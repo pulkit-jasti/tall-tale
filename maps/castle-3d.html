@@ -327,6 +327,17 @@
           const ball = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat(0x222222));
           ball.position.set(0, 2.4, z); load.add(ball);
         }
+      } else if (kind === 'prisoner') {
+        // Cage stays on the cart, the goblins inside are the load
+        for (const x of [-1.3, 1.3]) for (const z of [-2, 2]) {
+          const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3, 5), mat(0x444444));
+          bar.position.set(x, 3.3, z); g.add(bar);
+        }
+        const lid = box(3, 0.3, 4.5, 0x444444); lid.position.y = 4.9; g.add(lid);
+        for (const z of [-1.2, 0, 1.2]) {
+          const gob = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2, 6), mat(0x3f8f2f));
+          gob.position.set(0, 2.8, z); load.add(gob);
+        }
       } else {
         for (let i = 0; i < 6; i++) {
           const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4, 5), mat(0xeeeeee));
@@ -363,13 +374,18 @@
         ],
         ramp: [polar(RAMP_R, deg(156), BOARD), polar(RAMP_R, deg(132), WALL_TOP)],
       },
+      {
+        kind: 'prisoner', // Gate (270) to beside you (185), in reach. Goblins get eaten, cart goes back.
+        pts: arc(37.5, 270, 185, BOARD, 24),
+        wait: 5,
+      },
     ];
 
     const carts = routes.map((r) => {
-      ramp(r.ramp[0], r.ramp[1]);
+      if (r.ramp) ramp(r.ramp[0], r.ramp[1]);
       const lens = [0];
       for (let i = 1; i < r.pts.length; i++) lens.push(lens[i - 1] + r.pts[i - 1].distanceTo(r.pts[i]));
-      return { ...cart(r.kind), pts: r.pts, lens, total: lens[lens.length - 1], s: 0, dir: 1, wait: 1 };
+      return { ...cart(r.kind), pts: r.pts, lens, total: lens[lens.length - 1], s: 0, dir: 1, wait: 1, waitTime: r.wait || 2 };
     });
     label('Ramp', polar(RAMP_R, deg(36), WALL_TOP + 6), 0.4);
 
@@ -385,13 +401,138 @@
       const SPEED = 6; // cm per second
       if (c.wait > 0) { c.wait -= dt; return; }
       c.s += c.dir * SPEED * dt;
-      if (c.s >= c.total) { c.s = c.total; c.wait = 2; c.dir = -1; c.load.visible = false; } // unloaded at the machine
-      if (c.s <= 0) { c.s = 0; c.wait = 2; c.dir = 1; c.load.visible = true; }             // reloaded at the store
+      if (c.s >= c.total) { c.s = c.total; c.wait = c.waitTime; c.dir = -1; c.load.visible = false; } // unloaded (or eaten)
+      if (c.s <= 0) { c.s = 0; c.wait = c.waitTime; c.dir = 1; c.load.visible = true; }             // reloaded
       const pos = pointAt(c, c.s);
       c.g.position.copy(pos);
       if (c.wait <= 0) c.g.lookAt(pointAt(c, c.s + c.dir * 0.5));
     }
     carts.forEach((c) => { c.g.position.copy(c.pts[0]); c.g.lookAt(c.pts[1]); });
+    label('Prisoner cart', polar(37.5, deg(195), BOARD + 12), 0.45);
+
+    // ---------- Giant tools: 4 platforms beside you, 2 per side ----------
+    const FOOD = 5; // example: food currently in the jar, out of 10
+    const tangent = (a) => new THREE.Vector3(-Math.sin(a), 0, -Math.cos(a));
+
+    function slingshot() {
+      const g = new THREE.Group();
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 7, 8), mat(WOOD));
+      handle.position.y = 3.5; g.add(handle);
+      g.add(cylinderBetween(new THREE.Vector3(0, 7, 0), new THREE.Vector3(-2.5, 11, 0), 0.6, WOOD));
+      g.add(cylinderBetween(new THREE.Vector3(0, 7, 0), new THREE.Vector3(2.5, 11, 0), 0.6, WOOD));
+      const band = box(5, 0.3, 0.3, 0xe23b3b); band.position.y = 11; g.add(band);
+      return g;
+    }
+    function pepper() {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 7, 16), mat(0xf2efe6));
+      body.position.y = 3.5; g.add(body);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x444444));
+      cap.position.y = 7; g.add(cap);
+      return g;
+    }
+    function swatter() {
+      const g = new THREE.Group();
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 14, 8), mat(0x2d5bd1));
+      handle.position.y = 7; g.add(handle);
+      const head = box(7, 7, 0.4, 0x3fbf5f); head.position.y = 17.5; g.add(head);
+      return g;
+    }
+    function megaphone() {
+      const g = new THREE.Group();
+      const handle = box(1, 4, 1, 0x444444); handle.position.y = 2; g.add(handle);
+      const horn = new THREE.Mesh(
+        new THREE.ConeGeometry(3.5, 9, 16, 1, true),
+        new THREE.MeshLambertMaterial({ color: 0xffc531, side: THREE.DoubleSide })
+      );
+      horn.rotation.x = Math.PI / 2; // narrow end toward you, wide end outward
+      horn.position.y = 6; g.add(horn);
+      return g;
+    }
+
+    const tools = [
+      { d: 50,  name: 'Slingshot (free)', make: slingshot, cost: 0 },
+      { d: 30,  name: 'Pepper shaker', make: pepper, cost: 3 },
+      { d: 130, name: 'Fly swatter', make: swatter, cost: 4 },
+      { d: 150, name: 'Megaphone / bell', make: megaphone, cost: 6 },
+    ];
+
+    for (const t of tools) {
+      const a = deg(t.d);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5, 2, 20), mat(0x8a6a4a));
+      base.position.copy(polar(30, a, BOARD + 1));
+      scene.add(base);
+
+      const tool = t.make();
+      tool.position.copy(polar(30, a, BOARD + 2));
+      tool.rotation.y = faceOut(a);
+      scene.add(tool);
+
+      // Not enough food: tool looks faded and tied down with a rope
+      if (t.cost > FOOD) {
+        tool.traverse((o) => {
+          if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.35; }
+        });
+        const rope = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.4, 6, 16), mat(0x8b5a2b));
+        rope.rotation.x = Math.PI / 2;
+        rope.position.copy(polar(30, a, BOARD + 5));
+        scene.add(rope);
+      }
+
+      // Cost pips on the front edge of the platform. Lit = covered by current food.
+      for (let i = 0; i < t.cost; i++) {
+        const lit = i < FOOD;
+        const pip = new THREE.Mesh(
+          new THREE.SphereGeometry(0.7, 10, 8),
+          lit ? new THREE.MeshBasicMaterial({ color: 0xff8a00 }) : mat(0x777777)
+        );
+        pip.position.copy(polar(26.5, a, BOARD + 2.4)).addScaledVector(tangent(a), (i - (t.cost - 1) / 2) * 1.7);
+        scene.add(pip);
+      }
+
+      label(t.name, polar(30, a, BOARD + 30), 0.45);
+    }
+
+    // Pebble bowl beside the slingshot, kept topped up by soldiers
+    const bowl = new THREE.Mesh(
+      new THREE.SphereGeometry(2.5, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: 0x8a6a4a, side: THREE.DoubleSide })
+    );
+    bowl.position.copy(polar(31, deg(65), BOARD + 2.5));
+    scene.add(bowl);
+    for (let i = 0; i < 6; i++) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 6), mat(0x888888));
+      p.position.copy(polar(31, deg(65), BOARD + 1.6)).add(new THREE.Vector3(Math.cos(i) * 1.2, (i % 2) * 0.5, Math.sin(i) * 1.2));
+      scene.add(p);
+    }
+    label('Pebble bowl', polar(31, deg(65), BOARD + 9), 0.4);
+
+    // Food jar on the other side, fills with food items
+    const jar = new THREE.Mesh(
+      new THREE.CylinderGeometry(3, 3, 15, 16, 1, true),
+      new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+    );
+    jar.position.copy(polar(31, deg(115), BOARD + 7.5));
+    scene.add(jar);
+    for (let i = 0; i < FOOD; i++) {
+      const f = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), mat(i % 2 ? 0xd9822b : 0xb5523b));
+      f.position.copy(polar(31, deg(115), BOARD + 1.3 + i * 1.4)).add(new THREE.Vector3((i % 2 ? 0.6 : -0.6), 0, 0));
+      scene.add(f);
+    }
+    label('Food jar (' + FOOD + '/10)', polar(31, deg(115), BOARD + 20), 0.45);
+
+    // Flags on the side towers: castle health (left), wave progress (right)
+    for (const [d, color, text] of [[180, 0xe23b3b, 'Castle health flag'], [0, 0x2d5bd1, 'Wave progress flag']]) {
+      const a = deg(d);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 12, 6), mat(0x444444));
+      pole.position.copy(polar(43, a, BOARD + 29));
+      scene.add(pole);
+      const cloth = box(5, 3.5, 0.2, color);
+      cloth.position.copy(polar(43, a, BOARD + 33)).addScaledVector(tangent(a), 2.7);
+      cloth.rotation.y = faceOut(a);
+      scene.add(cloth);
+      label(text, polar(43, a, BOARD + 40), 0.45);
+    }
 
     // Area labels
     label('Castle interior', polar(30, deg(270), BOARD + 14), 0.6);
@@ -411,6 +552,11 @@
     // Arms resting on the board in front of you
     giant.add(cylinderBetween(new THREE.Vector3(-14, 95, 2), new THREE.Vector3(-12, BOARD + 2, -32), 3.5, SKIN));
     giant.add(cylinderBetween(new THREE.Vector3(14, 95, 2), new THREE.Vector3(12, BOARD + 2, -32), 3.5, SKIN));
+    // Wrist menu on the left wrist (shown when the palm turns up): pause, settings
+    const wristMenu = box(5, 0.5, 3.5, 0x222222);
+    wristMenu.position.set(-12.4, 76.5, -25);
+    giant.add(wristMenu);
+    label('Wrist menu (palm up)', new THREE.Vector3(-22, 86, -25), 0.4);
     scene.add(giant);
 
     // Arm reach sphere (about 70 cm from the shoulders)
