@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Castle 3D Mockup</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; background: #bfd9ee; }
+    #help {
+      position: absolute; top: 12px; left: 12px;
+      padding: 10px 12px; background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #222; font-size: 12px; line-height: 1.6;
+    }
+    #help b { display: block; margin-bottom: 4px; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="help">
+    <b>Castle mockup (1 unit = 1 cm)</b>
+    Left drag: look around<br>
+    Right drag: pan<br>
+    Scroll: zoom<br>
+    Arrow keys: move around<br>
+    1: giant's eye view, 2: overview<br>
+    H: hide giant, R: arm reach, L: labels
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ---------- Setup ----------
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xbfd9ee);
+    scene.fog = new THREE.Fog(0xbfd9ee, 400, 1200);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 5000);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.screenSpacePanning = false; // arrow up/down moves along the ground
+    controls.keyPanSpeed = 25;
+    controls.listenToKeyEvents(window);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x667744, 1.2));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    sun.position.set(150, 300, 100);
+    scene.add(sun);
+
+    // ---------- Helpers ----------
+    // Angles: 90 degrees = straight ahead (-Z), 0 = right, 180 = left, 270 = behind.
+    const deg = (d) => (d * Math.PI) / 180;
+    const polar = (r, a, y = 0) => new THREE.Vector3(r * Math.cos(a), y, -r * Math.sin(a));
+    const faceOut = (a) => a - Math.PI / 2; // rotation.y so local -Z points outward
+
+    const mat = (color) => new THREE.MeshLambertMaterial({ color });
+
+    function box(w, h, d, color) {
+      return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+    }
+
+    // A flat ring (or part of one) extruded upward
+    function ring(rIn, rOut, h, color, a0 = 0, a1 = Math.PI * 2) {
+      const s = new THREE.Shape();
+      if (a1 - a0 >= Math.PI * 2 - 1e-6) {
+        s.absarc(0, 0, rOut, 0, Math.PI * 2, false);
+        const hole = new THREE.Path();
+        hole.absarc(0, 0, rIn, 0, Math.PI * 2, true);
+        s.holes.push(hole);
+      } else {
+        s.moveTo(rOut * Math.cos(a0), rOut * Math.sin(a0));
+        s.absarc(0, 0, rOut, a0, a1, false);
+        s.lineTo(rIn * Math.cos(a1), rIn * Math.sin(a1));
+        s.absarc(0, 0, rIn, a1, a0, true);
+      }
+      const geo = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false, curveSegments: 64 });
+      geo.rotateX(-Math.PI / 2);
+      return new THREE.Mesh(geo, mat(color));
+    }
+
+    function cylinderBetween(p1, p2, r, color) {
+      const len = p1.distanceTo(p2);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), mat(color));
+      m.position.copy(p1).add(p2).multiplyScalar(0.5);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+      return m;
+    }
+
+    const labels = new THREE.Group();
+    scene.add(labels);
+
+    function label(text, pos, size = 1) {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 96;
+      const g = c.getContext('2d');
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      g.fillRect(0, 0, c.width, c.height);
+      g.strokeStyle = '#222'; g.lineWidth = 4;
+      g.strokeRect(2, 2, c.width - 4, c.height - 4);
+      g.fillStyle = '#222';
+      g.font = 'bold 44px system-ui, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(text, c.width / 2, c.height / 2);
+      const tex = new THREE.CanvasTexture(c);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+      sp.scale.set(32 * size, 6 * size, 1);
+      sp.position.copy(pos);
+      sp.renderOrder = 10;
+      labels.add(sp);
+    }
+
+    // ---------- Real floor (only seen through the hole you sit in) ----------
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), mat(0x6f6253));
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // ---------- Board: the whole world at hand height ----------
+    // Like a big round table with a hole in the middle for you.
+    // Flat around the castle, then rising gently so far enemies face you.
+    const BOARD = 65;     // board height in cm (would be set per player from resting hand height)
+    const HOLE = 25;      // radius of the hole you sit in
+    const FLAT_TO = 90;   // flat area around the castle
+    const RISE = 0.08;    // slope of the battlefield beyond that
+    const boardY = (r) => BOARD + Math.max(0, r - FLAT_TO) * RISE;
+
+    const boardProfile = [
+      new THREE.Vector2(HOLE, 0),
+      new THREE.Vector2(HOLE, BOARD),
+      new THREE.Vector2(FLAT_TO, BOARD),
+      new THREE.Vector2(700, boardY(700)),
+      new THREE.Vector2(700, 0),
+    ];
+    const board = new THREE.Mesh(
+      new THREE.LatheGeometry(boardProfile, 128),
+      new THREE.MeshLambertMaterial({ color: 0x9cc46b, side: THREE.DoubleSide })
+    );
+    scene.add(board);
+
+    // Zone borders drawn on the board
+    function circleLine(r, color) {
+      const pts = [];
+      for (let i = 0; i <= 128; i++) pts.push(polar(r, (i / 128) * Math.PI * 2, boardY(r) + 0.3));
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color })));
+    }
+    circleLine(60, 0x4d7a2e);   // near / middle
+    circleLine(150, 0x4d7a2e);  // middle / far
+    circleLine(300, 0x6e9a45);
+
+    // ---------- Castle ----------
+    const STONE = 0xc9c2b4, STONE_DARK = 0xa49c8c, WOOD = 0x9b7653;
+    const WALL_IN = 40, WALL_OUT = 46, WALL_H = 10;
+    const WALL_TOP = BOARD + WALL_H;
+
+    // Courtyard floor between you and the wall
+    const courtyard = ring(HOLE, WALL_IN, 0.3, 0xb59a72);
+    courtyard.position.y = BOARD;
+    scene.add(courtyard);
+
+    // The wall: low, about 10 cm, the right scale for 2.5 cm soldiers
+    const wall = ring(WALL_IN, WALL_OUT, WALL_H, STONE_DARK);
+    wall.position.y = BOARD;
+    scene.add(wall);
+
+    for (let d = 0; d < 360; d += 5) {
+      const c = box(1.5, 2, 1, STONE_DARK);
+      c.position.copy(polar(45.5, deg(d), WALL_TOP + 1));
+      c.rotation.y = faceOut(deg(d));
+      scene.add(c);
+    }
+
+    // Towers
+    for (const d of [0, 180, 225, 315]) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 4, 16, 12), mat(STONE));
+      t.position.copy(polar(43, deg(d), BOARD + 8));
+      scene.add(t);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(5, 7, 12), mat(0xb5523b));
+      roof.position.copy(polar(43, deg(d), BOARD + 19.5));
+      scene.add(roof);
+    }
+
+    // Gate at the back
+    const gate = box(7, 8, 1.2, 0x5a4330);
+    gate.position.copy(polar(46.6, deg(270), BOARD + 4));
+    gate.rotation.y = faceOut(deg(270));
+    scene.add(gate);
+
+    // Small buildings inside the castle (front is left clear for your hands)
+    function house(w, h, dp, color) {
+      const g = new THREE.Group();
+      const body = box(w, h, dp, color); body.position.y = h / 2; g.add(body);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, dp) * 0.75, 3, 4), mat(0xb5523b));
+      roof.rotation.y = Math.PI / 4;
+      roof.position.y = h + 1.5;
+      g.add(roof);
+      return g;
+    }
+    const buildings = [
+      { d: 200, name: 'Barracks', w: 8, h: 4, dp: 5 },
+      { d: 240, name: 'Kitchen', w: 6, h: 4, dp: 5 },
+      { d: 300, name: 'Forge', w: 6, h: 5, dp: 5 },
+      { d: 340, name: 'Cannonball store', w: 7, h: 4, dp: 5 },
+      { d: 15, w: 5, h: 3, dp: 4 },
+      { d: 168, name: 'Arrow workshop', w: 5, h: 3, dp: 4 },
+    ];
+    for (const b of buildings) {
+      const h = house(b.w, b.h, b.dp, STONE);
+      h.position.copy(polar(33, deg(b.d), BOARD));
+      h.rotation.y = faceOut(deg(b.d));
+      scene.add(h);
+      if (b.name) label(b.name, polar(33, deg(b.d), BOARD + 11), 0.45);
+    }
+
+    // ---------- Machines (simple shapes, local -Z faces outward) ----------
+    function catapult() {
+      const g = new THREE.Group();
+      const base = box(6, 2, 8, WOOD); base.position.y = 1; g.add(base);
+      const arm = box(1, 1, 10, 0x6b4f35); arm.position.set(0, 4, 1); arm.rotation.x = -0.5; g.add(arm);
+      const bucket = box(3, 2, 3, 0x6b4f35); bucket.position.set(0, 2.5, 5); g.add(bucket);
+      return g;
+    }
+    function volley() {
+      const g = new THREE.Group();
+      const body = box(7, 5, 5, WOOD); body.position.y = 2.5; g.add(body);
+      for (let i = -1; i <= 1; i++) for (let j = 0; j < 3; j++) {
+        const a = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 6, 6), mat(0xeeeeee));
+        a.rotation.x = Math.PI / 2 - 0.3;
+        a.position.set(i * 2, 1.5 + j * 1.5, -3);
+        g.add(a);
+      }
+      return g;
+    }
+    function cannon() {
+      const g = new THREE.Group();
+      const base = box(5, 2, 6, WOOD); base.position.y = 1; g.add(base);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 9, 12), mat(0x333333));
+      barrel.rotation.x = Math.PI / 2 - 0.25;
+      barrel.position.set(0, 3.5, -1.5);
+      g.add(barrel);
+      return g;
+    }
+    function ballista() {
+      const g = new THREE.Group();
+      const base = box(3, 3, 7, WOOD); base.position.y = 1.5; g.add(base);
+      const bow = box(11, 0.8, 0.8, 0x6b4f35); bow.position.set(0, 3.5, -3); g.add(bow);
+      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 9, 6), mat(0xeeeeee));
+      bolt.rotation.x = Math.PI / 2; bolt.position.set(0, 3.5, -1); g.add(bolt);
+      return g;
+    }
+    function cauldron() {
+      const g = new THREE.Group();
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 2.5, 4, 12), mat(0x333333));
+      pot.position.y = 3; g.add(pot);
+      const oil = new THREE.Mesh(new THREE.CircleGeometry(3.2, 12), mat(0xff8a00));
+      oil.rotation.x = -Math.PI / 2; oil.position.y = 5.05; g.add(oil);
+      const fire = new THREE.Mesh(new THREE.ConeGeometry(2, 2, 6), mat(0xff3b1f));
+      fire.position.y = 0.8; g.add(fire);
+      return g;
+    }
+
+    // ---------- Machines on the wall, operated directly by hand ----------
+    const slots = [
+      { d: 162, name: 'Cauldron', machine: cauldron },
+      { d: 126, name: 'Arrow volley', machine: volley },
+      { d: 90,  name: 'Catapult', machine: catapult },
+      { d: 54,  name: 'Cannon', machine: cannon },
+      { d: 18,  name: 'Ballista', machine: ballista },
+    ];
+
+    for (const s of slots) {
+      const a = deg(s.d);
+
+      const m = s.machine();
+      m.position.copy(polar(43, a, WALL_TOP));
+      m.rotation.y = faceOut(a);
+      scene.add(m);
+
+      // Ammo crate in the courtyard behind the machine
+      const crate = box(2.5, 2.5, 2.5, 0xc28a4a);
+      crate.position.copy(polar(36, a + deg(6), BOARD + 1.25));
+      crate.rotation.y = faceOut(a);
+      scene.add(crate);
+
+      label(s.name, polar(44, a, WALL_TOP + 14), 0.6);
+    }
+
+    // ---------- Ramps and supply carts ----------
+    // Soldiers drag carts from a store, along the courtyard, up a ramp
+    // on the inside of the wall, to a machine. Then back to reload.
+    const RAMP_R = 38.2;
+
+    function arc(r, d0, d1, y, steps = 16) {
+      const pts = [];
+      for (let i = 0; i <= steps; i++) pts.push(polar(r, deg(d0 + ((d1 - d0) * i) / steps), y));
+      return pts;
+    }
+
+    function ramp(p0, p1) {
+      const m = box(3.5, 1, p0.distanceTo(p1), WOOD);
+      const down = new THREE.Vector3(0, -0.5, 0); // so the top surface sits on the path
+      m.position.copy(p0).add(p1).multiplyScalar(0.5).add(down);
+      m.lookAt(p1.clone().add(down));
+      scene.add(m);
+    }
+
+    function cart(kind) {
+      const g = new THREE.Group();
+      const body = box(3, 1.2, 4.5, WOOD); body.position.y = 1.2; g.add(body);
+      for (const x of [-1.6, 1.6]) for (const z of [-1.4, 1.4]) {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.4, 10), mat(0x333333));
+        w.rotation.z = Math.PI / 2; w.position.set(x, 0.6, z); g.add(w);
+      }
+      const load = new THREE.Group();
+      if (kind === 'cannon') {
+        for (const z of [-1.2, 0, 1.2]) {
+          const ball = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat(0x222222));
+          ball.position.set(0, 2.4, z); load.add(ball);
+        }
+      } else {
+        for (let i = 0; i < 6; i++) {
+          const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4, 5), mat(0xeeeeee));
+          arrow.rotation.x = Math.PI / 2;
+          arrow.position.set(-0.8 + (i % 3) * 0.8, 2 + Math.floor(i / 3) * 0.35, 0);
+          load.add(arrow);
+        }
+      }
+      g.add(load);
+      // Two soldiers pulling at the front (+Z faces the direction of travel)
+      for (const x of [-0.9, 0.9]) {
+        const s = box(1.2, 2.6, 1.2, 0x2d5bd1); s.position.set(x, 1.3, 3.6); g.add(s);
+      }
+      scene.add(g);
+      return { g, load };
+    }
+
+    const routes = [
+      {
+        kind: 'cannon', // Cannonball store (340) to the cannon (54)
+        pts: [
+          ...arc(RAMP_R, 340, 384, BOARD),
+          polar(RAMP_R, deg(48), WALL_TOP),
+          ...arc(41.5, 48, 50, WALL_TOP, 2),
+        ],
+        ramp: [polar(RAMP_R, deg(24), BOARD), polar(RAMP_R, deg(48), WALL_TOP)],
+      },
+      {
+        kind: 'arrows', // Arrow workshop (168) to the arrow volley (126)
+        pts: [
+          ...arc(RAMP_R, 168, 156, BOARD, 4),
+          polar(RAMP_R, deg(132), WALL_TOP),
+          ...arc(41.5, 132, 131, WALL_TOP, 2),
+        ],
+        ramp: [polar(RAMP_R, deg(156), BOARD), polar(RAMP_R, deg(132), WALL_TOP)],
+      },
+    ];
+
+    const carts = routes.map((r) => {
+      ramp(r.ramp[0], r.ramp[1]);
+      const lens = [0];
+      for (let i = 1; i < r.pts.length; i++) lens.push(lens[i - 1] + r.pts[i - 1].distanceTo(r.pts[i]));
+      return { ...cart(r.kind), pts: r.pts, lens, total: lens[lens.length - 1], s: 0, dir: 1, wait: 1 };
+    });
+    label('Ramp', polar(RAMP_R, deg(36), WALL_TOP + 6), 0.4);
+
+    function pointAt(c, s) {
+      s = Math.max(0, Math.min(c.total, s));
+      let i = 1;
+      while (i < c.lens.length - 1 && c.lens[i] < s) i++;
+      const f = (s - c.lens[i - 1]) / (c.lens[i] - c.lens[i - 1] || 1);
+      return c.pts[i - 1].clone().lerp(c.pts[i], f);
+    }
+
+    function updateCart(c, dt) {
+      const SPEED = 6; // cm per second
+      if (c.wait > 0) { c.wait -= dt; return; }
+      c.s += c.dir * SPEED * dt;
+      if (c.s >= c.total) { c.s = c.total; c.wait = 2; c.dir = -1; c.load.visible = false; } // unloaded at the machine
+      if (c.s <= 0) { c.s = 0; c.wait = 2; c.dir = 1; c.load.visible = true; }             // reloaded at the store
+      const pos = pointAt(c, c.s);
+      c.g.position.copy(pos);
+      if (c.wait <= 0) c.g.lookAt(pointAt(c, c.s + c.dir * 0.5));
+    }
+    carts.forEach((c) => { c.g.position.copy(c.pts[0]); c.g.lookAt(c.pts[1]); });
+
+    // Area labels
+    label('Castle interior', polar(30, deg(270), BOARD + 14), 0.6);
+    label('Wall (10 cm)', polar(43, deg(250), WALL_TOP + 12), 0.6);
+    label('Gate', polar(52, deg(270), BOARD + 10), 0.5);
+    label('Near zone (in reach)', polar(54, deg(40), BOARD + 5), 0.5);
+    label('Middle zone', polar(105, deg(60), boardY(105) + 8), 0.8);
+    label('Far zone (rises toward you)', polar(260, deg(100), boardY(260) + 15), 1.4);
+
+    // ---------- Giant ----------
+    const giant = new THREE.Group();
+    const SKIN = 0xe0b48f;
+    const chair = box(34, 45, 34, 0x7a5a3a); chair.position.set(0, 22.5, 8); giant.add(chair);
+    const torso = box(30, 52, 18, 0x4a6fa5); torso.position.set(0, 71, 6); giant.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 12), mat(SKIN));
+    head.position.set(0, 110, 2); giant.add(head);
+    // Arms resting on the board in front of you
+    giant.add(cylinderBetween(new THREE.Vector3(-14, 95, 2), new THREE.Vector3(-12, BOARD + 2, -32), 3.5, SKIN));
+    giant.add(cylinderBetween(new THREE.Vector3(14, 95, 2), new THREE.Vector3(12, BOARD + 2, -32), 3.5, SKIN));
+    scene.add(giant);
+
+    // Arm reach sphere (about 70 cm from the shoulders)
+    const reach = new THREE.Mesh(
+      new THREE.SphereGeometry(70, 32, 16),
+      new THREE.MeshBasicMaterial({ color: 0x2255ff, wireframe: true, transparent: true, opacity: 0.15 })
+    );
+    reach.position.set(0, 96, 2);
+    reach.visible = false;
+    scene.add(reach);
+
+    // ---------- Soldiers walking in the courtyard and on the wall ----------
+    const lanes = [
+      { r: 29, y: BOARD }, { r: 37.5, y: BOARD }, { r: 41.5, y: WALL_TOP },
+    ];
+    const SOLDIERS = 80;
+    const soldiers = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 2.6, 1.2), mat(0x2d5bd1), SOLDIERS);
+    const soldierData = [];
+    for (let i = 0; i < SOLDIERS; i++) {
+      soldierData.push({
+        lane: lanes[i % lanes.length],
+        a: Math.random() * Math.PI * 2,
+        speed: (0.05 + Math.random() * 0.1) * (Math.random() < 0.5 ? -1 : 1),
+      });
+    }
+    scene.add(soldiers);
+
+    // ---------- Goblins: march in, climb the wall, pop over the top ----------
+    const GOBLINS = 40;
+    const goblins = new THREE.InstancedMesh(new THREE.ConeGeometry(1.6, 3.5, 6), mat(0x3f8f2f), GOBLINS);
+    const goblinData = [];
+    const spawnGoblin = (g) => {
+      g.r = 300 + Math.random() * 350;
+      g.a = deg(10 + Math.random() * 160); // the front 180 degree arc
+      g.speed = 8 + Math.random() * 8;
+      g.state = 'walk';
+      g.t = 0;
+    };
+    for (let i = 0; i < GOBLINS; i++) {
+      const g = {}; spawnGoblin(g); g.r = 48 + Math.random() * 550; goblinData.push(g);
+    }
+    scene.add(goblins);
+
+    // ---------- Views ----------
+    function eyeView() {
+      camera.position.set(0, 112, 0);
+      controls.target.set(0, BOARD, -70);
+    }
+    function overview() {
+      camera.position.set(0, 260, 200);
+      controls.target.set(0, BOARD, 0); // orbit around the giant
+    }
+    overview();
+
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === '1') eyeView();
+      if (k === '2') overview();
+      if (k === 'h') giant.visible = !giant.visible;
+      if (k === 'r') reach.visible = !reach.visible;
+      if (k === 'l') labels.visible = !labels.visible;
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ---------- Loop ----------
+    const dummy = new THREE.Object3D();
+    const clock = new THREE.Clock();
+
+    renderer.setAnimationLoop(() => {
+      const dt = Math.min(clock.getDelta(), 0.1);
+      const t = clock.elapsedTime;
+
+      soldierData.forEach((s, i) => {
+        s.a += s.speed * dt;
+        dummy.position.copy(polar(s.lane.r, s.a, s.lane.y + 1.3 + Math.abs(Math.sin(t * 8 + i)) * 0.4));
+        dummy.rotation.set(0, 0, 0);
+        dummy.updateMatrix();
+        soldiers.setMatrixAt(i, dummy.matrix);
+      });
+      soldiers.instanceMatrix.needsUpdate = true;
+
+      goblinData.forEach((g, i) => {
+        let y;
+        if (g.state === 'walk') {
+          g.r -= g.speed * dt;
+          if (g.r <= 47.5) { g.r = 47.5; g.state = 'climb'; g.t = 0; }
+          y = boardY(g.r) + Math.abs(Math.sin(t * 10 + i)) * 0.6;
+        } else if (g.state === 'climb') {
+          g.t += dt;
+          y = BOARD + Math.min(g.t / 1.5, 1) * WALL_H;
+          if (g.t > 1.5) { g.state = 'top'; g.t = 0; g.r = 45; }
+        } else {
+          // Sitting on top of the wall, right in reach
+          g.t += dt;
+          y = WALL_TOP + 2;
+          if (g.t > 2.5) spawnGoblin(g);
+        }
+        dummy.position.copy(polar(g.r, g.a, y + 1.75));
+        dummy.updateMatrix();
+        goblins.setMatrixAt(i, dummy.matrix);
+      });
+      goblins.instanceMatrix.needsUpdate = true;
+
+      carts.forEach((c) => updateCart(c, dt));
+
+      controls.update();
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
