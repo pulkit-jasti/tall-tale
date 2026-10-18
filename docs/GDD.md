@@ -27,7 +27,7 @@ Top level overview and index. Each topic gets its own file once its design is lo
 | Giant tools and food currency | [giant-tools.md](giant-tools.md) | First pass decided |
 | Body abilities (grab, smash, eat, table slam) | (planned) | Ideas only |
 | Food powers (powers from eating specific enemies) | (planned) | Ideas only |
-| Enemies | (planned) | Not started |
+| Enemies | [enemies.md](enemies.md) | First set decided |
 | Levels and progression | (planned) | Ideas only |
 | Army and supply carts | (planned) | Later |
 | Controls and accessibility | (planned) | Ideas only |
