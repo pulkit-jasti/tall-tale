@@ -178,21 +178,9 @@ use tools -> enemies stunned / disarmed -> troops capture them
 
 ---
 
-## 7. Dropped ideas
-
-- **Fishing rod:** interesting in theory, but would feel slow and sluggish in play.
-- **Auto refill between waves:** felt like a free escape hatch. Replaced by food from eating.
-- **Per-tool charges:** replaced by the shared food currency.
-- **Aimed pepper cloud:** aiming a cloud is unclear without area circles. Pepper became a near-zone tool instead.
-
-## 8. Other tool ideas (not designed yet)
-
-Fly swatter alternatives and future specialist tools: butterfly net (flyers), bucket or watering can (river water, put out fires), bellows or hand fan (blow balloons away), rolling pin (near zone), hand bell for rallying troops.
-
-## 9. Open questions
+## 7. Open questions
 
 - Hidden strip below the outside of the wall: how pepper and other near-zone tools handle enemies the player cannot see there.
 - Tribute food (non-enemy food like roast chicken after a good wave): yes or no.
 - Does food carry over between waves and between battles?
 - Exact food costs and bar size (tune in playtests).
-- Which tool counters river boats.

@@ -80,6 +80,17 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 - **Weak:** slingshot (too close).
 - Every wave includes some climbers. In wave 1, one is scripted to climb right in front of the player so the eating moment happens in the first minute.
 
+### Boom goblin
+
+- **Question:** "Can you stop it before it arrives?"
+- **Look:** a goblin with a big barrel strapped to its back and a lit, sparking fuse.
+- **Behavior:** runs at your troops (or the wall if no troops are near) and explodes. Kills troops, and drops the flag if it hits the wall.
+- **Toughness:** one hit, but hitting the barrel makes it explode where it stands.
+- **Best answer:** slingshot (shoot the barrel early so it blows up its own group).
+- **Also works:** pepper (it sneezes and drops the barrel, which becomes a powder keg on the road), megaphone (stunned in place, easy target), hands (if it reaches the wall, grab it and throw it back into the enemies), machines.
+- **Weak:** swatter (works, but it explodes right at the wall and costs a bit of flag).
+- **Chain reactions:** its explosion follows the same rule as powder kegs, so it can set off kegs, knock over trees and break bridges (see [map.md](map.md#5-triggers)).
+
 ### Tinker (support)
 
 - **Question:** "Can you pick the key target?"
@@ -102,6 +113,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 | Runners | ✗ | ★ | ✓ | ✓ | ✓ (at the wall) | ✓ (arrow volley) |
 | Balloons | ★ | ✓ (when close) | ✗ | ✓ | ✓ (when close) | ✓ (ballista) |
 | Climbers | ✗ | ✓ | ✓ | ✓ | ★ | ✓ (cauldron) |
+| Boom goblin | ★ | ✗ (explodes at the wall) | ✓ | ✓ | ✓ (throw it back) | ✓ |
 | Tinker | ★ | ✓ (when close) | ✓ | ✓ | ✓ (when close) | ✓ (catapult) |
 
 ---
@@ -115,10 +127,10 @@ Most of the variety and strategy comes from mixing enemy types in one wave, not 
 | Shield wall + tinker | Pepper alone fails because the tinker re-gears them. Shoot the tinker first, then pepper. |
 | Balloons carrying runners | Pop them early, or the swarm drops inside the castle. |
 | Grunts with helmets | Same enemy, a bit tougher. A reason to use the slingshot. |
+| Boom goblins inside a group | Shoot the barrel early and the group blows itself up. Wait too long and they reach your troops. |
+| Boom goblin near a powder keg or bridge | One shot sets off a chain reaction. |
 | Attacks from two sides at once | Where do you turn first? |
 | Climbers during a big push | Deal with the wall top, or the main group? |
-
-Later combos once the river exists: boats carrying climbers that climb from the moat.
 
 ### Other dials per wave
 

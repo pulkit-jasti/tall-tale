@@ -29,7 +29,8 @@
     Scroll: zoom<br>
     Arrow keys: move around<br>
     1: giant's eye view, 2: overview<br>
-    H: hide giant, R: arm reach, L: labels
+    H: hide giant, R: arm reach, L: labels<br>
+    K: keg, T: tree, B: bridge, O: boulder
   </div>
 
   <script type="module">
@@ -584,19 +585,263 @@
     }
     scene.add(soldiers);
 
-    // ---------- Goblins: march in, climb the wall, pop over the top ----------
+    // ---------- Sample level: roads as a graph ----------
+    // Points are [angle in degrees, distance in cm]. Enemies walk road to road.
+    // At a junction they pick a random branch that gets them closer to the castle.
+    // Generated fresh on every load: random angles and distances all around, so no two maps match.
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const nodes = {};
+    const CAMPS = [], RING = [], INNER = [], WALLS = [];
+    function addNodes(list, prefix, count, rMin, rMax) {
+      const start = rand(0, 360);
+      for (let i = 0; i < count; i++) {
+        const id = prefix + i;
+        nodes[id] = [start + (360 / count) * (i + rand(-0.35, 0.35)), rand(rMin, rMax)];
+        list.push(id);
+      }
+    }
+    addNodes(CAMPS, 'C', 6, 430, 600);    // camps
+    addNodes(RING, 'J', 8, 210, 310);     // ring road junctions
+    addNodes(INNER, 'K', 5, 110, 170);    // inner junctions
+    addNodes(WALLS, 'W', 7, 47.5, 47.5);  // wall, enemies climb here
+    const angDiff = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
+    const nearest = (id, list, n) =>
+      [...list].sort((x, y) => angDiff(nodes[id][0], nodes[x][0]) - angDiff(nodes[id][0], nodes[y][0])).slice(0, n);
+    const isWall = (id) => id[0] === 'W';
+    const onBoard = (p, lift = 0) => { p.y = boardY(Math.hypot(p.x, p.z)) + lift; return p; };
+    const nodePos = (id) => onBoard(polar(nodes[id][1], deg(nodes[id][0])));
+
+    const edges = [];
+    function road(a, b, bend = 0, mid = null) {
+      const p0 = nodePos(a), p1 = nodePos(b);
+      if (!mid) {
+        const side = new THREE.Vector3(p0.z - p1.z, 0, p1.x - p0.x).normalize();
+        mid = p0.clone().lerp(p1, 0.5).addScaledVector(side, bend);
+      }
+      const pts = new THREE.CatmullRomCurve3([p0, mid, p1]).getPoints(30).map((p) => onBoard(p));
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 2.5, 6), mat(0xc9a66b));
+      tube.position.y = -1.6; // sunk so only a flat strip shows
+      scene.add(tube);
+      const lens = [0];
+      for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + pts[i - 1].distanceTo(pts[i]));
+      const total = lens[lens.length - 1];
+      const e = { a, b, pts, lens, total, blocked: false };
+      e.back = { pts: [...pts].reverse(), lens: lens.map((l) => total - l).reverse(), total };
+      edges.push(e);
+      return e;
+    }
+    const made = new Set();
+    function link(a, b) {
+      const key = [a, b].sort().join('-');
+      if (made.has(key)) return;
+      made.add(key);
+      road(a, b, rand(-0.2, 0.2) * nodePos(a).distanceTo(nodePos(b)));
+    }
+    // Ring road between neighbouring junctions, with a random gap or two
+    RING.forEach((id, i) => {
+      if (Math.random() < 0.2) return;
+      const next = RING[(i + 1) % RING.length];
+      const a0 = nodes[id][0], d = ((nodes[next][0] - a0) % 360 + 540) % 360 - 180;
+      made.add([id, next].sort().join('-'));
+      road(id, next, 0, polar((nodes[id][1] + nodes[next][1]) / 2 * rand(1, 1.08), deg(a0 + d / 2)));
+    });
+    CAMPS.forEach((id) => nearest(id, RING, Math.random() < 0.3 ? 2 : 1).forEach((j) => link(id, j)));
+    RING.forEach((id) => nearest(id, INNER, Math.random() < 0.4 ? 2 : 1).forEach((k) => link(id, k)));
+    INNER.forEach((id) => nearest(id, WALLS, 2).forEach((w) => link(id, w)));
+
+    // Pick random roads for the features
+    const typed = (p, q) => edges.filter((e) => e.a[0] === p && e.b[0] === q).sort(() => Math.random() - 0.5);
+    const [eForest, eTree, eBridge] = typed('J', 'K');
+    const eMud = typed('K', 'W')[0];
+    const eB = typed('C', 'J')[0]; // boulder road
+
+    // Distance from each point to the castle. Recalculated only when a road opens or closes.
+    const dist = {};
+    function updateDistances() {
+      for (const id in nodes) dist[id] = isWall(id) ? 0 : Infinity;
+      for (let k = 0; k < 10; k++) for (const e of edges) {
+        if (e.blocked) continue;
+        dist[e.a] = Math.min(dist[e.a], dist[e.b] + e.total);
+        dist[e.b] = Math.min(dist[e.b], dist[e.a] + e.total);
+      }
+    }
+    updateDistances();
+
+    // Weighted random pick among open roads that lead closer to the castle
+    function pickLeg(from) {
+      const opts = [];
+      for (const e of edges) {
+        if (e.blocked || (e.a !== from && e.b !== from)) continue;
+        const to = e.a === from ? e.b : e.a;
+        if (dist[to] < dist[from]) opts.push({ e, from, to, fwd: e.a === from, w: 1 / (dist[to] + e.total) });
+      }
+      let r = Math.random() * opts.reduce((s, o) => s + o.w, 0);
+      return opts.find((o) => (r -= o.w) <= 0) || null;
+    }
+
+    const roadSide = (e, i) => {
+      const d = e.pts[i + 1].clone().sub(e.pts[i - 1]);
+      return new THREE.Vector3(-d.z, 0, d.x).normalize();
+    };
+    const roadDir = (e, i) => e.pts[i + 1].clone().sub(e.pts[i - 1]).setY(0).normalize();
+    const faceAlong = (m, dir) => m.lookAt(m.position.clone().add(dir));
+    const up = (p, y) => p.clone().add(new THREE.Vector3(0, y, 0));
+
+    // Camps
+    for (const id of CAMPS) {
+      const tent = new THREE.Mesh(new THREE.ConeGeometry(9, 12, 6), mat(0x7a2e2e));
+      tent.position.copy(up(nodePos(id), 6));
+      scene.add(tent);
+      label('Goblin camp', up(nodePos(id), 22), 0.7);
+    }
+
+    // ---------- Decor: no gameplay, just makes the land look lived in ----------
+    const roadPts = edges.flatMap((e) => e.pts);
+    const clearOfRoads = (p, gap) => roadPts.every((q) => (q.x - p.x) ** 2 + (q.z - p.z) ** 2 > gap * gap);
+    function cone(r, h, color) {
+      const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), mat(color));
+      m.geometry.translate(0, h / 2, 0);
+      return m;
+    }
+    function scatter(count, rMin, rMax, gap, make) {
+      for (let i = 0, tries = 0; i < count && tries < count * 30; tries++) {
+        const p = onBoard(polar(rand(rMin, rMax), rand(0, Math.PI * 2)));
+        if (!clearOfRoads(p, gap)) continue;
+        const m = make();
+        m.position.copy(p);
+        m.rotation.y = rand(0, Math.PI * 2);
+        scene.add(m);
+        i++;
+      }
+    }
+    scatter(10, 90, 450, 16, () => box(rand(14, 24), 0.4, rand(10, 18), Math.random() < 0.5 ? 0xd9c36a : 0x7fae4e)); // fields
+    scatter(20, 70, 480, 12, () => house(rand(4, 7), rand(3, 5), rand(4, 6), STONE));
+    scatter(90, 70, 680, 6, () => cone(rand(3, 5), rand(10, 18), 0x2f6b2a)); // trees
+    scatter(30, 60, 680, 5, () => new THREE.Mesh(new THREE.DodecahedronGeometry(rand(1.5, 4)), mat(0x8a8a8a))); // rocks
+    scatter(15, 70, 450, 6, () => { // haystacks
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.4, 3, 8), mat(0xd9b84a));
+      m.geometry.translate(0, 1.5, 0);
+      return m;
+    });
+
+    // Forest: hides enemies inside
+    const forest = { c: eForest.pts[15].clone(), r: 24 };
+    for (let i = 0; i < 16; i++) {
+      const a = Math.random() * Math.PI * 2, d = Math.random() * forest.r;
+      const tr = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 6), mat(0x2f6b2a));
+      tr.position.copy(onBoard(forest.c.clone().add(new THREE.Vector3(Math.cos(a) * d, 0, Math.sin(a) * d)), 7));
+      scene.add(tr);
+    }
+    label('Forest (hides)', up(forest.c, 22), 0.8);
+
+    // Mud: slows enemies
+    const mud = { c: eMud.pts[12].clone(), r: 10 };
+    const mudMesh = new THREE.Mesh(new THREE.CircleGeometry(mud.r, 20), mat(0x6b4a2b));
+    mudMesh.rotation.x = -Math.PI / 2;
+    mudMesh.position.copy(up(mud.c, 1));
+    scene.add(mudMesh);
+    label('Mud (slow)', up(mud.c, 10), 0.6);
+
+    // Stream and bridge
+    const bridgeAt = eBridge.pts[15].clone();
+    const stream = box(70, 0.4, 6, 0x4a90d9);
+    stream.position.copy(up(bridgeAt, 0.6));
+    faceAlong(stream, roadDir(eBridge, 15));
+    scene.add(stream);
+    const bridge = box(9, 1.5, 12, WOOD);
+    bridge.position.copy(up(bridgeAt, 1.2));
+    faceAlong(bridge, roadDir(eBridge, 15));
+    scene.add(bridge);
+    label('Bridge (B)', up(bridgeAt, 14), 0.7);
+
+    // Tree beside a road: falls across it and blocks it
+    const treeSide = roadSide(eTree, 8);
+    const treeBase = eTree.pts[8].clone().addScaledVector(treeSide, 8);
+    const treeAxis = roadDir(eTree, 8);
+    const tree = { g: new THREE.Group(), ang: 0, target: 0 };
+    tree.sign = treeAxis.clone().cross(new THREE.Vector3(0, 1, 0)).dot(treeSide) < 0 ? 1 : -1;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 20, 6), mat(0x6b4f35));
+    trunk.position.y = 10; tree.g.add(trunk);
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(6, 12, 6), mat(0x2f6b2a));
+    crown.position.y = 24; tree.g.add(crown);
+    tree.g.position.copy(treeBase);
+    scene.add(tree.g);
+    label('Tree (T)', up(treeBase, 36), 0.6);
+
+    // Powder keg next to the tree, so it can set the tree off
+    const keg = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 4.5, 10), mat(0xb5462e));
+    keg.position.copy(up(eTree.pts[4], 2.25)).addScaledVector(roadSide(eTree, 4), -8);
+    scene.add(keg);
+    label('Powder keg (K)', up(keg.position, 10), 0.6);
+
+    // Boulder on a hill beside the road
+    const bSide = roadSide(eB, 5);
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(14, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x86b25a));
+    hill.position.copy(eB.pts[5]).addScaledVector(bSide, 14);
+    scene.add(hill);
+    const boulder = { m: new THREE.Mesh(new THREE.SphereGeometry(4, 10, 8), mat(0x777777)), s0: eB.lens[5], rolling: false };
+    boulder.s = boulder.s0;
+    function placeBoulder() {
+      const k = Math.max(0, 1 - (boulder.s - boulder.s0) / 15); // rolls off the hill onto the road
+      boulder.m.position.copy(up(pointAt(eB, boulder.s), 4 + 14 * k)).addScaledVector(bSide, 14 * k);
+    }
+    placeBoulder();
+    scene.add(boulder.m);
+    label('Boulder (O)', up(hill.position, 28), 0.6);
+
+    // ---------- Triggers ----------
+    const timers = [];
+    const later = (sec, fn) => timers.push({ t: sec, fn });
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffa62b, transparent: true }));
+    puff.visible = false;
+    let puffT = 0;
+    scene.add(puff);
+
+    function killNear(p, r) {
+      goblinData.forEach((g) => { if (g.state === 'walk' && g.p.distanceTo(p) < r) spawnGoblin(g); });
+    }
+    function explodeKeg() {
+      if (!keg.visible) return;
+      keg.visible = false;
+      puff.position.copy(keg.position); puff.visible = true; puffT = 0;
+      killNear(keg.position, 30);
+      // Chain reaction: explosions set off nearby triggers
+      if (keg.position.distanceTo(treeBase) < 45) dropTree();
+      if (keg.position.distanceTo(bridgeAt) < 45) breakBridge();
+      later(10, () => { keg.visible = true; });
+    }
+    function dropTree() {
+      if (tree.target) return;
+      tree.target = tree.sign * Math.PI / 2;
+      eTree.blocked = true; updateDistances();
+      killNear(eTree.pts[8], 12);
+      later(10, () => { tree.target = 0; eTree.blocked = false; updateDistances(); });
+    }
+    function breakBridge() {
+      if (!bridge.visible) return;
+      bridge.visible = false;
+      eBridge.blocked = true; updateDistances();
+      killNear(bridgeAt, 9);
+      later(15, () => { bridge.visible = true; eBridge.blocked = false; updateDistances(); });
+    }
+    function rollBoulder() {
+      if (boulder.rolling || !boulder.m.visible) return;
+      boulder.rolling = true;
+    }
+
+    // ---------- Goblins: follow roads, climb the wall, pop over the top ----------
     const GOBLINS = 40;
     const goblins = new THREE.InstancedMesh(new THREE.ConeGeometry(1.6, 3.5, 6), mat(0x3f8f2f), GOBLINS);
     const goblinData = [];
-    const spawnGoblin = (g) => {
-      g.r = 300 + Math.random() * 350;
-      g.a = deg(10 + Math.random() * 160); // the front 180 degree arc
-      g.speed = 8 + Math.random() * 8;
-      g.state = 'walk';
-      g.t = 0;
-    };
+    function spawnGoblin(g, delay = Math.random() * 4) {
+      g.node = CAMPS[Math.floor(Math.random() * CAMPS.length)];
+      g.leg = null; g.s = 0; g.state = 'walk'; g.t = 0; g.delay = delay;
+      g.speed = 10 + Math.random() * 8;
+      g.ox = (Math.random() - 0.5) * 3; g.oz = (Math.random() - 0.5) * 3;
+      g.p = nodePos(g.node);
+    }
     for (let i = 0; i < GOBLINS; i++) {
-      const g = {}; spawnGoblin(g); g.r = 48 + Math.random() * 550; goblinData.push(g);
+      const g = {}; spawnGoblin(g, Math.random() * 40); goblinData.push(g);
     }
     scene.add(goblins);
 
@@ -618,6 +863,10 @@
       if (k === 'h') giant.visible = !giant.visible;
       if (k === 'r') reach.visible = !reach.visible;
       if (k === 'l') labels.visible = !labels.visible;
+      if (k === 'k') explodeKeg();
+      if (k === 't') dropTree();
+      if (k === 'b') breakBridge();
+      if (k === 'o') rollBoulder();
     });
 
     window.addEventListener('resize', () => {
@@ -644,26 +893,72 @@
       soldiers.instanceMatrix.needsUpdate = true;
 
       goblinData.forEach((g, i) => {
-        let y;
+        let pos, show = 1;
         if (g.state === 'walk') {
-          g.r -= g.speed * dt;
-          if (g.r <= 47.5) { g.r = 47.5; g.state = 'climb'; g.t = 0; }
-          y = boardY(g.r) + Math.abs(Math.sin(t * 10 + i)) * 0.6;
+          if (g.delay > 0) { g.delay -= dt; show = 0; }
+          else {
+            // Road closed ahead: turn back to the last junction
+            if (g.leg && g.leg.e.blocked) {
+              g.leg = { e: g.leg.e, from: g.leg.to, to: g.leg.from, fwd: !g.leg.fwd };
+              g.s = g.leg.e.total - g.s;
+            }
+            if (!g.leg) { g.leg = pickLeg(g.node); g.s = 0; }
+            if (g.leg) {
+              const path = g.leg.fwd ? g.leg.e : g.leg.e.back;
+              g.s += g.speed * (g.p.distanceTo(mud.c) < mud.r ? 0.35 : 1) * dt;
+              g.p.copy(pointAt(path, g.s));
+              if (g.s >= path.total) {
+                g.node = g.leg.to; g.leg = null;
+                if (isWall(g.node)) {
+                  g.state = 'climb'; g.t = 0; g.r = 47.5;
+                  g.a = deg(nodes[g.node][0] + (Math.random() - 0.5) * 8);
+                }
+              }
+            }
+            if (g.p.distanceTo(forest.c) < forest.r) show = 0;
+          }
+          pos = up(g.p, Math.abs(Math.sin(t * 10 + i)) * 0.6);
+          pos.x += g.ox; pos.z += g.oz;
         } else if (g.state === 'climb') {
           g.t += dt;
-          y = BOARD + Math.min(g.t / 1.5, 1) * WALL_H;
+          pos = polar(g.r, g.a, BOARD + Math.min(g.t / 1.5, 1) * WALL_H);
           if (g.t > 1.5) { g.state = 'top'; g.t = 0; g.r = 45; }
         } else {
           // Sitting on top of the wall, right in reach
           g.t += dt;
-          y = WALL_TOP + 2;
+          pos = polar(g.r, g.a, WALL_TOP + 2);
           if (g.t > 2.5) spawnGoblin(g);
         }
-        dummy.position.copy(polar(g.r, g.a, y + 1.75));
+        dummy.position.copy(up(pos, 1.75));
+        dummy.scale.setScalar(show);
         dummy.updateMatrix();
         goblins.setMatrixAt(i, dummy.matrix);
       });
       goblins.instanceMatrix.needsUpdate = true;
+      dummy.scale.setScalar(1);
+
+      // Triggers
+      tree.ang += (tree.target - tree.ang) * Math.min(1, dt * 6);
+      tree.g.quaternion.setFromAxisAngle(treeAxis, tree.ang);
+      if (boulder.rolling) {
+        boulder.s += 45 * dt;
+        placeBoulder();
+        boulder.m.rotation.x += dt * 12;
+        killNear(boulder.m.position, 8);
+        if (boulder.s >= eB.total) {
+          boulder.rolling = false; boulder.m.visible = false;
+          later(8, () => { boulder.s = boulder.s0; placeBoulder(); boulder.m.visible = true; });
+        }
+      }
+      if (puff.visible) {
+        puffT += dt;
+        puff.scale.setScalar(5 + puffT * 80);
+        puff.material.opacity = 1 - puffT / 0.5;
+        if (puffT > 0.5) puff.visible = false;
+      }
+      for (let i = timers.length - 1; i >= 0; i--) {
+        if ((timers[i].t -= dt) <= 0) { timers[i].fn(); timers.splice(i, 1); }
+      }
 
       carts.forEach((c) => updateCart(c, dt));
 

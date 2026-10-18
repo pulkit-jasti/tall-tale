@@ -22,7 +22,7 @@ Top level overview and index. Each topic gets its own file once its design is lo
 | Topic | File | Status |
 |---|---|---|
 | Core loop and pacing | (planned) | In discussion |
-| Layout: board, castle, zones | (planned) | Mostly decided, see `maps/castle-3d.html` |
+| Map: board, roads, triggers, environment | [map.md](map.md) | First pass decided, mockup in `maps/castle-3d.html` |
 | Castle machines | (planned) | In discussion |
 | Giant tools and food currency | [giant-tools.md](giant-tools.md) | First pass decided |
 | Body abilities (grab, flick, smash, eat) | (planned) | Ideas only |
