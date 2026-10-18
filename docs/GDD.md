@@ -25,11 +25,11 @@ Top level overview and index. Each topic gets its own file once its design is lo
 | Layout: board, castle, zones | (planned) | Mostly decided, see `maps/castle-3d.html` |
 | Castle machines | (planned) | In discussion |
 | Giant tools and food currency | [giant-tools.md](giant-tools.md) | First pass decided |
-| Body abilities (grab, smash, eat, table slam) | (planned) | Ideas only |
+| Body abilities (grab, flick, smash, eat) | (planned) | Ideas only |
 | Food powers (powers from eating specific enemies) | (planned) | Ideas only |
 | Enemies | [enemies.md](enemies.md) | First set decided |
 | Levels and progression | (planned) | Ideas only |
-| Army and supply carts | (planned) | Later |
+| Army and supply carts | (planned) | Later. For now troops leave through a hidden gate at the front of the castle (an invisible spawner). Gate mechanics come later. |
 | Controls and accessibility | (planned) | Ideas only |
 | Juice and feel | (planned) | Principles only |
 | Art style | README.md | Decided |

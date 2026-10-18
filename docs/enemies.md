@@ -24,7 +24,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 |---|---|---|
 | Body | Speed and size | Grunt, runner |
 | Gear | Visual health layers | Helmet, shield, balloon |
-| Goal | What it goes after, so how urgent it is | Wall, gate, carts, machines, troops |
+| Goal | What it goes after, so how urgent it is | Wall, carts, machines, troops |
 
 ### Toughness (no health bars)
 
@@ -58,7 +58,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 - **Behavior:** tiny, fast, in big swarms. Rush past troops toward the wall.
 - **Toughness:** one hit.
 - **Best answer:** fly swatter.
-- **Also works:** table slam, arrow volley, megaphone.
+- **Also works:** arrow volley, megaphone, hands when they reach the wall.
 - **Weak:** slingshot (too small and fast).
 
 ### Balloon riders
@@ -73,7 +73,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Climbers
 
 - **Question:** "Are you paying attention?"
-- **Behavior:** climb the wall unseen and suddenly pop up on the rampart, in reach. If ignored, they sabotage: cut cart ropes, jam machines, or try to open the gate.
+- **Behavior:** climb the wall unseen and suddenly pop up on the rampart, in reach. If ignored, they sabotage: cut cart ropes or jam machines.
 - **Toughness:** one hit.
 - **Best answer:** hands (grab and eat). They are also a main food source.
 - **Also works:** swatter, pepper (seasoned for eating), cauldron.
@@ -99,7 +99,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 |---|---|---|---|---|---|---|
 | Grunt | ✓ | ★ | ✓ | ✓ | ✓ | ✓ |
 | Shield | ✓ (slow) | ✗ | ★ | ✓ | ✓ | ✓ (catapult) |
-| Runners | ✗ | ★ | ✓ | ✓ | ✓ (table slam) | ✓ (arrow volley) |
+| Runners | ✗ | ★ | ✓ | ✓ | ✓ (at the wall) | ✓ (arrow volley) |
 | Balloons | ★ | ✓ (when close) | ✗ | ✓ | ✓ (when close) | ✓ (ballista) |
 | Climbers | ✗ | ✓ | ✓ | ✓ | ★ | ✓ (cauldron) |
 | Tinker | ★ | ✓ (when close) | ✓ | ✓ | ✓ (when close) | ✓ (catapult) |
@@ -125,14 +125,13 @@ Later combos once the river exists: boats carrying climbers that climb from the 
 - Group size
 - Direction (which side, or several sides)
 - Timing (lull vs burst)
-- Goal (wall, gate, carts, machines, troops)
+- Goal (wall, carts, machines, troops)
 
 ---
 
 ## 6. Intruders (enemies inside the castle)
 
 Enemies only get inside through mistakes:
-- the gate left open too long
 - balloons dropping goblins into the courtyard
 - climbers the player missed
 
@@ -143,7 +142,7 @@ What happens:
 How the player deals with them (the courtyard is fully in reach):
 - Grab and eat.
 - Flick them over the wall. They land on their own army and knock them over.
-- Swatter. Workers caught under it get flattened like pancakes, then pop back up dizzy. No one dies.
+- Swatter. Kills the intruders it hits.
 - Pepper. They sneeze and are seasoned for eating.
 
 When the courtyard is clear, workers peek out, cheer and wave at the giant, then go back to work.

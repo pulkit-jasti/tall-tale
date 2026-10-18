@@ -14,7 +14,7 @@ The player's abilities are split into categories:
 |---|---|---|
 | Castle machines | Human-built war machines on the wall (catapult, cannon, arrow volley...), modified with chains, gears and buttons so the giant can run them | Supply carts, fixed wedge of coverage |
 | **Giant tools** | Tools built for the giant. Handheld, used directly on the battlefield | Food currency |
-| Body abilities | Grab, flick, smash, eat, table slam. Always available | Hand reach |
+| Body abilities | Grab, flick, smash, eat. Always available | Hand reach |
 | Food powers | Powers from eating specific enemies | Ideas only, not designed yet |
 
 This file covers giant tools and the food currency that powers them.
@@ -57,7 +57,7 @@ Food only comes from play, so smart play is rewarded.
 
 **Hidden climbers**
 - Every wave has some enemies that climb the wall unseen and suddenly pop up on the rampart, in reach.
-- If ignored, they cause trouble (for example cut a cart rope, jam a machine, or try to open the gate).
+- If ignored, they cause trouble (for example cut a cart rope or jam a machine).
 - If grabbed, they are instant food. Eating is defense, not just a snack.
 
 **Prisoner carts**
@@ -95,7 +95,7 @@ use tools -> enemies stunned / disarmed -> troops capture them
 
 ### Fly swatter
 
-- **Role:** crowd clearing. Flattens groups of basic goblins and gives the army a fighting chance.
+- **Role:** crowd clearing. Kills groups of basic goblins and gives the army a fighting chance.
 - **Zone:** near zone and the edge of the middle zone (the swatter's length extends reach).
 - **Use:** once activated, the player has about **10 seconds** to swat as many times as they want.
 - **Cost:** 4 food.
@@ -127,7 +127,7 @@ use tools -> enemies stunned / disarmed -> troops capture them
 | Tool | Zone | Effect | Duration | Food |
 |---|---|---|---|---|
 | Slingshot | Middle, far | Precise hits, breaks shields, pops balloons | Per shot | Free |
-| Fly swatter | Near, edge of middle | Flattens basic goblins, no shield break | ~10 s | 4 |
+| Fly swatter | Near, edge of middle | Kills basic goblins, no shield break | ~10 s | 4 |
 | Pepper shaker | Near (wall) | Strips gear, seasons for eating | 5 to 10 s | 3 |
 | Megaphone / bell | Everywhere | Stuns all enemies | One use | 6 |
 
@@ -146,7 +146,7 @@ use tools -> enemies stunned / disarmed -> troops capture them
 - All effect motion is code-driven math, not animation files or physics.
 - **Gear breaking off:** the piece detaches, flies in an arc with a spin, bounces once, shrinks away in about 1 second.
 - **Enemy death:** white hit flash (1 to 2 frames), squash and stretch, spinning launch arc, then a puff of colored particles and stars. Never just vanish.
-- **Swatter kill:** flattens like a pancake, wobbles, then poofs.
+- **Swatter kill:** quick squash on impact, then the same poof.
 - **Hit-stop:** 2 to 3 frame freeze on big hits.
 - Particles are instanced. Debris comes from a pool with a hard cap (for example 20 pieces at once). Extra ones skip the flight and just poof.
 - Rule: real physics only for things you grab. Math-based motion for all juice.
