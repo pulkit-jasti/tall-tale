@@ -23,8 +23,9 @@ Top level overview and index. Each topic gets its own file once its design is lo
 | Topic | File | Status |
 |---|---|---|
 | **MVP scope (first build)** | [mvp.md](mvp.md) | Decided |
+| Game modes, menu, progression, kingdom, achievements | [modes-and-progression.md](modes-and-progression.md) | Decided. Scoring to discuss. |
 | Core loop, pacing, troops, sound cues | [core-loop.md](core-loop.md) | Decided as a starting point |
-| Map: board, roads, triggers, environment, levels and level generator | [map.md](map.md) | First pass decided, mockup in `maps/castle-3d.html`. Session structure to confirm. |
+| Map: board, roads, triggers, environment, level generator | [map.md](map.md) | First pass decided, mockup in `maps/castle-3d.html` |
 | Castle rules: win, lose, flag | [castle-rules.md](castle-rules.md) | Decided for the first build |
 | Castle machines | [castle-machines.md](castle-machines.md) | On hold until the first playtest |
 | Giant tools and food currency | [giant-tools.md](giant-tools.md) | First pass decided |

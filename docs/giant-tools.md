@@ -176,9 +176,8 @@ Rules:
 ## 6. Unlocks and progression
 
 - **No loadout.** There is no tool choice before a battle. Every unlocked tool is always on its platform.
-- **Tools unlock as the player progresses.** How and when is not decided yet. It depends on the level structure (see [map.md](map.md#8-levels-and-the-level-generator)).
-- **MVP:** all 4 tools are available from the start.
-- Direction (not locked): introduce a new tool together with the enemy it counters, so the player meets the problem, then gets the answer.
+- **The tutorial battle introduces one tool per wave.** After the tutorial every tool is always available in every mode. No gating (see [modes-and-progression.md](modes-and-progression.md)).
+- Custom Game and daily twists can limit tools (for example "pepper only").
 
 ---
 

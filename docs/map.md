@@ -146,35 +146,23 @@ Always on. They change how a road plays.
   - each main road passes at least one trigger
   - climbers in every wave
 - **Randomness inside a level:** which camp spawns, route choices at junctions, timing jitter, small offsets per goblin. Every replay feels a bit different.
-- **Designed levels** are seeds we picked and tested because they play well.
-- **Arcade mode** (later) uses a random seed plus the player's settings (difficulty slider).
-- Same code for both, so no extra work.
+- **The tutorial battle** uses a fixed seed we picked and tested, with hand-written waves.
+- **Daily Battle** uses the date as the seed. **Endless** uses a random seed. **Custom Game** uses the player's settings and optional seed.
+- Same code for all modes, so no extra work. Modes are described in [modes-and-progression.md](modes-and-progression.md).
 
-### Levels vs difficulty
+### Map vs difficulty
 
-- **Level = what you face:** enemy types, map, camps, features, combos. New problems, never just more health.
-- **Difficulty slider = how much:** enemy count, spawn rate, speed, troop strength (see [controls-and-ui.md](controls-and-ui.md)).
+- **Map and enemy mix = what you face:** enemy types, camps, features, combos. New problems, never just more health.
+- **Difficulty settings = how much:** enemy count, spawn rate, speed, troop strength. Adjustable in Custom Game.
 
 ### MVP
 
-- One fixed level (one fixed seed). One biome (green fields).
-
-### Proposed session structure (confirm after re-reading the competition rules)
-
-- Meta suggests something "satisfying in 10 minutes or less", and judges may only play once.
-- **Single Play button:** one battle of about 8 to 10 minutes where each wave teaches something new, so a judge sees every mechanic in one play:
-  1. Hands and eating (scripted climber)
-  2. Slingshot
-  3. Swatter vs runners
-  4. Pepper and megaphone
-  5. Everything together
-- **After that:** Endless or Arcade mode with random seeds and the slider, as the reason to come back.
-- Separate campaign levels and unlocks later, if there is time.
+- Only the tutorial battle (one fixed seed). One biome (green fields).
 
 ---
 
 ## 9. Open questions
 
-- Final session structure and progression (see section 8).
+- Endless difficulty curve (see [modes-and-progression.md](modes-and-progression.md#7-open-questions)).
 - Rebuild time for bridges and how long a fallen tree blocks a road.
 - How the hidden gate for troops sits on the road graph.

@@ -8,8 +8,7 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
 
 ## 1. Waves
 
-- A battle is a series of waves: 3 in the first level, 4 to 5 in later levels. About 5 to 8 minutes per battle.
-- Proposed: a single 8 to 10 minute battle where each wave introduces something new (see [map.md](map.md#8-levels-and-the-level-generator)). To confirm.
+- A battle is a series of waves. The tutorial battle has 5 waves in about 8 minutes, each introducing something new. Daily Battle is about 5 waves, Endless runs until the flag falls. See [modes-and-progression.md](modes-and-progression.md).
 - **Tension and release comes from a gentle intensity curve inside each wave**, not from long waits.
 - Each wave (about 60 to 90 seconds):
   1. **Warning:** camps rumble a few seconds before enemies come out.

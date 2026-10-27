@@ -280,7 +280,7 @@ Known costs of IWSDK vs Unity:
 
 - Subtitle for the name (to make it searchable), for example *Tall Tale: The Giant's Keep*
 - Final list of tools and machines
-- Session structure: single Play battle vs separate levels (proposal in [docs/map.md](docs/map.md#8-levels-and-the-level-generator))
+- Endless scoring and difficulty curve (see [docs/modes-and-progression.md](docs/modes-and-progression.md))
 - Win and lose conditions for each battle
 - How the hunger meter works exactly
 - Progression between battles (what keeps players coming back)

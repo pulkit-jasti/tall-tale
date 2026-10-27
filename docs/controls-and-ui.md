@@ -53,7 +53,7 @@ The board is a full circle all the time. There are no 120 or 180 degree modes. A
 ## 3. Menus
 
 - **2D start page:** one "Enter VR" button (the browser needs one tap to enter VR). Later it also asks for mic permission and can offer an optional "Install app" button.
-- **In VR:** a single Play button for now. More options come with progression (see [map.md](map.md#8-levels-and-the-level-generator)).
+- **In VR:** the menu is the board in peacetime, with a giant menu board and trophy shelf. See [modes-and-progression.md](modes-and-progression.md#2-the-menu-is-the-board-in-peacetime). MVP: a single Play button.
 
 ---
 
@@ -123,7 +123,7 @@ A gesture is a rule over these, for example "all fingers curled and palm down = 
 
 ### Difficulty slider
 
-- Lives on the Arcade mode setup screen (see [map.md](map.md#8-levels-and-the-level-generator)).
+- A dial on the Custom Game panel (see [modes-and-progression.md](modes-and-progression.md#custom-game)).
 - One slider from "Relaxed" to "Chaos".
 - Changes only amounts: enemies per camp, spawn rate, enemy speed, troop strength. Never the mechanics.
 - Also a cognitive accessibility option: players who struggle with many decisions at once get fewer enemies.
