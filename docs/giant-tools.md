@@ -36,7 +36,7 @@ This file covers giant tools and the food currency that powers them.
 One shared food bar powers all giant tools (except the slingshot).
 
 - Eating fills the bar.
-- Each tool has a food cost. As long as you have enough food, you can use any tool in your loadout.
+- Each tool has a food cost. As long as you have enough food, you can use any unlocked tool.
 - When the bar is empty, no tool can be used (the slingshot still works).
 - The bar does not drain over time. It is a resource, not a hunger meter. The old hunger idea is replaced by this.
 
@@ -60,7 +60,11 @@ Food only comes from play, so smart play is rewarded.
 - If ignored, they cause trouble (for example cut a cart rope or jam a machine).
 - If grabbed, they are instant food. Eating is defense, not just a snack.
 
-**Prisoner carts**
+**Intruders**
+- Goblins that get inside the courtyard (dropped by balloons, or missed climbers) are fully in reach and can be grabbed and eaten. See [enemies.md](enemies.md).
+
+**Prisoner carts (on hold, not in the MVP)**
+- Decide after the first playtest, based on how food feels and available time.
 - Story reason: the kingdom's side of the deal is to feed the giant.
 - Enemies that are stunned (megaphone) or disarmed (pepper) can be captured by nearby troops with a net.
 - Troops wheel them back to the castle in a cage cart. The player lifts the cage lid, grabs a goblin and eats it.
@@ -74,9 +78,10 @@ use tools -> enemies stunned / disarmed -> troops capture them
 ```
 
 **Self balancing**
-- Winning: troops capture more, so prisoner carts feed you.
 - Losing: more enemies reach the wall, so more climbers come into reach.
-- Either way food arrives through play, and a losing player gets more chances, not fewer. No death spiral.
+- A losing player gets more food chances, not fewer. No death spiral.
+- With prisoner carts (later): winning also feeds you, because troops capture more.
+- MVP: food comes only from climbers and intruders, so each wave must have enough climbers. Tune in playtests.
 
 **First five minutes**
 - In wave 1, one goblin is scripted to climb the wall right in front of the player, so the eating moment happens in the first minute.
@@ -89,9 +94,24 @@ use tools -> enemies stunned / disarmed -> troops capture them
 
 - **Role:** precision. Breaks shields, pops balloons, hits single targets.
 - **Zone:** middle and far.
-- **Use:** pull back and release. Projectile path, so a short trajectory preview is fine here.
+- **Use:** pull back and release. Projectile path, so a short trajectory preview is fine here (see aim assist below).
 - **Cost:** no food. Uses pebbles from a bowl beside the player.
 - **Limit:** soldiers keep topping up the bowl from a stone pile. The refill rate and the pull-back time limit spamming. The player always has one direct action, even with no food.
+
+#### Slingshot aim assist
+
+Most good VR slingshot and bow games have some. In order of importance:
+
+1. **Steady release direction.** Hand tracking jitters when the fingers open, so use the average aim direction from the last ~100 ms before release, not the release frame. Matters most for hands.
+2. **Trajectory dots** while pulling (like Angry Birds). Maybe only the first half of the arc, so some skill stays.
+3. **Target glow:** the enemy (or trigger) about to be hit lights up while aiming.
+4. **Gentle pull toward targets:** after release, the pebble bends slightly toward the nearest enemy within a small cone (about 5 to 10 degrees).
+5. **Bigger hit area:** the pebble's hit area is a bit bigger than it looks.
+
+Rules:
+- The player should feel skilled, not see the game aim for them.
+- Keep the assist weak on runners, since the slingshot is meant to be weak against them.
+- Assist strength is a config number, tuned in playtests. A stronger assist can be an accessibility option later.
 
 ### Fly swatter
 
@@ -153,32 +173,40 @@ use tools -> enemies stunned / disarmed -> troops capture them
 
 ---
 
-## 6. Loadout and progression
+## 6. Unlocks and progression
 
-- **Loadout:** the player picks giant tools before each battle. 1 slot at first, 2 early, 3 later.
-- **Enemy preview:** the upcoming enemy types are shown before choosing, so the choice is informed, not a guess.
-- **Starter tools** work on all enemies. **Specialist tools** are built to counter specific enemy types.
-- **Each level unlocks one new enemy type and one new tool** that counters it. Introduced in the same level (the enemy appears, then the counter tool is given with a little moment), so every level ends with a win and a new toy.
-- Loadout choice gets interesting once enemy types outnumber slots (around level 3 or 4).
-
-### Draft level plan (not locked, enemies still to be designed)
-
-| Level | New enemy | New tool | Slots |
-|---|---|---|---|
-| 1 | Goblins (basic) | Slingshot + body abilities | 1 |
-| 2 | Shield goblins | Pepper shaker | 2 |
-| 3 | Balloons | Fly swatter | 2 |
-| 4 | River boats | (to decide) | 3 |
-| 5 | Boss mix | Megaphone / bell | 3 |
-
-### Scope
-
-- About 4 weeks left. Target 4 to 5 levels, 2 starter tools, about 4 specialist tools, about 4 enemy types.
-- Tools can share mechanics to save time.
+- **No loadout.** There is no tool choice before a battle. Every unlocked tool is always on its platform.
+- **Tools unlock as the player progresses.** How and when is not decided yet. It depends on the level structure (see [map.md](map.md#8-levels-and-the-level-generator)).
+- **MVP:** all 4 tools are available from the start.
+- Direction (not locked): introduce a new tool together with the enemy it counters, so the player meets the problem, then gets the answer.
 
 ---
 
-## 7. Open questions
+## 7. Tool platforms and display
+
+### Platforms
+
+- Tools sit on small platforms beside the player: **2 on each side**, slightly forward (about 45 degrees off center), not straight out to the sides. Easy to grab without twisting, and visible at the edge of view.
+- 4 spots, one per tool: the slingshot plus the 3 food tools.
+- **The platforms stay with the player.** They do not turn when the board rotates (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
+- The player chooses which side the slingshot sits on (handedness setting).
+
+### Using and returning
+
+- **Grabbing is free. First use costs food** (first swat, first shake, first scream). Accidental grabs never waste food.
+- **When the use is over**, the tool shrinks, poofs and reappears on its platform.
+- **If dropped mid-use**, it floats back to the hand area after about 1 second. Its timer keeps running.
+- **Not enough food:** the tool looks dimmed or tied down with a little rope, so it reads as locked without any text.
+
+### Cost and food display
+
+- Each platform shows the tool's cost as **food pips** on its front, not numbers. Pips the player can afford light up.
+- The **food meter is an object**: a jar or basket beside the tool platforms that fills with little food items. The player sees it naturally when reaching for a tool.
+- No floating panels in front of the player. The battlefield stays clear. See [controls-and-ui.md](controls-and-ui.md).
+
+---
+
+## 8. Open questions
 
 - Hidden strip below the outside of the wall: how pepper and other near-zone tools handle enemies the player cannot see there.
 - Tribute food (non-enemy food like roast chicken after a good wave): yes or no.

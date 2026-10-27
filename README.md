@@ -10,8 +10,9 @@ The feeling we want: being a kid playing with toy soldiers and machines, making 
 
 ## Status
 
-- Stage: design locked, no code yet.
-- Next step: week 1 technical spike (see below).
+- Stage: design in [docs/GDD.md](docs/GDD.md). IWSDK project set up, no game code yet (starter template files still in `src/`).
+- Next step: the MVP build ([docs/mvp.md](docs/mvp.md)).
+- Some sections below are older than the GDD docs. When they disagree, the docs win.
 
 ---
 
@@ -56,7 +57,7 @@ Stage 1 is a pass/fail check that the project fits the theme and uses the requir
 |---|---|---|
 | Best New Gaming Experience | $100,000 (runner-up $50,000) | Main target |
 | Best First Five Minutes | $25,000 | Eating a goblin in the first minute is the hook |
-| Best Accessibility Forward Experience | $25,000 | Voice alternatives, roar, arc presets, threat cues |
+| Best Accessibility Forward Experience | $25,000 | Voice alternatives, quiet mode, rotating board, threat cues |
 | Boldest Original Concept | $25,000 | You sit inside the board. Only works in VR |
 | Best Reason to Come Back | $25,000 | Needs a good progression design |
 | Judge's Choice | $20,000 x2 | Bonus |
@@ -112,11 +113,10 @@ All actions are simple grab, drag, pull and release. No complex gestures.
   3. The enemy struggles, waving its arms and legs.
   4. Let go. It drops into your mouth, which closes.
 
-### Loadout
+### Tools and unlocks
 
 - There is a fixed set of tools. No AI-generated tools.
-- Before each battle you can only bring a limited number of them.
-- Choosing your loadout for the next battle is part of the strategy.
+- No loadout. Tools unlock as you progress, and every unlocked tool is always available. Details in [docs/giant-tools.md](docs/giant-tools.md).
 
 ### Hunger (proposed)
 
@@ -133,13 +133,12 @@ All actions are simple grab, drag, pull and release. No complex gestures.
 ### Surround play and comfort
 
 - The battlefield wraps around you, including threats from above (flyers, towers).
-- **Default:** about a 180 degree arc in front of you. Works in any chair.
-- **360 mode:** opt-in, for players on a swivel chair.
-- **Comfort mode:** about 120 degrees, for limited mobility.
+- **Always a full 360 degree board.** Two handles in front of you let you spin the board and set its height with both hands, so you never need to turn around. A seated game does not need a small world, just one that is easy to bring to you. Works in any chair.
+- **Comfort:** only the board spins. The sky, horizon and your tools stay still. Snap rotation is a later comfort option.
 - **Threat cues:**
   1. Spatial audio from the real direction of the threat (main cue).
-  2. A subtle glow on the ground or wall toward the threat.
-  3. A glow at the edge of your view, as an accessibility option only.
+  2. Visual cues (smoke, glow) as an accessibility option only.
+- Details in [docs/controls-and-ui.md](docs/controls-and-ui.md).
 - Threat cues matter for judging too ("FoV-aware design"), because Meta VR Glasses have a different field of view than Quest.
 
 ### Emergence
@@ -204,6 +203,15 @@ Known costs of IWSDK vs Unity:
 - Slightly slower first load.
 - Last year (2025) there was a separate IWSDK award. In 2026 there is not, so we compete directly with Unity games.
 
+### Hosting and the Quest browser
+
+- **For now:** a plain browser link hosted on **GitHub Pages** (HTTPS, which WebXR needs). Vite needs the repo base path set (for example `/tall-tale/`). The player opens the link and taps "Enter VR" once.
+- **Later: PWA and Store app.** Meta's Bubblewrap tool wraps the site into a Quest app. The app loads our hosted URL full screen and can launch straight into VR. Every web deploy updates the installed app, with no new build or Store review. Then use a separate test URL so the live version only changes when we choose. Whether the competition needs a Store build or accepts a link: check the Devpost rules.
+- **Quest browser:** Chromium based, kept close to desktop Chrome. Service workers, Cache Storage, IndexedDB and Web Audio work. Remote debugging with Chrome DevTools works. Use feature detection, not user-agent checks (Quest 3S reports itself as "Quest 3").
+- **Limits:** a mobile chip, no Web Speech API, entering VR and playing sound both need a user tap, storage limits are not documented by Meta.
+- **Loading:** the browser caches files after the first load. Keep audio small. A service worker for offline play can come with the PWA.
+- **AR mode (later):** IWSDK supports passthrough. Avoid depending on the sky or backdrop so AR stays a cheap toggle.
+
 ### Voice tech
 
 - The Quest browser has **no built-in speech recognition** (no Web Speech API).
@@ -245,6 +253,8 @@ Known costs of IWSDK vs Unity:
 - [ ] Roar detection by volume
 - [ ] Vosk recognizes a command in under about 300 to 500 ms on Quest 3S
 - [ ] Frame rate with many units, physics and Vosk running together
+- [ ] Spinning the board with two handles feels comfortable
+- [ ] Slingshot release direction is steady with hand tracking
 
 **Toy test:** build a tiny version with no menus or levels: you, a castle, a few goblins walking in, one machine and one cart. If it is fun to mess around with for 10 minutes, keep going.
 
@@ -270,7 +280,7 @@ Known costs of IWSDK vs Unity:
 
 - Subtitle for the name (to make it searchable), for example *Tall Tale: The Giant's Keep*
 - Final list of tools and machines
-- How many tools per battle (loadout size)
+- Session structure: single Play battle vs separate levels (proposal in [docs/map.md](docs/map.md#8-levels-and-the-level-generator))
 - Win and lose conditions for each battle
 - How the hunger meter works exactly
 - Progression between battles (what keeps players coming back)
@@ -294,6 +304,9 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 9. **Surround board:** kept. You sit inside the battlefield. Rare in VR strategy games.
 10. **Two armies with you as the giant:** kept. Inspired by Totally Accurate Battle Simulator, Social Empires and faction fights in Watch Dogs, Far Cry and GTA.
 11. **Fixed physical tools instead of AI constructs:** kept. Better for hand tracking, much smaller scope, more polish.
+12. **180 degree default with 120 and 360 presets:** replaced by a full 360 board the player spins and adjusts with two-handed handles. Unique, and fully seated.
+13. **Loadout before each battle:** dropped. Tools unlock and are always available.
+14. **Calibration screen:** replaced by auto placement on Play, the handles, and a "Reset table" button.
 
 ---
 

@@ -165,4 +165,4 @@ When the courtyard is clear, workers peek out, cheer and wave at the giant, then
 
 - **Silhouette:** each type is recognizable from far away (round shields, tiny fast runners, balloons, the tinker's big backpack).
 - **Color:** each type has its own color accent inside the palette.
-- **Sound:** each type has its own sound from its real direction (marching, buzzing imps, balloon creaks, tinker clanging). This doubles as the threat cue.
+- **Sound:** every enemy makes sound all the time while walking (grunting, cheering, marching, buzzing imps, balloon creaks, tinker clanging). It comes from their real direction and gets louder as they get closer. This is the main threat cue. See [core-loop.md](core-loop.md#3-direction-cues-sound-first).

@@ -4,10 +4,11 @@ Top level overview and index. Each topic gets its own file once its design is lo
 
 ## Overview
 
-- **Pitch:** You are a giant sitting in the middle of a tiny castle. Help your little army win the battle around you by running war machines, using giant tools, and eating enemies.
+- **Pitch:** You are a giant sitting in the middle of a tiny castle. Help your little army win the battle around you by using giant tools, grabbing and smashing enemies, and eating them.
+- **Board:** a full 360 degree round board you spin and adjust with two hands. A seated game with a big world you bring to you.
 - **Platform:** Meta Quest (3S target), WebXR with IWSDK.
 - **Play style:** seated, hands only, voice optional.
-- **Session:** short battles in waves, with calm moments between them.
+- **Session:** short battles in waves, with a gentle intensity curve and short breathers between them.
 
 ## Design pillars
 
@@ -21,14 +22,16 @@ Top level overview and index. Each topic gets its own file once its design is lo
 
 | Topic | File | Status |
 |---|---|---|
-| Core loop and pacing | (planned) | In discussion |
-| Map: board, roads, triggers, environment | [map.md](map.md) | First pass decided, mockup in `maps/castle-3d.html` |
+| **MVP scope (first build)** | [mvp.md](mvp.md) | Decided |
+| Core loop, pacing, troops, sound cues | [core-loop.md](core-loop.md) | Decided as a starting point |
+| Map: board, roads, triggers, environment, levels and level generator | [map.md](map.md) | First pass decided, mockup in `maps/castle-3d.html`. Session structure to confirm. |
+| Castle rules: win, lose, flag | [castle-rules.md](castle-rules.md) | Decided for the first build |
 | Castle machines | [castle-machines.md](castle-machines.md) | On hold until the first playtest |
 | Giant tools and food currency | [giant-tools.md](giant-tools.md) | First pass decided |
 | Enemies | [enemies.md](enemies.md) | First set decided |
-| Army and supply carts | (planned) | Later. For now troops leave through a hidden gate at the front of the castle (an invisible spawner). Gate mechanics come later. |
-| Controls and accessibility | (planned) | Ideas only |
+| Army and supply carts | (planned) | Later. Basic troop behavior is in [core-loop.md](core-loop.md). Troops leave through a hidden gate at the front (an invisible spawner). Gate mechanics, picking up troops and prisoner capture are on hold. |
+| Controls, UI and accessibility: 360 board and handles, menus, custom gestures, AR | [controls-and-ui.md](controls-and-ui.md) | First pass |
 | Juice and feel | (planned) | Principles only |
 | Art style | [README.md](../README.md) | Decided |
-| Audio | (planned) | Not started |
-| Tech and performance | [README.md](../README.md), [AGENTS.md](../AGENTS.md) | Decided |
+| Audio | [audio.md](audio.md) | Candidate sound list. Enemy sound cues decided in [core-loop.md](core-loop.md). |
+| Tech, hosting and performance | [README.md](../README.md), [AGENTS.md](../AGENTS.md) | Decided |

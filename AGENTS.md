@@ -5,15 +5,15 @@ Instructions for any coding agent working on this repo (Claude Code, Codex, Curs
 ## What this project is
 
 Tall Tale is a seated, hands-only VR game for Meta Quest, built for the Meta VR Start Developer Competition 2026.
-You are a giant sitting in the middle of a round castle. A tiny battle happens all around you. You help your army win by moving carts, loading and cranking war machines, picking up and placing troops, smashing enemies near the walls, and eating them.
+You are a giant sitting in the middle of a round castle. A tiny battle happens all around you. You help your army win by using giant tools, grabbing and smashing enemies near the walls, and eating them.
 
-Read README.md for the full design before making gameplay decisions.
+Read README.md and docs/GDD.md for the full design before making gameplay decisions. docs/mvp.md defines the first playable build.
 
 ## Hard rules (never break these)
 
 1. **Hands only.** The entire game must be playable with hand tracking. No controller is ever required. Controller support is optional and low priority.
 2. **Voice is never required.** Every voice command (troop orders, roar) must also have a hand-based way to do the same thing.
-3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius. Default play area is about 180 degrees in front of the player. 360 degrees is an opt-in mode. A 120 degree comfort preset must exist.
+3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius. The board is always a full 360 degree circle that the player rotates and adjusts with two-handed handles, so nothing ever requires turning around. Only the board rotates. The sky, horizon and the player's tool platforms stay fixed (comfort). See docs/controls-and-ui.md.
 4. **Performance first.** The game must hold a stable frame rate on a Meta Quest 3S. If a feature hurts frame rate, simplify it.
 5. **No copyrighted IP.** No names, logos, characters or lore from existing games, comics or films.
 6. **Cartoon violence only.** Enemies are non-human (goblins, orcs, etc.). No blood or gore. Eating enemies must stay funny, not disturbing.
@@ -26,7 +26,7 @@ Read README.md for the full design before making gameplay decisions.
 - **Speech:** vosk-browser (offline, runs in a Web Worker) with a small fixed command list.
 - **Roar detection:** Web Audio API volume analysis. No speech recognition needed.
 - **Assets:** low-poly. CC0 packs from Kenney.nl and Quaternius in glTF format, plus simple shapes generated in code.
-- **Hosting:** static hosting (GitHub Pages or Vercel). Judges open a link.
+- **Hosting:** GitHub Pages (static). Players open a link in the Quest browser. Vite needs the repo base path (for example `/tall-tale/`). PWA and Store packaging come later.
 - **No backend** unless a feature truly needs one. Ask before adding one.
 
 Use the IWSDK MCP server and code search (RAG) server that ship with new IWSDK projects to look up real SDK APIs. Do not guess IWSDK APIs.
