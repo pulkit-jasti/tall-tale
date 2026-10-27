@@ -94,9 +94,24 @@ The kingdom thanks the giant with gifts. Never on the space inside the wall, bec
 
 ## 5. Achievements
 
+Not in the MVP.
+
 - A list of flags, each tripped by a simple rule (for example "eat a seasoned goblin", "triple chain reaction", "eat every enemy type").
 - Shown as trophies on the trophy shelf.
 - Later: some achievements unlock kingdom gifts.
+
+### Reading a trophy
+
+- **Grab to read:** pick up a trophy and a small wooden tag unfolds beside it with the name and how it was earned, for example "Seasoned Snack: eat a peppered goblin". Put it back and the tag folds away. Held close to the face, the text is easy to read.
+- **Own shape per trophy** that hints at what it is for (a tiny pepper shaker, a goblin helmet, a boulder).
+- **Locked trophies are grey.** They can be grabbed too, and the tag shows a hint ("Eat a goblin that has been...?"). A few stay secret ("???") for surprise.
+- **Counter** on the shelf, for example "4 / 9".
+
+### Earning one
+
+- **During battle:** only a short sound and a small sparkle, so it does not distract.
+- **After the battle:** the new trophy pops up in the results moment with its name, then flies onto the shelf.
+- **New trophies glow** on the shelf until grabbed once.
 
 ---
 

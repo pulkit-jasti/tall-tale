@@ -30,7 +30,11 @@
     Arrow keys: move around<br>
     1: giant's eye view, 2: overview<br>
     H: hide giant, R: arm reach, L: labels<br>
-    K: keg, T: tree, B: bridge, O: boulder
+    K: keg, T: tree, B: bridge, O: boulder<br>
+    M: menu (peacetime) / battle<br>
+    U: first launch / unlocked menu, C: tap Custom Game / Back<br>
+    Q / E: spin board, [ / ]: board height, 0: reset table<br>
+    X: machines (on hold)
   </div>
 
   <script type="module">
@@ -102,7 +106,9 @@
     const labels = new THREE.Group();
     scene.add(labels);
 
-    function label(text, pos, size = 1) {
+    const allLabels = [];
+    let labelsOn = true;
+    function label(text, pos, size = 1, parent = labels) {
       const c = document.createElement('canvas');
       c.width = 512; c.height = 96;
       const g = c.getContext('2d');
@@ -119,7 +125,17 @@
       sp.scale.set(32 * size, 6 * size, 1);
       sp.position.copy(pos);
       sp.renderOrder = 10;
-      labels.add(sp);
+      sp.visible = labelsOn;
+      parent.add(sp);
+      allLabels.push(sp);
+      return sp;
+    }
+
+    // Move everything added to the scene (and to labels) since a marker into a group
+    const mark = () => ({ s: new Set(scene.children), l: new Set(labels.children) });
+    function moveSince(m, group) {
+      for (const o of [...scene.children]) if (!m.s.has(o) && o !== group) group.add(o);
+      for (const o of [...labels.children]) if (!m.l.has(o)) group.add(o);
     }
 
     // ---------- Real floor (only seen through the hole you sit in) ----------
@@ -271,6 +287,10 @@
     }
 
     // ---------- Machines on the wall, operated directly by hand ----------
+    // On hold (not in the MVP), so hidden by default. X shows them.
+    const machines = new THREE.Group();
+    machines.visible = false;
+    const mMachines = mark();
     const slots = [
       { d: 162, name: 'Cauldron', machine: cauldron },
       { d: 126, name: 'Arrow volley', machine: volley },
@@ -410,6 +430,11 @@
     }
     carts.forEach((c) => { c.g.position.copy(c.pts[0]); c.g.lookAt(c.pts[1]); });
     label('Prisoner cart', polar(37.5, deg(195), BOARD + 12), 0.45);
+    moveSince(mMachines, machines);
+    scene.add(machines);
+
+    // The giant's own things (tools, bowl, jar) stay still when the board spins
+    const mTools = mark();
 
     // ---------- Giant tools: 4 platforms beside you, 2 per side ----------
     const FOOD = 5; // example: food currently in the jar, out of 10
@@ -452,20 +477,20 @@
     }
 
     const tools = [
-      { d: 50,  name: 'Slingshot (free)', make: slingshot, cost: 0 },
-      { d: 30,  name: 'Pepper shaker', make: pepper, cost: 3 },
-      { d: 130, name: 'Fly swatter', make: swatter, cost: 4 },
-      { d: 150, name: 'Megaphone / bell', make: megaphone, cost: 6 },
+      { d: 90,  r: 32, name: 'Slingshot (free)', make: slingshot, cost: 0 },
+      { d: 45,  name: 'Pepper shaker', make: pepper, cost: 3 },
+      { d: 25,  name: 'Megaphone / bell', make: megaphone, cost: 6 },
+      { d: 140, name: 'Fly swatter', make: swatter, cost: 4 },
     ];
 
     for (const t of tools) {
-      const a = deg(t.d);
+      const a = deg(t.d), r = t.r || 30;
       const base = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5, 2, 20), mat(0x8a6a4a));
-      base.position.copy(polar(30, a, BOARD + 1));
+      base.position.copy(polar(r, a, BOARD + 1));
       scene.add(base);
 
       const tool = t.make();
-      tool.position.copy(polar(30, a, BOARD + 2));
+      tool.position.copy(polar(r, a, BOARD + 2));
       tool.rotation.y = faceOut(a);
       scene.add(tool);
 
@@ -476,7 +501,7 @@
         });
         const rope = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.4, 6, 16), mat(0x8b5a2b));
         rope.rotation.x = Math.PI / 2;
-        rope.position.copy(polar(30, a, BOARD + 5));
+        rope.position.copy(polar(r, a, BOARD + 5));
         scene.add(rope);
       }
 
@@ -487,11 +512,11 @@
           new THREE.SphereGeometry(0.7, 10, 8),
           lit ? new THREE.MeshBasicMaterial({ color: 0xff8a00 }) : mat(0x777777)
         );
-        pip.position.copy(polar(26.5, a, BOARD + 2.4)).addScaledVector(tangent(a), (i - (t.cost - 1) / 2) * 1.7);
+        pip.position.copy(polar(r - 3.5, a, BOARD + 2.4)).addScaledVector(tangent(a), (i - (t.cost - 1) / 2) * 1.7);
         scene.add(pip);
       }
 
-      label(t.name, polar(30, a, BOARD + 30), 0.45);
+      label(t.name, polar(r, a, BOARD + 30), 0.45);
     }
 
     // Pebble bowl beside the slingshot, kept topped up by soldiers
@@ -499,28 +524,31 @@
       new THREE.SphereGeometry(2.5, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
       new THREE.MeshLambertMaterial({ color: 0x8a6a4a, side: THREE.DoubleSide })
     );
-    bowl.position.copy(polar(31, deg(65), BOARD + 2.5));
+    bowl.position.copy(polar(33, deg(75), BOARD + 2.5));
     scene.add(bowl);
     for (let i = 0; i < 6; i++) {
       const p = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 6), mat(0x888888));
-      p.position.copy(polar(31, deg(65), BOARD + 1.6)).add(new THREE.Vector3(Math.cos(i) * 1.2, (i % 2) * 0.5, Math.sin(i) * 1.2));
+      p.position.copy(polar(33, deg(75), BOARD + 1.6)).add(new THREE.Vector3(Math.cos(i) * 1.2, (i % 2) * 0.5, Math.sin(i) * 1.2));
       scene.add(p);
     }
-    label('Pebble bowl', polar(31, deg(65), BOARD + 9), 0.4);
+    label('Pebble bowl', polar(33, deg(75), BOARD + 9), 0.4);
 
     // Food jar on the other side, fills with food items
     const jar = new THREE.Mesh(
       new THREE.CylinderGeometry(3, 3, 15, 16, 1, true),
       new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
     );
-    jar.position.copy(polar(31, deg(115), BOARD + 7.5));
+    jar.position.copy(polar(31, deg(120), BOARD + 7.5));
     scene.add(jar);
     for (let i = 0; i < FOOD; i++) {
       const f = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), mat(i % 2 ? 0xd9822b : 0xb5523b));
-      f.position.copy(polar(31, deg(115), BOARD + 1.3 + i * 1.4)).add(new THREE.Vector3((i % 2 ? 0.6 : -0.6), 0, 0));
+      f.position.copy(polar(31, deg(120), BOARD + 1.3 + i * 1.4)).add(new THREE.Vector3((i % 2 ? 0.6 : -0.6), 0, 0));
       scene.add(f);
     }
-    label('Food jar (' + FOOD + '/10)', polar(31, deg(115), BOARD + 20), 0.45);
+    label('Food jar (' + FOOD + '/10)', polar(31, deg(120), BOARD + 20), 0.45);
+    const fixed = new THREE.Group();
+    moveSince(mTools, fixed);
+    scene.add(fixed);
 
     // Flags on the side towers: castle health (left), wave progress (right)
     for (const [d, color, text] of [[180, 0xe23b3b, 'Castle health flag'], [0, 0x2d5bd1, 'Wave progress flag']]) {
@@ -544,6 +572,7 @@
     label('Far zone (rises toward you)', polar(260, deg(100), boardY(260) + 15), 1.4);
 
     // ---------- Giant ----------
+    const mPlayer = mark();
     const giant = new THREE.Group();
     const SKIN = 0xe0b48f;
     const chair = box(34, 45, 34, 0x7a5a3a); chair.position.set(0, 22.5, 8); giant.add(chair);
@@ -568,6 +597,9 @@
     reach.position.set(0, 96, 2);
     reach.visible = false;
     scene.add(reach);
+    const player = new THREE.Group();
+    moveSince(mPlayer, player);
+    scene.add(player);
 
     // ---------- Soldiers walking in the courtyard and on the wall ----------
     const lanes = [
@@ -687,12 +719,23 @@
     const faceAlong = (m, dir) => m.lookAt(m.position.clone().add(dir));
     const up = (p, y) => p.clone().add(new THREE.Vector3(0, y, 0));
 
-    // Camps
+    // Enemy camps: sand and rock hills. Bigger camp, more enemies. They rise out of the ground for battle.
+    const tents = [], campLabels = [];
     for (const id of CAMPS) {
-      const tent = new THREE.Mesh(new THREE.ConeGeometry(9, 12, 6), mat(0x7a2e2e));
-      tent.position.copy(up(nodePos(id), 6));
-      scene.add(tent);
-      label('Goblin camp', up(nodePos(id), 22), 0.7);
+      const camp = new THREE.Group();
+      const size = rand(7, 13);
+      const sand = new THREE.Mesh(new THREE.SphereGeometry(size, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xd8c08a));
+      sand.scale.y = 0.7;
+      camp.add(sand);
+      for (let i = 0; i < 4; i++) {
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(size * 0.25), mat(0x8a8a8a));
+        rock.position.set(Math.cos(i * 1.7) * size * 0.6, size * 0.35, Math.sin(i * 1.7) * size * 0.6);
+        camp.add(rock);
+      }
+      camp.position.copy(nodePos(id));
+      scene.add(camp);
+      tents.push(camp);
+      campLabels.push(label('Enemy camp', up(nodePos(id), 22), 0.7));
     }
 
     // ---------- Decor: no gameplay, just makes the land look lived in ----------
@@ -715,10 +758,10 @@
       }
     }
     scatter(10, 90, 450, 16, () => box(rand(14, 24), 0.4, rand(10, 18), Math.random() < 0.5 ? 0xd9c36a : 0x7fae4e)); // fields
-    scatter(20, 70, 480, 12, () => house(rand(4, 7), rand(3, 5), rand(4, 6), STONE));
-    scatter(90, 70, 680, 6, () => cone(rand(3, 5), rand(10, 18), 0x2f6b2a)); // trees
-    scatter(30, 60, 680, 5, () => new THREE.Mesh(new THREE.DodecahedronGeometry(rand(1.5, 4)), mat(0x8a8a8a))); // rocks
-    scatter(15, 70, 450, 6, () => { // haystacks
+    scatter(20, 92, 480, 12, () => house(rand(4, 7), rand(3, 5), rand(4, 6), STONE));
+    scatter(90, 92, 680, 6, () => cone(rand(3, 5), rand(10, 18), 0x2f6b2a)); // trees
+    scatter(30, 92, 680, 5, () => new THREE.Mesh(new THREE.DodecahedronGeometry(rand(1.5, 4)), mat(0x8a8a8a))); // rocks
+    scatter(15, 92, 450, 6, () => { // haystacks
       const m = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.4, 3, 8), mat(0xd9b84a));
       m.geometry.translate(0, 1.5, 0);
       return m;
@@ -845,6 +888,249 @@
     }
     scene.add(goblins);
 
+    // ---------- The growing kingdom (on the board, spins with it) ----------
+    // Kingdom ring: stone paving outside the wall, where villagers live
+    const KINGDOM_OUT = 85;
+    const kingdom = ring(WALL_OUT, KINGDOM_OUT, 0.25, 0xc4bcae);
+    kingdom.position.y = BOARD;
+    scene.add(kingdom);
+    circleLine(KINGDOM_OUT, 0x8f877a);
+
+    // Gifts sit between roads, never on them
+    function giftSpots(r, gap) {
+      const spots = [];
+      for (let d = 0; d < 360; d += 6) {
+        if (angDiff(d, 270) < 10 || !clearOfRoads(polar(r, deg(d)), gap)) continue;
+        spots.push(d);
+      }
+      return spots.sort(() => Math.random() - 0.5);
+    }
+
+    const monuments = [
+      ['Statue of the giant', () => {
+        const g = new THREE.Group();
+        const p = box(4, 2, 4, STONE_DARK); p.position.y = 1; g.add(p);
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.6, 4, 8), mat(STONE)); body.position.y = 4; g.add(body);
+        const hd = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), mat(STONE)); hd.position.y = 6.8; g.add(hd);
+        return g;
+      }],
+      ['Obelisk', () => {
+        const g = new THREE.Group();
+        const o = box(1.6, 6, 1.6, STONE); o.position.y = 3; g.add(o);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(1.2, 1.6, 4), mat(0xffc531));
+        tip.position.y = 6.8; tip.rotation.y = Math.PI / 4; g.add(tip);
+        return g;
+      }],
+      ['Fountain', () => {
+        const g = new THREE.Group();
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 1.2, 14), mat(STONE)); b.position.y = 0.6; g.add(b);
+        const w = new THREE.Mesh(new THREE.CircleGeometry(2.6, 14), mat(0x4a90d9));
+        w.rotation.x = -Math.PI / 2; w.position.y = 1.25; g.add(w);
+        const c = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 3, 6), mat(STONE)); c.position.y = 2; g.add(c);
+        return g;
+      }],
+      ['Banner pole', () => {
+        const g = new THREE.Group();
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 8, 6), mat(0x444444)); p.position.y = 4; g.add(p);
+        const c = box(0.2, 3, 2.4, 0xe0a82e); c.position.set(0, 6.2, 1.2); g.add(c);
+        return g;
+      }],
+    ];
+    const monumentSpots = giftSpots(62, 7);
+    monuments.forEach(([name, make], i) => {
+      const a = deg(monumentSpots[i * 3] ?? monumentSpots[i]); // spread out
+      const m = make();
+      m.position.copy(polar(62, a, BOARD + 0.25));
+      m.rotation.y = faceOut(a);
+      scene.add(m);
+      label(name, polar(62, a, BOARD + 13), 0.4);
+    });
+    const homeSpots = giftSpots(76, 6).slice(0, 14);
+    for (const d of homeSpots) {
+      const h = house(4, 3, 4, 0xe8dcc0);
+      h.position.copy(polar(76, deg(d), BOARD + 0.25));
+      h.rotation.y = faceOut(deg(d));
+      scene.add(h);
+    }
+    label('Kingdom ring (stone village)', polar(76, deg(homeSpots[0]), BOARD + 10), 0.5);
+
+    // Villagers walk the ring in peacetime and run indoors when a battle starts
+    const VILLAGERS = 40;
+    const villagers = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 2, 0.9), mat(0xf2c14e), VILLAGERS);
+    const villagerData = Array.from({ length: VILLAGERS }, () => ({
+      a: Math.random() * Math.PI * 2, r: rand(50, 80),
+      speed: rand(0.03, 0.08) * (Math.random() < 0.5 ? -1 : 1),
+    }));
+    scene.add(villagers);
+
+    // Gifts that grow upward: banners and lanterns on the towers
+    [0, 180, 225, 315].forEach((d, i) => {
+      const a = deg(d);
+      const banner = box(2.4, 6, 0.3, i % 2 ? 0xe0a82e : 0x8e5bd5);
+      banner.position.copy(polar(47.3, a, BOARD + 11));
+      banner.rotation.y = faceOut(a);
+      scene.add(banner);
+      const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd36b }));
+      lantern.position.copy(polar(47.5, a, BOARD + 15.5));
+      scene.add(lantern);
+    });
+    label('Gifts: banners, lanterns', polar(50, deg(225), BOARD + 26), 0.45);
+
+    // Trophy hill near the horizon: helmets and shields only (never bodies), grows after each battle
+    const hillPos = onBoard(polar(380, deg(270)));
+    const trophy = new THREE.Group();
+    trophy.position.copy(hillPos);
+    const mound = new THREE.Mesh(new THREE.SphereGeometry(20, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x9b8b6a));
+    mound.scale.y = 0.9;
+    trophy.add(mound);
+    for (let i = 0; i < 70; i++) {
+      const th = rand(0, Math.PI / 2 * 0.95), ph = rand(0, Math.PI * 2);
+      const p = new THREE.Vector3(Math.sin(th) * Math.cos(ph), Math.cos(th) * 0.9, Math.sin(th) * Math.sin(ph)).multiplyScalar(20);
+      const piece = i % 3
+        ? new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x8f9aa6))
+        : new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.5, 10), mat(0x9b3b2b));
+      piece.position.copy(p);
+      piece.rotation.set(rand(-0.6, 0.6), rand(0, 6), rand(-0.6, 0.6));
+      trophy.add(piece);
+    }
+    scene.add(trophy);
+    const signPost = box(1, 10, 1, WOOD);
+    signPost.position.copy(up(hillPos, 5)).add(new THREE.Vector3(0, 0, -24));
+    scene.add(signPost);
+    label('Trophy hill: 1,284 goblins defeated', up(hillPos, 34), 1.2);
+
+    // ---------- The giant's things (giant-sized, stay still) ----------
+    // Handles on the inner rim. Hold both: twist to spin the board, lift to set its height.
+    const handleMat = mat(0x5a4330);
+    for (const d of [70, 110]) {
+      const a = deg(d);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 4, 8), handleMat);
+      post.position.copy(polar(26.5, a, BOARD + 2));
+      fixed.add(post);
+      const grip = cylinderBetween(
+        polar(26.5, a, BOARD + 4).addScaledVector(tangent(a), -3),
+        polar(26.5, a, BOARD + 4).addScaledVector(tangent(a), 3), 1.1, 0x5a4330);
+      grip.material = handleMat;
+      fixed.add(grip);
+    }
+    label('Handles: twist = spin, lift = height', polar(27, deg(90), BOARD + 9), 0.45, fixed);
+
+    // Menu items rise out of the rim in peacetime and sink when a battle starts
+    const menuItems = [];
+    function menuItem(d, r) {
+      const g = new THREE.Group();
+      g.position.copy(polar(r, deg(d), BOARD));
+      g.rotation.y = faceOut(deg(d)); // local +Z faces you
+      g.userData.k = 1; // 1 = fully up, 0 = sunk into the rim
+      fixed.add(g);
+      menuItems.push(g);
+      return g;
+    }
+
+    // A giant sign: legs straight up, the board tilted back about 17 degrees so it is easy to read
+    const TILT = 0.3;
+    function signBoard(item) {
+      for (const x of [-17.8, 17.8]) { const p = box(1.5, 34, 1.5, WOOD); p.position.set(x, 17, 0); item.add(p); }
+      const face = new THREE.Group();
+      face.position.y = 22;
+      face.rotation.x = -TILT; // top leans away from you
+      item.add(face);
+      face.add(box(34, 24, 1.2, 0xb08a5e));
+      return face; // children use y relative to the board center
+    }
+
+    // Main menu board: a giant notice board the villagers built, with big carved buttons
+    const menuBoard = menuItem(90, 37);
+    const menuFace = signBoard(menuBoard);
+    for (const x of [-9, 2, 7]) { const v = box(0.9, 2, 0.9, 0xf2c14e); v.position.set(x, 13, 0); menuFace.add(v); } // tiny painters
+    const paint = box(0.8, 0.8, 0.8, 0xc8553d); paint.position.set(3, 12.4, 0); menuFace.add(paint);
+
+    const buttons = new THREE.Group();
+    buttons.position.y = -22; // button heights below are measured from the ground
+    menuFace.add(buttons);
+    let firstLaunch = true;
+    function button(text, y, color, locked) {
+      const b = box(22, 3.2, 1, locked ? 0x6d6152 : color);
+      b.position.set(0, y, 1.1);
+      buttons.add(b);
+      label(text, new THREE.Vector3(0, y, 2.2), 0.42, buttons);
+      if (!locked) return;
+      for (let i = 0; i < 9; i++) {
+        const link = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.25, 6, 10), mat(0x9a9a9a));
+        link.position.set(-11 + i * 2.75, y, 1.9);
+        link.rotation.y = i % 2 ? Math.PI / 2 : 0;
+        buttons.add(link);
+      }
+      const lock = box(2, 2, 1, 0xd4a017); lock.position.set(9, y - 0.6, 2.3); buttons.add(lock);
+    }
+    function buildMenu() {
+      while (buttons.children.length) buttons.remove(buttons.children[0]);
+      const modes = ['Daily Battle', 'Endless', 'Custom Game', 'Achievements'];
+      if (firstLaunch) {
+        button('Play', 30, 0x3fa34d, false);
+        modes.forEach((t, i) => button(t, 26 - i * 3.8, 0, true));
+        label('Win the first battle to unlock', new THREE.Vector3(0, 11.5, 2.2), 0.35, buttons);
+      } else {
+        const colors = [0xe0a82e, 0xc8553d, 0x5b7bd5, 0x8e5bd5];
+        modes.forEach((t, i) => button(t, 31 - i * 4.4 - (i > 1 ? 1.6 : 0), colors[i], false));
+        label('Best: 8,450', new THREE.Vector3(0, 24.3, 2.2), 0.3, buttons);
+        button('Play tutorial', 12, 0x7a8a6a, false);
+      }
+    }
+    buildMenu();
+
+    // Trophy shelf on one side: gold trophies are earned achievements
+    const shelf = menuItem(158, 35);
+    for (const x of [-7, 7]) { const s = box(1, 26, 5, WOOD); s.position.set(x, 13, 0); shelf.add(s); }
+    for (const y of [1, 9, 17, 25]) { const s = box(15, 0.8, 5, WOOD); s.position.set(0, y, 0); shelf.add(s); }
+    for (let i = 0; i < 9; i++) {
+      const color = i < 4 ? 0xffc531 : 0x8f8f8f;
+      const cup = new THREE.Group();
+      const foot = box(1.6, 0.6, 1.6, color); foot.position.y = 0.3; cup.add(foot);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.4, 6), mat(color)); stem.position.y = 1.3; cup.add(stem);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 0.5, 2, 10), mat(color)); top.position.y = 3; cup.add(top);
+      cup.position.set(-4.5 + (i % 3) * 4.5, 1.4 + Math.floor(i / 3) * 8, 0.5);
+      shelf.add(cup);
+    }
+    label('Trophy shelf (achievements)', new THREE.Vector3(0, 30, 0), 0.45, shelf);
+
+    // Custom Game board: same spot as the main menu. Tapping "Custom Game" sinks the menu, then this rises.
+    const custom = menuItem(90, 37);
+    custom.userData.k = 0;
+    let screen = 'main'; // 'main' or 'custom'
+    const customFace = signBoard(custom);
+    label('Custom Game', new THREE.Vector3(0, 15, 0), 0.5, customFace);
+    ['Enemies', 'Map', 'Rules', 'Twists'].forEach((name, i) => {
+      const x = -12 + i * 8;
+      label(name, new THREE.Vector3(x, 9, 1.5), 0.22, customFace);
+      const dial = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 1, 14), mat(0xd9d4c7));
+      dial.rotation.x = Math.PI / 2; dial.position.set(x, 4.5, 1.1); customFace.add(dial);
+      const pointer = box(0.5, 1.7, 0.3, 0xc8553d);
+      pointer.position.set(x, 5.1, 1.7); pointer.rotation.z = rand(-1.2, 1.2); customFace.add(pointer);
+      const base = box(2.4, 3, 0.6, 0x333a44); base.position.set(x, -1.5, 0.9); customFace.add(base);
+      const lever = box(0.7, 2.4, 0.7, i % 2 ? 0x3fa34d : 0xaaaaaa);
+      lever.position.set(x, -1, 1.7); lever.rotation.x = i % 2 ? 0.5 : -0.5; customFace.add(lever);
+    });
+    for (const [text, x, color] of [['Back', -11, 0x7a8a6a], ['Random', 0, 0x8e5bd5], ['Play', 11, 0x3fa34d]]) {
+      const b = box(9, 3, 1, color); b.position.set(x, -7.5, 1.1); customFace.add(b);
+      label(text, new THREE.Vector3(x, -7.5, 2.2), 0.28, customFace);
+    }
+
+    // Everything on the board goes into one group that spins.
+    // The sky, the giant, the tools, the menu and the handles stay still (comfort).
+    const world = new THREE.Group();
+    for (const o of [...scene.children]) if (!o.isLight && o !== ground && o !== fixed && o !== player) world.add(o);
+    scene.add(world);
+
+    // Peacetime (menu) or battle
+    let mode = 'menu', peace = 1, heightOff = 0;
+    const held = new Set();
+    function setMode(m) {
+      mode = m;
+      if (m === 'battle') goblinData.forEach((g) => spawnGoblin(g, 2 + Math.random() * 25));
+      else trophy.scale.multiplyScalar(1.08); // the pile grows after each battle
+    }
+
     // ---------- Views ----------
     function eyeView() {
       camera.position.set(0, 112, 0);
@@ -862,12 +1148,20 @@
       if (k === '2') overview();
       if (k === 'h') giant.visible = !giant.visible;
       if (k === 'r') reach.visible = !reach.visible;
-      if (k === 'l') labels.visible = !labels.visible;
+      if (k === 'l') { labelsOn = !labelsOn; allLabels.forEach((s) => (s.visible = labelsOn)); }
+      if (k === 'm') setMode(mode === 'menu' ? 'battle' : 'menu');
+      if (k === 'u') { firstLaunch = !firstLaunch; buildMenu(); }
+      if (k === 'c') screen = screen === 'main' ? 'custom' : 'main';
+      if (k === 'x') machines.visible = !machines.visible;
+      if (k === '0') { world.rotation.y = 0; heightOff = 0; } // Reset table
+      held.add(k);
       if (k === 'k') explodeKeg();
       if (k === 't') dropTree();
       if (k === 'b') breakBridge();
       if (k === 'o') rollBoulder();
     });
+
+    window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -930,7 +1224,7 @@
           if (g.t > 2.5) spawnGoblin(g);
         }
         dummy.position.copy(up(pos, 1.75));
-        dummy.scale.setScalar(show);
+        dummy.scale.setScalar(show * (1 - peace));
         dummy.updateMatrix();
         goblins.setMatrixAt(i, dummy.matrix);
       });
@@ -961,6 +1255,38 @@
       }
 
       carts.forEach((c) => updateCart(c, dt));
+
+      // Handles: spin the board and set its height (only the board moves, never the sky)
+      const spin = (held.has('q') ? 1 : 0) - (held.has('e') ? 1 : 0);
+      const lift = (held.has(']') ? 1 : 0) - (held.has('[') ? 1 : 0);
+      world.rotation.y += spin * dt * 0.9;
+      heightOff = Math.max(-15, Math.min(15, heightOff + lift * dt * 10));
+      world.position.y = heightOff;
+      fixed.position.y = heightOff;
+      handleMat.color.set(spin || lift ? 0xff8a00 : 0x5a4330);
+
+      // Peacetime: menu up, camps sunk, villagers out. Battle: the opposite.
+      peace += ((mode === 'menu' ? 1 : 0) - peace) * Math.min(1, dt * 3);
+      tents.forEach((c) => (c.scale.y = Math.max(0.001, 1 - peace)));
+      campLabels.forEach((s) => (s.visible = labelsOn && peace < 0.5));
+      // Menu boards share one spot: one sinks fully before the other rises
+      menuItems.forEach((it) => {
+        const other = it === custom ? menuBoard : it === menuBoard ? custom : null;
+        const want = mode === 'menu' && (it === custom ? screen === 'custom' : it === menuBoard ? screen === 'main' : true);
+        const go = want && (!other || other.userData.k < 0.05);
+        it.userData.k += ((go ? 1 : 0) - it.userData.k) * Math.min(1, dt * 4);
+        it.scale.y = Math.max(0.001, it.userData.k);
+        it.visible = it.userData.k > 0.02;
+      });
+      villagerData.forEach((v, i) => {
+        v.a += v.speed * dt;
+        dummy.position.copy(polar(v.r + Math.sin(t * 0.7 + i) * 2, v.a, BOARD + 1.25 + Math.abs(Math.sin(t * 7 + i)) * 0.3));
+        dummy.scale.setScalar(Math.max(0.001, peace));
+        dummy.updateMatrix();
+        villagers.setMatrixAt(i, dummy.matrix);
+      });
+      villagers.instanceMatrix.needsUpdate = true;
+      dummy.scale.setScalar(1);
 
       controls.update();
       renderer.render(scene, camera);
