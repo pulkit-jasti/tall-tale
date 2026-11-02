@@ -14,11 +14,11 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
   1. **Warning:** camps rumble a few seconds before enemies come out.
   2. **Build:** small groups walk in.
   3. **Peak:** the big push and the combos.
-  4. **Release:** the last enemy falls. Big juice and a cheer.
+  4. **Release:** the last enemy falls. Big juice, a cheer, and the wave flag climbs a notch.
 
 ### Short breathers, no long gaps
 
-- Between waves there is only a short breather of about 5 to 10 seconds: release juice, workers cheer, soldiers raise the flag a little, then the next wave's sounds start.
+- Between waves there is only a short breather of about 5 to 10 seconds: release juice, workers cheer, soldiers raise the castle health flag a little, then the next wave's sounds start. In the tutorial, the next wave's new tool appears on its platform during the breather.
 - No long prep phase, because there is nothing to build or prepare yet. A longer gap can come back later if prep features are added (for example machines).
 
 ---
@@ -28,6 +28,7 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
 - **Spawn:** squads of 3 to 4 soldiers come out of a hidden gate at the front of the castle every few seconds. Cap of about 15 on the board.
 - **Movement:** they walk the road graph outward toward the camp that is attacking. Same road system as enemies, in reverse.
 - **Fighting:** when an enemy is close, both stop and fight with simple timed hits. Soldiers take 2 hits, grunts take 1.
+- **At the wall:** grunts and runners that get past them stop at the wall and hit it. Only climbers climb.
 - **Balance target:** on their own, troops lose slowly. The player is always needed, but never overwhelmed.
 
 ### On hold (not in the MVP)

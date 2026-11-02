@@ -13,13 +13,30 @@ Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md), [Castle rul
 
 | Info | Shown as |
 |---|---|
-| Castle health | The flag on its pole ([castle-rules.md](castle-rules.md)) |
+| Castle health | The red flag on its pole ([castle-rules.md](castle-rules.md#2-the-two-flags)) |
+| Battle progress | The blue wave flag, one notch per wave |
 | Where damage is happening | Cracks, smoke and fires on the wall, plus spatial sound |
 | Food | A jar or basket beside the tool platforms |
 | Tool cost | Food pips on each tool platform |
 | Tool locked (not enough food) | Tool dimmed or tied down with a rope |
 
 - In-world displays also help with "FoV-aware design" and polish in judging, and keep the "toys on a table" feeling.
+
+### Interaction feedback (applies to everything you can touch)
+
+Every grabbable or pokeable thing (goblins, tools, handles, buttons, the wrist button, trophies) uses the same states, so the player learns them once. There are no haptics, so these are the main feedback.
+
+| State | When | Look | Sound |
+|---|---|---|---|
+| Idle | Hand far away | Normal | None |
+| Ready | Hand within grab or poke range | Soft white brighten | Soft tick |
+| Held / pressed | Grabbed or poked | Orange | Grab or click |
+| Locked | Ready, but cannot be used (not enough food) | Stays dimmed, small wobble | "Not enough food" buzz |
+
+- **Only one target per hand.** Only the nearest thing in range is Ready, so the player always knows what they will grab.
+- **The tutorial hint is different:** a slow pulse, not a steady brighten, so "look here" never gets confused with "you can grab this".
+- **Buttons** also press in when poked.
+- **Cheap to draw:** change the material's emissive color only. No outline effects or post-processing (performance budget).
 
 ---
 
@@ -29,16 +46,27 @@ The board is a full circle all the time. There are no 120 or 180 degree modes. A
 
 ### Rotating and adjusting by hand
 
-- **Two handles** on the inner rim of the board, right in front of the player, below where the hands do most of the work. Away from the tool platforms.
-- **Two-handed only:** the board moves only while both handles are held, like a steering wheel. No one grabs both by accident mid-fight.
-  - **Twist** to rotate the board (around the vertical axis only, no tilting).
-  - **Lift or lower** to change the board height (within a sensible range).
-- Turning is a choice: the player can turn their head, or spin the board. Spinning takes both hands, so "spin to the new threat now, or finish this group first?" becomes a real decision.
+Two handles on the inner rim, right in front of the player, below where the hands do most of the work. **Each handle has one job and a big arrow beside it**, so it is clear what it does without any text. Each works with one hand, which also helps players who can only use one hand.
+
+| Handle | Where | Arrow | How it works |
+|---|---|---|---|
+| **Rotate handle** | Right of center | Curved double arrow along the rim, above the handle | A big knob on a short curved track. Grab it and slide it sideways along the track. The board turns with it 1:1 (around the vertical axis only, no tilting). On release the knob glides back to the middle of its track and the board stays where it is. For a big turn, slide, let go, and slide again. |
+| **Height handle** | Left of center | Vertical double arrow (up and down) beside the handle | A bar between two upright rails. Grab it and slide it up or down. The board follows 1:1, within a sensible range. On release the board stays at the new height. |
+
+- The handles only move along their own track (sideways or up and down). Any other hand motion is ignored.
+- The handles follow the standard Ready and Held states (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)). The arrow lights up together with its handle.
+- Oversized grab zones, so they are easy to grab without looking closely.
+- Handedness (later) swaps the two sides.
+- Turning is a choice: the player can turn their head, or spin the board. Spinning takes a hand off the battle, so "spin to the new threat now, or finish this group first?" is a real decision.
 - Enemy sounds sit on the board, so they turn with it automatically.
+
+### Rejected
+
+- **One pair of two-handed handles (twist to spin, lift to change height):** two jobs on one control, nothing on the handles explained them, and it needed both hands.
 
 ### Comfort rules
 
-- **Only the board rotates.** The sky, the horizon, the tool platforms and the food jar stay still. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it.
+- **Only the board rotates.** The sky, the horizon, the tool platforms, the food jar and the two flags stay still. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it.
 - **Movement follows the hands exactly (1:1)**, with no smoothing or lag. Moving the world is only comfortable when the player clearly causes it.
 - Later ideas: a small "momentum" flick spin for fun, and snap rotation (30 degree steps) as a comfort option.
 
@@ -50,21 +78,54 @@ The board is a full circle all the time. There are no 120 or 180 degree modes. A
 
 ---
 
-## 3. Menus
+## 3. Grab and eat
 
-- **2D start page:** one "Enter VR" button (the browser needs one tap to enter VR). Later it also asks for mic permission and can offer an optional "Install app" button.
+The player's own hands do only two things: grab and eat. There is no smashing, slapping or throwing.
+
+### Grab
+
+- Goblins are tiny (about 3.5 cm), too small to grab reliably with tracked fingers. So the grab zone is much bigger than the goblin: about 5 to 6 cm around the hand's pinch point.
+- When the player closes their fingers inside that zone, the grab snaps to the nearest goblin. The goblin lifts into the fingers.
+- A grabbed goblin struggles: arms and legs wave, it squeals.
+- The goblin that would be grabbed shows the Ready state while the hand is near (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)).
+
+### Eat
+
+1. Bring the held goblin toward the face (hand within about 25 cm) and tilt the head up. The giant's mouth opens. It must not require touching the mouth.
+2. Let go. The goblin drops into the mouth, which closes. Chomp, gulp, small burp. Food is added to the food jar.
+
+### Letting go anywhere else
+
+- The goblin drops back onto the board, dazed for a moment, then carries on.
+
+---
+
+## 4. Menus
+
+- **2D start page:** one "Enter VR" button (the browser needs one tap to enter VR). Before entering VR it asks for mic permission (needed for the megaphone). Later it can offer an optional "Install app" button.
 - **In VR:** the menu is the board in peacetime, with a giant menu board and trophy shelf. See [modes-and-progression.md](modes-and-progression.md#2-the-menu-is-the-board-in-peacetime). MVP: a single Play button.
+- **End of battle (MVP):** a simple win or lose panel. See [castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp).
 
 ---
 
-## 4. Pause and settings
+## 5. Pause and settings
 
-- **Wrist menu:** turn a palm up to show a small menu on the wrist with pause, settings and "Reset table". It needs a short hold delay so it does not open by accident.
-- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset.
+### What hand tracking games do
+
+- **Palm pinch is taken by the system.** On Quest, a pinch with the palm facing the player is reserved for the system on both hands (the left one opens the Quest menu). Apps cannot use it or turn it off.
+- So the common pattern is a **wrist button**: a small button on the inside of one wrist that shows when the player turns that palm toward their face. The other hand's index finger pokes it. A poke with the other hand is deliberate, so it is rarely pressed by accident.
+
+### Our pause
+
+- **Wrist button on the left wrist** (right wrist once handedness exists). It fades in only when the left palm faces the player's face for about 0.3 seconds, and fades out when the hand turns away.
+- **Poke it with the right index finger** to pause. The button presses in, with a click sound.
+- **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Reset table", "Restart battle".
+- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume".
+- Settings come later (not in the MVP).
 
 ---
 
-## 5. Accessibility options
+## 6. Accessibility options
 
 None of these are in the MVP. They come after the first playtest (see [mvp.md](mvp.md)).
 
@@ -78,7 +139,7 @@ None of these are in the MVP. They come after the first playtest (see [mvp.md](m
 
 ---
 
-## 6. Custom hand gestures
+## 7. Custom hand gestures
 
 Hand tracking gives the position of every finger joint every frame, so almost any gesture is possible. The limits come from tracking quality, not the API.
 
@@ -96,8 +157,8 @@ Not raw joint positions (they change as the whole hand moves). Instead, a few si
 |---|---|---|
 | Finger curl | Fingertip distance to the palm | Fist vs open hand |
 | Pinch | Thumb tip to index tip distance | Pinch |
-| Palm direction | Which way the palm faces | Palm up for the wrist menu |
-| Speed | Hand movement over the last few frames | Flick, shake, swat |
+| Palm direction | Which way the palm faces | Palm toward the face shows the wrist pause button |
+| Speed | Hand movement over the last few frames | Shake (pepper, bell), swat |
 
 A gesture is a rule over these, for example "all fingers curled and palm down = fist".
 
@@ -113,7 +174,7 @@ A gesture is a rule over these, for example "all fingers curled and palm down = 
 
 ---
 
-## 7. Future (not in the MVP)
+## 8. Future (not in the MVP)
 
 ### AR mode
 

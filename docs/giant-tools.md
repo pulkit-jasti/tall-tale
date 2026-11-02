@@ -14,10 +14,10 @@ The player's abilities are split into categories:
 |---|---|---|
 | Castle machines | Human-built war machines on the wall (catapult, cannon, arrow volley...), modified with chains, gears and buttons so the giant can run them | Supply carts, fixed wedge of coverage |
 | **Giant tools** | Tools built for the giant. Handheld, used directly on the battlefield | Food currency |
-| Body abilities | Grab, flick, smash, eat. Always available | Hand reach |
+| Body abilities | Grab and eat. Always available | Hand reach |
 | Food powers | Powers from eating specific enemies | Ideas only, not designed yet |
 
-This file covers giant tools and the food currency that powers them.
+This file covers giant tools and the food currency that powers them. Grab and eat are described in [controls-and-ui.md](controls-and-ui.md#3-grab-and-eat).
 
 ---
 
@@ -50,6 +50,9 @@ One shared food bar powers all giant tools (except the slingshot).
 | Fly swatter | costs 4 |
 | Megaphone / bell | costs 6 |
 | Food bar max | 10 |
+| Food at the start of a battle | 4 |
+
+- Food carries over between waves within a battle. It resets to the starting value at the start of each battle.
 
 ### Where food comes from
 
@@ -57,7 +60,7 @@ Food only comes from play, so smart play is rewarded.
 
 **Hidden climbers**
 - Every wave has some enemies that climb the wall unseen and suddenly pop up on the rampart, in reach.
-- If ignored, they cause trouble (for example cut a cart rope or jam a machine).
+- If ignored for a few seconds, they jump down into the courtyard and become intruders (see [enemies.md](enemies.md#6-intruders-enemies-inside-the-castle)).
 - If grabbed, they are instant food. Eating is defense, not just a snack.
 
 **Intruders**
@@ -81,7 +84,7 @@ use tools -> enemies stunned / disarmed -> troops capture them
 - Losing: more enemies reach the wall, so more climbers come into reach.
 - A losing player gets more food chances, not fewer. No death spiral.
 - With prisoner carts (later): winning also feeds you, because troops capture more.
-- MVP: food comes only from climbers and intruders, so each wave must have enough climbers. Tune in playtests.
+- MVP: food comes only from climbers and intruders, so each wave must have enough climbers. The climber count per wave is in the tutorial wave table ([mvp.md](mvp.md#tutorial-waves)). Tune in playtests.
 
 **First five minutes**
 - In wave 1, one goblin is scripted to climb the wall right in front of the player, so the eating moment happens in the first minute.
@@ -139,8 +142,11 @@ Rules:
 - **Use (megaphone):** one scream. Mic loudness is tracked. Passing the threshold triggers the stun. Louder and longer means a stronger effect (longer stun). Then the megaphone is used up.
 - **Use (bell):** shake the bell. Harder shaking means a stronger effect. Same result, hands only.
 - **Cost:** 6 food (most expensive).
+- **Mic permission:** asked on the 2D start page, before entering VR (see [controls-and-ui.md](controls-and-ui.md#4-menus)).
 - **Calibration:** a quick test shout at the start sets the threshold per player, since mics and voices differ.
-- **Quiet mode:** chosen at the start. Replaces the megaphone with the bell. Offered to everyone (speech difficulty, playing at night, around other people), so no one has to declare a disability.
+- **MVP: both on one platform.** The megaphone and the bell sit side by side on the same platform. Using either one triggers the stun and costs the 6 food once. So the game is fully playable without voice from the first build.
+- **No mic:** if the player denied mic permission, the megaphone is shown tied down and the bell still works.
+- **Quiet mode (later):** chosen at the start. Hides the megaphone so only the bell is shown. Offered to everyone (speech difficulty, playing at night, around other people), so no one has to declare a disability.
 
 ### Summary
 
@@ -176,7 +182,7 @@ Rules:
 ## 6. Unlocks and progression
 
 - **No loadout.** There is no tool choice before a battle. Every unlocked tool is always on its platform.
-- **The tutorial battle introduces one tool per wave.** After the tutorial every tool is always available in every mode. No gating (see [modes-and-progression.md](modes-and-progression.md)).
+- **The tutorial battle introduces one tool per wave.** A tool's platform stays empty until its wave. Then the tool appears on it with a poof and glows until the player grabs it once. No text. After the tutorial every tool is always available in every mode. No gating (see [modes-and-progression.md](modes-and-progression.md)).
 - Custom Game and daily twists can limit tools (for example "pepper only").
 
 ---
@@ -207,7 +213,5 @@ Rules:
 
 ## 8. Open questions
 
-- Hidden strip below the outside of the wall: how pepper and other near-zone tools handle enemies the player cannot see there.
 - Tribute food (non-enemy food like roast chicken after a good wave): yes or no.
-- Does food carry over between waves and between battles?
-- Exact food costs and bar size (tune in playtests).
+- Exact food costs, starting food and bar size (tune in playtests).

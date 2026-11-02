@@ -40,7 +40,7 @@ Locked buttons are shown, not hidden, so a judge sees right away that there is m
 
 ### Tutorial battle (first Play)
 
-- Hand-crafted: fixed map seed and hand-written waves in JSON. Same generator as every other mode.
+- Hand-crafted: a hand-made map blueprint, a scripted tutorial director in code that teaches and helps when the player gets stuck, and a fixed seed. It does not use the level generator. See [mvp.md](mvp.md#tutorial-director) and [map.md](map.md#8-levels-and-the-level-generator).
 - **5 waves, about 8 minutes.** Each wave introduces something new:
 
 | Wave | Introduces |

@@ -10,7 +10,7 @@ Back to [GDD index](GDD.md). Related: [Giant tools and food](giant-tools.md).
 
 - **Every enemy is a question, every tool is an answer.** Each enemy type asks the player something different.
 - **Best answer, never the only answer.** Each enemy has one best answer, one or two weak spots, and everything else works normally.
-- **Hands are the universal backup.** They work on almost everything, but only in reach. So there is always a way, at the cost of letting enemies get close.
+- **Hands are the universal backup.** Grabbing and eating works on almost everything, but only in reach. So there is always a way, at the cost of letting enemies get close.
 - **Harder through new problems, not bigger health.** Difficulty comes from new types and combos, never from tankier versions of the same enemy.
 - **Non-human and cartoony.** Goblins and other creatures. No blood or gore.
 
@@ -40,7 +40,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Grunt goblin
 
 - **Question:** "Can you handle numbers?"
-- **Behavior:** walks the road, fights troops, attacks the wall.
+- **Behavior:** walks the road, fights troops, then stops at the wall and hits it (it does not climb).
 - **Toughness:** one hit. Can wear a helmet for one extra hit.
 - **Best answer:** fly swatter (groups).
 
@@ -55,7 +55,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Runner imps
 
 - **Question:** "Can you react fast?"
-- **Behavior:** tiny, fast, in big swarms. Rush past troops toward the wall.
+- **Behavior:** tiny, fast, in big swarms. Rush past troops toward the wall, then hit it (they do not climb).
 - **Toughness:** one hit.
 - **Best answer:** fly swatter.
 - **Also works:** arrow volley, megaphone, hands when they reach the wall.
@@ -73,7 +73,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Climbers
 
 - **Question:** "Are you paying attention?"
-- **Behavior:** climb the wall unseen and suddenly pop up on the rampart, in reach. If ignored, they sabotage: cut cart ropes or jam machines.
+- **Behavior:** the only enemy that climbs the wall. They climb unseen and suddenly pop up on the rampart, in reach. If ignored for a few seconds, they jump down into the courtyard and become intruders.
 - **Toughness:** one hit.
 - **Best answer:** hands (grab and eat). They are also a main food source.
 - **Also works:** swatter, pepper (seasoned for eating), cauldron.
@@ -87,7 +87,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 - **Behavior:** runs at your troops (or the wall if no troops are near) and explodes. Kills troops, and drops the flag if it hits the wall.
 - **Toughness:** one hit, but hitting the barrel makes it explode where it stands.
 - **Best answer:** slingshot (shoot the barrel early so it blows up its own group).
-- **Also works:** pepper (it sneezes and drops the barrel, which becomes a powder keg on the road), megaphone (stunned in place, easy target), hands (if it reaches the wall, grab it and throw it back into the enemies), machines.
+- **Also works:** pepper (it sneezes and drops the barrel, which becomes a powder keg on the road), megaphone (stunned in place, easy target), hands (if it reaches the wall, grab it and eat it, with a smoky burp), machines.
 - **Weak:** swatter (works, but it explodes right at the wall and costs a bit of flag).
 - **Chain reactions:** its explosion follows the same rule as powder kegs, so it can set off kegs, knock over trees and break bridges (see [map.md](map.md#5-triggers)).
 
@@ -113,7 +113,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 | Runners | ✗ | ★ | ✓ | ✓ | ✓ (at the wall) | ✓ (arrow volley) |
 | Balloons | ★ | ✓ (when close) | ✗ | ✓ | ✓ (when close) | ✓ (ballista) |
 | Climbers | ✗ | ✓ | ✓ | ✓ | ★ | ✓ (cauldron) |
-| Boom goblin | ★ | ✗ (explodes at the wall) | ✓ | ✓ | ✓ (throw it back) | ✓ |
+| Boom goblin | ★ | ✗ (explodes at the wall) | ✓ | ✓ | ✓ (at the wall) | ✓ |
 | Tinker | ★ | ✓ (when close) | ✓ | ✓ | ✓ (when close) | ✓ (catapult) |
 
 ---
@@ -153,7 +153,6 @@ What happens:
 
 How the player deals with them (the courtyard is fully in reach):
 - Grab and eat.
-- Flick them over the wall. They land on their own army and knock them over.
 - Swatter. Kills the intruders it hits.
 - Pepper. They sneeze and are seasoned for eating.
 

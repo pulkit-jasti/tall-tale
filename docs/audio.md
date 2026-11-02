@@ -1,6 +1,8 @@
 # Audio
 
-Status: candidate list. The developer will listen to sources and pick. Enemy sound cues are decided in [core-loop.md](core-loop.md#3-direction-cues-sound-first).
+Status: candidate list. Sound is the last step of the MVP build. Enemy sound cues are decided in [core-loop.md](core-loop.md#3-direction-cues-sound-first).
+
+**Until then:** use the sample sound that came with the IWSDK starter (`public/audio/chime.mp3`) as a placeholder wherever a sound is needed, so the sound system and spatial audio can be built and tested. Real sounds replace it at the end. Each sound is referenced by name from one config file, so swapping files needs no code changes.
 
 Back to [GDD index](GDD.md).
 
@@ -19,6 +21,8 @@ Back to [GDD index](GDD.md).
 **Player**
 - Grab
 - Eat: chomp, gulp, small burp
+- Pause button click
+- Soft "ready" tick (hand in range of something grabbable)
 - Slingshot: stretch, release, hit
 - Swatter: whoosh, splat
 - Pepper: shake, sneeze

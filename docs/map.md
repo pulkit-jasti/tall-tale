@@ -1,6 +1,18 @@
 # Map, Roads and Environment
 
-Status: first pass decided. Sample level mockup: `maps/castle-3d.html` (random layout on every reload).
+Status: first pass decided. Sample level mockup: `maps/castle-3d.html` (random layout on every reload, 1 unit = 1 cm). The mockup is older than these docs: it still shows castle machines, carts and flags on the towers. When they disagree, this file wins.
+
+### Scale (from the mockup)
+
+- Board height about 65 cm (set per player by the height handle), hole the player sits in about 25 cm radius.
+- Castle wall from 40 to 46 cm, **about 6 cm high** (the mockup still shows 10 cm).
+- Soldiers about 2.5 cm tall, goblins about 3.5 cm tall.
+
+### No hidden strip outside the wall
+
+- Seen from the seat, a wall hides a strip of board right behind it. With a 10 cm wall, goblins up to about 8 cm outside it would be fully hidden.
+- **Default:** a lower wall (about 6 cm), and grunts and runners that hit the wall stand about 5 cm out from it. So enemies at the wall stay visible, and pepper and the swatter can be aimed at them.
+- Check this in the toy test (build step 1) and adjust both numbers if needed.
 
 Back to [GDD index](GDD.md). Related: [Enemies](enemies.md), [Giant tools](giant-tools.md).
 
@@ -19,9 +31,9 @@ Back to [GDD index](GDD.md). Related: [Enemies](enemies.md), [Giant tools](giant
 
 - The whole world is a raised round board at about hand height, like a big round table with a hole in the middle for the player.
 - Flat around the castle, then rising gently toward the horizon so far enemies face the player.
-- The castle sits in the middle with a low wall (about 10 cm) at about 40 to 46 cm from the player, within reach.
+- The castle sits in the middle with a low wall (about 6 cm) at about 40 to 46 cm from the player, within reach.
 - Zones: near (up to about 60 cm, in reach), middle (60 to 150 cm), far (beyond 150 cm).
-- The board is always a full 360 degree circle. The player rotates it and sets its height with two-handed handles (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
+- The board is always a full 360 degree circle. The player rotates it with the rotate handle and sets its height with the height handle (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 
 ---
 
@@ -49,7 +61,7 @@ The diagram only shows how points connect. In the game, roads are gentle natural
 - Roads go all around the castle (full 360 degrees).
 - Camps, junctions and wall entries are spread at uneven angles and distances, with random bends, so the map looks natural.
 - A **ring road** links junctions sideways. It can have gaps.
-- Maps are made by the level generator (section 8). Points are stored as angle and distance from the castle.
+- Each map is stored as a blueprint JSON file (section 8). Points are stored as angle and distance from the castle.
 
 ### Enemy camps
 
@@ -74,7 +86,7 @@ The diagram only shows how points connect. In the game, roads are gentle natural
 2. Enemies walk a road to the next point.
 3. **At a junction, they pick a branch by weighted random**, among open branches that lead closer to the castle. Shorter routes are a bit more likely.
 4. **If a road is blocked** (fallen tree, broken bridge), it is removed from the choices. Enemies already on it turn back to the last junction.
-5. At a wall entry point, they climb the wall.
+5. At a wall entry point, grunts and runners stop about 5 cm out from the wall and hit it (so they stay visible, see "No hidden strip outside the wall" at the top). Only climbers climb it.
 
 Extra randomness: which camp attacks, a small sideways offset per goblin, and small speed differences.
 
@@ -137,18 +149,46 @@ Always on. They change how a road plays.
 | Triggers on routes | A keg or boulder on a busy road rewards timing. Off the road it is decoration. |
 | Enemy mix and order | Grunts only is easy. Runners plus climbers during a push splits attention. |
 
-### One generator for everything
+### Three separate parts
 
-- **A level is a small JSON file:** generator settings plus a seed.
-- The generator builds the map from **rules**, for example:
+A battle is built from three parts that never mix:
+
+| Part | What it is | Format |
+|---|---|---|
+| **Map blueprint** | Where things are: camps (with size), junctions, roads and their in-between points, wall entries, the troop gate, trigger spots, decor | Static JSON file |
+| **Director** | What happens when: spawns enemies, introduces tools, opens roads, ends the battle | Code |
+| **Game systems** | How things behave: enemies, troops, tools, triggers, food, flags | Code, with tuning numbers in config files |
+
+- The game only reads blueprints. It does not care whether a blueprint was written by hand or made by the generator.
+- Directors only call the game systems (spawn enemy, show tool, open road). Nothing tutorial-only lives inside the systems.
+
+### Blueprints
+
+- **MVP: written by hand.** The tutorial map is one hand-made blueprint, `tutorial.json`.
+- **Shortcut:** the mockup (`maps/castle-3d.html`) already makes random road layouts. Its output can be exported once as a starting point, then tweaked by hand.
+- **A debug view** (top-down, or the mockup reading the blueprint) helps check a blueprint without the headset.
+
+### Directors
+
+- **Tutorial director (MVP):** a hand-written script in code. See [mvp.md](mvp.md#tutorial-director).
+- **Wave director (later):** a simple runner that reads waves from a config file. Used by Endless, Daily Battle and Custom Game.
+
+### Randomness
+
+- All randomness goes through **one seeded random function**. The same seed always gives the same run, which makes bugs easy to repeat.
+- **Inside a battle:** which camp spawns, route choices at junctions, timing jitter, small offsets per goblin.
+- **The tutorial uses a fixed seed,** so every run plays the same and can be tested properly.
+
+### The level generator (later, not in the MVP)
+
+- A function: `(seed, settings) => blueprint`. Settings are **ranges, not single values** (for example 2 to 3 camps, camp distance 150 to 250 cm), and the generator picks inside them using the seed.
+- It builds the map from **rules**, for example:
   - every road reaches the wall
   - a minimum distance between camps
   - each main road passes at least one trigger
-  - climbers in every wave
-- **Randomness inside a level:** which camp spawns, route choices at junctions, timing jitter, small offsets per goblin. Every replay feels a bit different.
-- **The tutorial battle** uses a fixed seed we picked and tested, with hand-written waves.
-- **Daily Battle** uses the date as the seed. **Endless** uses a random seed. **Custom Game** uses the player's settings and optional seed.
-- Same code for all modes, so no extra work. Modes are described in [modes-and-progression.md](modes-and-progression.md).
+- It outputs the same blueprint format as the hand-made tutorial map, so no game code changes.
+- **Daily Battle** uses the date as the seed. **Endless** uses a random seed. **Custom Game** uses the player's settings and optional seed. Modes are described in [modes-and-progression.md](modes-and-progression.md).
+- Built when the first mode after the tutorial is started.
 
 ### Map vs difficulty
 
@@ -157,7 +197,7 @@ Always on. They change how a road plays.
 
 ### MVP
 
-- Only the tutorial battle (one fixed seed). One biome (green fields).
+- Only the tutorial battle: one hand-made blueprint, the tutorial director and a fixed seed. One biome (green fields). No generator.
 
 ---
 

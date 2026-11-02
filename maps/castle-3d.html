@@ -33,7 +33,7 @@
     K: keg, T: tree, B: bridge, O: boulder<br>
     M: menu (peacetime) / battle<br>
     U: first launch / unlocked menu, C: tap Custom Game / Back<br>
-    Q / E: spin board, [ / ]: board height, 0: reset table<br>
+    Q / E: rotate handle (spin board), [ / ]: height handle, 0: reset table<br>
     X: machines (on hold)
   </div>
 
@@ -1000,20 +1000,62 @@
     label('Trophy hill: 1,284 goblins defeated', up(hillPos, 34), 1.2);
 
     // ---------- The giant's things (giant-sized, stay still) ----------
-    // Handles on the inner rim. Hold both: twist to spin the board, lift to set its height.
-    const handleMat = mat(0x5a4330);
-    for (const d of [70, 110]) {
-      const a = deg(d);
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 4, 8), handleMat);
-      post.position.copy(polar(26.5, a, BOARD + 2));
-      fixed.add(post);
-      const grip = cylinderBetween(
-        polar(26.5, a, BOARD + 4).addScaledVector(tangent(a), -3),
-        polar(26.5, a, BOARD + 4).addScaledVector(tangent(a), 3), 1.1, 0x5a4330);
-      grip.material = handleMat;
-      fixed.add(grip);
+    // Two handles on the inner rim, one job each, with a big arrow beside each one.
+    // Right: rotate handle. Slide it sideways along its curved track to spin the board.
+    // Left: height handle. Slide it up or down between its rails to raise or lower the board.
+    const HANDLE_R = 27, HANDLE_WOOD = 0x5a4330, TRACK = 0x3b2b1f, ARROW = 0xf2c14e, ACTIVE = 0xff8a00;
+    const rotMat = mat(HANDLE_WOOD), heightMat = mat(HANDLE_WOOD);
+    const rotArrowMat = mat(ARROW), heightArrowMat = mat(ARROW);
+    const arcCurve = (r, a0, a1, y) => new THREE.CatmullRomCurve3(
+      Array.from({ length: 17 }, (_, i) => polar(r, deg(a0 + ((a1 - a0) * i) / 16), y)));
+    function arrowHead(pos, dir, m) {
+      const c = new THREE.Mesh(new THREE.ConeGeometry(1.4, 2.6, 10), m);
+      c.position.copy(pos).addScaledVector(dir, 1.3);
+      c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      fixed.add(c);
     }
-    label('Handles: twist = spin, lift = height', polar(27, deg(90), BOARD + 9), 0.45, fixed);
+
+    // Rotate handle: a big knob on a curved track
+    const ROT_A = 68, ROT_SPAN = 12; // the track runs ROT_A +- ROT_SPAN degrees
+    fixed.add(new THREE.Mesh(new THREE.TubeGeometry(arcCurve(HANDLE_R, ROT_A - ROT_SPAN, ROT_A + ROT_SPAN, BOARD + 1), 24, 0.6, 6), mat(TRACK)));
+    const rotGrip = new THREE.Group();
+    const rotPost = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 4, 8), rotMat);
+    rotPost.position.y = 2;
+    const rotKnob = new THREE.Mesh(new THREE.SphereGeometry(2.2, 12, 10), rotMat);
+    rotKnob.position.y = 5;
+    rotGrip.add(rotPost, rotKnob);
+    fixed.add(rotGrip);
+    let rotOff = 0; // where the knob sits on its track, in degrees from the center
+    const placeRotGrip = () => rotGrip.position.copy(polar(HANDLE_R, deg(ROT_A + rotOff), BOARD + 1));
+    placeRotGrip();
+    // Curved double arrow above the track
+    const ROT_ARROW_Y = BOARD + 10;
+    fixed.add(new THREE.Mesh(new THREE.TubeGeometry(arcCurve(HANDLE_R, ROT_A - ROT_SPAN + 2, ROT_A + ROT_SPAN - 2, ROT_ARROW_Y), 24, 0.5, 6), rotArrowMat));
+    for (const s of [-1, 1]) {
+      const a = deg(ROT_A + s * (ROT_SPAN - 2));
+      arrowHead(polar(HANDLE_R, a, ROT_ARROW_Y), tangent(a).multiplyScalar(s), rotArrowMat);
+    }
+    label('Rotate handle', polar(HANDLE_R, deg(ROT_A), BOARD + 15), 0.4, fixed);
+
+    // Height handle: a bar that slides between two upright rails
+    const H_A = deg(112), hT = tangent(H_A), hBase = polar(HANDLE_R, H_A, BOARD);
+    for (const s of [-1, 1]) {
+      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 12, 6), mat(TRACK));
+      rail.position.copy(hBase).addScaledVector(hT, s * 3).add(new THREE.Vector3(0, 6, 0));
+      fixed.add(rail);
+    }
+    const H_GRIP_Y = 6;
+    const heightGrip = cylinderBetween(hBase.clone().addScaledVector(hT, -3.5), hBase.clone().addScaledVector(hT, 3.5), 1.5, HANDLE_WOOD);
+    heightGrip.material = heightMat;
+    heightGrip.position.y = BOARD + H_GRIP_Y;
+    fixed.add(heightGrip);
+    // Vertical double arrow beside it, on the side toward the center
+    const hArrow = hBase.clone().addScaledVector(hT, -6.5);
+    fixed.add(cylinderBetween(up(hArrow, 2), up(hArrow, 12), 0.5, ARROW));
+    fixed.children[fixed.children.length - 1].material = heightArrowMat;
+    arrowHead(up(hArrow, 12), new THREE.Vector3(0, 1, 0), heightArrowMat);
+    arrowHead(up(hArrow, 2), new THREE.Vector3(0, -1, 0), heightArrowMat);
+    label('Height handle', up(hBase, 17), 0.4, fixed);
 
     // Menu items rise out of the rim in peacetime and sink when a battle starts
     const menuItems = [];
@@ -1263,7 +1305,13 @@
       heightOff = Math.max(-15, Math.min(15, heightOff + lift * dt * 10));
       world.position.y = heightOff;
       fixed.position.y = heightOff;
-      handleMat.color.set(spin || lift ? 0xff8a00 : 0x5a4330);
+      // The held handle and its arrow light up. The knob slides along its track while turning,
+      // and glides back to the center on release (the board stays where it is).
+      rotOff += (spin * ROT_SPAN * 0.8 - rotOff) * Math.min(1, dt * 6);
+      placeRotGrip();
+      heightGrip.position.y = BOARD + H_GRIP_Y + lift * 3;
+      for (const m of [rotMat, rotArrowMat]) m.color.set(spin ? ACTIVE : m === rotMat ? HANDLE_WOOD : ARROW);
+      for (const m of [heightMat, heightArrowMat]) m.color.set(lift ? ACTIVE : m === heightMat ? HANDLE_WOOD : ARROW);
 
       // Peacetime: menu up, camps sunk, villagers out. Battle: the opposite.
       peace += ((mode === 'menu' ? 1 : 0) - peace) * Math.min(1, dt * 3);

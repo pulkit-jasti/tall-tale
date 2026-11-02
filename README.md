@@ -2,17 +2,17 @@
 
 A seated, hands-only VR game for Meta Quest.
 
-You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Haul carts, load and crank war machines, pick up and place troops, roar at enemies, and when goblins get too close, pick one up and eat it.
+You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Your little army does most of the fighting. You turn the battle with giant tools (a slingshot, a fly swatter, a pepper shaker and a megaphone), and when goblins climb the wall, you pick one up and eat it. Eating is also how you pay for your tools.
 
-The feeling we want: being a kid playing with toy soldiers and machines, making up your own battle story, except the toys are alive.
+The feeling we want: being a kid playing with toy soldiers, making up your own battle story, except the toys are alive.
 
 ---
 
 ## Status
 
-- Stage: design in [docs/GDD.md](docs/GDD.md). IWSDK project set up, no game code yet (starter template files still in `src/`).
-- Next step: the MVP build ([docs/mvp.md](docs/mvp.md)).
-- Some sections below are older than the GDD docs. When they disagree, the docs win.
+- Stage: design done for the MVP. IWSDK project set up, no game code yet (starter template files still in `src/`).
+- Next step: the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
+- The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---
 
@@ -57,9 +57,9 @@ Stage 1 is a pass/fail check that the project fits the theme and uses the requir
 |---|---|---|
 | Best New Gaming Experience | $100,000 (runner-up $50,000) | Main target |
 | Best First Five Minutes | $25,000 | Eating a goblin in the first minute is the hook |
-| Best Accessibility Forward Experience | $25,000 | Voice alternatives, quiet mode, rotating board, threat cues |
+| Best Accessibility Forward Experience | $25,000 | Quiet mode (bell instead of voice), rotating board, threat cues |
 | Boldest Original Concept | $25,000 | You sit inside the board. Only works in VR |
-| Best Reason to Come Back | $25,000 | Needs a good progression design |
+| Best Reason to Come Back | $25,000 | Daily Battle, Endless high score, growing kingdom, achievements ([docs/modes-and-progression.md](docs/modes-and-progression.md)) |
 | Judge's Choice | $20,000 x2 | Bonus |
 
 ---
@@ -71,84 +71,66 @@ Stage 1 is a pass/fail check that the project fits the theme and uses the requir
 - You are a giant. A kingdom agreed to feed you if you fight for them.
 - You sit at the center of their round castle.
 - Enemies (goblins, orcs and other non-human creatures) attack from all sides.
-- Your troops march out of the castle gates below you. Look down and you see them leaving.
+- Your troops march out of a hidden gate at the front of the castle and fight on their own.
 
 ### Core idea
 
-- You do not fight alone. Your army does most of the fighting, like a tiny Totally Accurate Battle Simulator battle around you.
-- Your job is to **help the battle turn**: keep machines loaded and firing, move troops where they are needed, and step in when things go wrong.
-- The skill is **management and timing**: knowing which station needs loading, which side is losing, and where to turn next. Like a cockpit game, but every control is a physical object you handle.
+- You do not fight alone. Your army does most of the fighting, like a tiny Totally Accurate Battle Simulator battle around you. On their own they lose slowly, so you are always needed.
+- Your job is to **help the battle turn**: listen for where enemies come from, spin the board, and use the right tool at the right time.
 - Even when you are not doing anything, the battle around you is fun to watch.
 
 ### Three distance zones
 
 | Zone | What happens there | What you do |
 |---|---|---|
-| Far | Enemies arrive | Hit them with war machines and the slingshot |
-| Middle | Troops and enemies clash | Pick up and place troops, push carts, block paths |
-| Near (castle walls) | Enemies that broke through | Smash them with your hands, or eat them |
+| Far | Enemies leave their camps | Slingshot, shoot triggers (powder kegs, boulders, trees) |
+| Middle | Troops and enemies clash | Slingshot, megaphone |
+| Near (castle wall) | Enemies hit the wall, climbers pop up | Fly swatter, pepper shaker, grab and eat |
 
 Each zone is the backup for the one before it.
 
-### Player actions
+### What the player does
 
-All actions are simple grab, drag, pull and release. No complex gestures.
+All actions are simple grab, pull, shake, poke and release. No complex gestures. Details in [docs/giant-tools.md](docs/giant-tools.md) and [docs/controls-and-ui.md](docs/controls-and-ui.md).
 
-- **Handheld slingshot:** pull back and release to throw stones.
-- **War machines** (examples, final list not locked):
-  - Multi-arrow launcher
-  - Ground catapult
-- **Machine loop (example: arrow launcher):**
-  1. Push an empty cart to the storage area near the castle.
-  2. Tiny workers load it (about 10 seconds).
-  3. Push the loaded cart to the arrow station. Workers load the machine.
-  4. Grab the lever and turn it to wind the spring and charge the machine.
-  5. Aim it.
-  6. Press the big launch button.
-- **Pick up and place troops** anywhere on the board, like a hands-on real-time strategy game.
-- **Smash** enemies near the walls (last resort, not the main action).
-- **Eat enemies:**
-  1. Pick up a tiny enemy.
-  2. Bring it toward your face and tilt your head up. The giant's mouth opens.
-  3. The enemy struggles, waving its arms and legs.
-  4. Let go. It drops into your mouth, which closes.
+- **Grab and eat:** pick up a tiny goblin, bring it to your face, tilt your head up and let go. Your bare hands only grab and eat. No smashing or throwing.
+- **Slingshot (free):** pull back and release to shoot pebbles. Precise, middle and far.
+- **Fly swatter (4 food):** about 10 seconds of swatting groups near the wall.
+- **Pepper shaker (3 food):** enemies sneeze off their gear and become "seasoned" (worth more food).
+- **Megaphone or bell (6 food):** scream into the megaphone, or shake the bell, to stun every enemy. Both sit on the same platform, so voice is never needed.
+- **Move the board:** slide the rotate handle sideways to spin the board, slide the height handle up or down to raise or lower it. Each has a big arrow beside it.
 
-### Tools and unlocks
+### Food
 
-- There is a fixed set of tools. No AI-generated tools.
-- No loadout. Tools unlock as you progress, and every unlocked tool is always available. Details in [docs/giant-tools.md](docs/giant-tools.md).
+- One food jar powers all tools except the slingshot. Eating fills it. It never drains on its own.
+- Food comes from climbers (goblins that climb the wall and pop up in reach) and intruders in the courtyard.
+- No loadout and no unlocks after the tutorial. Every tool is always on its platform.
 
-### Hunger (proposed)
+### Win and lose
 
-- The giant has a hunger meter that affects strength.
-- The kingdom feeds you when you protect it well.
-- Eating enemies is emergency food.
+- Two flags in front of the player: the red castle health flag slides down with damage, the blue wave flag climbs one notch per wave.
+- Win by surviving all waves. Lose when the red flag reaches the bottom. Details in [docs/castle-rules.md](docs/castle-rules.md).
 
 ### Voice (optional, never required)
 
-- **Troop commands:** shout orders like "Charge!", "Fall back!", "Open the gate!" Useful because your hands are busy with machines.
-- **Roar:** a loud, sustained shout makes nearby enemies flinch and scatter. Uses only microphone volume, no speech recognition.
-- **Hand alternatives are required** for every voice action (for example, grab and blow a war horn, or raise a banner). This keeps the game hands-only and also helps accessibility.
+- **Megaphone:** uses only mic loudness, no speech recognition. Mic permission is asked on the start page.
+- **Voice troop orders:** later, not in the MVP.
+- **Hand alternatives are required** for every voice action. The bell sits next to the megaphone and does the same thing. This keeps the game hands-only and helps accessibility.
 
 ### Surround play and comfort
 
-- The battlefield wraps around you, including threats from above (flyers, towers).
-- **Always a full 360 degree board.** Two handles in front of you let you spin the board and set its height with both hands, so you never need to turn around. A seated game does not need a small world, just one that is easy to bring to you. Works in any chair.
-- **Comfort:** only the board spins. The sky, horizon and your tools stay still. Snap rotation is a later comfort option.
+- The battlefield wraps around you.
+- **Always a full 360 degree board.** Two handles in front of you, one to spin the board and one to set its height, so you never need to turn around. Works in any chair.
+- **Comfort:** only the board spins. The sky, horizon, your tools and the two flags stay still. Snap rotation is a later comfort option.
 - **Threat cues:**
   1. Spatial audio from the real direction of the threat (main cue).
   2. Visual cues (smoke, glow) as an accessibility option only.
-- Details in [docs/controls-and-ui.md](docs/controls-and-ui.md).
 - Threat cues matter for judging too ("FoV-aware design"), because Meta VR Glasses have a different field of view than Quest.
 
 ### Emergence
 
 - Emergence comes from combining systems, not from scripted moments.
-- Being a giant who can pick up almost anything creates unplanned solutions, for example:
-  - Throw an enemy into its own army.
-  - Drop your archers onto a tower.
-  - Block a path with a cart.
-  - Crush a squad with a loaded cart.
+- Examples: one slingshot shot sets off a powder keg that knocks a tree across the road; pepper a group, then eat them for double food.
 - Score the result, not the method. If something silly works, it counts.
 
 ### Difficulty and pacing
@@ -160,9 +142,9 @@ Lessons from games the developer enjoyed:
 - **Social Empires / Social Wars:** units that move and fight on their own, and things you build that keep working.
 - **Totally Accurate Battle Simulator:** physics chaos that is fun to watch.
 
-Enemy ideas (not locked): shield walls, swarms, flyers, wall climbers, battering rams, saboteurs that attack carts.
+Enemies are in [docs/enemies.md](docs/enemies.md). The MVP has grunts, runners and climbers.
 
-Introduce one new station or enemy type per level so players are never overwhelmed.
+Introduce one new tool or enemy type at a time so players are never overwhelmed.
 
 ---
 
@@ -215,18 +197,18 @@ Known costs of IWSDK vs Unity:
 ### Voice tech
 
 - The Quest browser has **no built-in speech recognition** (no Web Speech API).
-- Microphone access through the standard browser API (`getUserMedia`) is reported to work, but Meta does not officially document it inside immersive mode. **Must be tested in the spike.**
+- Microphone access through the standard browser API (`getUserMedia`) is reported to work, but Meta does not officially document it inside immersive mode. **Must be tested early in the headset.**
 - Ask for mic permission on the 2D start page before entering VR.
 - One mic stream is used two ways:
-  - **Roar:** Web Audio API measures loudness. Loud and longer than about half a second counts as a roar.
-  - **Commands:** audio goes into **vosk-browser**.
+  - **Megaphone (MVP):** Web Audio API measures loudness. A loud scream past a fixed threshold triggers the stun.
+  - **Voice troop orders (later, not in the MVP):** audio goes into **vosk-browser**.
 - **What Vosk is:** an open-source speech-to-text engine that runs fully on the device, with no API calls. vosk-browser runs it in a Web Worker so the game does not freeze. With a small fixed word list it is fast and accurate. The model is about 40 to 50 MB and should be cached.
 - Meta's own Voice SDK is Unity only and cloud-based, so it does not apply.
 - Paid alternative if Vosk is too slow: Picovoice (on-device, has a web SDK). Check licensing first.
 
 ### Performance budget (starting point)
 
-- Units on the board: roughly 40 to 80 small troops and enemies. Confirm in the spike.
+- Units on the board: roughly 40 to 80 small troops and enemies. Confirm in the first headset test.
 - Instancing for repeated meshes.
 - Simple collision shapes only.
 - Object pooling for projectiles and units.
@@ -244,48 +226,44 @@ Known costs of IWSDK vs Unity:
 
 ---
 
-## Week 1 spike (prove the risky parts first)
+## Risky parts to prove first (in the headset)
 
-- [ ] Hand grab, drag and release of small physics objects (carts, troops) feels good
-- [ ] Lever crank and pull-to-release slingshot feel good without haptics
+These are checked during the first MVP build steps ([docs/mvp.md](docs/mvp.md#build-order)).
+
+- [ ] Grabbing tiny (about 3.5 cm) goblins with the snap grab zone feels reliable
 - [ ] "Eat" trigger near the face works reliably
-- [ ] Microphone works inside the immersive session on Quest browser
-- [ ] Roar detection by volume
-- [ ] Vosk recognizes a command in under about 300 to 500 ms on Quest 3S
-- [ ] Frame rate with many units, physics and Vosk running together
-- [ ] Spinning the board with two handles feels comfortable
+- [ ] Spinning the board with the rotate handle and setting its height feel comfortable
+- [ ] Enemies at the wall are visible from the seat (no hidden strip)
 - [ ] Slingshot release direction is steady with hand tracking
-
-**Toy test:** build a tiny version with no menus or levels: you, a castle, a few goblins walking in, one machine and one cart. If it is fun to mess around with for 10 minutes, keep going.
+- [ ] Pepper shake and swatter swings are detected well
+- [ ] Microphone works inside the immersive session on Quest browser, and the scream threshold works
+- [ ] Wrist pause button does not open by accident
+- [ ] Frame rate with many units and physics running together
 
 ---
 
-## Timeline (draft)
+## Timeline
 
 | Dates | Goal |
 |---|---|
-| Oct 15 to 21 | Join Start program, get the Quest 3S, set up IWSDK project, week 1 spike |
-| Oct 22 to 28 | Core: castle, board, troop and enemy behavior, pick up and place, one machine with the cart loop |
-| Oct 29 to Nov 4 | More tools (slingshot, arrow launcher, catapult), eating, hunger, roar, voice commands with hand alternatives |
-| Nov 5 to 11 | Levels (about 5), enemy types, onboarding, boss fight |
-| Nov 12 to 15 | Polish, sound, performance, demo video, Devpost write-up |
+| Oct 15 to 30 | Competition setup, Quest 3S, IWSDK project, full design |
+| Oct 31 to Nov 11 | MVP build, in the order in [docs/mvp.md](docs/mvp.md#build-order) |
+| Nov 12 to 15 | Polish, real sounds, performance, demo video, Devpost write-up |
 | Nov 16 | Submit (2 days of buffer before the deadline) |
 
-**Cut first if behind:** voice commands, then extra machines, then hunger.
-**Never cut:** hands-only flow, onboarding, a stable frame rate, the eating moment.
+The MVP is the submission. Endless, Daily Battle and the other modes are bonus if time allows.
+
+**Cut first if behind:** the last steps of the MVP build order, then extra juice.
+**Never cut:** hands-only flow, grab and eat, the slingshot, a stable frame rate.
 
 ---
 
 ## Open questions
 
 - Subtitle for the name (to make it searchable), for example *Tall Tale: The Giant's Keep*
-- Final list of tools and machines
-- Endless scoring and difficulty curve (see [docs/modes-and-progression.md](docs/modes-and-progression.md))
-- Win and lose conditions for each battle
-- How the hunger meter works exactly
-- Progression between battles (what keeps players coming back)
-- Exact enemy types and what each one asks of the player
-- Hand alternatives for each voice command
+- Castle machines: keep or cut, after the first playtest ([docs/castle-machines.md](docs/castle-machines.md))
+- Endless scoring and difficulty curve ([docs/modes-and-progression.md](docs/modes-and-progression.md))
+- Final food numbers and climber counts (tune in playtests)
 
 ---
 
@@ -307,6 +285,14 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 12. **180 degree default with 120 and 360 presets:** replaced by a full 360 board the player spins and adjusts with two-handed handles. Unique, and fully seated.
 13. **Loadout before each battle:** dropped. Tools unlock and are always available.
 14. **Calibration screen:** replaced by auto placement on Play, the handles, and a "Reset table" button.
+15. **Hunger meter:** replaced by the food jar, a resource that only fills by eating and never drains on its own.
+16. **Carts, machines and picking up troops as the core loop:** on hold. The giant's own tools and eating became the core. Machines will be decided after the first playtest.
+17. **Smashing, slapping and throwing enemies with bare hands:** dropped. Bare hands only grab and eat, so the fly swatter has a clear role and the hands stay simple.
+18. **Voice troop commands and roar:** replaced by the megaphone tool for the MVP. Voice orders may come later.
+19. **One castle flag:** replaced by two flags (castle health and wave progress) that stay in front of the player and do not spin with the board.
+20. **Palm-up wrist menu:** replaced by a wrist button poked with the other hand, because Quest reserves the palm-facing pinch for its own menu.
+21. **Two-handed handles (twist to spin, lift for height):** replaced by two one-handed handles with one job each and a big arrow beside each. Clearer, and works with one hand.
+22. **Bell only after the MVP:** the bell is now in the MVP next to the megaphone, because voice must never be required.
 
 ---
 
@@ -319,7 +305,7 @@ From the 2025 Meta Horizon Start Developer Competition:
 - **Tiny Golf** (Best Casual Game, $100k): mixed reality mini golf, "all you need is a pinch."
 - **Little Critters** (Casual runner-up): mixed reality tower defense with minimal, fun hand interactions.
 - **Saber Punks** (Best Social Game): VR fighting game with motion combos.
-- **Hand Survivor** (Best Hand Interactions): seated wave survival with gesture spells and squishing. Our closest competitor in feel, so we avoid gesture spells and make smashing a last resort. Their future plans include a "kid playing with toys" theme, so we keep our framing about a giant and a kingdom.
+- **Hand Survivor** (Best Hand Interactions): seated wave survival with gesture spells and squishing. Our closest competitor in feel, so we avoid gesture spells and have no smashing at all. Their future plans include a "kid playing with toys" theme, so we keep our framing about a giant and a kingdom.
 - **Pocket Lands** (Best Hand Interactions): lap-sized voxel diorama.
 - **Dun Jun, The Nanauts** (IWSDK award): proof that IWSDK can make decent games.
 
