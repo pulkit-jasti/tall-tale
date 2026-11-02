@@ -38,6 +38,16 @@ Every grabbable or pokeable thing (goblins, tools, handles, buttons, the wrist b
 - **Buttons** also press in when poked.
 - **Cheap to draw:** change the material's emissive color only. No outline effects or post-processing (performance budget).
 
+### Pinch and grab (the two hand actions)
+
+| Action | How | Used for |
+|---|---|---|
+| **Pinch** | Thumb and index finger together | Small things: picking up goblins, pulling back the slingshot pouch, pebbles, other small actions |
+| **Grab** | Close the whole hand into a fist | Big things: fly swatter, pepper shaker, megaphone, bell, the rotate and height handles |
+
+- Buttons (Play, pause panel, wrist button) are poked with the index finger, not pinched or grabbed.
+- Each object accepts only its own action, so a pinch never picks up the swatter and a fist never picks up a goblin.
+
 ---
 
 ## 2. The 360 degree board
@@ -80,12 +90,12 @@ Two handles on the inner rim, right in front of the player, below where the hand
 
 ## 3. Grab and eat
 
-The player's own hands do only two things: grab and eat. There is no smashing, slapping or throwing.
+The player's own hands do only two things: pick up goblins and eat them. There is no smashing, slapping or throwing.
 
-### Grab
+### Pick up (pinch)
 
-- Goblins are tiny (about 3.5 cm), too small to grab reliably with tracked fingers. So the grab zone is much bigger than the goblin: about 5 to 6 cm around the hand's pinch point.
-- When the player closes their fingers inside that zone, the grab snaps to the nearest goblin. The goblin lifts into the fingers.
+- Goblins are tiny (about 3.5 cm), too small to pick up reliably with tracked fingers. So the pinch zone is much bigger than the goblin: about 5 to 6 cm around the hand's pinch point.
+- When the player pinches (thumb and index) inside that zone, it snaps to the nearest goblin. The goblin lifts into the fingers.
 - A grabbed goblin struggles: arms and legs wave, it squeals.
 - The goblin that would be grabbed shows the Ready state while the hand is near (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)).
 
@@ -155,8 +165,8 @@ Not raw joint positions (they change as the whole hand moves). Instead, a few si
 
 | Measure | How | Used for |
 |---|---|---|
-| Finger curl | Fingertip distance to the palm | Fist vs open hand |
-| Pinch | Thumb tip to index tip distance | Pinch |
+| Finger curl | Fingertip distance to the palm | Grab (fist) for big tools and handles |
+| Pinch | Thumb tip to index tip distance | Pinch for goblins and the slingshot pouch |
 | Palm direction | Which way the palm faces | Palm toward the face shows the wrist pause button |
 | Speed | Hand movement over the last few frames | Shake (pepper, bell), swat |
 

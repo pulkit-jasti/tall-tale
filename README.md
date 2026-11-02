@@ -93,7 +93,7 @@ Each zone is the backup for the one before it.
 
 All actions are simple grab, pull, shake, poke and release. No complex gestures. Details in [docs/giant-tools.md](docs/giant-tools.md) and [docs/controls-and-ui.md](docs/controls-and-ui.md).
 
-- **Grab and eat:** pick up a tiny goblin, bring it to your face, tilt your head up and let go. Your bare hands only grab and eat. No smashing or throwing.
+- **Grab and eat:** pinch a tiny goblin, bring it to your face, tilt your head up and let go. Your bare hands only grab and eat. No smashing or throwing.
 - **Slingshot (free):** pull back and release to shoot pebbles. Precise, middle and far.
 - **Fly swatter (4 food):** about 10 seconds of swatting groups near the wall.
 - **Pepper shaker (3 food):** enemies sneeze off their gear and become "seasoned" (worth more food).
@@ -187,7 +187,7 @@ Known costs of IWSDK vs Unity:
 
 ### Hosting and the Quest browser
 
-- **For now:** a plain browser link hosted on **GitHub Pages** (HTTPS, which WebXR needs). Vite needs the repo base path set (for example `/tall-tale/`). The player opens the link and taps "Enter VR" once.
+- **For now:** a plain browser link hosted on **GitHub Pages** (HTTPS, which WebXR needs). Vite uses a relative base (`./`), so the build works under the repo path on GitHub Pages. The player opens the link and taps "Enter VR" once.
 - **Later: PWA and Store app.** Meta's Bubblewrap tool wraps the site into a Quest app. The app loads our hosted URL full screen and can launch straight into VR. Every web deploy updates the installed app, with no new build or Store review. Then use a separate test URL so the live version only changes when we choose. Whether the competition needs a Store build or accepts a link: check the Devpost rules.
 - **Quest browser:** Chromium based, kept close to desktop Chrome. Service workers, Cache Storage, IndexedDB and Web Audio work. Remote debugging with Chrome DevTools works. Use feature detection, not user-agent checks (Quest 3S reports itself as "Quest 3").
 - **Limits:** a mobile chip, no Web Speech API, entering VR and playing sound both need a user tap, storage limits are not documented by Meta.
@@ -230,7 +230,7 @@ Known costs of IWSDK vs Unity:
 
 These are checked during the first MVP build steps ([docs/mvp.md](docs/mvp.md#build-order)).
 
-- [ ] Grabbing tiny (about 3.5 cm) goblins with the snap grab zone feels reliable
+- [ ] Pinching tiny (about 3.5 cm) goblins with the snap pinch zone feels reliable
 - [ ] "Eat" trigger near the face works reliably
 - [ ] Spinning the board with the rotate handle and setting its height feel comfortable
 - [ ] Enemies at the wall are visible from the seat (no hidden strip)
@@ -254,7 +254,6 @@ These are checked during the first MVP build steps ([docs/mvp.md](docs/mvp.md#bu
 The MVP is the submission. Endless, Daily Battle and the other modes are bonus if time allows.
 
 **Cut first if behind:** the last steps of the MVP build order, then extra juice.
-**Never cut:** hands-only flow, grab and eat, the slingshot, a stable frame rate.
 
 ---
 

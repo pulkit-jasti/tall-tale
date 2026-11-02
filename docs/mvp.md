@@ -32,7 +32,7 @@ Back to [GDD index](GDD.md).
 - End of battle: a simple win ("Congratulations") or lose panel with a button to play again ([castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp)).
 
 **Player**
-- Body abilities: **grab and eat only** ([controls-and-ui.md](controls-and-ui.md#3-grab-and-eat)). Grab zone bigger than the goblin, snaps to the nearest one.
+- Body abilities: **grab and eat only** ([controls-and-ui.md](controls-and-ui.md#3-grab-and-eat)). Goblins are picked up with a pinch. The pinch zone is bigger than the goblin and snaps to the nearest one.
 - **All 4 giant tools:** slingshot, fly swatter, pepper shaker, megaphone ([giant-tools.md](giant-tools.md)). This is the most satisfying part, so it is the main thing to test. The megaphone uses a fixed loudness threshold for now (no calibration). **The bell sits on the same platform** and triggers the same stun by shaking, so voice is never required. If mic permission is denied, the megaphone is tied down and the bell still works. A debug key also triggers the stun, for testing without a mic.
 - No loadout, no unlocks. Each tool appears on its platform in its tutorial wave with a poof, and glows until grabbed. No text.
 - Slingshot aim assist ([giant-tools.md](giant-tools.md#slingshot-aim-assist)).
@@ -70,7 +70,7 @@ The tutorial is a hand-written script in code, not a JSON file, because it waits
 - **Keep fallbacks simple:** at most two. First repeat the step, then make it easier.
 - **It must never get stuck.** Every step has a timeout (for example 30 seconds) that moves on anyway. A judge who cannot do something still sees the rest of the game.
 - **Enemies keep coming while a step waits, but at half the spawn rate.** It still feels like a battle, without piling up on a player who is still learning.
-- **The full step list** (start, goal and fallback for each step) is drafted by the coding agent in build step 3 and reviewed by the developer before it is built.
+- **The full step list** (start, goal and fallback for each step) is written and built by the coding agent in build step 3. The developer tunes it after playing it.
 
 ### Tutorial waves
 
@@ -91,21 +91,42 @@ Starting numbers, kept next to the director's steps and tuned in playtests. Clim
 
 ## Build order
 
-Test in the headset after each step. Each step should be playable on its own.
+Each step should be playable on its own.
+
+**Every step is done when:** `npm run typecheck`, `npm run build` and `npm test` pass, the step's items below exist, and the step is committed and pushed. The developer then checks it on the headset from the GitHub Pages link.
 
 1. **Toy test:** remove the starter template files. Board, castle wall, the rotate and height handles with their arrows, a few goblins walking in on simple roads, grab and eat. Prove that grabbing tiny goblins works and that enemies at the wall are visible from the seat.
+   - Done when: a debug key spawns goblins, and the handles, grab and eat work in the code. The developer must test this step on the headset before step 2 builds on it.
 2. **Slingshot** with aim assist, and the pebble bowl.
+   - Done when: a pebble can be pulled, released and hits goblins, and the bowl refills.
 3. **Waves and flags:** blueprint loader and `tutorial.json`, road graph, camps, seeded random, the tutorial director, both flags, win and lose panels.
+   - Done when: the 5 tutorial waves play from start to win, debug keys skip a wave and lose the castle, and the director and win/lose tests pass.
 4. **Fly swatter, pepper shaker, food jar and pips.**
+   - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
 5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required).
+   - Done when: a debug key triggers the megaphone, and the bell does the same by hand.
 6. **Pause:** wrist button, pause panel, auto-pause, Reset table.
+   - Done when: the battle freezes and resumes, and Reset table places the board again.
 7. **Juice**, then **real sounds** last.
+   - Done when: every sound name in the sound config points to a real file.
 
-If time runs short, cut from the end of this list, but never cut grab and eat, the slingshot, the bell (if the megaphone is in) or a stable frame rate.
+If time runs short, cut from the end of this list.
+
+### Tests
+
+Only a few logic tests, in Vitest. No tests for visuals, hand feel or sound, and no screenshots or browser runs.
+
+- **Tutorial director:** steps move on when their goal is met, fall back after a timeout, at most 2 fallbacks.
+- **Win and lose:** clearing the last wave wins, castle health at zero loses, the breather repairs part of the damage.
+- **Food and tool costs:** eating adds food, a tool cannot be used without enough food, food carries over between waves.
+
+To make these testable, game rules live in plain TypeScript functions with no Three.js or IWSDK imports. Do not add tests for anything else (seeded random, handle math, config counts).
 
 ### Left to the coding agent
 
-Tuning numbers the agent picks as sensible starting values and keeps in config files: pebble bowl size and refill rate, how long an ignored climber waits, stun length, how long a fallen tree blocks a road, troop strength and spawn rate, where the troop gate sits on the road graph, step timeouts.
+- **Tuning numbers:** the agent picks sensible starting values and keeps them in config files. For example pebble bowl size and refill rate, how long an ignored climber waits, stun length, how long a fallen tree blocks a road, troop strength and spawn rate, castle damage and repair amounts, enemy speeds and group sizes, step timeouts, and any other number the docs do not give.
+- **Layout of the fixed things around the player:** tool platforms (and which tool sits on which), handles, flags, food jar and pebble bowl. Nothing overlaps, and everything is within about 60 cm of the seat.
+- **Where the troop gate sits** on the road graph.
 
 ---
 

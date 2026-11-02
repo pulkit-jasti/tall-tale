@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "iwsdk-runtime": {
+      "command": "node",
+      "args": [
+        "node_modules/@iwsdk/cli/dist/cli.js",
+        "mcp",
+        "stdio"
+      ]
+    },
+    "iwsdk-reference": {
+      "command": "node",
+      "args": [
+        "node_modules/@iwsdk/reference/dist/cli.js"
+      ]
+    },
+    "metavr": {
+      "command": "node",
+      "args": [
+        "node_modules/@meta-quest/metavr/bin.js",
+        "mcp",
+        "server"
+      ]
+    }
+  }
+}

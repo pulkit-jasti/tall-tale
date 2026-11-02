@@ -143,7 +143,7 @@ Rules:
 - **Use (bell):** shake the bell. Harder shaking means a stronger effect. Same result, hands only.
 - **Cost:** 6 food (most expensive).
 - **Mic permission:** asked on the 2D start page, before entering VR (see [controls-and-ui.md](controls-and-ui.md#4-menus)).
-- **Calibration:** a quick test shout at the start sets the threshold per player, since mics and voices differ.
+- **Threshold:** the MVP uses one fixed loudness threshold. Later, a quick test shout at the start sets it per player, since mics and voices differ.
 - **MVP: both on one platform.** The megaphone and the bell sit side by side on the same platform. Using either one triggers the stun and costs the 6 food once. So the game is fully playable without voice from the first build.
 - **No mic:** if the player denied mic permission, the megaphone is shown tied down and the bell still works.
 - **Quiet mode (later):** chosen at the start. Hides the megaphone so only the bell is shown. Offered to everyone (speech difficulty, playing at night, around other people), so no one has to declare a disability.
