@@ -16,7 +16,7 @@ Back to [GDD index](GDD.md).
 - Triggers: boulder, powder keg and leaning tree only.
 - Hidden gate at the front as the troop spawner.
 - Two flags in front of the player (castle health and wave progress). They stay still when the board spins ([castle-rules.md](castle-rules.md#2-the-two-flags)).
-- Simple shapes only (like the mockup). No final art yet. Scale is in [map.md](map.md#scale-from-the-mockup).
+- Real models from [assets.md](assets.md) from build step 1. Simple shapes only for the things in [placeholder-shapes.md](placeholder-shapes.md). Scale is in [map.md](map.md#scale-from-the-mockup).
 
 **Rules and pacing**
 - **Only the tutorial battle:** 5 hand-crafted waves, about 8 minutes, each wave introducing a tool (table below). A hand-made map blueprint, a scripted tutorial director in code, and a fixed seed. No level generator ([map.md](map.md#8-levels-and-the-level-generator)).
@@ -26,7 +26,7 @@ Back to [GDD index](GDD.md).
 
 **Menus**
 - A 2D start page with one "Enter VR" button. It asks for mic permission before entering VR.
-- A single Play button in VR (a simple shape is fine, no menu board yet).
+- A single Play button in VR (a simple shape, no menu board yet).
 - Board placed automatically when Play is pressed.
 - Pause with a wrist button, plus auto-pause on the Quest menu. Pause panel: Resume, Reset table, Restart battle ([controls-and-ui.md](controls-and-ui.md#5-pause-and-settings)).
 - End of battle: a simple win ("Congratulations") or lose panel with a button to play again ([castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp)).
@@ -46,7 +46,7 @@ Back to [GDD index](GDD.md).
 
 **Feedback**
 - Spatial enemy sounds, louder as they get closer. Camps rumble before spawning.
-- Until the last step, every sound uses the starter sample `public/audio/chime.mp3` as a placeholder ([audio.md](audio.md)).
+- Real sounds from `public/audio/README.md`, added in the step where each feature is built. Sounds it lists as missing use `public/audio/chime.mp3` until the last step ([audio.md](audio.md)).
 - Basic juice: hit flash, poof, gear flying off.
 
 ---
@@ -107,7 +107,7 @@ Each step should be playable on its own.
    - Done when: a debug key triggers the megaphone, and the bell does the same by hand.
 6. **Pause:** wrist button, pause panel, auto-pause, Reset table.
    - Done when: the battle freezes and resumes, and Reset table places the board again.
-7. **Juice**, then **real sounds** last.
+7. **Juice**, then the **missing sounds** last (the ones still using `chime.mp3`).
    - Done when: every sound name in the sound config points to a real file.
 
 If time runs short, cut from the end of this list.
@@ -141,7 +141,7 @@ To make these testable, game rules live in plain TypeScript functions with no Th
 | Level generator and the config-based wave director | [map.md](map.md#8-levels-and-the-level-generator) |
 | AR (passthrough) mode | [controls-and-ui.md](controls-and-ui.md) |
 | Installable app (PWA) and Store packaging | [README](../README.md#hosting-and-the-quest-browser) |
-| Final art and most sounds | [audio.md](audio.md) |
+| Real models for the placeholder shapes (tools, handles, bell) | [placeholder-shapes.md](placeholder-shapes.md) |
 | Prisoner carts | [giant-tools.md](giant-tools.md) |
 | Picking up and placing troops | [core-loop.md](core-loop.md) |
 | Difficulty slider | [controls-and-ui.md](controls-and-ui.md) |

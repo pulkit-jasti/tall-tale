@@ -1,8 +1,8 @@
 # Audio
 
-Status: candidate list. Sound is the last step of the MVP build. Enemy sound cues are decided in [core-loop.md](core-loop.md#3-direction-cues-sound-first).
+Status: most sounds chosen. Enemy sound cues are decided in [core-loop.md](core-loop.md#3-direction-cues-sound-first).
 
-**Until then:** use the sample sound that came with the IWSDK starter (`public/audio/chime.mp3`) as a placeholder wherever a sound is needed, so the sound system and spatial audio can be built and tested. Real sounds replace it at the end. Each sound is referenced by name from one config file, so swapping files needs no code changes.
+**Files:** `public/audio/README.md` maps each sound below to Kenney files. Use them from the build step where each feature is built. Sounds it lists as missing use the IWSDK starter sample (`public/audio/chime.mp3`) until the last build step. Each sound is referenced by name from one config file, so swapping files needs no code changes.
 
 Back to [GDD index](GDD.md).
 

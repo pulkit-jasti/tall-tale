@@ -25,7 +25,7 @@ Read README.md and docs/GDD.md for the full design before making gameplay decisi
 - **Physics:** Havok (built into IWSDK).
 - **Megaphone (scream) detection:** Web Audio API mic loudness. No speech recognition needed. Mic permission is asked on the 2D start page.
 - **Speech (later, not in the MVP):** vosk-browser (offline, runs in a Web Worker) with a small fixed command list, for voice troop orders.
-- **Assets:** low-poly. CC0 packs from Kenney.nl and Quaternius in glTF format, plus simple shapes generated in code.
+- **Assets:** low-poly CC0 models in `public/gltf/` and sounds in `public/audio/`. docs/assets.md says which model and sound to use for each thing. Use only those. Anything without a model is a simple shape from docs/placeholder-shapes.md. If you add a new shape, list it there.
 - **Hosting:** GitHub Pages (static). Players open a link in the Quest browser. Vite uses a relative base (`./`), which works under the repo path. Keep it. PWA and Store packaging come later.
 - **No backend** unless a feature truly needs one. Ask before adding one.
 
@@ -66,7 +66,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - Keep three parts separate: the map blueprint (static JSON), the director (code that decides what happens when, for example the scripted tutorial) and the game systems. Directors only call systems. See docs/map.md section 8.
 - All randomness goes through one seeded random function. The tutorial uses a fixed seed.
 - Keep systems small and separate: board, units, enemies, giant tools, player hands, food, flags, director, audio.
-- Sounds: use the starter sample `public/audio/chime.mp3` as a placeholder until the last build step. Reference sounds by name from one config file.
+- Sounds: use the files mapped in `public/audio/README.md` from the step where each feature is built. Sounds listed there as missing use `public/audio/chime.mp3` until the last build step. Reference sounds by name from one config file.
 
 ## Cloud build run
 

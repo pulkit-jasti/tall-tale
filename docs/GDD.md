@@ -34,5 +34,6 @@ Top level overview and index. Each topic gets its own file once its design is lo
 | Controls, UI and accessibility: 360 board and handles, grab and eat, menus, pause, custom gestures, AR | [controls-and-ui.md](controls-and-ui.md) | First pass |
 | Juice and feel | (planned) | Principles only |
 | Art style | [README.md](../README.md) | Decided |
-| Audio | [audio.md](audio.md) | Candidate sound list. Placeholder sound until the end of the MVP. Enemy sound cues decided in [core-loop.md](core-loop.md). |
+| Assets for the MVP: which model for what, simple shapes | [assets.md](assets.md), [placeholder-shapes.md](placeholder-shapes.md) | Decided |
+| Audio | [audio.md](audio.md) | Most sounds chosen, mapped in `public/audio/README.md`. Enemy sound cues decided in [core-loop.md](core-loop.md). |
 | Tech, hosting and performance | [README.md](../README.md), [AGENTS.md](../AGENTS.md) | Decided |

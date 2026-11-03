@@ -159,7 +159,7 @@ Introduce one new tool or enemy type at a time so players are never overwhelmed.
   - Lots of motion: squash and stretch, particles, hit pauses, wobble.
   - Strong sound effects (half of perceived polish).
 - Free CC0 asset packs: **Kenney.nl** and **Quaternius**, in glTF format. Check each pack's license page.
-- Simple shapes generated in code where packs do not cover it.
+- Simple shapes generated in code where packs do not cover it. The MVP mapping is in [docs/assets.md](docs/assets.md) and [docs/placeholder-shapes.md](docs/placeholder-shapes.md).
 
 ---
 
