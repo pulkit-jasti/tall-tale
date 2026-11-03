@@ -10,8 +10,8 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 
 ## Status
 
-- Stage: design done for the MVP. IWSDK project set up, no game code yet (starter template files still in `src/`).
-- Next step: the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
+- Stage: MVP build step 1 (Toy test) done: board, castle wall, handles, goblins on simple roads, grab and eat. Waiting for the first headset test.
+- Next step: the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---

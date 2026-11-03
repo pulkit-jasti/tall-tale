@@ -1,19 +1,34 @@
-/**
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
 import { World } from '@iwsdk/core';
+import { AudioContext as ThreeAudioContext } from 'three';
 import projectOptions from 'virtual:iwsdk-project';
-import { PanelSystem } from './panel.js';
-import { RobotSystem } from './robot.js';
+import { DEBUG_KEYS } from './debug/debugKeys.js';
+import { GameSystem } from './game.js';
 
-World.create(
-  document.getElementById('scene-container') as HTMLDivElement,
-  projectOptions,
-).then((world) => {
-  world.registerSystem(RobotSystem);
-  world.registerSystem(PanelSystem);
+const container = document.getElementById('scene-container') as HTMLDivElement;
+const startPage = document.getElementById('start-page') as HTMLDivElement;
+const enterButton = document.getElementById('enter-vr') as HTMLButtonElement;
+const keyList = document.getElementById('debug-keys') as HTMLUListElement;
+
+for (const { key, does } of DEBUG_KEYS) {
+  const item = document.createElement('li');
+  item.innerHTML = `<b>${key}</b> ${does}`;
+  keyList.appendChild(item);
+}
+
+World.create(container, projectOptions).then(async (world) => {
+  world.registerSystem(GameSystem);
+
+  const vrSupported = (await navigator.xr?.isSessionSupported('immersive-vr').catch(() => false)) ?? false;
+  enterButton.disabled = false;
+  enterButton.textContent = vrSupported ? 'Enter VR' : 'Play in the browser (no VR found)';
+  enterButton.addEventListener('click', () => {
+    // Sound needs one tap before it can play.
+    void ThreeAudioContext.getContext().resume();
+    startPage.style.display = 'none';
+    if (vrSupported) world.launchXR();
+  });
+  // Coming back from VR shows the start page again.
+  world.renderer.xr.addEventListener('sessionend', () => {
+    startPage.style.display = 'flex';
+  });
 });
