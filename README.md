@@ -94,8 +94,8 @@ Each zone is the backup for the one before it.
 
 All actions are simple grab, pull, shake, poke and release. No complex gestures. Details in [docs/giant-tools.md](docs/giant-tools.md) and [docs/controls-and-ui.md](docs/controls-and-ui.md).
 
-- **Grab and eat:** pinch a tiny goblin and hold it near your mouth for a moment. Your bare hands only grab and eat. No smashing or throwing.
-- **Slingshot (free):** pull back and release to shoot pebbles. Precise, middle and far.
+- **Grab and eat:** pinch a tiny goblin and hold it near your mouth for a moment. Your bare hands only grab and eat. No smashing, and a toss does no damage.
+- **Slingshot (free):** pull back and release to shoot pebbles. Precise, middle and far. A pebble thrown by hand only knocks a goblin back. Load a goblin instead of a pebble for a stronger shot that knocks over the ones around it, at the cost of a meal.
 - **Fly swatter (4 food):** about 10 seconds of swatting groups near the wall.
 - **Pepper shaker (3 food):** enemies sneeze off their gear and become "seasoned" (worth more food).
 - **Megaphone or bell (6 food):** scream into the megaphone, or shake the bell, to stun every enemy. Both sit on the same platform, so voice is never needed.
@@ -298,6 +298,7 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 24. **Eat by letting go with the head tilted up:** replaced after the first headset test by holding the goblin near the mouth for a moment. The old pose turned the palm toward the headset, and the pinch opened the Quest menu.
 25. **Goblins drop straight down when let go:** after the first headset test they keep the hand's speed and fly in a simple arc. Still no throwing as an attack (see 17): a toss does no damage.
 26. **Slingshot fixed on its platform, with the pebble loading itself:** replaced after the first slingshot headset test. The player now picks up the slingshot by its handle with one hand and aims by turning the body, pinches a pebble from the bowl and clicks it into the pouch, then pulls with the other hand. Aiming one-handed on a fixed frame was too fiddly, and the auto reload did not feel good. Pebbles and their hit area also got bigger.
+27. **Dropped pebbles only fall:** pebbles now toss like goblins. A thrown pebble knocks a goblin back, dazed, but never knocks it out, so the slingshot keeps its purpose. A held goblin can also be loaded into the slingshot: it knocks out what it hits plus a small splash, and costs a meal (eat or shoot).
 
 ---
 

@@ -272,6 +272,9 @@ export class GameSystem extends createSystem({}) {
       case 'slingLoad':
         this.slingshot.debugLoad();
         break;
+      case 'slingGoblin':
+        this.slingshot.debugLoadGoblin();
+        break;
       case 'bowlEmpty':
         this.slingshot.debugBowl(false);
         break;

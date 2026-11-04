@@ -99,7 +99,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 
 ## 3. Grab and eat
 
-The player's own hands do only two things: pick up goblins and eat them. There is no smashing, slapping or throwing.
+The player's own hands do only two things: pick up goblins and eat them. There is no smashing or slapping, and a toss is never an attack. A held goblin can also be loaded into the slingshot pouch ([giant-tools.md](giant-tools.md)).
 
 ### Pick up (pinch)
 
@@ -120,6 +120,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 - The goblin keeps the hand's speed, so letting go mid-swing tosses it in an arc. It lands on whatever is under it (courtyard, wall top or field), bounces once on a hard landing, is dazed for a moment, then carries on. Letting go of a still hand drops it straight down.
 - A toss does no damage and is not an attack. It is only there so goblins feel like real little things.
+- Pebbles from the bowl use the same toss. A thrown pebble only knocks a goblin back, dazed, and never knocks it out ([giant-tools.md](giant-tools.md)).
 - Simple projectile math per flying goblin (gravity, ground height, one bounce), no physics engine, so it costs almost nothing. The hand speed is smoothed and capped, so tracking jitter cannot fling a goblin off the map. Numbers are in `GOBLIN_RULES` in `src/config/game.ts`.
 
 ---

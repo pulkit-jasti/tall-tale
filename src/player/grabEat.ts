@@ -62,6 +62,12 @@ export class GrabEat {
       if (slot.held) {
         const goblin = slot.held;
         this.goblins.holdAt(goblin, hand.pinchPoint, headPosition, dt);
+        // Brought to the empty slingshot pouch: it clicks in, ready to shoot.
+        if (this.slingshot.loadGoblin(hand, goblin)) {
+          this.goblins.setTouch(goblin, 'idle');
+          this.clearHeld(slot);
+          continue;
+        }
         const mouth = hand.pinchPoint.distanceTo(headPosition);
         const inZone = mouth < EAT.mouthDistance;
         if (inZone && !slot.inEatZone) this.audio.play('readyTick');

@@ -178,6 +178,9 @@ export const GOBLIN_RULES = {
   rampartWait: 8,
   /** Dazed time after being dropped (seconds). */
   dazedTime: 1.4,
+  /** Knocked back by a thrown pebble or a goblin shot: sideways and upward speed of the hop (cm per second). */
+  knockSpeed: 60,
+  knockHop: 90,
   /** Gravity for dropped goblins (cm per second squared). */
   gravity: 980,
   /** Hand speed smoothing while held, so tracking jitter does not fling goblins (seconds). */
@@ -281,6 +284,15 @@ export const SLINGSHOT = {
   holdSmoothing: 0.03,
   /** Let go: it glides back to its platform in this long (seconds). */
   returnTime: 0.35,
+  /**
+   * The holding hand lost tracking (often hidden behind the pulling hand): the
+   * slingshot stays where it is this long before it lets go (seconds, on top of HANDS.lostGrace).
+   */
+  holdLostGrace: 0.6,
+  /** The pulling hand lost tracking: the pouch stays this long before the pull is cancelled (seconds, on top of HANDS.lostGrace). */
+  pullLostGrace: 0.4,
+  /** The pulling hand is back: its pinch must read again within this long, or the pull is cancelled, never shot (seconds). */
+  pullSettle: 0.15,
   /** A held pebble clicks into the empty pouch within this distance (meters). */
   attachRadius: 0.05,
   /** Pulls shorter than this do not shoot, the pebble stays (cm). */
@@ -314,23 +326,32 @@ export const AIM_ASSIST = {
   steadyWindow: 0.1,
   /** ...skipping this last bit, while the fingers already open. */
   steadySkip: 0.05,
-  /** 2. Trajectory dots while pulling: count and share of the flight shown. */
-  dotCount: 10,
-  dotShare: 0.5,
+  /** 2. Trajectory dots while pulling: count and share of the flight shown (1 = all the way to the impact). */
+  dotCount: 18,
+  dotShare: 1,
   dotSize: 0.45,
   dotColor: 0xffffff,
+  /** Semi transparent circle on the ground where the shot will land (cm). Same size as the hit area. */
+  markerRadius: 4,
+  markerColor: 0xffffff,
+  markerOpacity: 0.35,
+  /** Lifted this far above the ground so it never flickers into it (cm). */
+  markerLift: 0.2,
   /** Prediction step for the dots and the target glow (seconds). */
   traceStep: 1 / 60,
-  /** 4. Gentle pull toward a target within this cone after release (degrees). */
-  coneDeg: 7,
+  /**
+   * 4. Gentle pull toward a target within this cone after release (degrees).
+   * Raised from 7 and 30 after the headset tests, to make up for hand tracking jitter.
+   */
+  coneDeg: 10,
   /** Most it bends per second (degrees). Times `strength`. */
-  turnDegPerSec: 30,
+  turnDegPerSec: 45,
   /** Overall assist strength (0 = off, 1 = normal). An accessibility option later. */
   strength: 1,
   /** Assist share per enemy type. Weak on runners: the slingshot is meant to be weak against them. */
   typeShare: { grunt: 1, runner: 0.3, climber: 1 } as Record<GoblinType, number>,
-  /** 5. Hit area around the pebble's center, bigger than it looks (cm). */
-  hitRadius: 3.5,
+  /** 5. Hit area around the pebble's center, bigger than it looks (cm). Raised from 3.5. */
+  hitRadius: 4,
 };
 
 /** The pebble bowl beside the slingshot. Soldiers keep topping it up. */
@@ -353,6 +374,28 @@ export const PEBBLE_BOWL = {
   pileWidth: 6,
   pileMinScale: 0.35,
   postLength: 12,
+};
+
+/** A pebble thrown by hand. It only knocks a goblin back, dazed. Knocking out is the slingshot's job. */
+export const PEBBLE_THROW = {
+  /** Hand speed smoothing, so tracking jitter does not fling pebbles (seconds). Same as goblins. */
+  smoothing: 0.06,
+  /** Thrown pebbles keep this share of the hand speed. */
+  scale: 1,
+  /** Fastest throw (cm per second). */
+  maxSpeed: 350,
+  /** Slower than this it is only dropped and does nothing (cm per second). */
+  minSpeed: 60,
+  /** Share of the slingshot's bend toward a goblin (AIM_ASSIST). Weaker, toward goblins only. */
+  assist: 0.5,
+};
+
+/** A goblin loaded into the slingshot instead of a pebble. It costs a meal, so it hits harder. */
+export const GOBLIN_SHOT = {
+  /** Goblins this close to the impact are knocked back, dazed (cm). The goblin hit is knocked out. */
+  splashRadius: 8,
+  /** Spin while flying (radians per second). */
+  spin: 14,
 };
 
 export const PARTICLES = {

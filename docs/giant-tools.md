@@ -101,21 +101,24 @@ use tools -> enemies stunned / disarmed -> troops capture them
 - **Cost:** no food. Uses pebbles from a bowl beside the player.
 - **Limit:** soldiers keep topping up the bowl from a stone pile. The refill rate and the pull-back time limit spamming. The player always has one direct action, even with no food.
 - **How it works (step 2, changed after the first slingshot headset test):**
-  1. Grab the slingshot's handle with either hand (fist or pinch, like the ring handle, with the same short open-hand wait first). It follows that hand, so the player aims by turning the hand and the body, which is faster than fine moves with one hand.
-  2. Pinch a pebble from the bowl and bring it to the pouch. Close enough, it clicks into the pouch and stays there however the slingshot moves. Let go. A pebble let go over the bowl goes back in. Let go anywhere else, it just falls (no damage).
+  1. Grab the slingshot's handle with either hand (fist or pinch, like the ring handle, with the same short open-hand wait first). It follows that hand, so the player aims by turning the hand and the body, which is faster than fine moves with one hand. Once the pouch is pulled, the slingshot locks where it is until the shot, and the aim comes only from the pulling hand. The holding hand is often hidden behind the pulling hand then, and its guessed pose must not move the shot.
+  2. Pinch a pebble from the bowl and bring it to the pouch. Close enough, it clicks into the pouch and stays there however the slingshot moves. Let go. A pebble let go over the bowl goes back in. Let go anywhere else, it keeps the hand's speed, like a tossed goblin (see "Thrown pebbles" below).
   3. Pinch the pouch with the free hand, pull back and let go to shoot. A short pull (under 4 cm) or a shot toward the player's face does not shoot.
+  - **Hidden hands:** pulling straight back can hide the holding hand behind the pulling hand. Then the slingshot stays where it is for a moment instead of dropping, and during a pull the holding hand never lets go because it looks open (its fingers are only guessed). If the pulling hand is lost, the pouch waits at its last spot. When the hand comes back, the pull goes on if the pinch reads again, or is cancelled. It never shoots by itself. Numbers are `holdLostGrace`, `pullLostGrace` and `pullSettle` in `SLINGSHOT`.
   - Letting go of the handle glides the slingshot back to its platform. A loaded pebble stays in. It also shoots while it rests on the platform, so it works with one hand.
   - No auto reload. An empty pouch or an empty bowl shows Locked (wobble and buzz). The pile in the bowl shrinks as pebbles are taken and refills over time.
-  - Pebbles are 2.5 cm with a 3.5 cm hit area. One hit knocks out any goblin. If aiming is still too hard, the next step is a bigger goblin hit box. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
+  - Pebbles are 2.5 cm with a 4 cm hit area. One hit knocks out any goblin. If aiming is still too hard, the next step is a bigger goblin hit box. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
+- **Thrown pebbles:** a pebble thrown by hand only knocks the goblin it hits back a little, dazed for a moment. It never knocks one out, so the slingshot keeps its job (range and knock outs). It buys a second near the wall. A slow let go just drops the pebble and does nothing. Thrown pebbles will not set off triggers (powder kegs, boulders, trees), so those stay a slingshot moment. Numbers are in `PEBBLE_THROW`.
+- **Goblin shot:** a held goblin brought to the empty pouch clicks in like a pebble. Shot, it tumbles through the air, knocks out the goblin it hits, knocks back the goblins within about 8 cm of the impact (dazed), and poofs. Landing without a hit still knocks back the goblins around it. It costs a goblin the player could have eaten, so it is a choice: food or a stronger shot. Numbers are in `GOBLIN_SHOT`. Debug key J loads one, L shoots it.
 
 #### Slingshot aim assist
 
 Most good VR slingshot and bow games have some. In order of importance:
 
 1. **Steady release direction.** Hand tracking jitters when the fingers open, so use the average aim direction from the last ~100 ms before release, not the release frame. Matters most for hands.
-2. **Trajectory dots** while pulling (like Angry Birds). Maybe only the first half of the arc, so some skill stays.
+2. **Trajectory dots** while pulling (like Angry Birds), all the way to the impact, plus a semi transparent circle on the ground where the shot will land (under the goblin's feet when it will hit one). The full line was chosen after the first slingshot headset test, so the player knows exactly where it goes. `dotShare` in `AIM_ASSIST` can shorten it again.
 3. **Target glow:** the enemy (or trigger) about to be hit lights up while aiming.
-4. **Gentle pull toward targets:** after release, the pebble bends slightly toward the nearest enemy within a small cone (about 5 to 10 degrees).
+4. **Gentle pull toward targets:** after release, the pebble bends slightly toward the nearest target within a small cone (10 degrees, raised from 7 to make up for hand tracking jitter). Targets are goblins and every other thing meant to be shot (boulder, leaning tree, powder keg and anything later), which register with the slingshot as a `SlingTarget`. Everything shot with the slingshot gets this, pebbles and goblin shots alike. A pebble thrown by hand gets half the bend, toward goblins only.
 5. **Bigger hit area:** the pebble's hit area is a bit bigger than it looks.
 
 Rules:

@@ -317,6 +317,22 @@ export class Goblins {
     goblin.play('fall', true, 1);
   }
 
+  /**
+   * Bonked by a thrown pebble or a goblin shot splash: a short hop along
+   * (dx, dz), then dazed. No damage. A climber is knocked off the wall.
+   */
+  knockBack(goblin: Goblin, dx: number, dz: number): void {
+    if (!this.isHittable(goblin)) return;
+    const d = Math.hypot(dx, dz) || 1;
+    goblin.vx = (dx / d) * GOBLIN_RULES.knockSpeed;
+    goblin.vz = (dz / d) * GOBLIN_RULES.knockSpeed;
+    goblin.vy = GOBLIN_RULES.knockHop;
+    goblin.mode = 'falling';
+    goblin.landAs = 'dazed';
+    goblin.play('fall', true, 1);
+    this.audio.play('squeal', this.worldPosition(goblin, temp), 1, 0.1);
+  }
+
   update(dt: number): void {
     for (const g of this.list) {
       if (g.mode === 'dead') continue;

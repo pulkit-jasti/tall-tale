@@ -15,6 +15,7 @@ export type DebugCommand =
   | 'place'
   | 'slingShot'
   | 'slingLoad'
+  | 'slingGoblin'
   | 'bowlEmpty'
   | 'bowlFill'
   | 'fps'
@@ -47,6 +48,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'place', code: 'KeyP', label: 'Place board again', does: 'Place the board again in front of you' },
   { id: 'slingShot', code: 'KeyL', label: 'Slingshot shot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },
   { id: 'slingLoad', code: 'KeyO', label: 'Load slingshot', does: 'Put a pebble in the slingshot pouch' },
+  { id: 'slingGoblin', code: 'KeyJ', label: 'Goblin in slingshot', does: 'Put the goblin nearest the castle in the slingshot pouch (then L shoots it)' },
   { id: 'bowlEmpty', code: 'KeyU', label: 'Empty bowl', does: 'Empty the pebble bowl (the bowl shows Locked until it refills)' },
   { id: 'bowlFill', code: 'KeyI', label: 'Fill bowl', does: 'Fill the pebble bowl' },
   { id: 'fps', code: 'KeyF', label: 'FPS on/off', does: 'FPS counter on or off (add ?fps to the URL on the hosted build)' },
