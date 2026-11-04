@@ -208,7 +208,8 @@ Known costs of IWSDK vs Unity:
 
 ### Performance budget (starting point)
 
-- Units on the board: roughly 40 to 80 small troops and enemies. Confirm in the first headset test.
+- Units on the board: roughly 40 to 80 small troops and enemies. Measured: about 50 goblins at 72 Hz so far ([docs/performance.md](docs/performance.md)).
+- Frame rate: 72 Hz, asked for on entering VR (the Quest 3S browser default is 90 Hz).
 - Instancing for repeated meshes.
 - Simple collision shapes only.
 - Object pooling for projectiles and units.
@@ -238,7 +239,7 @@ These are checked during the first MVP build steps ([docs/mvp.md](docs/mvp.md#bu
 - [ ] Pepper shake and swatter swings are detected well
 - [ ] Microphone works inside the immersive session on Quest browser, and the scream threshold works
 - [ ] Wrist pause button does not open by accident
-- [ ] Frame rate with many units and physics running together
+- [x] Frame rate with many units: about 50 goblins at 72 Hz with no dropped frames ([docs/performance.md](docs/performance.md)). Re-test with troops and physics in step 5.
 
 ---
 

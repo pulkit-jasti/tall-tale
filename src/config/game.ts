@@ -52,6 +52,15 @@ export const ROADS = {
   laneJitter: 1.8,
 };
 
+/** VR session settings. */
+export const XR = {
+  /**
+   * Frame rate asked for on entering VR (Hz), if the headset supports it.
+   * 72 gives 13.9 ms per frame instead of 11.1 ms at 90 (the Quest 3S default).
+   */
+  frameRate: 72,
+};
+
 /** Zones where the bare hands, the handles and the camera live. */
 export const STAGE = {
   /** Delay after entering VR before the board is placed (seconds). */
@@ -226,21 +235,69 @@ export const PARTICLES = {
   gravity: 0.9,
 };
 
+/** Debug actions (keys and the laptop debug page). */
+export const DEBUG = {
+  /** Grunts added per stress test press. */
+  stressAdd: 10,
+  /** The stress test can raise the unit cap up to this. */
+  stressMax: 120,
+  /** Gap between stress test grunts leaving their camps (seconds). */
+  stressGap: 0.25,
+  /** Board turn and height per debug page press (degrees, cm). */
+  spinStepDeg: 30,
+  heightStepCm: 5,
+  /** Each game page checks in with the debug page this often (seconds). */
+  heartbeatEvery: 2,
+};
+
+/**
+ * Automatic stress test (debug page button): adds grunts step by step,
+ * measures each step, and stops at the first step that fails. The unit
+ * budget is the last step that passed.
+ */
+export const STRESS_TEST = {
+  /** Grunts added per step. */
+  step: 10,
+  /** Measured time per step, after the warm-up (seconds). */
+  measureSeconds: 20,
+  /**
+   * A step passes only if all three hold. FPS limits are shares of the page's
+   * real target rate (72 Hz: avg at least 71, 1% low at least 65).
+   */
+  minAvgShare: 0.985,
+  minLowShare: 0.9,
+  maxMissedPct: 1,
+  /** Stop here even if it still passes. */
+  maxUnits: 120,
+};
+
 /** Live frame rate panel for performance checks (debug). */
 export const FPS = {
-  /** Frame rate the headset should hold (Quest browser default). */
+  /** Frame rate to hold when the XR session does not report its own (Quest browser default). */
   target: 72,
-  /** Redraw the numbers this often (seconds). */
+  /** Live numbers are measured over this long (seconds). */
   refresh: 0.5,
+  /** The panel redraws at most this often, and only when its text changed (seconds). */
+  drawEvery: 1,
   /** Shown by default in the dev server. The deployed build shows it with ?fps in the URL. */
   showInDev: true,
-  /** Panel spot: on the rim, left of front, standing just above the ring (cm, degrees). */
+  /** Panel spot: on the rim, left of front (clear of the left arrow), standing just above the ring (cm, degrees). */
   radius: 27,
-  angleDeg: -36,
-  aboveRing: 3,
-  /** Panel size (cm). */
-  width: 9,
-  height: 3.4,
+  angleDeg: -24,
+  aboveRing: 1,
+  /** Panel size (cm). Keep width / height at 2:1 like the canvas. */
+  width: 13.6,
+  height: 6.8,
+  /** A measured run skips this long after each reset, so spawn hitches do not count (seconds). */
+  warmup: 3,
+  /** A frame longer than this many frame budgets counts as missed (likely a stale frame in the headset). */
+  missedFactor: 1.5,
+  /** The 1% low uses the last this many seconds of the run. */
+  lowWindow: 60,
+  /** Highest refresh rate to size the frame buffer for (Hz). */
+  maxRefresh: 120,
+  /** Send the run numbers to the laptop debug page this often (seconds). */
+  reportEvery: 1,
 };
 
 /** Mouse look in the browser (not used in VR). */

@@ -10,6 +10,7 @@ import {
   Vector3,
 } from 'three';
 import { PARTICLES } from '../config/game.js';
+import { mark } from '../debug/perfMarks.js';
 import type { Random } from '../rules/random.js';
 
 interface Particle {
@@ -47,6 +48,7 @@ export class Particles {
 
   /** A small burst at a world position. */
   burst(at: Vector3, colors: number[], count = 12, speed = PARTICLES.speed): void {
+    mark('particles');
     for (let n = 0; n < count; n++) {
       const i = this.next;
       this.next = (this.next + 1) % this.pool.length;

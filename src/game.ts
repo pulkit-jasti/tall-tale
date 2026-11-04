@@ -3,9 +3,13 @@
 import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { GameAudio } from './audio/sound.js';
-import { HANDLES, STAGE, TOY_SPAWN } from './config/game.js';
+import { DEBUG, FPS, HANDLES, STAGE, TOY_SPAWN, XR } from './config/game.js';
 import { TOY_ROADS } from './config/toyMap.js';
+import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { FpsCounter } from './debug/fpsCounter.js';
+import { mark } from './debug/perfMarks.js';
+import { sendHeartbeat, sendRunStats, sendStressTest, takeRemoteCommands } from './debug/remote.js';
+import { StressTest } from './debug/stressTest.js';
 import { ToySpawner } from './director/toySpawner.js';
 import { Particles } from './fx/particles.js';
 import { GrabEat } from './player/grabEat.js';
@@ -33,9 +37,11 @@ export class GameSystem extends createSystem({}) {
   private spawner!: ToySpawner;
   private debugRng!: Random;
   private fps!: FpsCounter;
+  private stressTest!: StressTest;
   private placeTimer = -1;
   private wasImmersive = false;
   private paused = false;
+  private heartbeatTimer = 0;
 
   init(): void {
     void this.setup().catch((error) => console.error('[game] setup failed', error));
@@ -62,9 +68,36 @@ export class GameSystem extends createSystem({}) {
     ]);
     this.goblins = new Goblins(this.stage.boardSpin, built.roads, createRandom(seed + 200), this.audio);
     await this.goblins.load();
+    this.fps.countUnits = () => this.goblins.aliveCount;
+    this.fps.onReport = (stats) => {
+      sendRunStats(stats);
+      if (stats.final) {
+        console.info(
+          `[fps] run: ${stats.units} units, ${stats.seconds.toFixed(0)} s, avg ${stats.avgFps.toFixed(1)}, ` +
+            `1% low ${stats.lowFps.toFixed(0)}, missed ${stats.missedPct.toFixed(1)}%`,
+        );
+      }
+    };
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.roads.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
+    this.stressTest = new StressTest({
+      clear: () => {
+        this.spawner.auto = false;
+        this.spawner.clear();
+        this.goblins.killAll();
+      },
+      spawn: (count) => {
+        this.goblins.cap = Math.min(DEBUG.stressMax, Math.max(this.goblins.cap, this.goblins.aliveCount + count));
+        this.spawner.sendMany('grunt', count);
+        return count * DEBUG.stressGap;
+      },
+      resetRun: (extraWarmup) => this.fps.resetRun(extraWarmup),
+      stats: () => this.fps.currentRun(),
+      units: () => this.goblins.aliveCount,
+      hidePanel: (hide) => this.fps.hideForTest(hide),
+      report: sendStressTest,
+    });
 
     this.placeBoard();
     this.ready = true;
@@ -84,7 +117,22 @@ export class GameSystem extends createSystem({}) {
     headForward.set(0, 0, -1).applyQuaternion(headQuaternion);
   }
 
+  /** Asks the headset for the configured frame rate (docs: Meta "WebXR App Framerate Control"). */
+  private requestFrameRate(): void {
+    const session = this.world.session;
+    const rates = session?.supportedFrameRates;
+    if (!session || !rates || !rates.includes(XR.frameRate)) {
+      console.info(`[xr] ${XR.frameRate} Hz not offered (${rates ? [...rates].join(', ') : 'no list'})`);
+      return;
+    }
+    session
+      .updateTargetFrameRate(XR.frameRate)
+      .then(() => console.info(`[xr] frame rate set to ${XR.frameRate} Hz`))
+      .catch((error) => console.warn('[xr] frame rate change failed', error));
+  }
+
   private placeBoard(): void {
+    mark('board placed');
     this.readHead();
     this.grabEat?.releaseAll();
     this.stage.place(headPosition, headQuaternion);
@@ -92,10 +140,12 @@ export class GameSystem extends createSystem({}) {
 
   update(delta: number): void {
     if (!this.ready) return;
-    this.fps.update(delta);
     // Entering VR: place the board once the head pose has settled.
     const immersive = this.immersive;
-    if (immersive && !this.wasImmersive) this.placeTimer = STAGE.placeDelay;
+    if (immersive && !this.wasImmersive) {
+      this.placeTimer = STAGE.placeDelay;
+      this.requestFrameRate();
+    }
     this.wasImmersive = immersive;
     // Simple auto-pause while the Quest menu is open (full pause is build step 6).
     // Read the XR session directly too, and the page itself, in case one of
@@ -110,6 +160,23 @@ export class GameSystem extends createSystem({}) {
       this.audio.setPaused(paused);
       console.info(`[game] ${paused ? 'paused' : 'resumed'} (${state})`);
       this.fps.status = paused ? 'paused' : '';
+      // Menu frames and the hitch after it would pollute the measured run.
+      this.fps.resetRun();
+    }
+    // Aim for the rate the headset really runs at (72, 90 or 120 Hz).
+    this.fps.target = Math.round(this.world.session?.frameRate ?? FPS.target);
+    this.fps.update(delta, !paused);
+    this.heartbeatTimer -= delta;
+    if (this.heartbeatTimer <= 0) {
+      this.heartbeatTimer = DEBUG.heartbeatEvery;
+      sendHeartbeat({
+        immersive,
+        paused,
+        liveFps: this.fps.live,
+        targetFps: this.fps.target,
+        units: this.goblins.aliveCount,
+        testing: this.stressTest.active,
+      });
     }
     if (paused) return;
 
@@ -123,6 +190,7 @@ export class GameSystem extends createSystem({}) {
     this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
     this.readHead();
     this.debugKeys(dt);
+    this.stressTest.update(dt);
     this.handles.update(dt);
     this.spawner.update(dt);
     this.goblins.update(dt);
@@ -132,24 +200,11 @@ export class GameSystem extends createSystem({}) {
 
   private debugKeys(dt: number): void {
     const keys = this.input.keyboard;
-    if (keys.getKeyDown('KeyG')) this.spawner.sendGroup('grunt');
-    if (keys.getKeyDown('KeyR')) this.spawner.sendGroup('runner');
-    if (keys.getKeyDown('KeyV')) this.spawner.sendGroup('climber');
-    if (keys.getKeyDown('KeyC')) {
-      // The board angle that is in front of the player right now.
-      this.goblins.spawnClimberAt(this.stage.spin + degToRad(this.debugRng.range(-10, 10)));
+    for (const action of DEBUG_ACTIONS) {
+      if (action.code && keys.getKeyDown(action.code)) this.runDebug(action.id);
     }
-    if (keys.getKeyDown('KeyT')) {
-      this.spawner.auto = !this.spawner.auto;
-      console.info(`[debug] auto spawning ${this.spawner.auto ? 'on' : 'off'}`);
-    }
-    if (keys.getKeyDown('KeyK')) {
-      this.spawner.clear();
-      this.goblins.killAll();
-    }
-    if (keys.getKeyDown('KeyB')) this.grabEat.debugEat(headPosition, headForward);
-    if (keys.getKeyDown('KeyP')) this.placeBoard();
-    if (keys.getKeyDown('KeyF')) this.fps.toggle();
+    // Buttons on the laptop debug page (dev server only).
+    for (const id of takeRemoteCommands()) this.runDebug(id);
     let spin = 0;
     let height = 0;
     // A bigger spin moves the board to the left as seen from the seat.
@@ -159,6 +214,75 @@ export class GameSystem extends createSystem({}) {
     if (keys.getKeyPressed('KeyX')) height += 1;
     if (spin || height) {
       this.handles.nudge(degToRad(spin * HANDLES.keyRotateDegPerSec * dt), height * HANDLES.keyHeightCmPerSec * dt);
+    }
+  }
+
+  private runDebug(id: DebugCommand): void {
+    switch (id) {
+      case 'grunts':
+        this.spawner.sendGroup('grunt');
+        break;
+      case 'runners':
+        this.spawner.sendGroup('runner');
+        break;
+      case 'climberRoad':
+        this.spawner.sendGroup('climber');
+        break;
+      case 'climberFront':
+        // The board angle that is in front of the player right now.
+        this.goblins.spawnClimberAt(this.stage.spin + degToRad(this.debugRng.range(-10, 10)));
+        break;
+      case 'auto':
+        this.spawner.auto = !this.spawner.auto;
+        console.info(`[debug] auto spawning ${this.spawner.auto ? 'on' : 'off'}`);
+        break;
+      case 'clear':
+        this.spawner.clear();
+        this.goblins.killAll();
+        this.fps.resetRun();
+        break;
+      case 'resetRun':
+        this.fps.resetRun();
+        break;
+      case 'autoTest':
+        // Only a page in VR runs it, so a laptop tab never measures instead of the headset.
+        if (!this.immersive) {
+          console.info('[stress test] ignored: this page is not in VR');
+          break;
+        }
+        this.stressTest.start();
+        break;
+      case 'stopTest':
+        this.stressTest.stop();
+        break;
+      case 'eatFront':
+        this.grabEat.debugEat(headPosition, headForward);
+        break;
+      case 'place':
+        this.placeBoard();
+        break;
+      case 'fps':
+        this.fps.toggle();
+        break;
+      case 'stress':
+        // Raise the unit cap for this session so the real limit can be found.
+        this.goblins.cap = Math.min(DEBUG.stressMax, Math.max(this.goblins.cap, this.goblins.aliveCount + DEBUG.stressAdd));
+        // A clean test: no auto trickle changing the count, and the run
+        // starts once all the new grunts are out.
+        this.spawner.auto = false;
+        this.fps.resetRun(DEBUG.stressAdd * DEBUG.stressGap);
+        this.spawner.sendMany('grunt', DEBUG.stressAdd);
+        console.info(`[debug] stress: unit cap ${this.goblins.cap}, auto spawning off`);
+        break;
+      case 'spinLeft':
+      case 'spinRight':
+        // A bigger spin moves the board to the left as seen from the seat.
+        this.handles.nudge(degToRad(id === 'spinLeft' ? DEBUG.spinStepDeg : -DEBUG.spinStepDeg), 0);
+        break;
+      case 'boardUp':
+      case 'boardDown':
+        this.handles.nudge(0, id === 'boardUp' ? DEBUG.heightStepCm : -DEBUG.heightStepCm);
+        break;
     }
   }
 }

@@ -1,6 +1,6 @@
 // Toy test spawner (build step 1 only). A stand-in for the tutorial director
 // that comes in step 3. Like a director, it only calls the goblin system.
-import { TOY_SPAWN, type GoblinType } from '../config/game.js';
+import { DEBUG, TOY_SPAWN, type GoblinType } from '../config/game.js';
 import type { Random } from '../rules/random.js';
 import type { Goblins } from '../units/goblins.js';
 
@@ -26,6 +26,11 @@ export class ToySpawner {
   sendGroup(type: GoblinType, road = this.rng.int(this.roadCount)): void {
     const size = type === 'runner' ? TOY_SPAWN.runnerGroup : type === 'grunt' ? TOY_SPAWN.gruntGroup : 1;
     for (let i = 0; i < size; i++) this.queue.push({ type, road, wait: TOY_SPAWN.groupGap });
+  }
+
+  /** Debug stress test: many goblins, spread over all roads. */
+  sendMany(type: GoblinType, count: number): void {
+    for (let i = 0; i < count; i++) this.queue.push({ type, road: i % this.roadCount, wait: DEBUG.stressGap });
   }
 
   update(dt: number): void {

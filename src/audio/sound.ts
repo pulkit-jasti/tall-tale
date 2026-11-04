@@ -3,6 +3,7 @@
 import { AssetManager } from '@iwsdk/core';
 import { Audio, AudioListener, Object3D, PositionalAudio, Vector3 } from 'three';
 import { SOUNDS, type SoundDef, type SoundName } from '../config/sounds.js';
+import { mark } from '../debug/perfMarks.js';
 import type { Random } from '../rules/random.js';
 
 const POSITIONAL_VOICES = 12;
@@ -80,6 +81,7 @@ export class GameAudio {
     this.lastPlayed.set(name, now);
     const buffer = this.buffers.get(this.rng.pick(def.files));
     if (!buffer) return;
+    mark('sound');
     let voice: Audio | PositionalAudio;
     if (def.positional && at) {
       const p = this.positional[this.nextPositional];

@@ -7,9 +7,11 @@
 
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
 import { defineConfig } from 'vite';
+import { debugPage } from './vite-plugins/debugPage.js';
 
 export default defineConfig({
-  plugins: [iwsdkDev()],
+  // debugPage: laptop buttons at /__debug that reach the headset live (dev only).
+  plugins: [iwsdkDev(), debugPage()],
   server: { host: '0.0.0.0', port: 8081, open: false },
   build: {
     outDir: 'dist',

@@ -37,3 +37,4 @@ Top level overview and index. Each topic gets its own file once its design is lo
 | Assets for the MVP: which model for what, simple shapes | [assets.md](assets.md), [placeholder-shapes.md](placeholder-shapes.md) | Decided |
 | Audio | [audio.md](audio.md) | Most sounds chosen, mapped in `public/audio/README.md`. Enemy sound cues decided in [core-loop.md](core-loop.md). |
 | Tech, hosting and performance | [README.md](../README.md), [AGENTS.md](../AGENTS.md) | Decided |
+| Performance tests: how we measure, test log, unit budget, next optimizations | [performance.md](performance.md) | Budget measured: about 50 goblins at 72 Hz |

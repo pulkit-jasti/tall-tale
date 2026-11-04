@@ -15,6 +15,7 @@ import {
   Vector3,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
+import { mark } from '../debug/perfMarks.js';
 import { CASTLE, GOBLIN_RULES, GOBLINS, ROADS, type GoblinStats, type GoblinType } from '../config/game.js';
 import { angleOf, boardHeight, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
@@ -141,6 +142,8 @@ const temp2 = new Vector3();
 
 export class Goblins {
   readonly list: Goblin[] = [];
+  /** Most goblins at once. The debug stress test can raise it. */
+  cap = GOBLIN_RULES.maxGoblins;
   private template!: ModelTemplate;
   private baseColor = new Color(1, 1, 1);
 
@@ -164,11 +167,13 @@ export class Goblins {
   private obtain(type: GoblinType): Goblin | null {
     let goblin = this.list.find((g) => g.mode === 'dead') ?? null;
     if (!goblin) {
-      if (this.list.length >= GOBLIN_RULES.maxGoblins) return null;
+      if (this.list.length >= this.cap) return null;
       goblin = new Goblin(this.template, this.template.animations, this.baseColor);
+      mark('goblin built');
       this.board.add(goblin.root);
       this.list.push(goblin);
     }
+    mark('goblin spawn');
     goblin.setType(type);
     goblin.speed = goblin.stats.speed * (1 + this.rng.range(-GOBLIN_RULES.speedJitter, GOBLIN_RULES.speedJitter));
     goblin.root.visible = true;

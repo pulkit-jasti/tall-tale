@@ -29,7 +29,7 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Climber | `characters/mini-dungeon/character-orc.glb` | 3.5 cm tall | Purple accent |
 
 - Goblin types share one model and differ by size, tint and speed (each type has its own color accent, see [enemies.md](enemies.md)). The agent picks the exact tints.
-- **Performance fallback:** 40 to 80 skinned characters may be too slow on Quest 3S. If the frame rate drops, switch goblins to code-made shapes (one InstancedMesh per body part, animated in code). Decide in the first headset test.
+- **Performance fallback:** 40 to 80 skinned characters may be too slow on Quest 3S. If the frame rate drops, switch goblins to code-made shapes (one InstancedMesh per body part, animated in code). First headset test: about 50 skinned goblins hold 72 Hz, so the fallback is not needed yet. Decide again with troops in step 5 ([performance.md](performance.md)).
 - **Weapons:** attach to the `arm-right` bone. Goblins: `props/mini-arena/weapon-spear.glb` (some goblins bare handed for variety). Troops: `props/mini-arena/weapon-sword.glb`. Target length about 1.5 cm. A weapon is the "gear" that flies off when peppered.
 
 ### Animations

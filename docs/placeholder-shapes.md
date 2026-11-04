@@ -40,7 +40,7 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Play button (in VR) | Big round button (short cylinder) on a small post. | 10 cm wide |
 | Wrist pause button | Small round button (short cylinder) on the inside of the left wrist. | 3 cm wide |
 | Pause, win and lose panels | Rounded flat panel with big poke buttons. Use IWSDK UI (check iwsdk-reference) for the text. | About 40 cm wide |
-| FPS counter (debug) | Small flat panel with a canvas texture (average FPS and worst frame in ms), standing just above the ring handle, left of front. Rises with the board, never spins. On in the dev server, `?fps` on the hosted build, F toggles it. | 9 cm wide |
+| FPS counter (debug) | Small flat panel with a canvas texture Top: live FPS, worst frame in ms, units on the board, "paused". Bottom: the measured run (avg FPS, 1% low, missed frames). Standing just above the ring handle, left of front. Rises with the board, never spins. On in the dev server, `?fps` on the hosted build, F or the debug page toggles it. | 13.6 x 6.8 cm |
 | Giant's mouth feedback | None in the world. Use a sound and a small burst of particles at the face when a goblin is eaten. | |
 | Goblin helmet (only if helmets are used) | Small half sphere on the head. | 1 cm |
 | Goblins (only as the performance fallback) | Code-made body parts (capsule body, sphere head, cylinder limbs), one InstancedMesh per part, animated in code. See [assets.md](assets.md#2-characters-troops-goblins-workers). | 3.5 cm tall |

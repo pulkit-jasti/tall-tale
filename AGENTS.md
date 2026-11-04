@@ -37,12 +37,16 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 
 ## Performance budget
 
-- About 40 to 80 small units on the board in total (troops plus enemies). Confirm the real limit in the first headset test.
+- About 40 to 80 small units on the board in total (troops plus enemies). **Measured so far: about 50 goblins at 72 Hz** with no dropped frames. Every test result, what we learned and the next optimizations are in docs/performance.md. Add each new stress test result there.
 - Use instancing for repeated meshes (troops, enemies, pebbles, particles).
 - Use simple collision shapes (boxes, spheres, capsules). Never use full mesh colliders on moving objects.
 - Pool objects (pebbles, debris, units) instead of creating and destroying them.
 - Avoid full-screen post-processing (bloom etc.). Fake glow with emissive materials and simple shaders.
 - Keep the first load fast. Cache large files.
+- **How to measure:** use the measured run on the FPS panel (also live on the laptop debug page, with a history table and CSV copy). Judge by three numbers over a run of at least 20 seconds: avg FPS (at least 98.5% of the target, 71 of 72), 1% low (at least 90%, 65 of 72), missed frames (under 1%). The 1% low counts each frame in whole display beats (1 beat = on time, 2 = one dropped frame), because the headset only shows frames on its beat and the page clock wobbles by a ms or two. The raw clock value is shown for information only. The target is the XR session's real frame rate, 72 if it does not report one. Only trust numbers from a "headset" page: the IWSDK emulator fakes a Quest on localhost, and the laptop screen runs at 120 Hz. A run resets on Stress, clearing goblins, pause, or "New measured run", and skips a 3 second warm-up. Missed frames and the 1% low matter more than the average in VR, because dips cause judder.
+- **Frame rate:** the game asks for 72 Hz on entering VR (`XR.frameRate` in config). The Quest 3S browser default is 90 Hz, which leaves only 11.1 ms per frame.
+- **Slow frame causes:** code that can cause a hitch calls `mark()` from `src/debug/perfMarks.ts` (goblin built or spawned, sound, particles, panel redraw, debug send). Each missed frame counts the marks from the frame before it, and the stress test result lists them. "nothing marked" means the browser, hand tracking or garbage collection. Add a mark when adding something that might hitch.
+- **Unit budget:** the "Run stress test" button on the debug page first measures the empty board (baseline), then adds grunts 10 at a time, measures each step for 20 seconds with that rule, stops at the first failing step and clears the board. Only a page in VR runs it, the FPS panel is hidden while it measures, and the debug page lists every connected game page. The budget is the last passing step. Rules are in `STRESS_TEST` in `src/config/game.ts`. Run it again after big changes (new models, effects, troops).
 
 ## Hand interaction rules
 
@@ -62,6 +66,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - The developer works on a Mac and tests on a Quest 3S over Wi-Fi in the Quest browser.
 - Make as much as possible testable in desktop Chrome with the Immersive Web Emulator, so the developer only needs the headset for feel and hand tracking checks.
 - Add debug shortcuts, for example keys that trigger the megaphone, skip a wave or add food, so features can be tested without a mic or a headset.
+- Every debug action goes in `DEBUG_ACTIONS` in `src/debug/debugKeys.ts` and gets a case in `GameSystem.runDebug`. It then works from a keyboard key and from the laptop debug page at `/__debug` on the dev server, which sends it live to the headset over Vite's hot reload WebSocket (`vite-plugins/debugPage.ts`, dev only).
 - Keep game rules data driven (unit stats, tool costs, food values in config files), so tuning does not need code changes.
 - Keep three parts separate: the map blueprint (static JSON), the director (code that decides what happens when, for example the scripted tutorial) and the game systems. Directors only call systems. See docs/map.md section 8.
 - All randomness goes through one seeded random function. The tutorial uses a fixed seed.
