@@ -8,6 +8,7 @@ export type PerfMark =
   | 'goblin spawn'
   | 'sound'
   | 'panel redraw'
+  | 'hint sign'
   | 'debug send'
   | 'particles'
   | 'board placed'

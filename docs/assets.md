@@ -98,6 +98,14 @@ Not in the MVP map: siege machines, bridge, forest, mud, hill features, cage, ca
 | Pebble pile in the bowl | `rocks/survival/resource-stone-large.glb` | 6 cm | Shrinks as pebbles are taken |
 | Slingshot target (tutorial only, optional) | `props/mini-forest/target.glb` | 8 cm | |
 
+### Tutorial ghost hands
+
+| Thing | File | Size | Notes |
+|---|---|---|---|
+| Ghost hand (tutorial demos) | `hands/left.glb`, `hands/right.glb` | Real hand size (meters) | Meta's standard WebXR hand ("generic-hand" from WebXR Input Profiles 1.0.20, MIT, license in the folder). 25 joints, flat hierarchy. Posed with IWSDK's `AnimatedControllerHand` open and pressed poses. See `src/ui/ghostHand.ts`. |
+
+UI images for the hint sign and panels are in `public/ui/` (see its README).
+
 ## 6. Sounds
 
 All sounds are mapped in `public/audio/README.md` (file names and what each one is for). Use them from the build step where each feature is built. Sounds listed there as missing use `public/audio/chime.mp3` until the last build step.

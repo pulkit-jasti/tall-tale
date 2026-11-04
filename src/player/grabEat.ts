@@ -36,6 +36,14 @@ export class GrabEat {
   private time = 0;
   /** Called with each eaten goblin (food comes in build step 4). */
   onEat: (goblin: Goblin) => void = () => {};
+  /** Called with each goblin picked up (the tutorial waits for it). */
+  onGrab: (goblin: Goblin) => void = () => {};
+
+  /** True while a hand holds this goblin. */
+  isHolding(goblin: Goblin): boolean {
+    for (const slot of this.slots.values()) if (slot.held === goblin) return true;
+    return false;
+  }
 
   constructor(
     private hands: HandTracker,
@@ -117,6 +125,7 @@ export class GrabEat {
           slot.target = null;
           this.goblins.grab(target.goblin);
           this.goblins.setTouch(target.goblin, 'held');
+          this.onGrab(target.goblin);
           continue;
         }
         nowReady.add(target.goblin);

@@ -6,6 +6,7 @@
 
 export type DebugCommand =
   | 'skipWave'
+  | 'skipStep'
   | 'loseCastle'
   | 'damageCastle'
   | 'restartBattle'
@@ -43,6 +44,7 @@ export interface DebugAction {
 
 export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'skipWave', code: 'KeyW', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
+  { id: 'skipStep', code: 'KeyS', label: 'Skip tutorial step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
   { id: 'loseCastle', code: 'KeyH', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
   { id: 'damageCastle', code: 'KeyD', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
   { id: 'restartBattle', code: 'KeyA', label: 'Restart battle', does: 'Start the tutorial battle again from wave 1 (same as the panel button)' },

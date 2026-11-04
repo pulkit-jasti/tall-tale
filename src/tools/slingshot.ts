@@ -57,6 +57,8 @@ import { cloneStatic, InstancedPool, loadTemplate, type ModelTemplate } from '..
 import { flatMaterial, pebbleBowl, post, slingshotBand, slingshotFrame, slingshotPouch } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
+export type SlingEvent = 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot';
+
 /** The three things on the slingshot a hand can reach for. */
 export type SlingPart = 'pouch' | 'bowl' | 'handle';
 
@@ -232,8 +234,22 @@ export class Slingshot {
 
   /** Called with each goblin a pebble knocks out (the tutorial director counts them). */
   onHit: (goblin: Goblin) => void = () => {};
+  /** Called on each step of using it (the tutorial lessons wait for these). */
+  onEvent: (event: SlingEvent) => void = () => {};
   /** The frame glows (pulsing) until the handle is grabbed: a new tool, or a hint. */
   beckon = false;
+
+  /** World position of a part, for the tutorial's markers. */
+  partWorld(part: SlingPart, out: Vector3): Vector3 {
+    if (part === 'pouch') return this.pouchWorld(out);
+    if (part === 'bowl') return this.stage.fixedRig.localToWorld(out.copy(this.bowlCenter));
+    return this.frame.localToWorld(out.set(0, SLINGSHOT.handleHeight * 0.5, 0));
+  }
+
+  /** True while a pebble or goblin is in the pouch. */
+  get isLoaded(): boolean {
+    return this.loaded;
+  }
 
   constructor(
     private stage: Stage,
@@ -423,6 +439,7 @@ export class Slingshot {
     const mesh = cloneStatic(this.stoneTemplate);
     this.stage.fixedRig.add(mesh);
     this.handPebbles.push({ hand, mesh, velocity: new Vector3(), last: new Vector3(), hasLast: false });
+    this.onEvent('pebbleTaken');
     this.placeHandPebble(hand, mesh);
     this.audio.play('grab', hand.pinchPoint);
     return true;
@@ -436,6 +453,7 @@ export class Slingshot {
     this.frameHolder = { hand, viaPinch, openTime: 0, lostTime: 0, offset };
     this.returnLeft = 0;
     this.beckon = false;
+    this.onEvent('grabbed');
     this.audio.play('grab', hand.palm);
   }
 
@@ -465,6 +483,7 @@ export class Slingshot {
     this.placePouchGoblin();
     this.audio.play('pebbleLoad', this.pouchWorld(temp));
     this.audio.play('squeal', temp);
+    this.onEvent('loaded');
   }
 
   /** Lets go of everything without shooting (board placed again). A loaded pebble or goblin stays in. */
@@ -641,6 +660,7 @@ export class Slingshot {
         this.stage.fixedRig.remove(p.mesh);
         this.handPebbles.splice(i, 1);
         this.audio.play('pebbleLoad', temp);
+        this.onEvent('loaded');
       }
     }
   }
@@ -753,6 +773,7 @@ export class Slingshot {
     this.launch(this.aimOrigin, this.aimVelocity, target, ...this.takeLoad());
     this.audio.play('slingRelease', this.pouchWorld(temp));
     this.endAim();
+    this.onEvent('shot');
   }
 
   /** Empties the pouch. Returns what flies: a pebble shot, or a goblin shot with its goblin. */
@@ -1265,6 +1286,7 @@ export class Slingshot {
     this.aimVelocity.set(temp.x / flight, (temp.y + 0.5 * g * flight * flight) / flight, temp.z / flight);
     this.launch(this.aimOrigin, this.aimVelocity, best, ...load);
     this.audio.play('slingRelease', this.pouchWorld(temp));
+    this.onEvent('shot');
   }
 
   /** Debug: puts the goblin nearest the castle into the empty pouch without hands. */

@@ -11,6 +11,10 @@ import { TUTORIAL_WAVES } from './director/tutorial.js';
 import tutorialMap from './maps/tutorial.json';
 import { parseBlueprint } from './rules/blueprint.js';
 import { EndPanel } from './ui/endPanel.js';
+import { GhostHand } from './ui/ghostHand.js';
+import { HintSign } from './ui/hintSign.js';
+import { Markers } from './ui/markers.js';
+import { loadUiImages } from './ui/uiImages.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';
@@ -82,9 +86,12 @@ export class GameSystem extends createSystem({}) {
     this.handles = new BoardHandles(this.stage);
     this.fps = new FpsCounter(this.stage.boardLift);
 
+    const ghost = new GhostHand();
     const [built] = await Promise.all([
       buildBoard(this.stage.boardSpin, blueprint),
       this.audio.load(),
+      loadUiImages(),
+      ghost.load(root),
     ]);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
@@ -116,11 +123,16 @@ export class GameSystem extends createSystem({}) {
       slingshot: this.slingshot,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
       panel: new EndPanel(this.stage.fixedRig, this.audio),
+      sign: new HintSign(this.stage.boardLift, this.audio),
+      markers: new Markers(root, this.stage.boardLift),
+      ghost,
       audio: this.audio,
       particles: this.particles,
       rng: createRandom(seed + 600),
+      isHeld: (goblin) => this.grabEat.isHolding(goblin),
     });
     this.grabEat.onEat = () => this.battle.noteEaten();
+    this.grabEat.onGrab = () => this.battle.notePicked();
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
     this.stressTest = new StressTest({
@@ -247,7 +259,7 @@ export class GameSystem extends createSystem({}) {
     this.stressTest.update(dt);
     this.handles.update(dt);
     this.spawner.update(dt);
-    this.battle.update(dt, this.hands.hands);
+    this.battle.update(dt, this.hands.hands, headPosition, headForward);
     this.goblins.update(dt);
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
@@ -277,6 +289,9 @@ export class GameSystem extends createSystem({}) {
     switch (id) {
       case 'skipWave':
         this.battle.skipWave();
+        break;
+      case 'skipStep':
+        this.battle.skipStep();
         break;
       case 'loseCastle':
         this.battle.loseNow();

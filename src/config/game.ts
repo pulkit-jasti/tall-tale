@@ -287,14 +287,98 @@ export const END_PANEL = {
   buttonRadius: 3.5,
   buttonDepth: 1.6,
   buttonColor: 0x6fae4a,
-  /** Poke: Ready when the fingertip is this close in front of the button face (cm). */
-  readyDistance: 5,
-  /** Pressed when the fingertip pushes this deep into the button (cm). */
-  pressDepth: 0.6,
-  /** How far the button sinks when pressed (cm). */
-  travel: 0.8,
   /** The panel appears this long after the battle ends, after the last poofs (seconds). */
   showDelay: 1.2,
+};
+
+/** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. */
+export const POKE = {
+  /** Ready when the fingertip is this close in front of the button face. */
+  readyDistance: 5,
+  /** Pressed when the fingertip pushes this deep into the button. */
+  pressDepth: 0.6,
+  /** How far the button sinks when pressed. */
+  travel: 0.8,
+  /** The poke zone is this much wider than the button. */
+  zoneScale: 1.3,
+};
+
+/**
+ * The tutorial's hint sign: low in front, just outside the ring (the tool
+ * platforms fill the space inside it), tilted back toward the eyes and kept
+ * under the line of sight to the front wall top (boardLift, cm).
+ */
+export const HINT_SIGN = {
+  radius: 33,
+  /** Bottom edge above the board. */
+  y: 4,
+  width: 22,
+  height: 9,
+  tiltDeg: 45,
+  /** A new instruction pops in over this long (seconds). */
+  popTime: 0.25,
+  /** A finished lesson shows its ticked box this long before the next one (seconds). */
+  doneTime: 1.2,
+  /** Round "Next" poke button in the sign's bottom right corner (cm). */
+  nextRadius: 1.6,
+  nextDepth: 1,
+  nextColor: 0x6fae4a,
+};
+
+/** Info steps (wave banners, flags): how long they stay up so they can be read. */
+export const READING = {
+  /** Seconds = base + perWord * words, never below min. */
+  base: 2,
+  perWord: 0.35,
+  min: 7,
+  /** "Look at the flag" steps: the head must point within this cone of it (degrees)... */
+  gazeConeDeg: 14,
+  /** ...for this long (seconds). */
+  gazeHold: 1,
+  /** They move on anyway this long after the reading time (seconds). */
+  gazeGrace: 12,
+};
+
+/** Ghost hands that show how to do each lesson (src/ui/ghostHand.ts). */
+export const GHOST_HAND = {
+  color: 0x9fd4ff,
+  opacity: 0.45,
+  /** Glowing fingertips for a pinch (meters). */
+  tipSize: 0.007,
+  tipColor: 0xffe28a,
+  /** Fades in and out at the ends of each loop (seconds). */
+  fade: 0.3,
+  /** Pause between loops (seconds). */
+  rest: 0.6,
+  /** Hidden while one of the player's hands is this close to the demo's target (meters). */
+  hideNear: 0.09,
+  /** Fingers point down by this much toward the target (degrees). */
+  pitchDeg: 35,
+  /**
+   * Roll that turns the palm down (degrees, mirrored for the left hand). A
+   * guess from the WebXR grip space: tune in the headset.
+   */
+  palmRollDeg: 90,
+  /** The ghost's mouth point: in front of the face and a little down (meters). */
+  mouthForward: 0.16,
+  mouthDown: 0.07,
+};
+
+/** Tutorial markers (src/ui/markers.ts). */
+export const MARKERS = {
+  /** "!" size (meters, world). */
+  size: 0.03,
+  /** Above the target (meters) and the bounce height. */
+  lift: 0.02,
+  bob: 0.012,
+  bobSpeed: 4,
+  arrowColor: '#f2c14e',
+  /** The target counts as out of view beyond this angle from where the head looks (degrees). */
+  offViewDeg: 50,
+  /** Out of view arrow on the ring: size (cm), angle off the front (degrees) and how far it slides. */
+  turnArrowSize: 6,
+  turnArrowDeg: 14,
+  turnArrowSlide: 6,
 };
 
 /** Debug spawning (keys and the stress test), apart from the director. */
@@ -549,9 +633,9 @@ export const FPS = {
   drawEvery: 1,
   /** Shown by default in the dev server. The deployed build shows it with ?fps in the URL. */
   showInDev: true,
-  /** Panel spot: on the rim, left of front (clear of the left arrow), standing just above the ring (cm, degrees). */
+  /** Panel spot: on the rim, left of front (between the hint sign and the left arrow), standing just above the ring (cm, degrees). */
   radius: 27,
-  angleDeg: -24,
+  angleDeg: -32,
   aboveRing: 1,
   /** Panel size (cm). Keep width / height at 2:1 like the canvas. */
   width: 13.6,

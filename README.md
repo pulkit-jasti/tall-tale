@@ -13,7 +13,7 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 - Stage: MVP build step 1 (Toy test) done and tested on the headset. Scale and pinching goblins work. Fixes from the test: eating no longer needs letting go or a head tilt (it opened the Quest menu), one ring handle replaces the two handles, and the board starts higher.
 - Build step 2 (Slingshot with aim assist and the pebble bowl) done and tested on the headset (2026-11-04). The slingshot is handheld: grab it by the handle, click a pebble from the bowl into the pouch, pull with the other hand. Pebbles can also be thrown by hand (they only knock a goblin back), and a held goblin can be loaded as a stronger shot. Details in [docs/mvp.md](docs/mvp.md#build-order).
 - The stress test has not been re-run since step 2. Do it later and log it in [docs/performance.md](docs/performance.md).
-- Build step 3 (waves and flags) is built and waiting for the headset test: tutorial map blueprint, road graph, 5 tutorial waves with the director, both flags, win and lose panels.
+- Build step 3 (waves and flags) is built and waiting for the headset test: tutorial map blueprint, road graph, 5 tutorial waves with a guided, learn-by-doing tutorial (hint sign with text, markers, Kenney UI images), both flags, win and lose panels.
 - **Next step: headset test of step 3, then build step 4** (fly swatter, pepper shaker, food jar), then the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildTutorialSteps, TUTORIAL_TIMING, TUTORIAL_WAVES, type TutorialApi } from '../director/tutorial.js';
+import { READING } from '../config/game.js';
+import { buildTutorialSteps, readTime, TUTORIAL_TIMING, TUTORIAL_WAVES, type TutorialApi } from '../director/tutorial.js';
 import { Director, type DirectorStep } from './director.js';
 
 interface Ctx {
@@ -85,36 +86,86 @@ function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: s
     clearWave() {
       this.cleared++;
     },
-    climberInFront: () => {},
+    lessonClimber: () => {},
     showTool(tool) {
       this.shown.push(tool);
     },
     hintTool: () => {},
     helpWithTool: () => {},
-    hasTool: (tool) => tool === 'slingshot',
     toolUses: () => 0,
+    boardSpun: () => 0,
+    boardMoved: () => 0,
+    picked: () => 0,
     eaten: () => 0,
+    slingCount: () => 0,
+    slingLoaded: () => false,
+    gazeTime: () => 0,
+  };
+}
+
+/** A fake game where the player does every lesson right away: each count is higher every time it is read. */
+function eagerApi(): ReturnType<typeof idleApi> {
+  let n = 0;
+  const more = (): number => (n += 100);
+  return {
+    ...idleApi(),
+    waveCleared: () => true,
+    toolUses: more,
+    boardSpun: more,
+    boardMoved: more,
+    picked: more,
+    eaten: more,
+    slingCount: more,
+    slingLoaded: () => true,
+    gazeTime: () => 10,
   };
 }
 
 describe('tutorial director', () => {
   it('never gets stuck: a player who does nothing still sees all 5 waves', () => {
     const api = idleApi();
-    const director = new Director(buildTutorialSteps(), api);
-    run(director, 60 * 30, 0.25);
+    const director = new Director(buildTutorialSteps(['slingshot']), api);
+    run(director, 60 * 40, 0.25);
     expect(director.finished).toBe(true);
     expect(api.started).toEqual([0, 1, 2, 3, 4]);
     expect(api.cleared).toBe(TUTORIAL_WAVES.length);
     expect(api.ended).toBe(TUTORIAL_WAVES.length);
-    expect(api.shown).toEqual(['slingshot', 'swatter', 'pepper', 'megaphone']);
+    // Only built tools are shown.
+    expect(api.shown).toEqual(['slingshot']);
   });
 
-  it('skips the teaching step of a tool that is not built yet', () => {
-    const api = idleApi();
-    api.waveCleared = () => true;
-    const director = new Director(buildTutorialSteps(), api);
-    // Wave 1 waits for eating, wave 2 for the slingshot. Waves 3 to 5 need nothing.
-    run(director, TUTORIAL_TIMING.actionTimeout * 2 + TUTORIAL_TIMING.breather * 4 + 5, 0.25);
+  it('moves on as soon as the player does each lesson, and leaves out tools not built yet', () => {
+    const api = eagerApi();
+    const steps = buildTutorialSteps(['slingshot']);
+    expect(steps.some((s) => s.id === 'learn-swatter')).toBe(false);
+    const director = new Director(steps, api);
+    // Only the info steps take time (their reading time) and the 4 breathers.
+    const reading = steps.filter((s) => s.hint?.next).reduce((sum, s) => sum + readTime(s.hint!.text), 0);
+    run(director, reading + TUTORIAL_TIMING.breather * 4 + 5, 0.25);
     expect(director.finished).toBe(true);
+  });
+
+  it('keeps info steps up long enough to read, and the flag steps wait for a look', () => {
+    expect(readTime('Short.')).toBe(READING.min);
+    expect(readTime('one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen'))
+      .toBeGreaterThan(READING.min);
+    const api = idleApi();
+    let looked = 0;
+    api.gazeTime = () => looked;
+    const steps = buildTutorialSteps(['slingshot']);
+    const flag = steps.find((s) => s.id === 'flag-health')!;
+    const read = readTime(flag.hint!.text);
+    // Read but not looked at: still waiting.
+    expect(flag.done(api, read + 1)).toBe(false);
+    looked = READING.gazeHold;
+    // Looked at, but not read yet: still waiting.
+    expect(flag.done(api, read - 1)).toBe(false);
+    expect(flag.done(api, read + 1)).toBe(true);
+  });
+
+  it('numbers the lessons', () => {
+    const lessons = buildTutorialSteps(['slingshot']).filter((s) => s.hint?.kind === 'lesson');
+    expect(lessons[0].hint?.header).toBe(`Step 1 of ${lessons.length}`);
+    expect(lessons.map((s) => s.id)).toContain('learn-sling-shoot');
   });
 });

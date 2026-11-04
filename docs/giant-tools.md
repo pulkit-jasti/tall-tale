@@ -192,7 +192,7 @@ Rules:
 ## 6. Unlocks and progression
 
 - **No loadout.** There is no tool choice before a battle. Every unlocked tool is always on its platform.
-- **The tutorial battle introduces one tool per wave.** A tool's platform stays empty until its wave. Then the tool appears on it with a poof and glows until the player grabs it once. No text. After the tutorial every tool is always available in every mode. No gating (see [modes-and-progression.md](modes-and-progression.md)).
+- **The tutorial battle introduces one tool per wave.** A tool's platform stays empty until its wave. Then the tool appears on it with a poof and glows until the player grabs it once, and the tutorial's hint sign teaches it step by step (see [mvp.md](mvp.md#tutorial-director)). After the tutorial every tool is always available in every mode. No gating (see [modes-and-progression.md](modes-and-progression.md)).
 - Custom Game and daily twists can limit tools (for example "pepper only").
 
 ---

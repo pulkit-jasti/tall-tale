@@ -72,6 +72,8 @@ export class Goblin {
   readonly lastHeld = new Vector3();
   hasLastHeld = false;
   landAs: 'dazed' | 'intruder' = 'dazed';
+  /** How long this goblin waits on the rampart before jumping in (seconds). Longer for a tutorial climber. */
+  rampartWait: number = GOBLIN_RULES.rampartWait;
   attackRight = true;
   touch: TouchState = 'idle';
   readonly target = new Vector3();
@@ -199,6 +201,7 @@ export class Goblins {
     goblin.root.visible = true;
     goblin.root.rotation.set(0, 0, 0);
     goblin.hasTarget = false;
+    goblin.rampartWait = GOBLIN_RULES.rampartWait;
     this.setTouch(goblin, 'idle');
     return goblin;
   }
@@ -225,9 +228,10 @@ export class Goblins {
    * Spawns a climber at the wall at a board angle (radians), climbing, or
    * already up on the rampart (`onRampart`, in reach right away).
    */
-  spawnClimberAt(angle: number, onRampart = false): Goblin | null {
+  spawnClimberAt(angle: number, onRampart = false, rampartWait: number = GOBLIN_RULES.rampartWait): Goblin | null {
     const goblin = this.obtain('climber');
     if (!goblin) return null;
+    goblin.rampartWait = rampartWait;
     const r = CASTLE.wallOut + 0.6;
     goblin.root.position.set(polarX(r, angle), 0, polarZ(r, angle));
     if (onRampart) this.popUp(goblin);
@@ -505,7 +509,7 @@ export class Goblins {
     const a = angleOf(p.x, p.z);
     p.set(polarX(CASTLE.rampartRadius, a), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, a));
     g.mode = 'rampart';
-    g.timer = GOBLIN_RULES.rampartWait;
+    g.timer = g.rampartWait;
     g.faceCenter();
     g.play('jump', false);
   }
@@ -582,7 +586,7 @@ export class Goblins {
         break;
       case 'wallTop':
         g.mode = 'rampart';
-        g.timer = GOBLIN_RULES.rampartWait;
+        g.timer = g.rampartWait;
         g.faceCenter();
         g.play('idle');
         break;

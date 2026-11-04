@@ -2,7 +2,7 @@
 // red castle health flag slides down with damage, the blue wave flag climbs
 // one notch per wave. Progress bars built into the world, no numbers.
 // They live in boardLift (cm): they rise with the board but never spin.
-import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, PlaneGeometry, SphereGeometry, type Object3D } from 'three';
+import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, type Object3D } from 'three';
 import { FLAGS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { flatMaterial } from './shapes.js';
@@ -54,6 +54,11 @@ class Flag {
   set(share: number, instant = false): void {
     this.target = Math.min(1, Math.max(0, share));
     if (instant) this.shown = this.target;
+  }
+
+  /** World position of the cloth's middle, for markers. */
+  clothWorld(out: Vector3): Vector3 {
+    return this.pivot.localToWorld(out.set(0, -FLAGS.clothHeight / 2, 0));
   }
 
   /** Small rings on the pole, one per step (the wave flag's notches). */
@@ -108,6 +113,10 @@ export class Flags {
     this.healthShare = healthShare;
     this.health.set(healthShare, instant);
     this.wave.set(waveShare, instant);
+  }
+
+  clothWorld(which: 'health' | 'wave', out: Vector3): Vector3 {
+    return (which === 'health' ? this.health : this.wave).clothWorld(out);
   }
 
   update(dt: number): void {

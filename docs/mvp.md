@@ -34,7 +34,7 @@ Back to [GDD index](GDD.md).
 **Player**
 - Body abilities: **grab and eat only** ([controls-and-ui.md](controls-and-ui.md#3-grab-and-eat)). Goblins are picked up with a pinch. The pinch zone is bigger than the goblin and snaps to the nearest one.
 - **All 4 giant tools:** slingshot, fly swatter, pepper shaker, megaphone ([giant-tools.md](giant-tools.md)). This is the most satisfying part, so it is the main thing to test. The megaphone uses a fixed loudness threshold for now (no calibration). **The bell sits on the same platform** and triggers the same stun by shaking, so voice is never required. If mic permission is denied, the megaphone is tied down and the bell still works. A debug key also triggers the stun, for testing without a mic.
-- No loadout, no unlocks. Each tool appears on its platform in its tutorial wave with a poof, and glows until grabbed. No text.
+- No loadout, no unlocks. Each tool appears on its platform in its tutorial wave with a poof, and glows until grabbed. The tutorial's hint sign then teaches it step by step.
 - Slingshot aim assist ([giant-tools.md](giant-tools.md#slingshot-aim-assist)).
 - Food currency: eating fills the food jar, tools cost food. Start with 4 food. Food carries over between waves.
 - Tool platforms beside the player with food pips.
@@ -63,7 +63,14 @@ The tutorial is a hand-written script in code, not a JSON file, because it waits
   - **If stuck:** what to do after a while, for example glow the tool again, or spawn the climber again closer.
 - The director moves to the next step only when the current one is done.
 - Steps only call the normal game systems (spawn enemy, show tool, open road). Nothing tutorial-only lives inside those systems.
-- No text, as decided. Hints are glows, poofs and sounds.
+- **Learn by doing, with text.** Without text, players do not know what to do. Each lesson shows one short instruction on the hint sign, a bouncing marker on the thing to use, and waits until the player does it. Then its box is ticked with a chime and the next one appears. No "OK" buttons.
+  - **Hint sign:** low in front, just outside the ring handle, tilted toward the eyes and under the line of sight to the front wall. It rises with the board, never spins and never follows the head. Kenney UI images (`public/ui/`) on a canvas texture. Shows "Step 3 of 8" for lessons, "Wave 2 of 5" banners for waves, and goblins left while a wave is cleared.
+  - **Marker:** a "!" with a down arrow above the target, drawn on top so the wall never hides it.
+  - **Out of view:** an arrow on the ring points left or right, and the sign says where to look.
+  - **Ghost hand:** a see-through 3D hand loops the gesture next to the real target (Meta's onboarding guidance: animated hand demonstrations). It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`.
+  - **Info steps** (wave banners, flags) stay up for a reading time based on their length (`READING`). The flag steps also wait until the player looks at the flag for a second. A "Next" poke button on the sign skips them.
+  - **New things are taught before their wave**, so no enemies press the player while learning. Lessons that need enemies (shooting a goblin) run at half the spawn rate.
+- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot a goblin. Wave banners and the two flags are explained as the battle starts. Lessons for the swatter, pepper, megaphone and bell are added when those tools are built.
 
 ### Rules that keep it safe
 
@@ -120,7 +127,8 @@ Each step should be playable on its own.
      - Both flags (`src/world/flags.ts`) in boardLift: they rise with the board, never spin.
      - Win and lose panels with a round poke button (`src/ui/endPanel.ts`). Text is a canvas texture like the FPS panel, not IWSDK UI.
      - The battle starts when the start page button is pressed (after the board is placed in VR). Leaving VR ends it. The slingshot is hidden until wave 2, then poofs in and glows until grabbed.
-     - Debug keys: W skip wave, H lose castle, D damage castle, A restart battle. The stress test stops the battle.
+     - Debug keys: W skip wave, S skip tutorial step, H lose castle, D damage castle, A restart battle. The stress test stops the battle.
+     - Guided tutorial with text (see "Tutorial director"): hint sign `src/ui/hintSign.ts`, markers `src/ui/markers.ts`, Kenney UI images through `src/ui/uiImages.ts`. The win and lose panels use the same images.
 4. **Fly swatter, pepper shaker, food jar and pips.**
    - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
 5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.

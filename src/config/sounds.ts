@@ -36,6 +36,7 @@ export const SOUNDS = {
   pebbleLoad: { files: ['interface/click_001.ogg', 'interface/click_002.ogg'], volume: 0.8, positional: true },
   locked: { files: ['interface/error_004.ogg', 'interface/error_006.ogg'], volume: 0.5, positional: false },
   buttonClick: { files: ['interface/click_001.ogg', 'interface/click_002.ogg', 'interface/select_001.ogg'], volume: 0.8, positional: false },
+  lessonDone: { files: ['interface/confirmation_002.ogg'], volume: 0.7, positional: false },
   toolPoof: { files: ['interface/maximize_008.ogg'], volume: 0.7, positional: true },
   round1: { files: ['voice/round_1.ogg'], volume: 0.7, positional: false },
   round2: { files: ['voice/round_2.ogg'], volume: 0.7, positional: false },
