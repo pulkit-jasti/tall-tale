@@ -144,16 +144,16 @@ Each step should be playable on its own.
      - The welcome panel shows when the start page button is pressed (after the board is placed in VR). Leaving VR ends the battle. The slingshot is hidden until wave 2.
      - Debug keys: W skip wave, S skip tutorial step, H lose castle, D damage castle, A start or restart the battle. The stress test stops the battle.
      - Not done on purpose: the stress test waits until the game is built further. Gameplay feels smooth on the headset for now.
-4. **Fly swatter, pepper shaker, food jar and pips.**
+4. **Fly swatter, pepper shaker, food jar and price tags** (first built with food pips).
    - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
-   - **Built (2026-11-04), waiting for the headset test.** What is in it ([giant-tools.md](giant-tools.md)):
+   - **Done (2026-11-04), headset test passed** after five rounds of headset tests and fixes (listed below). The first build ([giant-tools.md](giant-tools.md)):
      - Food rules `src/rules/food.ts` (start 4, max 10, +1 per goblin, +2 seasoned, costs and use timers in `FOOD` and `TOOLS`), tested in `food.test.ts`. Food carries over between waves and resets for a new battle.
      - Food jar `src/world/foodJar.ts`: a pot between the two left platforms with one food ball per food on its mouth.
      - Shared food tool `src/tools/handTool.ts`: platform, price tag (first pips), fist grab, follows the hand, grabbing is free, the first use pays, Locked (dimmed, rope, wobble, buzz), dropped mid-use it floats back to the hand area, use over it shrinks, poofs and pops back. The megaphone and bell in step 5 build on it.
      - Fly swatter `src/tools/flySwatter.ts` (10 s, 4 food) and pepper shaker `src/tools/pepperShaker.ts` (8 s, 3 food, seasoned goblins).
      - Tutorial: a "food jar" info step after the flags, and for each new tool a grab lesson in the breather and a use lesson in its wave (swatter wave 3, pepper wave 4). Without enough food the use lesson says so and a climber pops up to eat. The easier fallback tops up the jar. Ghost hand demos `swatterGrab` and `pepperGrab` (left hand, need a headset check).
      - Debug keys: Y add 3 food, 0 empty the jar, 1 show both tools now, 2 swat the front of the wall, 3 pepper the front of the wall.
-   - **Changes after the first step 4 review (2026-11-04), waiting for the headset test:**
+   - **Changes from the headset tests (2026-11-04), all tested and passed:**
      - **Reach band** ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)): every grab, pinch and poke target is 40 to 50 cm from the eyes (rare ones up to 58). `REACH` in config, a dev warning at start (`src/rules/reach.ts`).
      - **Bigger castle:** wall 46 to 52 cm (was 40 to 46), courtyard 40 to 44, rampart 49, map wall entries and inner roads 6 cm further out. All courtyard houses, stalls and crates removed until the main gameplay is done.
      - **Tools outside the ring:** platforms, pebble bowl and food jar 33.5 cm out (were 19), low (tops 6 cm above the board, were 10), in boardLift: they rise with the board, never turn. Flags just behind them (38.5 cm).
@@ -168,8 +168,18 @@ Each step should be playable on its own.
      - **Compass letters** on the ring, turning with the board: all 8 directions in raised blocky gold like the bands, the main four bigger (first tried as 4 wooden plaques).
      - **Tools free in the tutorial** (`TOOLS.freeInTutorial`): a player who used up the jar on the swatter could not pick up the pepper. Price tags say "Free", and the lessons say tools cost food but are free while learning.
      - **Debug page** sorted into sections with icons. New: "Start at wave 1 to 5" (earlier lessons and waves left out, earlier tools out, a little more food; Play keeps starting there in this tab until "Restart game") and "Restart game". The pages table shows each page's tutorial step. The FPS panel is hidden by default (debug page or key F turns it on).
+   - **Postponed from step 4** (decided, not forgotten):
+     - **Food jar look:** it still reads like another tool stand. Idea: a low "tribute tray" piled with drumsticks (one per food), no post, and the same drumstick icon on the price tags. Needs a food model (Kenney Food Kit is CC0, but a new asset pack needs the developer's OK) or a code-made drumstick. Polish step.
+     - **Courtyard houses, stalls and workers:** removed to keep the castle clear while the gameplay is built. They come back with the polish.
+     - **Locked tools and food costs in play:** tools are free in the tutorial, so the Locked look (dim, rope, buzz) and paying food are only seen with `TOOLS.freeInTutorial` off. They matter once there is a battle after the tutorial (Endless or Daily Battle).
+     - **Pointer to things out of view:** the head direction hints were removed. A simple pointer arrow comes later, if playtests show the marker alone is not enough.
+     - **"Measure reach again"** for players: only on the debug page for now. It goes in the pause menu (step 6).
+     - **Directions in the hints:** the compass letters on the ring can name where goblins come from ("Goblins from the east!") in wave banners and lessons.
+     - **Stress test:** not re-run since step 2. Run it after step 5, since troops add the most units, and log it in [performance.md](performance.md).
+     - **Controller grip:** the fist frame for controllers is a rough guess from the grip space (controllers are low priority).
 5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.
    - Done when: a debug key triggers the megaphone, and the bell does the same by hand.
+   - **Carry over from step 4:** the megaphone and the bell build on the shared food tool (`src/tools/handTool.ts`): each needs a real grip pose in `HOLD.poses`, a price tag (free in the tutorial), its grab and use spots in `reachSpots()` (`src/rules/reach.ts`), and ghost hand demos with the same grip slant. Anything new that hurts the castle must show on the wall (threat cues). Board distances turned into meters by hand multiply by `stage.boardScale` (the reach check).
 6. **Pause:** wrist button, pause panel, auto-pause, Reset table.
    - Done when: the battle freezes and resumes, and Reset table places the board again.
 7. **Juice**, then the **missing sounds** last (the ones still using `chime.mp3`).
