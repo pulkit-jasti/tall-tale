@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { READING } from '../config/game.js';
-import { buildTutorialSteps, readTime, TUTORIAL_TIMING, TUTORIAL_WAVES, type TutorialApi } from '../director/tutorial.js';
+import { buildTutorialSteps, TUTORIAL_WAVES, type TutorialApi, type TutorialStep } from '../director/tutorial.js';
 import { Director, type DirectorStep } from './director.js';
 
 interface Ctx {
@@ -99,7 +98,6 @@ function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: s
     eaten: () => 0,
     slingCount: () => 0,
     slingLoaded: () => false,
-    gazeTime: () => 0,
   };
 }
 
@@ -117,50 +115,85 @@ function eagerApi(): ReturnType<typeof idleApi> {
     eaten: more,
     slingCount: more,
     slingLoaded: () => true,
-    gazeTime: () => 10,
   };
 }
 
+/** Runs the director, poking "Next" whenever an info step shows (as the player would). */
+function runPokingNext(director: Director<TutorialApi>, seconds: number, dt = 0.25): void {
+  for (let t = 0; t < seconds; t += dt) {
+    const step = director.current as TutorialStep | null;
+    if (step?.hint?.next) director.skip();
+    director.update(dt);
+  }
+}
+
 describe('tutorial director', () => {
-  it('never gets stuck: a player who does nothing still sees all 5 waves', () => {
+  it('lessons never get stuck: a player who skips every lesson but clears the waves sees all 5', () => {
     const api = idleApi();
-    const director = new Director(buildTutorialSteps(['slingshot']), api);
-    run(director, 60 * 40, 0.25);
+    api.waveCleared = () => true;
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
+    runPokingNext(director, 60 * 40);
     expect(director.finished).toBe(true);
     expect(api.started).toEqual([0, 1, 2, 3, 4]);
     expect(api.cleared).toBe(TUTORIAL_WAVES.length);
-    expect(api.ended).toBe(TUTORIAL_WAVES.length);
     // Only built tools are shown.
     expect(api.shown).toEqual(['slingshot']);
+  });
+
+  it('a wave has no timer: it waits until it is cleared (ignoring it loses the castle)', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
+    runPokingNext(director, 60 * 60);
+    expect(director.current?.id).toBe('wave-1-clear');
+    expect(api.ended).toBe(0);
+    api.waveCleared = () => true;
+    director.update(0.1);
+    // Cleared: the slingshot arrives and its first lesson starts right away (no message, no Next).
+    expect(director.current?.id).toBe('learn-sling-grab');
+    expect(api.shown).toEqual(['slingshot']);
+  });
+
+  it('info steps wait for Next: no time limit and nothing else moves them on', () => {
+    const api = eagerApi();
+    const steps = buildTutorialSteps(['slingshot']);
+    const director = new Director<TutorialApi>(steps, api);
+    // The board, pinch and eat lessons pass at once, then the first info step waits.
+    run(director, 60 * 10, 0.25);
+    expect(director.current?.id).toBe('flag-health');
+    director.skip();
+    expect(director.current?.id).toBe('flag-wave');
   });
 
   it('moves on as soon as the player does each lesson, and leaves out tools not built yet', () => {
     const api = eagerApi();
     const steps = buildTutorialSteps(['slingshot']);
     expect(steps.some((s) => s.id === 'learn-swatter')).toBe(false);
-    const director = new Director(steps, api);
-    // Only the info steps take time (their reading time) and the 4 breathers.
-    const reading = steps.filter((s) => s.hint?.next).reduce((sum, s) => sum + readTime(s.hint!.text), 0);
-    run(director, reading + TUTORIAL_TIMING.breather * 4 + 5, 0.25);
+    const director = new Director<TutorialApi>(steps, api);
+    // Lessons pass right away, so only one frame per info step is needed.
+    runPokingNext(director, steps.length * 2);
     expect(director.finished).toBe(true);
   });
 
-  it('keeps info steps up long enough to read, and the flag steps wait for a look', () => {
-    expect(readTime('Short.')).toBe(READING.min);
-    expect(readTime('one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen'))
-      .toBeGreaterThan(READING.min);
-    const api = idleApi();
-    let looked = 0;
-    api.gazeTime = () => looked;
+  it('the slingshot is taught by actions only: no Next button anywhere from its arrival to the first shot', () => {
     const steps = buildTutorialSteps(['slingshot']);
-    const flag = steps.find((s) => s.id === 'flag-health')!;
-    const read = readTime(flag.hint!.text);
-    // Read but not looked at: still waiting.
-    expect(flag.done(api, read + 1)).toBe(false);
-    looked = READING.gazeHold;
-    // Looked at, but not read yet: still waiting.
-    expect(flag.done(api, read - 1)).toBe(false);
-    expect(flag.done(api, read + 1)).toBe(true);
+    const from = steps.findIndex((s) => s.id === 'wave-1-cleared');
+    const to = steps.findIndex((s) => s.id === 'learn-sling-shoot');
+    expect(steps.slice(from, to + 1).some((s) => s.hint?.next)).toBe(false);
+  });
+
+  it('does not ask again for slingshot steps the player already did', () => {
+    const api = idleApi();
+    api.waveCleared = () => true;
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
+    while (director.current?.id !== 'learn-sling-grab') director.skip();
+    // The player grabbed it, took a pebble and loaded it all in one go, faster than the lessons.
+    const done = { grabbed: 1, pebbleTaken: 1, loaded: 1, shot: 0 };
+    api.slingCount = (event) => done[event];
+    api.slingLoaded = () => true;
+    director.update(0.1);
+    // All three loading lessons pass, wave 2 starts, and the shoot lesson shows.
+    expect(director.current?.id).toBe('learn-sling-shoot');
+    expect(api.started).toContain(1);
   });
 
   it('numbers the lessons', () => {

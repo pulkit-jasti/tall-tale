@@ -12,9 +12,9 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 
 - Stage: MVP build step 1 (Toy test) done and tested on the headset. Scale and pinching goblins work. Fixes from the test: eating no longer needs letting go or a head tilt (it opened the Quest menu), one ring handle replaces the two handles, and the board starts higher.
 - Build step 2 (Slingshot with aim assist and the pebble bowl) done and tested on the headset (2026-11-04). The slingshot is handheld: grab it by the handle, click a pebble from the bowl into the pouch, pull with the other hand. Pebbles can also be thrown by hand (they only knock a goblin back), and a held goblin can be loaded as a stronger shot. Details in [docs/mvp.md](docs/mvp.md#build-order).
-- The stress test has not been re-run since step 2. Do it later and log it in [docs/performance.md](docs/performance.md).
-- Build step 3 (waves and flags) is built and waiting for the headset test: tutorial map blueprint, road graph, 5 tutorial waves with a guided, learn-by-doing tutorial (hint sign with text, markers, Kenney UI images), both flags, win and lose panels.
-- **Next step: headset test of step 3, then build step 4** (fly swatter, pepper shaker, food jar), then the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
+- Build step 3 (waves and flags) done and tested on the headset (2026-11-04): tutorial map blueprint, road graph, 5 tutorial waves, a guided, learn-by-doing tutorial (hint sign with text, ghost hands that show each gesture, markers), both flags, welcome, win and lose panels. Waves are small and castle damage is high for quick testing, until balancing with troops in step 5.
+- The stress test has not been re-run since step 2, on purpose: it waits until the game is built further. Gameplay feels smooth on the headset. Log it in [docs/performance.md](docs/performance.md) when it is run.
+- **Next step: build step 4** (fly swatter, pepper shaker, food jar), then the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---
@@ -301,6 +301,11 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 25. **Goblins drop straight down when let go:** after the first headset test they keep the hand's speed and fly in a simple arc. Still no throwing as an attack (see 17): a toss does no damage.
 26. **Slingshot fixed on its platform, with the pebble loading itself:** replaced after the first slingshot headset test. The player now picks up the slingshot by its handle with one hand and aims by turning the body, pinches a pebble from the bowl and clicks it into the pouch, then pulls with the other hand. Aiming one-handed on a fixed frame was too fiddly, and the auto reload did not feel good. Pebbles and their hit area also got bigger.
 27. **Dropped pebbles only fall:** pebbles now toss like goblins. A thrown pebble knocks a goblin back, dazed, but never knocks it out, so the slingshot keeps its purpose. A held goblin can also be loaded into the slingshot: it knocks out what it hits plus a small splash, and costs a meal (eat or shoot).
+28. **Tutorial with no text (only glows, poofs and sounds):** replaced in step 3 by a guided, learn-by-doing tutorial with short text on a hint sign, a marker on the target, and see-through ghost hands that show each gesture (Meta's onboarding guidance). Without text, nobody knew what to do.
+29. **Info steps that move on by time or by looking:** replaced by a Next button. A player may look at something without noticing it, so reading is never rushed. Hand lessons still move on by themselves when done, and tools are taught by actions only, with no Next.
+30. **A timer that ends each wave:** dropped. It ended waves while goblins were still attacking, which rewarded doing nothing. A wave now ends when cleared or when the castle falls.
+31. **A hint sign in front during waves and a goblin counter:** the sign now hides while a wave is fought, so it never covers enemies, and the counter is gone (the blue flag shows progress, no numbers).
+32. **A solid box slingshot pouch:** replaced by an open upright leather strip, because the loaded stone disappeared inside the box.
 
 ---
 

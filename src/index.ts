@@ -27,7 +27,7 @@ World.create(container, projectOptions).then(async (world) => {
     // Sound needs one tap before it can play.
     void ThreeAudioContext.getContext().resume();
     startPage.style.display = 'none';
-    // The tutorial battle starts once the board is placed.
+    // Once the board is placed, the welcome panel's Play button starts the tutorial.
     requestBattleStart(vrSupported);
     if (vrSupported) world.launchXR();
   });

@@ -1,22 +1,24 @@
-// Tutorial markers: a bouncing "!" with a down arrow above the thing to grab,
-// pinch or look at, always drawn on top so the wall never hides it. When that
-// thing is out of view, a big arrow on the ring points toward it.
-import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Texture, Vector3, type Object3D } from 'three';
+// Tutorial markers: one bouncing down arrow above the thing to grab, pinch or
+// look at, always drawn on top so the wall never hides it. When that thing is
+// out of view, a big arrow on the ring points toward it instead.
+import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Vector3, type Object3D } from 'three';
 import { HANDLES, MARKERS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
-import { iconTextureSource, type UiImageName } from './uiImages.js';
+import { arrowCanvas } from './uiImages.js';
 
-function sprite(name: UiImageName, tint?: string): Sprite {
-  const source = iconTextureSource(name, tint);
-  let map: Texture | null = null;
+/** A sprite drawn on top of everything, sized by its height and keeping the image's shape. */
+function sprite(source: HTMLCanvasElement | null, height: number): Sprite {
+  let map: CanvasTexture | null = null;
   if (source) {
-    map = source instanceof HTMLCanvasElement ? new CanvasTexture(source) : new Texture(source);
+    map = new CanvasTexture(source);
     map.colorSpace = SRGBColorSpace;
-    map.needsUpdate = true;
+    map.anisotropy = 4;
   }
   const material = new SpriteMaterial({ map, color: map ? 0xffffff : 0xf2c14e, depthTest: false, depthWrite: false, fog: false });
   const s = new Sprite(material);
   s.renderOrder = 10;
+  const aspect = source ? source.width / source.height : 1;
+  s.scale.set(height * aspect, height, 1);
   return s;
 }
 
@@ -31,22 +33,18 @@ export class Markers {
   private arrows: Record<'left' | 'right', Sprite>;
 
   constructor(world: Object3D, boardLift: Object3D) {
-    const bang = sprite('marker');
-    bang.scale.setScalar(MARKERS.size);
-    bang.position.y = MARKERS.size * 1.4;
-    const down = sprite('down', MARKERS.arrowColor);
-    down.scale.setScalar(MARKERS.size * 0.8);
-    down.position.y = MARKERS.size * 0.4;
-    this.pointer.add(bang, down);
+    // One bouncing arrow pointing down at the target (an extra "!" above it was too much).
+    const down = sprite(arrowCanvas('down'), MARKERS.size);
+    down.position.y = MARKERS.size * 0.5;
+    this.pointer.add(down);
     this.pointer.visible = false;
     world.add(this.pointer);
 
     const y = HANDLES.ringY + HANDLES.ringRadius + MARKERS.turnArrowSize / 2 + 1;
     const place = (side: 'left' | 'right'): Sprite => {
-      const s = sprite(side === 'left' ? 'arrowLeft' : 'arrowRight');
+      const s = sprite(arrowCanvas(side), MARKERS.turnArrowSize);
       const a = degToRad(side === 'left' ? -MARKERS.turnArrowDeg : MARKERS.turnArrowDeg);
       s.position.set(polarX(HANDLES.radius, a), y, polarZ(HANDLES.radius, a));
-      s.scale.setScalar(MARKERS.turnArrowSize);
       s.visible = false;
       boardLift.add(s);
       return s;
@@ -75,8 +73,9 @@ export class Markers {
     if (toTarget.lengthSq() < 1e-6 || look < 1e-6) return null;
     const angle = Math.atan2(forward.x * toTarget.z - forward.z * toTarget.x, forward.x * toTarget.x + forward.z * toTarget.z);
     if (Math.abs(angle) < degToRad(MARKERS.offViewDeg)) return null;
-    // A positive angle here is to the player's right.
+    // A positive angle here is to the player's right. Only the side arrow shows then.
     const side = angle > 0 ? 'right' : 'left';
+    this.pointer.visible = false;
     const arrow = this.arrows[side];
     arrow.visible = true;
     const slide = (Math.sin(this.time * MARKERS.bobSpeed) * 0.5 + 0.5) * MARKERS.turnArrowSlide;

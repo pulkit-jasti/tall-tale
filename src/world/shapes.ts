@@ -1,7 +1,6 @@
 // Code-made placeholder shapes (docs/placeholder-shapes.md). Each shape lives
 // in its own small function so a real model can replace it later.
 import {
-  BoxGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
   DoubleSide,
@@ -202,7 +201,32 @@ export function slingshotBand(material: MeshStandardMaterial): Mesh {
 
 /** The leather pouch that is pinched: a small flattened box. */
 export function slingshotPouch(material: MeshStandardMaterial): Mesh {
-  return new Mesh(new BoxGeometry(3.6, 1.5, 2.2), material);
+  // An open leather pouch, like a real one: a thin upright strip across x
+  // (between the bands), standing square to the ground and facing the shot.
+  // It bends back into a U behind the stone (toward +z, the player), so the
+  // stone sits in its cup and shows above and below it. Its two ends are at
+  // z = 0, x = +-length / 2, where the bands tie on.
+  const { pouchLength, pouchWidth, pouchSag, pouchThickness, pouchSegments } = SLINGSHOT;
+  const half = pouchLength / 2;
+  const bend = (x: number): number => pouchSag * (1 - (x / half) ** 2);
+  // Drawn flat in (x, z), then stood up: the strip's width becomes its height.
+  const shape = new Shape();
+  for (let i = 0; i <= pouchSegments; i++) {
+    const x = -half + (pouchLength * i) / pouchSegments;
+    if (i === 0) shape.moveTo(x, bend(x));
+    else shape.lineTo(x, bend(x));
+  }
+  for (let i = pouchSegments; i >= 0; i--) {
+    const x = -half + (pouchLength * i) / pouchSegments;
+    shape.lineTo(x, bend(x) + pouchThickness);
+  }
+  shape.closePath();
+  const geometry = new ExtrudeGeometry(shape, { depth: pouchWidth, bevelEnabled: false, curveSegments: 1 });
+  // Shape y becomes z (the bend toward the player), the extrusion becomes the height, centered on y = 0.
+  geometry.rotateX(Math.PI / 2);
+  geometry.translate(0, pouchWidth / 2, 0);
+  material.side = DoubleSide;
+  return new Mesh(geometry, material);
 }
 
 /** Shallow open bowl (lathe) with its rim at y = 0 (cm). */

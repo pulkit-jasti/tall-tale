@@ -26,7 +26,7 @@ Back to [GDD index](GDD.md).
 
 **Menus**
 - A 2D start page with one "Enter VR" button. It asks for mic permission before entering VR.
-- A single Play button in VR (a simple shape, no menu board yet).
+- A single Play button in VR (a simple shape, no menu board yet). Built in step 3: a small "Welcome, giant!" panel with a round poke button appears once the board is placed, and the tutorial starts when it is poked (the same panel and button as Play again).
 - Board placed automatically when Play is pressed.
 - Pause with a wrist button, plus auto-pause on the Quest menu. Pause panel: Resume, Reset table, Restart battle ([controls-and-ui.md](controls-and-ui.md#5-pause-and-settings)).
 - End of battle: a simple win ("Congratulations") or lose panel with a button to play again ([castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp)).
@@ -64,24 +64,32 @@ The tutorial is a hand-written script in code, not a JSON file, because it waits
 - The director moves to the next step only when the current one is done.
 - Steps only call the normal game systems (spawn enemy, show tool, open road). Nothing tutorial-only lives inside those systems.
 - **Learn by doing, with text.** Without text, players do not know what to do. Each lesson shows one short instruction on the hint sign, a bouncing marker on the thing to use, and waits until the player does it. Then its box is ticked with a chime and the next one appears. No "OK" buttons.
-  - **Hint sign:** low in front, just outside the ring handle, tilted toward the eyes and under the line of sight to the front wall. It rises with the board, never spins and never follows the head. Kenney UI images (`public/ui/`) on a canvas texture. Shows "Step 3 of 8" for lessons, "Wave 2 of 5" banners for waves, and goblins left while a wave is cleared.
+  - **Hint sign:** in front of the player (position below). It rises with the board, never spins and never follows the head. Kenney UI images (`public/ui/`) on a canvas texture. Shows "Step 3 of 8" for lessons and "Wave 2 of 5" banners for waves. **While a wave is fought it is gone**, so it never covers the enemies: after the wave banner's Next it disappears and comes back when the wave is cleared, or for a lesson. No goblin counter: the blue flag shows the progress.
   - **Marker:** a "!" with a down arrow above the target, drawn on top so the wall never hides it.
   - **Out of view:** an arrow on the ring points left or right, and the sign says where to look.
-  - **Ghost hand:** a see-through 3D hand loops the gesture next to the real target (Meta's onboarding guidance: animated hand demonstrations). It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`.
-  - **Info steps** (wave banners, flags) stay up for a reading time based on their length (`READING`). The flag steps also wait until the player looks at the flag for a second. A "Next" poke button on the sign skips them.
+  - **Ghost hand:** a see-through 3D hand loops the gesture on the real target (Meta's onboarding guidance: animated hand demonstrations). It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`. After the first headset test (angles were wrong and hands went through the ring and the bowl), the hand is turned by named directions (bar or fingers, and palm) matched to axes measured from its own joints, a fist closes around the bar's center line, a pinch puts the tips on the object, and every approach comes from the open side. The accuracy rules are in AGENTS.md ("Ghost hand demos").
+  - **Hint sign position:** after the headset tests it sits just past the castle wall (50 cm out, bottom edge 12 cm above the board, about 14 to 27 degrees below eye level), so it is behind the goblins on and at the front wall, never in front of them. The Next button stays within reach.
+  - **Next button:** one click per push. After a click the finger must come back out about 2 cm and 0.6 s must pass, and a new step ignores it for 1 s, so a slow or resting finger never skips several steps.
+  - **Flags** are explained before wave 1 starts ("Your castle"), while nothing attacks.
+  - **Climbers** always climb between two towers (`CASTLE.towerClearDeg`), and the map's wall entries sit in the middle of the tower gaps.
+  - **Marker:** one bouncing down arrow over the target, or only the side arrow when the target is out of view.
+  - **Info steps** (wave banners, the flags, "wave cleared" and new tool breathers) only move on when the player pokes "Next" on the sign. Not by time, and not by looking at something: a player may turn toward a thing without noticing it, so they always get as long as they need. Only lessons, where the player does something with their hands, move on by themselves when it is done.
   - **New things are taught before their wave**, so no enemies press the player while learning. Lessons that need enemies (shooting a goblin) run at half the spawn rate.
-- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot a goblin. Wave banners and the two flags are explained as the battle starts. Lessons for the swatter, pepper, megaphone and bell are added when those tools are built.
+- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot (any shot counts, hit or miss: the player has learned how it works). Wave banners and the two flags are explained as the battle starts. Lessons for the swatter, pepper, megaphone and bell are added when those tools are built.
+- **A new tool is taught by actions only, never with Next.** When a wave is cleared and a new tool comes, its first lesson starts at once ("Wave cleared! Here is a new tool..."), and the wave that brings it starts straight into its use lesson, with no banner in between. Tool lessons count from the moment the tool appears, so steps the player already did are never asked again.
 
 ### Rules that keep it safe
 
 - **Keep fallbacks simple:** at most two. First repeat the step, then make it easier.
-- **It must never get stuck.** Every step has a timeout (for example 30 seconds) that moves on anyway. A judge who cannot do something still sees the rest of the game.
+- **It must never get stuck.** Every lesson has a timeout (for example 60 seconds) that moves on anyway. A judge who cannot do something still sees the rest of the game. Info steps have no timeout: they wait for the "Next" button, which always works. **Waves have no timer either:** a wave ends when it is cleared or the castle falls, so a player who ignores it loses. Only a stalemate ends a wave early: every goblin is out, some are left far away, and nothing has hurt the castle for 60 seconds (`CASTLE_HEALTH.stalemateSeconds`), so the leftovers run off. A goblin at or on the wall, in the courtyard, or held (in a hand or the slingshot) always blocks it: the player can still deal with that one. There is only ever one lesson climber: a fallback moves it in front of the player again instead of adding another.
 - **Enemies keep coming while a step waits, but at half the spawn rate.** It still feels like a battle, without piling up on a player who is still learning.
 - **The full step list** (start, goal and fallback for each step) is written and built by the coding agent in build step 3. The developer tunes it after playing it.
 
 ### Tutorial waves
 
 Starting numbers, kept next to the director's steps and tuned in playtests. Climbers are the food source, so their count keeps food in step with tool costs (start 4, max 10).
+
+**For now the code uses small test waves** (2 to 7 goblins each, `TUTORIAL_WAVES` in `src/director/tutorial.ts`) and high castle damage, so a full run is quick to test. The numbers below come back when the waves are balanced with troops in build step 5.
 
 | Wave | New thing | Camps | Grunts | Runners | Climbers | Food check |
 |---|---|---|---|---|---|---|
@@ -118,17 +126,20 @@ Each step should be playable on its own.
      - Not done yet: re-run the stress test and log it in [performance.md](performance.md).
 3. **Waves and flags:** blueprint loader and `tutorial.json`, road graph, camps, seeded random, the tutorial director, both flags, win and lose panels.
    - Done when: the 5 tutorial waves play from start to win, debug keys skip a wave and lose the castle, and the director and win/lose tests pass.
-   - **Built (2026-11-04), waiting for the headset test.** What is in it:
-     - Blueprint `src/maps/tutorial.json` (4 camps, junctions, a ring road with gaps, 6 wall entries, gate and trigger spots for step 5), checked by `src/rules/blueprint.ts`.
+   - **Done (2026-11-04), headset test passed.** What is in it:
+     - Blueprint `src/maps/tutorial.json` (4 camps, junctions, a ring road with gaps, 6 wall entries in the middle of the tower gaps, gate and trigger spots for step 5), checked by `src/rules/blueprint.ts`. The toy test roads (`toyMap.ts`) are gone.
      - Road graph `src/rules/roadGraph.ts`: weighted random at junctions, shorter routes more likely, roads can close (goblins on it turn back). Nothing closes a road yet (trees come in step 5).
-     - Waves `src/units/waveSpawner.ts`: camps rumble, small groups, a calm start and a push at the end, camps sink as their goblins come out. Numbers in `TUTORIAL_WAVES` (`src/director/tutorial.ts`) and `WAVES`.
-     - Director `src/rules/director.ts` and the step list in `src/director/tutorial.ts`. Wave 1 waits for a goblin to be eaten (a climber pops up in front), wave 2 for a slingshot hit. Steps for tools not built yet are skipped.
+     - Waves `src/units/waveSpawner.ts`: camps rumble, small groups, a calm start and a push at the end, camps sink as their goblins come out. Numbers in `TUTORIAL_WAVES` (`src/director/tutorial.ts`) and `WAVES`. **For now small test waves and high castle damage**, balanced with troops in step 5.
+     - Waves have no timer: a wave ends when cleared or when the castle falls. A stalemate check ends one only if goblins are stuck far away (see "Rules that keep it safe").
+     - Director `src/rules/director.ts` and the step list in `src/director/tutorial.ts`: a guided, learn-by-doing tutorial with text (see "Tutorial director"). Hand lessons move on when the player does them, info steps wait for Next, tools are taught by actions only. Steps for tools not built yet are left out.
      - Castle health in `src/rules/battle.ts` (`CASTLE_HEALTH`): wall hits and intruders damage it, each breather repairs 35% of the damage.
-     - Both flags (`src/world/flags.ts`) in boardLift: they rise with the board, never spin.
-     - Win and lose panels with a round poke button (`src/ui/endPanel.ts`). Text is a canvas texture like the FPS panel, not IWSDK UI.
-     - The battle starts when the start page button is pressed (after the board is placed in VR). Leaving VR ends it. The slingshot is hidden until wave 2, then poofs in and glows until grabbed.
-     - Debug keys: W skip wave, S skip tutorial step, H lose castle, D damage castle, A restart battle. The stress test stops the battle.
-     - Guided tutorial with text (see "Tutorial director"): hint sign `src/ui/hintSign.ts`, markers `src/ui/markers.ts`, Kenney UI images through `src/ui/uiImages.ts`. The win and lose panels use the same images.
+     - Both flags (`src/world/flags.ts`) in boardLift: they rise with the board, never spin. Explained before wave 1.
+     - Welcome panel with a Play button, and win and lose panels with Play again (`src/ui/endPanel.ts`). One shared poke button for every button (`src/ui/pokeButton.ts`), with icons drawn in code.
+     - Hint sign `src/ui/hintSign.ts` (hidden while a wave is fought), markers `src/ui/markers.ts`, ghost hands `src/ui/ghostHand.ts` and `src/ui/ghostDemos.ts` (accuracy rules in AGENTS.md), Kenney UI images through `src/ui/uiImages.ts`.
+     - Slingshot pouch is now an open upright leather strip, so a loaded stone stays in view.
+     - The welcome panel shows when the start page button is pressed (after the board is placed in VR). Leaving VR ends the battle. The slingshot is hidden until wave 2.
+     - Debug keys: W skip wave, S skip tutorial step, H lose castle, D damage castle, A start or restart the battle. The stress test stops the battle.
+     - Not done on purpose: the stress test waits until the game is built further. Gameplay feels smooth on the headset for now.
 4. **Fly swatter, pepper shaker, food jar and pips.**
    - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
 5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.

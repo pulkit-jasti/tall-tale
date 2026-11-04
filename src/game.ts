@@ -246,10 +246,11 @@ export class GameSystem extends createSystem({}) {
       this.placeTimer -= dt;
       if (this.placeTimer <= 0) this.placeBoard();
     }
-    // The battle starts once the board is in place (in VR, after the auto placement).
+    // Once the board is in place (in VR, after the auto placement), the welcome
+    // panel shows. Its Play button starts the battle (in the browser: key A).
     if (pendingStart === 'browser' || (pendingStart === 'vr' && immersive && this.placeTimer <= 0)) {
       pendingStart = null;
-      this.battle.start();
+      this.battle.welcome();
     }
 
     this.player.updateWorldMatrix(true, false);

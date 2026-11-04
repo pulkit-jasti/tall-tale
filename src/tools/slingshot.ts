@@ -143,6 +143,7 @@ const DUST_COLORS = [0xd9c08a, 0xc9b07a, 0xb59a68];
 const temp = new Vector3();
 const temp2 = new Vector3();
 const temp3 = new Vector3();
+const shotQuaternion = new Quaternion();
 const segment = new Vector3();
 const toCenter = new Vector3();
 const center = new Vector3();
@@ -173,6 +174,8 @@ export class Slingshot {
   private bowlTouch: TouchState = 'idle';
   private pouchPebble: Object3D | null = null;
   private pile: Object3D | null = null;
+  /** Height of the full pebble pile (cm). */
+  private pileHeight = 0;
   private stoneTemplate!: ModelTemplate;
   private pebbles: Pebble[] = [];
   private pool!: InstancedPool;
@@ -239,11 +242,26 @@ export class Slingshot {
   /** The frame glows (pulsing) until the handle is grabbed: a new tool, or a hint. */
   beckon = false;
 
-  /** World position of a part, for the tutorial's markers. */
-  partWorld(part: SlingPart, out: Vector3): Vector3 {
+  /**
+   * World position of a part, for the tutorial's markers and ghost hand:
+   * the pouch center, the bowl's rim center, the top of the pebble pile in
+   * the bowl, or the middle of the handle (on its axis).
+   */
+  partWorld(part: SlingPart | 'pebbles', out: Vector3): Vector3 {
     if (part === 'pouch') return this.pouchWorld(out);
     if (part === 'bowl') return this.stage.fixedRig.localToWorld(out.copy(this.bowlCenter));
+    if (part === 'pebbles') {
+      out.copy(this.bowlCenter);
+      out.y += -PEBBLE_BOWL.depth * 0.85 + (this.pile?.visible ? this.pile.scale.y * this.pileHeight : 0);
+      return this.stage.fixedRig.localToWorld(out);
+    }
     return this.frame.localToWorld(out.set(0, SLINGSHOT.handleHeight * 0.5, 0));
+  }
+
+  /** Level direction the slingshot shoots (world), from the pouch through the fork. */
+  shotDirection(out: Vector3): Vector3 {
+    this.frame.getWorldQuaternion(shotQuaternion);
+    return out.set(0, 0, -1).applyQuaternion(shotQuaternion).setY(0).normalize();
   }
 
   /** True while a pebble or goblin is in the pouch. */
@@ -320,6 +338,7 @@ export class Slingshot {
     this.bowlMaterials = [bowlMesh.material as MeshStandardMaterial];
     bowl.add(bowlMesh, stem);
     this.pile = cloneStatic(pile);
+    this.pileHeight = pile.size.y;
     this.pile.position.y = -depth * 0.85;
     bowl.add(this.pile);
     this.root.add(bowl);
@@ -344,7 +363,9 @@ export class Slingshot {
     }
     // The pebble in the pouch, shown once one is loaded.
     this.pouchPebble = cloneStatic(stone);
-    this.pouchPebble.position.y = -stone.size.y / 2 + 0.5;
+    // It sits in the pouch's cup, its back against the leather, centered on the
+    // strip's height. The stone is taller than the strip, so it shows above and below.
+    this.pouchPebble.position.set(0, -stone.size.y / 2, SLINGSHOT.pouchSag - stone.size.z / 2);
     this.pouchPebble.visible = false;
     this.pouch.add(this.pouchPebble);
 
@@ -791,7 +812,8 @@ export class Slingshot {
     const g = this.pouchGoblin;
     if (!g) return;
     this.toBoard(this.toRig(g.root.position.copy(this.pouch.position)));
-    g.root.position.y -= g.stats.height * 0.4;
+    // Held in the pouch's cup at its middle, most of it in view above and below the strip.
+    g.root.position.y -= g.stats.height * 0.45;
   }
 
   private cancelPull(): void {
@@ -1194,11 +1216,14 @@ export class Slingshot {
   // ---- Looks ----
 
   /** Stretches each band from its fork tip to the pouch (frame space). */
+  /** Each band runs from its fork tip to its own end of the pouch. */
   private updateBands(): void {
     for (let i = 0; i < 2; i++) {
       const band = this.bands[i];
       const tip = this.tips[i];
-      temp2.copy(this.pouch.position).sub(tip);
+      // tips[0] is on the -x side, like the pouch's left end.
+      temp3.set(((i === 0 ? -1 : 1) * SLINGSHOT.pouchLength) / 2, 0, 0).applyQuaternion(this.pouch.quaternion);
+      temp2.copy(this.pouch.position).add(temp3).sub(tip);
       const length = Math.max(0.01, temp2.length());
       band.position.copy(tip).addScaledVector(temp2, 0.5);
       band.quaternion.setFromUnitVectors(UP, temp2.multiplyScalar(1 / length));

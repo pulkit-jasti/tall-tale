@@ -5,7 +5,7 @@
 // tutorial-only lives in those systems.
 import { Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { CASTLE_HEALTH, END_PANEL, GHOST_HAND, HANDLES, HINT_SIGN, READING, TOOL_SPOTS, WAVES } from '../config/game.js';
+import { CASTLE_HEALTH, END_PANEL, GHOST_HAND, HANDLES, HINT_SIGN, TOOL_SPOTS, WAVES } from '../config/game.js';
 import { WAVE_VOICES } from '../config/sounds.js';
 import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
@@ -39,8 +39,9 @@ const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
 const BUILT_TOOLS: ToolName[] = ['slingshot'];
 const ICONS: Record<HintIcon, UiImageName> = {
-  hand: 'hand',
-  gauntlet: 'gauntlet',
+  pinch: 'target',
+  grab: 'target',
+  spin: 'returnArrow',
   up: 'up',
   target: 'target',
   warning: 'warning',
@@ -50,9 +51,8 @@ const ICONS: Record<HintIcon, UiImageName> = {
 };
 const temp = new Vector3();
 const markerAt = new Vector3();
-const toMarker = new Vector3();
 const lastAnchor = new Vector3();
-const view: ViewFrame = { right: new Vector3(), up: new Vector3(0, 1, 0), back: new Vector3(), head: new Vector3() };
+const view: ViewFrame = { head: new Vector3(), up: new Vector3(0, 1, 0), shot: new Vector3() };
 
 export interface BattleParts {
   stage: Stage;
@@ -78,6 +78,8 @@ export class Battle implements TutorialApi {
   private director: Director<TutorialApi> | null = null;
   private wave = -1;
   private endTimer = -1;
+  /** Time since anything last hurt the castle (seconds), for the stalemate check. */
+  private sinceDamage = 0;
 
   // What the player did in this battle, for the lessons.
   private eatenCount = 0;
@@ -96,14 +98,14 @@ export class Battle implements TutorialApi {
   /** A finished lesson keeps its ticked box up this long (seconds). */
   private doneFlash = 0;
   private doneContent: SignContent | null = null;
-  /** How long the head has pointed at the current step's marker (seconds). */
-  private gaze = 0;
   private head = new Vector3();
   private forward = new Vector3();
 
   constructor(private parts: BattleParts) {
     parts.goblins.onWallHit = () => {
-      if (this.running) damageCastle(this.state, CASTLE_HEALTH.wallHitDamage);
+      if (!this.running) return;
+      damageCastle(this.state, CASTLE_HEALTH.wallHitDamage);
+      this.sinceDamage = 0;
     };
     parts.slingshot.onHit = () => this.slingHits++;
     parts.slingshot.onEvent = (event) => this.sling[event]++;
@@ -144,6 +146,19 @@ export class Battle implements TutorialApi {
     console.info('[battle] tutorial started');
   }
 
+  /**
+   * Before the battle: an empty, calm board and the welcome panel. Poking its
+   * Play button starts the tutorial (the same button as Play again).
+   */
+  welcome(): void {
+    this.stop();
+    this.parts.goblins.killAll();
+    this.parts.slingshot.setVisible(false);
+    this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
+    this.parts.flags.show(1, 0, true);
+    this.parts.panel.show('welcome');
+  }
+
   /** Stops everything (stress test, leaving VR). The board is left empty. */
   stop(): void {
     this.running = false;
@@ -173,7 +188,17 @@ export class Battle implements TutorialApi {
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     if (this.running && this.state.phase === 'playing') {
-      damageCastle(this.state, goblins.countMode('intruder') * CASTLE_HEALTH.intruderDamagePerSec * dt);
+      const intruders = goblins.countMode('intruder');
+      damageCastle(this.state, intruders * CASTLE_HEALTH.intruderDamagePerSec * dt);
+      // A goblin the player can reach, or holds, or has in the slingshot is never a
+      // stalemate: they can still deal with it, so the wave must wait for them.
+      this.sinceDamage = intruders > 0 || goblins.anyInReach() ? 0 : this.sinceDamage + dt;
+      // Stalemate: every goblin is out, some are left far away, but none has hurt the castle for a long time.
+      if (this.wave >= 0 && spawner.allOut && goblins.aliveCount > 0 && this.sinceDamage > CASTLE_HEALTH.stalemateSeconds) {
+        console.info('[battle] stalemate: the leftover goblins run off');
+        this.endWave();
+        this.sinceDamage = 0;
+      }
       this.director?.update(dt);
       spawner.rate = this.director?.spawnRate ?? 1;
       spawner.update(dt);
@@ -191,7 +216,7 @@ export class Battle implements TutorialApi {
 
   /** The hint sign, the marker and the ghost hand for the current step. */
   private updateHint(dt: number, hands: HandState[], head: Vector3, forward: Vector3): void {
-    const { sign, markers, goblins, spawner, ghost } = this.parts;
+    const { sign, markers, goblins, ghost } = this.parts;
     sign.update(dt);
     if (!this.running || this.state.phase !== 'playing') {
       sign.show(null);
@@ -208,7 +233,6 @@ export class Battle implements TutorialApi {
     }
     const step = (this.director?.current ?? null) as TutorialStep | null;
     const hint = step?.hint;
-    if (step !== this.shownStep) this.gaze = 0;
     this.shownStep = step;
     if (!hint) {
       this.shown = null;
@@ -218,19 +242,12 @@ export class Battle implements TutorialApi {
       return;
     }
     const target = this.markerPosition(hint.marker, markerAt);
-    // Looking at the marker: the head points within a small cone of it.
-    if (target) {
-      toMarker.copy(target).sub(head).normalize();
-      const looking = toMarker.dot(forward) > Math.cos(degToRad(READING.gazeConeDeg));
-      this.gaze = looking ? this.gaze + dt : 0;
-    }
     this.updateGhost(dt, hint.demo, hands, head);
     const side = markers.update(dt, target, head, forward);
     let text = hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
     let sub: string | undefined;
-    if (hint.goblinsLeft) sub = `Goblins left: ${goblins.aliveCount + spawner.remaining}`;
     if (side) sub = `It is to your ${side}. Turn your head or spin the board.`;
     this.shown = { kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], sub, next: hint.next };
     sign.show(this.shown);
@@ -240,14 +257,12 @@ export class Battle implements TutorialApi {
 
   /** Loops the step's ghost hand demo next to its target, out of the way of the player's own hand. */
   private updateGhost(dt: number, demo: GhostDemoName | undefined, hands: HandState[], head: Vector3): void {
-    const { ghost, stage } = this.parts;
+    const { ghost } = this.parts;
     ghost.play(demo);
     if (!demo) return;
-    // The seat's directions: right, up, and toward the player, as the board was placed.
-    view.right.set(1, 0, 0).applyQuaternion(stage.root.quaternion);
-    view.back.set(0, 0, 1).applyQuaternion(stage.root.quaternion);
     view.head.copy(head);
-    const anchors = (anchor: GhostAnchor, out: Vector3): Vector3 | null => this.ghostAnchor(anchor, out);
+    this.parts.slingshot.shotDirection(view.shot);
+    const anchors = (anchor: GhostAnchor, out: Vector3, arcDeg?: number): Vector3 | null => this.ghostAnchor(anchor, out, arcDeg);
     // Steps out of the way while a real hand is where the demo ends.
     let near = false;
     if (this.ghostAnchor(endAnchor(demo), lastAnchor)) {
@@ -258,8 +273,16 @@ export class Battle implements TutorialApi {
     ghost.update(dt, anchors, view, near);
   }
 
-  private ghostAnchor(anchor: GhostAnchor, out: Vector3): Vector3 | null {
+  /** Exact points the ghost hand touches (world, meters). */
+  private ghostAnchor(anchor: GhostAnchor, out: Vector3, arcDeg = 0): Vector3 | null {
     switch (anchor) {
+      case 'ring': {
+        // The center of the ring's tube, at an angle along it from the seat's front.
+        const a = degToRad(arcDeg);
+        return this.parts.stage.boardLift.localToWorld(out.set(polarX(HANDLES.radius, a), HANDLES.ringY, polarZ(HANDLES.radius, a)));
+      }
+      case 'pebbles':
+        return this.parts.slingshot.partWorld('pebbles', out);
       case 'mouth':
         out.copy(this.forward).setY(0).normalize().multiplyScalar(GHOST_HAND.mouthForward).add(this.head);
         out.y -= GHOST_HAND.mouthDown;
@@ -362,6 +385,7 @@ export class Battle implements TutorialApi {
 
   startWave(index: number): void {
     this.wave = index;
+    this.sinceDamage = 0;
     this.parts.spawner.start(TUTORIAL_WAVES[index]);
     const last = index === TUTORIAL_WAVES.length - 1;
     this.parts.audio.play(last ? 'finalRound' : WAVE_VOICES[index] ?? 'finalRound');
@@ -383,10 +407,20 @@ export class Battle implements TutorialApi {
   }
 
   lessonClimber(onRampart: boolean): void {
+    const { goblins, particles, audio, stage, rng } = this.parts;
+    // Only one lesson climber at a time: a fallback moves it in front of the
+    // player again (they may have spun the board) instead of adding another.
+    const old = this.lessonGoblin;
+    if (old && goblins.isHittable(old) && !this.parts.isHeld(old)) {
+      goblins.centerWorld(old, temp);
+      particles.burst(temp, POOF_COLORS, 6, 0.15);
+      audio.play('poof', temp, 0.6);
+      goblins.kill(old);
+    }
     const spread = degToRad(WAVES.frontClimberSpread);
     // The board angle in front of the player right now.
-    const angle = this.parts.stage.spin + this.parts.rng.range(-spread, spread);
-    const goblin = this.parts.goblins.spawnClimberAt(angle, onRampart, TUTORIAL_TIMING.lessonClimberWait);
+    const angle = stage.spin + rng.range(-spread, spread);
+    const goblin = goblins.spawnClimberAt(angle, onRampart, TUTORIAL_TIMING.lessonClimberWait);
     if (goblin) this.lessonGoblin = goblin;
   }
 
@@ -398,6 +432,9 @@ export class Battle implements TutorialApi {
     const { slingshot, stage, particles, audio } = this.parts;
     slingshot.setVisible(true);
     slingshot.beckon = true;
+    // The lessons count what the player does with it from now on (see slingshotLessons).
+    this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
+    this.slingHits = 0;
     const { angleDeg, radius } = TOOL_SPOTS.slingshot;
     const a = degToRad(angleDeg);
     stage.fixedRig.localToWorld(temp.set(polarX(radius, a), TOOL_SPOTS.platformTop + 4, polarZ(radius, a)));
@@ -442,9 +479,5 @@ export class Battle implements TutorialApi {
 
   slingLoaded(): boolean {
     return this.parts.slingshot.isLoaded;
-  }
-
-  gazeTime(): number {
-    return this.gaze;
   }
 }

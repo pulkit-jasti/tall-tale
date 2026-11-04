@@ -37,6 +37,8 @@ export const CASTLE = {
   /** Angle of the first tower (degrees, 0 = front). */
   towerStartDeg: 30,
   towerWidth: 5,
+  /** Climbers keep at least this far from a tower's center (degrees), so they are never inside one. */
+  towerClearDeg: 12,
   stoneColor: 0xc9c2b4,
   stoneTopColor: 0xddd6c8,
   stoneDarkColor: 0xa49c8c,
@@ -213,12 +215,25 @@ export const ROUTES = {
 /** Castle health, damage and repair (docs/castle-rules.md). Health is the red flag's height. */
 export const CASTLE_HEALTH = {
   maxHealth: 100,
-  /** Damage per wall hit from a grunt or runner (one hit every GOBLIN_RULES.wallHitInterval). */
-  wallHitDamage: 0.35,
+  /**
+   * Damage per wall hit from a grunt or runner (one hit every GOBLIN_RULES.wallHitInterval).
+   * Set high for quick testing (two grunts at the wall take the castle down in about a minute).
+   * Balanced with troops in build step 5.
+   */
+  wallHitDamage: 1.5,
   /** Damage per second from each intruder in the courtyard. Faster than outside attacks. */
-  intruderDamagePerSec: 1.2,
+  intruderDamagePerSec: 3,
   /** Share of the missing health repaired in each breather. */
   repairShare: 0.35,
+  /**
+   * A wave that is not cleared, with every goblin already out of its camp,
+   * and nothing has hurt the castle for this long (seconds), is a stalemate
+   * (for example a goblin stuck somewhere harmless, far away): its leftovers
+   * run off and it ends. Never while the castle is under attack, and never
+   * while a goblin is at or on the wall, in the courtyard, or held: the
+   * player can still deal with those.
+   */
+  stalemateSeconds: 60,
 };
 
 /** How a wave's enemies come out of their camps (the numbers per wave are in src/director/tutorial.ts). */
@@ -282,11 +297,11 @@ export const END_PANEL = {
   /** Tilted back a little, toward the eyes (degrees). */
   tiltDeg: 20,
   width: 32,
-  height: 20,
-  /** The round poke button below the text, in front of the panel (cm). */
+  height: 24,
+  /** The round poke button at the bottom, below all the text, in front of the panel (cm). */
   buttonRadius: 3.5,
-  buttonDepth: 1.6,
-  buttonColor: 0x6fae4a,
+  /** Space between the button's rim and the panel's bottom edge (cm). */
+  buttonMargin: 1.2,
   /** The panel appears this long after the battle ends, after the last poofs (seconds). */
   showDelay: 1.2,
 };
@@ -295,48 +310,51 @@ export const END_PANEL = {
 export const POKE = {
   /** Ready when the fingertip is this close in front of the button face. */
   readyDistance: 5,
-  /** Pressed when the fingertip pushes this deep into the button. */
-  pressDepth: 0.6,
-  /** How far the button sinks when pressed. */
-  travel: 0.8,
+  /** How far the cap sinks into its rim. It follows the fingertip. */
+  travel: 1,
+  /** It clicks when pushed this share of the way down. */
+  fireShare: 0.85,
+  /** After a click, the fingertip must come back out this far in front of the face before another press... */
+  releaseDistance: 2,
+  /** ...and this long must pass (seconds). */
+  cooldown: 0.6,
+  /** A button whose job just changed (the sign shows a new step) ignores presses this long (seconds). */
+  lockAfterChange: 1,
   /** The poke zone is this much wider than the button. */
   zoneScale: 1.3,
+  /** One look for every button: cap color, rim color, round side smoothness, icon size on the face. */
+  color: 0x6fae4a,
+  rimColor: 0x3b2b1f,
+  /** The rim is this much wider than the cap. */
+  rimScale: 1.3,
+  segments: 32,
+  iconShare: 0.8,
+  /** Cap thickness as a share of its radius, unless a button sets its own. */
+  depthShare: 0.4,
 };
 
 /**
- * The tutorial's hint sign: low in front, just outside the ring (the tool
- * platforms fill the space inside it), tilted back toward the eyes and kept
- * under the line of sight to the front wall top (boardLift, cm).
+ * The tutorial's hint sign: in front, just past the castle wall, so it is
+ * behind the goblins at the front of the wall and on its rampart, never in
+ * front of them. High enough to read without looking down (about 14 to 27
+ * degrees below eye level), and big enough for its distance. Its Next
+ * button stays within arm's reach (boardLift, cm; the eyes are about 36 cm
+ * above the board).
  */
 export const HINT_SIGN = {
-  radius: 33,
+  radius: 50,
   /** Bottom edge above the board. */
-  y: 4,
-  width: 22,
-  height: 9,
-  tiltDeg: 45,
+  y: 12,
+  width: 30,
+  height: 12.3,
+  tiltDeg: 15,
   /** A new instruction pops in over this long (seconds). */
   popTime: 0.25,
   /** A finished lesson shows its ticked box this long before the next one (seconds). */
   doneTime: 1.2,
-  /** Round "Next" poke button in the sign's bottom right corner (cm). */
-  nextRadius: 1.6,
-  nextDepth: 1,
-  nextColor: 0x6fae4a,
-};
-
-/** Info steps (wave banners, flags): how long they stay up so they can be read. */
-export const READING = {
-  /** Seconds = base + perWord * words, never below min. */
-  base: 2,
-  perWord: 0.35,
-  min: 7,
-  /** "Look at the flag" steps: the head must point within this cone of it (degrees)... */
-  gazeConeDeg: 14,
-  /** ...for this long (seconds). */
-  gazeHold: 1,
-  /** They move on anyway this long after the reading time (seconds). */
-  gazeGrace: 12,
+  /** Round "Next" poke button just outside the sign's right edge (cm). */
+  nextRadius: 2.2,
+  nextGap: 1,
 };
 
 /** Ghost hands that show how to do each lesson (src/ui/ghostHand.ts). */
@@ -352,13 +370,13 @@ export const GHOST_HAND = {
   rest: 0.6,
   /** Hidden while one of the player's hands is this close to the demo's target (meters). */
   hideNear: 0.09,
-  /** Fingers point down by this much toward the target (degrees). */
-  pitchDeg: 35,
-  /**
-   * Roll that turns the palm down (degrees, mirrored for the left hand). A
-   * guess from the WebXR grip space: tune in the headset.
-   */
-  palmRollDeg: 90,
+  /** The open pose: IWSDK's relaxed pose opened this much further (share of the way back from pressed). */
+  openExtra: 0.35,
+  /** Pinch pose: the thumb and index tips end this far apart, center to center, so the pads touch (meters). */
+  pinchTouch: 0.012,
+  /** Pinch pose IK: rounds, and the most each joint turns per step (degrees). */
+  pinchIkRounds: 12,
+  pinchIkStepDeg: 15,
   /** The ghost's mouth point: in front of the face and a little down (meters). */
   mouthForward: 0.16,
   mouthDown: 0.07,
@@ -366,13 +384,12 @@ export const GHOST_HAND = {
 
 /** Tutorial markers (src/ui/markers.ts). */
 export const MARKERS = {
-  /** "!" size (meters, world). */
+  /** Down arrow size (meters, world). */
   size: 0.03,
   /** Above the target (meters) and the bounce height. */
   lift: 0.02,
   bob: 0.012,
   bobSpeed: 4,
-  arrowColor: '#f2c14e',
   /** The target counts as out of view beyond this angle from where the head looks (degrees). */
   offViewDeg: 50,
   /** Out of view arrow on the ring: size (cm), angle off the front (degrees) and how far it slides. */
@@ -450,6 +467,17 @@ export const SLINGSHOT = {
   pouchColor: 0x5a3a24,
   /** The pouch rests this far behind the fork (cm). */
   pouchRest: 2.5,
+  /**
+   * The pouch: an open leather strip between the bands (cm), standing upright
+   * and facing the shot. It bends back into a U (pouchSag deep) behind the
+   * stone. Its height (pouchWidth) is less than the stone's, so the stone shows
+   * above and below it. Low poly: a few flat segments.
+   */
+  pouchLength: 3.8,
+  pouchWidth: 1.6,
+  pouchSag: 0.9,
+  pouchThickness: 0.25,
+  pouchSegments: 6,
   /** Pinch zone around the pouch (meters). Generous, like the goblins. */
   grabRadius: 0.06,
   /** Grab zone around the handle (meters). */

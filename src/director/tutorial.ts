@@ -6,7 +6,7 @@
 // The wave numbers and the step list live here together, so they are tuned
 // side by side. Steps only call the game systems through TutorialApi. Nothing
 // tutorial-only lives in those systems. No Three.js here, so it can be tested.
-import { READING, type GoblinType } from '../config/game.js';
+import type { GoblinType } from '../config/game.js';
 import type { DirectorStep } from '../rules/director.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
@@ -24,40 +24,45 @@ export interface WavePlan {
   newTool?: ToolName;
 }
 
-/** Starting numbers from docs/mvp.md "Tutorial waves". Tuned in playtests. */
+/**
+ * Small test waves for now, so a whole run is quick to play. The real
+ * starting numbers from docs/mvp.md "Tutorial waves" (6 grunts and 3 climbers
+ * in wave 1, up to 18 grunts, 16 runners and 4 climbers in wave 5) come back
+ * when the waves are balanced, with troops in build step 5.
+ */
 export const TUTORIAL_WAVES: WavePlan[] = [
   {
     intro: 'Goblins are coming! Grab and eat them before they break your wall.',
     camps: ['campNorth'],
-    counts: { grunt: 6, runner: 0, climber: 3 },
-    spawnTime: 50,
+    counts: { grunt: 2, runner: 0, climber: 1 },
+    spawnTime: 12,
   },
   {
     intro: 'Two camps now. Shoot goblins far away before they reach the wall.',
     camps: ['campNorth', 'campEast'],
-    counts: { grunt: 10, runner: 0, climber: 2 },
-    spawnTime: 55,
+    counts: { grunt: 3, runner: 0, climber: 1 },
+    spawnTime: 15,
     newTool: 'slingshot',
   },
   {
     intro: 'Runners! They are small and fast and rush straight to the wall.',
     camps: ['campNorth', 'campWest'],
-    counts: { grunt: 8, runner: 12, climber: 3 },
-    spawnTime: 60,
+    counts: { grunt: 2, runner: 3, climber: 1 },
+    spawnTime: 15,
     newTool: 'swatter',
   },
   {
     intro: 'Three camps attack. Spin the board to keep watch all around you.',
     camps: ['campEast', 'campSouth', 'campWest'],
-    counts: { grunt: 14, runner: 8, climber: 4 },
-    spawnTime: 65,
+    counts: { grunt: 3, runner: 2, climber: 1 },
+    spawnTime: 18,
     newTool: 'pepper',
   },
   {
     intro: 'The final wave. Everything at once!',
     camps: ['campNorth', 'campEast', 'campSouth'],
-    counts: { grunt: 18, runner: 16, climber: 4 },
-    spawnTime: 70,
+    counts: { grunt: 4, runner: 3, climber: 1 },
+    spawnTime: 20,
   },
 ];
 
@@ -67,10 +72,6 @@ export const TUTORIAL_TIMING = {
   stuckAfter: 20,
   /** A lesson moves on after this long anyway, so it never gets stuck. */
   actionTimeout: 60,
-  /** A wave that is not cleared after this long (after its lessons) ends anyway: leftovers run off. */
-  clearTimeout: 90,
-  /** Breather between waves. */
-  breather: 8,
   /** Spinning the board this far (degrees) finishes the spin lesson. */
   spinGoal: 60,
   /** Moving the board this far (cm) finishes the height lesson. */
@@ -82,7 +83,7 @@ export const TUTORIAL_TIMING = {
 /** What a marker points at. The battle turns it into a world position. */
 export type MarkerTarget = 'ring' | 'lessonGoblin' | 'healthFlag' | 'waveFlag' | 'slingHandle' | 'bowl' | 'pouch';
 
-export type HintIcon = 'hand' | 'gauntlet' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
+export type HintIcon = 'pinch' | 'grab' | 'spin' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
 
 export interface Hint {
   /** 'lesson' steps are numbered and ticked when done. 'banner' shows a wave title. */
@@ -92,20 +93,12 @@ export interface Hint {
   text: string;
   icon?: HintIcon;
   marker?: MarkerTarget;
-  /** Show how many goblins are left on the board. */
-  goblinsLeft?: boolean;
   /** Shown instead when the lesson goblin is on the board, not in the hand (dropped it). */
   whenDropped?: string;
   /** A ghost hand loops this demonstration next to the target. */
   demo?: GhostDemoName;
-  /** Info steps: a "Next" button on the sign skips them. */
+  /** Info steps: they wait for the "Next" button on the sign. */
   next?: boolean;
-}
-
-/** How long an info step stays up so it can be read (seconds). */
-export function readTime(text: string): number {
-  const words = text.split(/\s+/).filter(Boolean).length;
-  return Math.max(READING.min, READING.base + READING.perWord * words);
 }
 
 export interface TutorialStep extends DirectorStep<TutorialApi> {
@@ -130,7 +123,7 @@ export interface TutorialApi {
   hintTool(tool: ToolName): void;
   /** The easier fallback for a tool, for example a pebble already in the slingshot pouch. */
   helpWithTool(tool: ToolName): void;
-  /** How often the tool did its job (slingshot: goblins knocked out). */
+  /** How often the tool did its job since it appeared (slingshot: goblins knocked out). */
   toolUses(tool: ToolName): number;
   /** Total board spin (degrees) and height change (cm) made by the player so far. */
   boardSpun(): number;
@@ -138,11 +131,9 @@ export interface TutorialApi {
   /** Goblins picked up and eaten in this battle. */
   picked(): number;
   eaten(): number;
-  /** Slingshot steps done so far, and whether something is in the pouch. */
+  /** Slingshot steps done since it appeared, and whether something is in the pouch. */
   slingCount(event: 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot'): number;
   slingLoaded(): boolean;
-  /** How long the player has looked at the current step's marker without looking away (seconds). */
-  gazeTime(): number;
 }
 
 const lesson = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Partial<Hint> = {}): Hint => ({
@@ -186,24 +177,15 @@ function lessonStep(
   };
 }
 
-/** A banner or info step that stays up long enough to read. "Next" skips it. */
-function readStep(id: string, hint: Hint, start?: (api: TutorialApi) => void): TutorialStep {
-  const seconds = readTime(hint.text);
-  return { id, hint: { ...hint, next: true }, start, done: (_api, time) => time >= seconds, timeout: seconds };
-}
-
 /**
- * An info step that waits for the player to look at its marker for a moment,
- * after the reading time. "Next" skips it, and it moves on anyway after a while.
+ * An info step (a wave banner, the flags, a new tool): it stays up until the
+ * player pokes "Next". Nothing moves it on by itself, not time and not where
+ * the player looks, so there is always time to notice and read it. Only
+ * lessons, where the player does something with their hands, move on by
+ * themselves.
  */
-function lookStep(id: string, hint: Hint): TutorialStep {
-  const seconds = readTime(hint.text);
-  return {
-    id,
-    hint: { ...hint, next: true },
-    done: (api, time) => time >= seconds && api.gazeTime() >= READING.gazeHold,
-    timeout: seconds + READING.gazeGrace,
-  };
+function infoStep(id: string, hint: Hint, start?: (api: TutorialApi) => void): TutorialStep {
+  return { id, hint: { ...hint, next: true }, start, done: () => false, timeout: Infinity };
 }
 
 /** Before wave 1: moving the board, then picking up and eating the lesson climber. */
@@ -213,7 +195,7 @@ function introLessons(): TutorialStep[] {
   return [
     lessonStep(
       'learn-spin',
-      lesson('Grab the ring in front of you and pull it sideways to spin the board.', 'hand', 'ring', { demo: 'spin' }),
+      lesson('Grab the ring in front of you and pull it sideways to spin the board.', 'spin', 'ring', { demo: 'spin' }),
       (api, since) => api.boardSpun() - since >= TUTORIAL_TIMING.spinGoal,
       (api) => api.boardSpun(),
       { timeout: 45 },
@@ -227,7 +209,7 @@ function introLessons(): TutorialStep[] {
     ),
     lessonStep(
       'learn-pinch',
-      lesson('A goblin climbed your wall! Pinch it with your thumb and finger to pick it up.', 'hand', 'lessonGoblin', {
+      lesson('A goblin climbed your wall! Pinch it with your thumb and finger to pick it up.', 'pinch', 'lessonGoblin', {
         demo: 'pinchGoblin',
       }),
       (api, since) => api.picked() + api.eaten() > since,
@@ -253,26 +235,36 @@ function introLessons(): TutorialStep[] {
   ];
 }
 
-/** Before wave 2: picking up and loading the slingshot. Shooting is taught once goblins come. */
+/**
+ * Before wave 2: picking up and loading the slingshot. Shooting is taught once
+ * goblins come. The slingshot can be used as soon as it appears (during the
+ * "New tool" message), so these lessons count from that moment, not from when
+ * each lesson starts: what the player already did counts, and they are never
+ * asked to do it again.
+ */
+const fromToolShown = (): number => 0;
+
 function slingshotLessons(): TutorialStep[] {
   return [
     lessonStep(
       'learn-sling-grab',
-      lesson('Grab the slingshot by its handle with either hand.', 'gauntlet', 'slingHandle', { demo: 'slingGrab' }),
+      lesson('Wave cleared! Here is a new tool: the slingshot. Grab it by its handle with either hand.', 'grab', 'slingHandle', {
+        demo: 'slingGrab',
+      }),
       (api, since) => api.slingCount('grabbed') > since,
-      (api) => api.slingCount('grabbed'),
+      fromToolShown,
       { fallbacks: [(api) => api.hintTool('slingshot')], timeout: 45 },
     ),
     lessonStep(
       'learn-sling-pebble',
-      lesson('Pinch a pebble from the bowl with your other hand.', 'hand', 'bowl', { demo: 'pebble' }),
+      lesson('Pinch a pebble from the bowl with your other hand.', 'pinch', 'bowl', { demo: 'pebble' }),
       (api, since) => api.slingCount('pebbleTaken') > since || api.slingLoaded(),
-      (api) => api.slingCount('pebbleTaken'),
+      fromToolShown,
       { fallbacks: [(api) => api.helpWithTool('slingshot')], timeout: 45 },
     ),
     lessonStep(
       'learn-sling-load',
-      lesson('Bring the pebble to the pouch. It clicks in.', 'hand', 'pouch', { demo: 'load' }),
+      lesson('Bring the pebble to the pouch. It clicks in.', 'pinch', 'pouch', { demo: 'load' }),
       (api) => api.slingLoaded(),
       () => 0,
       { fallbacks: [(api) => api.helpWithTool('slingshot')], timeout: 40 },
@@ -283,11 +275,13 @@ function slingshotLessons(): TutorialStep[] {
 function shootLesson(): TutorialStep {
   return lessonStep(
     'learn-sling-shoot',
-    lesson('Pinch the pouch, pull it back and let go to shoot a goblin. The dots show where it lands.', 'target', 'pouch', {
+    lesson('Goblins are coming! Pinch the pouch, pull it back and let go to shoot. The dots show where it lands.', 'target', 'pouch', {
       demo: 'shoot',
     }),
-    (api, since) => api.toolUses('slingshot') > since,
-    (api) => api.toolUses('slingshot'),
+    // Any shot finishes it, hit or miss: the player has learned how it works.
+    // A shot already made since the slingshot appeared counts too.
+    (api, since) => api.slingCount('shot') > since,
+    fromToolShown,
     {
       fallbacks: [(api) => api.helpWithTool('slingshot'), (api) => api.helpWithTool('slingshot')],
       slowSpawns: true,
@@ -305,9 +299,10 @@ const TOOL_LESSON_TEXT: Partial<Record<ToolName, string>> = {
 function toolLesson(tool: ToolName): TutorialStep {
   return lessonStep(
     `learn-${tool}`,
-    lesson(TOOL_LESSON_TEXT[tool] ?? `Try the ${tool}.`, 'gauntlet'),
+    lesson(`New tool: ${TOOL_NAMES[tool]}! ${TOOL_LESSON_TEXT[tool] ?? ''}`.trim(), 'grab'),
     (api, since) => api.toolUses(tool) > since,
-    (api) => api.toolUses(tool),
+    // Counts from when the tool appeared, like the slingshot lessons.
+    fromToolShown,
     { fallbacks: [(api) => api.hintTool(tool), (api) => api.helpWithTool(tool)], slowSpawns: true },
   );
 }
@@ -330,27 +325,31 @@ export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORI
   waves.forEach((wave, i) => {
     if (i === 0) steps.push(...introLessons());
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(...slingshotLessons());
-    steps.push(readStep(`wave-${i + 1}-start`, banner(wave.intro, 'warning'), (api) => api.startWave(i)));
+    // The two flags are explained before the first wave, while nothing attacks yet.
     if (i === 0) {
-      steps.push(lookStep('flag-health', banner('Look at the red flag on your left. It is your castle health. Goblins at the wall pull it down.', 'info', 'healthFlag')));
-      steps.push(lookStep('flag-wave', banner('Now look at the blue flag on your right. It climbs one notch for every wave you clear.', 'info', 'waveFlag')));
+      const header = 'Your castle';
+      steps.push(infoStep('flag-health', banner('Look at the red flag on your left. It is your castle health. Goblins at the wall pull it down.', 'info', 'healthFlag', { header })));
+      steps.push(infoStep('flag-wave', banner('Now look at the blue flag on your right. It climbs one notch for every wave you clear.', 'info', 'waveFlag', { header })));
     }
+    // A wave whose new tool has a lesson starts straight into that lesson: the
+    // lesson's own text guides the player, and it moves on by their action, so
+    // there is no banner and no Next button in between.
+    const lessonFollows = has(wave.newTool);
+    const startWave = (api: TutorialApi): void => api.startWave(i);
+    if (lessonFollows) steps.push({ id: `wave-${i + 1}-start`, start: startWave, done: () => true, timeout: 0 });
+    else steps.push(infoStep(`wave-${i + 1}-start`, banner(wave.intro, 'warning'), startWave));
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson());
     else if (has(wave.newTool)) steps.push(toolLesson(wave.newTool));
     if (wave.newTool === 'pepper' && has('megaphone')) steps.push(toolLesson('megaphone'));
+    // While the wave is fought the sign stays away, so it never covers the enemies.
+    // It comes back when the wave is cleared (the breather) or for a lesson.
     steps.push({
       id: `wave-${i + 1}-clear`,
-      hint: banner(
-        i === 0
-          ? 'Clear the wave! Grab and eat the goblins at the wall and on top of it.'
-          : 'Clear the wave! Eat goblins at the wall, shoot the ones far away.',
-        'warning',
-        undefined,
-        { goblinsLeft: true },
-      ),
+      // No timer: a wave ends only when it is cleared, or the castle falls. A
+      // player who ignores it loses. The battle ends a stalemate on its own
+      // (see Battle.update), so this never waits forever.
       done: (api) => api.waveCleared(),
-      timeout: TUTORIAL_TIMING.clearTimeout,
-      onTimeout: (api) => api.endWave(),
+      timeout: Infinity,
     });
     steps.push(breatherStep(i, waves, has));
   });
@@ -358,8 +357,8 @@ export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORI
   const lessons = steps.filter((s) => s.hint?.kind === 'lesson');
   let wave = 0;
   for (const step of steps) {
-    if (!step.hint) continue;
     if (step.id.startsWith('wave-') && step.id.endsWith('-start')) wave = Number(step.id.split('-')[1]) - 1;
+    if (!step.hint) continue;
     if (step.hint.kind === 'lesson') step.hint.header = `Step ${lessons.indexOf(step) + 1} of ${lessons.length}`;
     else if (!step.hint.header) step.hint.header = waveTitle(wave);
   }
@@ -368,30 +367,24 @@ export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORI
 
 /**
  * The wave is over: the flag climbs. Between waves, the next wave's new tool
- * appears during the breather. After the last wave the battle is won (the
- * win panel takes over, so there is no hint).
+ * appears during the breather, which is an info step: it waits for "Next".
+ * After the last wave the battle is won (the win panel takes over, so there
+ * is no hint).
  */
 function breatherStep(i: number, waves: WavePlan[], has: (tool?: ToolName) => tool is ToolName): TutorialStep {
   const last = i === waves.length - 1;
   const next = waves[i + 1];
   const tool = has(next?.newTool) ? next.newTool : undefined;
-  return {
-    id: `wave-${i + 1}-cleared`,
-    hint: last
-      ? undefined
-      : banner(
-          tool ? `New tool: ${TOOL_NAMES[tool]}! It is on the platform beside you.` : 'Well done! Get ready for the next wave.',
-          'star',
-          tool === 'slingshot' ? 'slingHandle' : undefined,
-          { header: `Wave ${i + 1} cleared!` },
-        ),
-    start: (api) => {
-      api.clearWave();
-      if (tool) api.showTool(tool);
-      // The megaphone shares its platform with the bell and comes with the pepper (wave 4).
-      if (tool === 'pepper' && has('megaphone')) api.showTool('megaphone');
-    },
-    done: (_api, time) => last || time >= TUTORIAL_TIMING.breather,
-    timeout: TUTORIAL_TIMING.breather,
+  const start = (api: TutorialApi): void => {
+    api.clearWave();
+    if (tool) api.showTool(tool);
+    // The megaphone shares its platform with the bell and comes with the pepper (wave 4).
+    if (tool === 'pepper' && has('megaphone')) api.showTool('megaphone');
   };
+  const id = `wave-${i + 1}-cleared`;
+  // After the last wave the win panel takes over. Before a new tool, its first
+  // lesson takes over right away (it says the wave is cleared and names the
+  // tool), so the tool is learned by doing, with no Next button.
+  if (last || tool) return { id, start, done: () => true, timeout: 0 };
+  return infoStep(id, banner('Well done! Get ready for the next wave.', 'star', undefined, { header: `Wave ${i + 1} cleared!` }), start);
 }

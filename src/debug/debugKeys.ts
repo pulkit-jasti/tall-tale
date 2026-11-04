@@ -47,7 +47,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'skipStep', code: 'KeyS', label: 'Skip tutorial step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
   { id: 'loseCastle', code: 'KeyH', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
   { id: 'damageCastle', code: 'KeyD', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
-  { id: 'restartBattle', code: 'KeyA', label: 'Restart battle', does: 'Start the tutorial battle again from wave 1 (same as the panel button)' },
+  { id: 'restartBattle', code: 'KeyA', label: 'Restart battle', does: 'Start the tutorial battle from the first lesson (same as the Play and Play again buttons)' },
   { id: 'grunts', code: 'KeyG', label: 'Grunts', does: 'Send a group of grunts' },
   { id: 'runners', code: 'KeyR', label: 'Runners', does: 'Send a group of runners' },
   { id: 'climberFront', code: 'KeyC', label: 'Climber in front', does: 'A climber pops up right in front of you' },

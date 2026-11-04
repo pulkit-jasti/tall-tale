@@ -5,7 +5,7 @@
 // redrawn only when its text changes.
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { HINT_SIGN } from '../config/game.js';
+import { HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { HandState } from '../player/hands.js';
 import { degToRad } from '../rules/boardMath.js';
@@ -30,7 +30,10 @@ export interface SignContent {
 
 const INK = '#4a3424';
 const SUB_INK = '#8a5a34';
-const CANVAS_WIDTH = 768;
+/** Layout width the drawing code is written for (pixels). */
+const LAYOUT_WIDTH = 768;
+/** The canvas is this many times sharper than the layout. */
+const CANVAS_SCALE = 1.5;
 
 export class HintSign {
   private root = new Group();
@@ -40,11 +43,13 @@ export class HintSign {
   /** Little pop when the text changes (1 = settled). */
   private pop = 1;
   private next: PokeButton;
+  /** The text panel. Only it pops, so the Next button never jumps under a finger. */
+  private panel: Mesh;
 
   constructor(parent: Object3D, audio: GameAudio) {
     const { width, height, radius, y, tiltDeg } = HINT_SIGN;
-    this.canvas.width = CANVAS_WIDTH;
-    this.canvas.height = Math.round((CANVAS_WIDTH * height) / width);
+    this.canvas.width = Math.round(LAYOUT_WIDTH * CANVAS_SCALE);
+    this.canvas.height = Math.round(((LAYOUT_WIDTH * height) / width) * CANVAS_SCALE);
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
     this.texture.anisotropy = 4;
@@ -56,10 +61,11 @@ export class HintSign {
     const face = new Group();
     face.rotation.x = -degToRad(tiltDeg);
     face.add(mesh);
-    // "Next" button in the bottom right corner, for info steps the player can skip.
+    this.panel = mesh;
+    // "Next" button just outside the sign's right edge, so it never covers the text.
     const r = HINT_SIGN.nextRadius;
-    this.next = new PokeButton(r, HINT_SIGN.nextDepth, HINT_SIGN.nextColor, audio);
-    this.next.group.position.set(width / 2 - r * 1.6, -height / 2 + r * 1.6, 0);
+    this.next = new PokeButton(audio, { radius: r, icon: 'next' });
+    this.next.group.position.set(width / 2 + r * 1.3 + HINT_SIGN.nextGap, 0, 0);
     this.next.group.visible = false;
     face.add(this.next.group);
     this.root.add(face);
@@ -83,7 +89,11 @@ export class HintSign {
     if (key === this.drawn) return;
     // A new instruction pops in. Ticking the box or a counter change does not.
     const sameText = this.drawn && JSON.parse(this.drawn).text === content.text;
-    if (!sameText) this.pop = 0;
+    if (!sameText) {
+      this.pop = 0;
+      // A new step: a finger still on Next must not skip it too.
+      this.next.lock(POKE.lockAfterChange);
+    }
     this.drawn = key;
     this.draw(content);
   }
@@ -99,14 +109,16 @@ export class HintSign {
     // Ease out with a small overshoot, then settle at full size.
     const t = this.pop - 1;
     const ease = 1 + 2.7 * t * t * t + 1.7 * t * t;
-    this.root.scale.setScalar(0.8 + 0.2 * ease);
+    this.panel.scale.setScalar(0.8 + 0.2 * ease);
   }
 
   private draw(content: SignContent): void {
     mark('hint sign');
     const c = this.canvas.getContext('2d')!;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    // Laid out at LAYOUT_WIDTH, drawn at CANVAS_SCALE times that, so text stays sharp further away.
+    c.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
+    const w = LAYOUT_WIDTH;
+    const h = this.canvas.height / CANVAS_SCALE;
     c.clearRect(0, 0, w, h);
     const pad = 18;
     if (!drawNineSlice(c, 'panel', 0, 0, w, h, 16, 40)) {
@@ -157,15 +169,7 @@ export class HintSign {
       c.fillStyle = SUB_INK;
       c.textAlign = 'center';
       c.font = 'bold 30px sans-serif';
-      c.fillText(content.sub, w / 2 - (content.next ? 60 : 0), h - pad - subH / 2 - 4);
-    }
-    if (content.next) {
-      // Label just left of the round button in the corner.
-      const buttonLeft = w - ((HINT_SIGN.nextRadius * 2.6) / HINT_SIGN.width) * w;
-      c.fillStyle = SUB_INK;
-      c.textAlign = 'right';
-      c.font = 'bold 30px sans-serif';
-      c.fillText('Next', buttonLeft - 10, h - pad - 26);
+      c.fillText(content.sub, w / 2, h - pad - subH / 2 - 4);
     }
     this.texture.needsUpdate = true;
   }

@@ -22,4 +22,8 @@ All CC0 from Kenney packs (license in each folder). Flat PNGs, drawn onto canvas
 | | | `pause`, `home`, `gear`, `audioOn`, `audioOff`, `next`, `previous`, `plus`, `minus` | Pause panel and later settings |
 | | | `star`, `trophy`, `medal1`, `medal2`, `target`, `locked`, `unlocked` | Win panel, achievements, Locked tool state |
 
+**Sharpness rule:** an image must have at least as many pixels as it covers in the headset, or it looks blocky. Small icons scaled up must come from `vector/` (SVG, sharp at any size) or be drawn in code (the arrows in `src/ui/uiImages.ts`). The small `rpg/` cursors and arrows (about 25 px) are too small for anything but tiny use.
+
+| `vector/` | UI Pack Adventure (SVG) | `checkbox_beige_*`, `minimap_icon_exclamation_yellow`, `minimap_icon_star_yellow`, `banner_hanging`, `panel_brown` | Sign checkbox, tutorial marker "!", star, sharp versions of the banner and panel |
+
 Not copied (still in Downloads if needed): the other colors (blue, grey, red variants), the small "Default" sizes, black icons, spritesheets, vector files, minimap compass and rings, scrollbars and patterns. No font was downloaded. The panels use the browser's sans-serif until a Kenney font is added.

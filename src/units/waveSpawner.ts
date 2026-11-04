@@ -104,13 +104,6 @@ export class WaveSpawner {
     return this.groups.every((g) => g.out >= g.count);
   }
 
-  /** Goblins of this wave still waiting in their camps. */
-  get remaining(): number {
-    let count = 0;
-    for (const g of this.groups) count += g.count - g.out;
-    return count;
-  }
-
   get running(): boolean {
     return this.active;
   }

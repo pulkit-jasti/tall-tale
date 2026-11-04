@@ -17,7 +17,7 @@ import {
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { CASTLE, GOBLIN_RULES, GOBLINS, ROADS, type GoblinStats, type GoblinType } from '../config/game.js';
-import { angleOf, boardHeight, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
+import { angleOf, boardHeight, clearOfTowers, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
@@ -45,6 +45,9 @@ const GRABBABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
   'intruder',
   'dazed',
 ]);
+
+/** Modes where a goblin is near or in the player's hands (never part of a stalemate). */
+const IN_REACH: ReadonlySet<GoblinMode> = new Set<GoblinMode>(['toWall', 'atWall', 'climbing', 'rampart', 'intruder', 'held']);
 
 export class Goblin {
   readonly root = new Group();
@@ -179,6 +182,15 @@ export class Goblins {
     return count;
   }
 
+  /**
+   * True if any goblin is at or on the wall, in the courtyard, or held (by a
+   * hand or in the slingshot): ones the player can still deal with.
+   */
+  anyInReach(): boolean {
+    for (const g of this.list) if (IN_REACH.has(g.mode)) return true;
+    return false;
+  }
+
   /** Goblins in one mode right now (for example intruders, for castle damage). */
   countMode(mode: GoblinMode): number {
     let count = 0;
@@ -232,6 +244,7 @@ export class Goblins {
     const goblin = this.obtain('climber');
     if (!goblin) return null;
     goblin.rampartWait = rampartWait;
+    angle = clearOfTowers(angle);
     const r = CASTLE.wallOut + 0.6;
     goblin.root.position.set(polarX(r, angle), 0, polarZ(r, angle));
     if (onRampart) this.popUp(goblin);
@@ -483,7 +496,8 @@ export class Goblins {
 
   private headToWall(g: Goblin): void {
     const p = g.root.position;
-    const a = angleOf(p.x, p.z);
+    // Climbers climb between towers, never up the side of one.
+    const a = g.type === 'climber' ? clearOfTowers(angleOf(p.x, p.z)) : angleOf(p.x, p.z);
     const r = g.type === 'climber' ? CASTLE.wallOut + 0.6 : CASTLE.wallOut + CASTLE.wallStandOff;
     g.target.set(polarX(r, a), 0, polarZ(r, a));
     g.mode = 'toWall';

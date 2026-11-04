@@ -1,17 +1,18 @@
-// The end of battle panel (docs/castle-rules.md section 4): a plain panel in
-// front of the player that says "Congratulations, the kingdom is safe!" or
-// "The castle has fallen", with one round button poked with the index finger
-// to play again. Text is a small canvas texture, drawn once per show, like the
-// FPS panel. It lives in fixedRig (cm), so it never spins with the board.
+// The panel in front of the player with one round button poked with the index
+// finger: the welcome panel before the battle ("Play", docs/mvp.md "Menus"),
+// and the end of battle panel (docs/castle-rules.md section 4) that says
+// "Congratulations, the kingdom is safe!" or "The castle has fallen", to play
+// again. Text is a small canvas texture, drawn once per show, like the FPS
+// panel. It lives in fixedRig (cm), so it never spins with the board.
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { END_PANEL } from '../config/game.js';
+import { END_PANEL, POKE } from '../config/game.js';
 import type { HandState } from '../player/hands.js';
 import { degToRad } from '../rules/boardMath.js';
 import { PokeButton } from './pokeButton.js';
 import { drawIcon, drawNineSlice, type UiImageName } from './uiImages.js';
 
-export type EndKind = 'won' | 'lost';
+export type EndKind = 'welcome' | 'won' | 'lost';
 
 interface PanelText {
   title: string;
@@ -22,18 +23,24 @@ interface PanelText {
 }
 
 const TEXT: Record<EndKind, PanelText> = {
+  welcome: { title: 'Welcome, giant!', subtitle: 'The tiny kingdom needs you', button: 'Poke the button to play', icon: 'star' },
   won: { title: 'Congratulations!', subtitle: 'The kingdom is safe!', button: 'Poke the button to play again', icon: 'trophy' },
   lost: { title: 'Oh no!', subtitle: 'The castle has fallen', button: 'Poke the button to try again', icon: 'warning' },
 };
 
+/** Dark brown ink and a deep green (the button's color, darker) on the light panel. */
+const PANEL_INK = '#4a3424';
+const PANEL_ACCENT = '#2f5f22';
+
 export class EndPanel {
   private root = new Group();
   private button: PokeButton;
+  private buttonTopPx = 0;
   private canvas = document.createElement('canvas');
   private texture: CanvasTexture;
 
   constructor(parent: Object3D, audio: GameAudio) {
-    const { width, height, buttonRadius, buttonDepth } = END_PANEL;
+    const { width, height, buttonRadius } = END_PANEL;
     this.canvas.width = 512;
     this.canvas.height = Math.round((512 * height) / width);
     this.texture = new CanvasTexture(this.canvas);
@@ -43,8 +50,13 @@ export class EndPanel {
       new MeshBasicMaterial({ map: this.texture, transparent: true, fog: false, toneMapped: false }),
     );
     this.root.add(board);
-    this.button = new PokeButton(buttonRadius, buttonDepth, END_PANEL.buttonColor, audio);
-    this.button.group.position.set(0, -height * 0.3, 0);
+    this.button = new PokeButton(audio, { radius: buttonRadius, icon: 'play' });
+    // The button sits at the bottom of the panel. Its rim is wider than its cap.
+    const rim = buttonRadius * POKE.rimScale;
+    const buttonY = -height / 2 + rim + END_PANEL.buttonMargin;
+    this.button.group.position.set(0, buttonY, 0);
+    // Where the rim's top edge is on the canvas (pixels from the top), so the text stays above it.
+    this.buttonTopPx = ((height / 2 - (buttonY + rim)) / height) * this.canvas.height;
     this.root.add(this.button.group);
     // Straight in front of the player, tilted back toward the eyes.
     this.root.position.set(0, END_PANEL.y, -END_PANEL.radius);
@@ -59,8 +71,12 @@ export class EndPanel {
 
   show(kind: EndKind): void {
     this.draw(TEXT[kind]);
+    // Play to start, restart to play again.
+    this.button.setIcon(kind === 'welcome' ? 'play' : 'restart');
     this.root.visible = true;
     this.button.reset();
+    // A finger still there from the last poke must not start the next battle at once.
+    this.button.lock(POKE.lockAfterChange);
   }
 
   hide(): void {
@@ -77,27 +93,32 @@ export class EndPanel {
     const w = this.canvas.width;
     const h = this.canvas.height;
     c.clearRect(0, 0, w, h);
-    if (!drawNineSlice(c, 'panelDark', 0, 0, w, h, 32, 48)) {
-      c.fillStyle = 'rgba(40, 30, 22, 0.88)';
+    // The same light parchment look as the hint sign, with dark ink for good contrast.
+    if (!drawNineSlice(c, 'panel', 0, 0, w, h, 16, 40)) {
+      c.fillStyle = '#e8d7b0';
       c.fillRect(0, 0, w, h);
     }
-    // Title on a hanging banner, the rest below it.
+    // Title on a hanging banner, the rest below it, all above the button.
+    const bannerBottom = 18 + 96;
     drawNineSlice(c, 'banner', w * 0.12, 18, w * 0.76, 96, 24, 30);
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillStyle = '#fff4dc';
     c.font = 'bold 46px sans-serif';
     c.fillText(text.title, w / 2, 66);
-    c.fillStyle = '#f2e6c8';
-    c.font = 'bold 44px sans-serif';
-    c.fillText(text.subtitle, w / 2, h * 0.43);
+    // The label sits just above the button's rim, the subtitle between it and the banner.
+    const labelY = this.buttonTopPx - 26;
+    const subtitleY = (bannerBottom + labelY - 20) / 2;
+    c.fillStyle = PANEL_INK;
+    c.font = 'bold 42px sans-serif';
+    c.fillText(text.subtitle, w / 2, subtitleY);
     if (text.icon) {
-      drawIcon(c, text.icon, 34, h * 0.43 - 34, 68, '#f2c14e');
-      drawIcon(c, text.icon, w - 34 - 68, h * 0.43 - 34, 68, '#f2c14e');
+      drawIcon(c, text.icon, 30, subtitleY - 30, 60, PANEL_INK);
+      drawIcon(c, text.icon, w - 30 - 60, subtitleY - 30, 60, PANEL_INK);
     }
-    c.fillStyle = '#f2c14e';
-    c.font = 'bold 34px sans-serif';
-    c.fillText(text.button, w / 2, h * 0.56);
+    c.fillStyle = PANEL_ACCENT;
+    c.font = 'bold 30px sans-serif';
+    c.fillText(text.button, w / 2, labelY);
     this.texture.needsUpdate = true;
   }
 }

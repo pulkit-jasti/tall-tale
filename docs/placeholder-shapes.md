@@ -28,7 +28,7 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 
 | Thing | Shape | Size |
 |---|---|---|
-| Slingshot | Y shaped wooden frame (3 cylinders) on the platform, 2 bands (thin cylinders stretched from the fork tips to the pouch) and a leather pouch (small flattened box) that is pinched. Rests on its platform and is picked up by the handle. Built in step 2. | Frame 15 cm tall, pouch 3.6 cm |
+| Slingshot | Y shaped wooden frame (3 cylinders) on the platform, 2 bands (thin cylinders stretched from the fork tips to the pouch) and an open leather pouch that is pinched: a thin upright strip between the two bands, square to the ground and facing the shot, bent back into a U behind the stone (6 flat segments). The strip is lower than the stone, so a loaded stone shows above and below it. The bands tie onto its two ends. Rests on its platform and is picked up by the handle. Built in step 2. | Frame 15 cm tall, pouch 3.6 cm |
 | Fly swatter | Long thin handle (cylinder) and a flat square mesh head (thin box, a grid texture made in code is optional). | 35 cm long |
 | Pepper shaker | Cylinder body with a dome top and a few dark dots for holes. Red or black. | 12 cm tall |
 | Megaphone | Cone (open wide end) with a short cylinder handle. | 20 cm long |
@@ -43,7 +43,8 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Play button (in VR) | Big round button (short cylinder) on a small post. | 10 cm wide |
 | Wrist pause button | Small round button (short cylinder) on the inside of the left wrist. | 3 cm wide |
 | Tutorial hint sign | Flat panel with a canvas texture (Kenney beige panel, inset, checkbox, icons from `public/ui/`), low in front just outside the ring, tilted back 45 degrees. | 22 x 9 cm |
-| Tutorial marker | Two sprites always drawn on top: a yellow "!" and a down arrow, bouncing above the target. Kenney arrows on the ring when the target is out of view. | 3 cm, ring arrows 6 cm |
+| Tutorial marker | Two sprites always drawn on top: a yellow "!" (Kenney SVG) and a down arrow, bouncing above the target. Big left or right arrows on the ring when the target is out of view. Arrows are drawn in code at 256 px, so they stay sharp. | 3 cm, ring arrows 6 cm |
+| Poke buttons (Next, Play, Play again) | One shared component (`src/ui/pokeButton.ts`): a smooth green cap raised in a dark rim, with a crisp icon drawn in code on its face (cream with a brown outline: arrow, play, restart). Only the size and icon change. The cap follows the fingertip in and clicks at the bottom. The Next button sits just outside the sign's right edge. | Next 4.4 cm wide, panels 7 cm |
 | Pause, win and lose panels | Rounded flat panel with big poke buttons. Win and lose (step 3): text on a canvas texture like the FPS panel, and one round button (short cylinder) poked with the index finger. | 32 x 20 cm (40 cm was too wide this close) |
 | FPS counter (debug) | Small flat panel with a canvas texture Top: live FPS, worst frame in ms, units on the board, "paused". Bottom: the measured run (avg FPS, 1% low, missed frames). Standing just above the ring handle, left of front. Rises with the board, never spins. On in the dev server, `?fps` on the hosted build, F or the debug page toggles it. | 13.6 x 6.8 cm |
 | Giant's mouth feedback | None in the world. Use a sound and a small burst of particles at the face when a goblin is eaten. | |

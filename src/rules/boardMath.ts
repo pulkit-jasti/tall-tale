@@ -51,6 +51,24 @@ export function landingHeight(r: number): number | null {
   }
 }
 
+/**
+ * The nearest board angle (radians) to `angle` that keeps at least
+ * CASTLE.towerClearDeg away from every wall tower, so a climber there is
+ * clearly in view between two towers, never inside one.
+ */
+export function clearOfTowers(angle: number): number {
+  const step = 360 / CASTLE.towerCount;
+  const clear = CASTLE.towerClearDeg;
+  const deg = angle / DEG;
+  // Offset from the nearest tower, in degrees from -step/2 to step/2.
+  let fromTower = (deg - CASTLE.towerStartDeg) % step;
+  if (fromTower > step / 2) fromTower -= step;
+  if (fromTower < -step / 2) fromTower += step;
+  if (Math.abs(fromTower) >= clear) return angle;
+  const shift = (fromTower >= 0 ? clear : -clear) - fromTower;
+  return (deg + shift) * DEG;
+}
+
 /** Shortest signed difference between two angles (radians). */
 export function angleDelta(from: number, to: number): number {
   let d = to - from;
