@@ -17,7 +17,7 @@ Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md), [Castle rul
 | Battle progress | The blue wave flag, one notch per wave |
 | Where damage is happening | Cracks, smoke and fires on the wall, plus spatial sound |
 | Food | A jar or basket beside the tool platforms |
-| Tool cost | Food pips on each tool platform |
+| Tool cost | A small wooden price tag on each tool platform: a food ball and the cost as a number, like a price on a market stall. Cream number = the jar has enough, red = not enough, a tick = a paid use is running |
 | Tool locked (not enough food) | Tool dimmed or tied down with a rope |
 
 - In-world displays also help with "FoV-aware design" and polish in judging, and keep the "toys on a table" feeling.
@@ -37,6 +37,24 @@ Every grabbable or pokeable thing (goblins, tools, handles, buttons, the wrist b
 - **The tutorial hint is different:** a slow pulse, not a steady brighten, so "look here" never gets confused with "you can grab this".
 - **Buttons** also press in when poked.
 - **Cheap to draw:** change the material's emissive color only. No outline effects or post-processing (performance budget).
+
+### Reach band (where interactive things go)
+
+Every grab, pinch and poke target must be a comfortable reach from the chair. Too close is as bad as too far: the elbows jam, and hand tracking gets worse near the body and face.
+
+| Distance from the eyes | Zone | What goes there |
+|---|---|---|
+| Under 30 cm | Too close | Nothing (it also overlaps the eat zone, 22 cm from the face) |
+| 30 to 40 cm | Close | Nothing that is reached often |
+| **40 to 50 cm** | **Best** | Everything the hands use often: the ring handle, the tool handles, the pebble bowl, the Next and panel buttons |
+| 50 to 58 cm | Edge | Only things reached now and then: climbers on the rampart, intruders in the courtyard |
+| Over 58 cm | Out of reach | Only things the tools reach (the slingshot, the swatter's long handle), and things to look at (the hint sign) |
+
+- **Where the numbers come from:** Meta's hands guidance ("Hands UI best practices", "Spatial UI inside interactive 3D scenes") puts direct touch at 42 to 46 cm and says to avoid 50 to 80 cm, the "middle distance" where people reach, miss and give up. It also says frequent actions belong low, because raised arms tire quickly. The close limit is our own, from the eat zone and the first headset tests.
+- **Measured from the eyes** with the board at its placed height (36 cm below the eyes). Board spots convert with `reachDistance()` in `src/rules/reach.ts`: for example 33.5 cm out and 10 cm above the board is about 42 cm.
+- **Everything is sized from it:** the ring handle (27 cm out, about 41 cm from the eyes), the tool platforms just outside it (33.5 cm out, tops 6 cm above the board, handles about 42 cm), and the castle: the wall moved out to 46 to 52 cm, as far as it can go with climbers on the rampart still in reach (about 56 cm).
+- **Low:** tool platforms sit low (6 cm above the board), so the hand reaches them without lifting the arm.
+- **Checked in code:** `REACH` in `src/config/game.ts`. The dev server warns at start about any spot in `reachSpots()` outside the band. Add every new interactive thing there.
 
 ### Pinch and grab (the two hand actions)
 
@@ -65,7 +83,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
   - The grab zone is a band on and above the ring (about 6 cm). A hand below the ring, like one resting on the lap, never grabs it.
   - The hand must be open in the zone for a moment (about 0.15 seconds) first. Then the ring glows Ready with a tick, and closing the hand grabs it. A hand that curls up while drifting by does nothing.
   - A goblin in pinch range always wins over the ring.
-  - Goblins inside the castle stay near the wall (courtyard band 34 to 38 cm), away from the ring.
+  - Goblins inside the castle stay near the wall (courtyard band 40 to 44 cm), away from the ring and the tool platforms.
 - **The first 4 cm of hand movement lock one direction** for that grab. Smaller drifts do nothing:
   - **Sideways:** the board spins with the hand 1:1 (around the vertical axis only, no tilting). The ring turns with it. On release both stay where they are (no spring back, which felt uncomfortable in the headset test). For a big turn, pull, let go, grab again and pull again (about 4 to 6 pulls for a full turn).
   - **Up or down:** the board rises or lowers with the hand 1:1, within a wide range (about 25 cm down and 35 cm up). On release the board stays at the new height.
@@ -74,7 +92,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 - Arrows: a curved double arrow lies on top of the ring at the front, and a small up and down arrow stands on it 50 degrees left and right of front. The arrows never turn: they always stay in front of the player. The bands and poles turn with the ring.
 - The ring follows the standard Ready and Held states (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)). The arrows light up together with it.
 - Oversized grab zone, so it is easy to grab without looking closely.
-- Full circle or arc: a full circle can be grabbed anywhere, even at the sides. An arc keeps the sides clear for the tool platforms. Decide after headset tests.
+- Full circle or arc: a full circle can be grabbed anywhere, even at the sides. The tool platforms stand just outside it, so the full circle stays.
 - Turning is a choice: the player can turn their head, or spin the board. Spinning takes a hand off the battle, so "spin to the new threat now, or finish this group first?" is a real decision.
 - Enemy sounds sit on the board, so they turn with it automatically.
 
@@ -85,7 +103,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 
 ### Comfort rules
 
-- **Only the board rotates.** The sky, the horizon, the tool platforms, the food jar and the two flags stay still. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it.
+- **Only the board rotates.** The sky, the horizon, the tool platforms, the food jar and the two flags never turn. The platforms, jar, flags and hint sign rise and fall with the board, so they always stand at the same spot on it and the ring never passes through them. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it.
 - **Movement follows the hands exactly (1:1)**, with no smoothing or lag. Moving the world is only comfortable when the player clearly causes it.
 - Later ideas: a small "momentum" flick spin for fun, and snap rotation (30 degree steps) as a comfort option.
 

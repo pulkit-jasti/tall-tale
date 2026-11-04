@@ -1,14 +1,16 @@
-// The tutorial's hint sign: a small sign low in front of the player, just
-// above the ring handle, with one short instruction at a time (learn by
-// doing). It always stays in the same spot: it rises with the board but never
-// spins and never follows the head. A canvas texture with Kenney UI images,
-// redrawn only when its text changes.
+// The tutorial's hint sign: a sign in front of the player, past the goblins
+// at the castle wall, with one short instruction at a time (learn by doing).
+// It always stays in the same spot: it rises with the board but never spins
+// and never follows the head. A canvas texture with Kenney UI images, redrawn
+// only when its text changes. The sign is out of reach, so its Next button
+// stands apart, in front between the tool platforms (HINT_SIGN.nextAt).
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { HandState } from '../player/hands.js';
 import { degToRad } from '../rules/boardMath.js';
+import { post } from '../world/shapes.js';
 import { PokeButton } from './pokeButton.js';
 import { drawIcon, drawNineSlice, wrapText, type UiImageName } from './uiImages.js';
 
@@ -20,7 +22,7 @@ export interface SignContent {
   /** The instruction, one or two short lines. */
   text: string;
   icon?: UiImageName;
-  /** Small bottom line, for example "Goblins left: 4" or where to look. */
+  /** Small bottom line, for example "Nice!" on a finished lesson. */
   sub?: string;
   /** The lesson is done: the checkbox is ticked. */
   done?: boolean;
@@ -43,7 +45,9 @@ export class HintSign {
   /** Little pop when the text changes (1 = settled). */
   private pop = 1;
   private next: PokeButton;
-  /** The text panel. Only it pops, so the Next button never jumps under a finger. */
+  /** The Next button's stand, in reach in front of the player. */
+  private nextStand = new Group();
+  /** The text panel. Only it pops. */
   private panel: Mesh;
 
   constructor(parent: Object3D, audio: GameAudio) {
@@ -62,27 +66,32 @@ export class HintSign {
     face.rotation.x = -degToRad(tiltDeg);
     face.add(mesh);
     this.panel = mesh;
-    // "Next" button just outside the sign's right edge, so it never covers the text.
-    const r = HINT_SIGN.nextRadius;
-    this.next = new PokeButton(audio, { radius: r, icon: 'next' });
-    this.next.group.position.set(width / 2 + r * 1.3 + HINT_SIGN.nextGap, 0, 0);
-    this.next.group.visible = false;
-    face.add(this.next.group);
     this.root.add(face);
     this.root.position.set(0, y + (height / 2) * Math.cos(degToRad(tiltDeg)), -radius);
     this.root.visible = false;
     parent.add(this.root);
+    // "Next" button straight in front, in reach, its face tilted up toward the eyes.
+    this.next = new PokeButton(audio, { radius: HINT_SIGN.nextRadius, icon: 'next' });
+    this.next.group.rotation.x = -degToRad(HINT_SIGN.nextTiltDeg);
+    // A post down to the board, so it stands like the tool platforms.
+    const stem = post(HINT_SIGN.nextY - HINT_SIGN.nextRadius);
+    stem.position.y -= HINT_SIGN.nextRadius;
+    this.nextStand.add(this.next.group, stem);
+    this.nextStand.position.set(0, HINT_SIGN.nextY, -HINT_SIGN.nextAt);
+    this.nextStand.visible = false;
+    parent.add(this.nextStand);
   }
 
   show(content: SignContent | null): void {
     if (!content) {
       this.root.visible = false;
+      this.nextStand.visible = false;
       this.drawn = '';
       return;
     }
     this.root.visible = true;
-    if (!!content.next !== this.next.group.visible) {
-      this.next.group.visible = !!content.next;
+    if (!!content.next !== this.nextStand.visible) {
+      this.nextStand.visible = !!content.next;
       this.next.reset();
     }
     const key = JSON.stringify(content);
@@ -100,7 +109,7 @@ export class HintSign {
 
   /** True on the frame the "Next" button is poked (only while it shows). */
   pokedNext(hands: HandState[], dt: number): boolean {
-    return this.root.visible && this.next.group.visible && this.next.update(hands, dt);
+    return this.root.visible && this.nextStand.visible && this.next.update(hands, dt);
   }
 
   update(dt: number): void {

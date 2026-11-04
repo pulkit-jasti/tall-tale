@@ -69,12 +69,13 @@ describe('director', () => {
 });
 
 /** A fake game: the player does nothing at all. */
-function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: string[]; ended: number } {
+function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: string[]; ended: number; held: Record<string, boolean> } {
   return {
     cleared: 0,
     started: [],
     shown: [],
     ended: 0,
+    held: {},
     startWave(index) {
       this.started.push(index);
     },
@@ -91,6 +92,9 @@ function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: s
     },
     hintTool: () => {},
     helpWithTool: () => {},
+    holdToolTimer(tool, on) {
+      this.held[tool] = on;
+    },
     toolUses: () => 0,
     toolGrabbed: () => 0,
     canAfford: () => true,
@@ -211,6 +215,42 @@ describe('tutorial director', () => {
     // All three loading lessons pass, wave 2 starts, and the shoot lesson shows.
     expect(director.current?.id).toBe('learn-sling-shoot');
     expect(api.started).toContain(1);
+  });
+
+  it('teaches the food jar by eating, right before the first food tool appears', () => {
+    const ids = buildTutorialSteps(['slingshot', 'swatter', 'pepper']).map((s) => s.id);
+    expect(ids.indexOf('food-jar')).toBeGreaterThan(ids.indexOf('wave-2-cleared'));
+    expect(ids.indexOf('learn-food')).toBeGreaterThan(ids.indexOf('food-jar'));
+    expect(ids.indexOf('learn-swatter-grab')).toBe(ids.indexOf('learn-food') + 1);
+    // Only once: the pepper comes without it.
+    expect(ids.filter((id) => id === 'food-jar')).toHaveLength(1);
+  });
+
+  it('holds the swatter timer while its use lesson runs, and moves on after one goblin is swatted', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot', 'swatter']), api);
+    while (director.current?.id !== 'learn-swatter') director.skip();
+    expect(api.held.swatter).toBe(true);
+    // Goblins take a while to reach the wall: the lesson keeps waiting, the timer stays held.
+    run(director, 90);
+    expect(director.current?.id).toBe('learn-swatter');
+    expect(api.held.swatter).toBe(true);
+    api.toolUses = () => 1;
+    director.update(0.1);
+    expect(director.current?.id).toBe('wave-3-clear');
+    expect(api.held.swatter).toBe(false);
+  });
+
+  it('starts at a later wave: the earlier lessons and waves are left out', () => {
+    const api = idleApi();
+    const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper'], TUTORIAL_WAVES, 2);
+    expect(steps[0].id).toBe('wave-2-cleared');
+    expect(steps.some((s) => s.id === 'learn-spin' || s.id === 'learn-sling-grab')).toBe(false);
+    const director = new Director<TutorialApi>(steps, api);
+    director.update(0.1);
+    // The breather clears wave 2, then the food jar is shown before the swatter.
+    expect(api.cleared).toBe(1);
+    expect(director.current?.id).toBe('food-jar');
   });
 
   it('numbers the lessons', () => {

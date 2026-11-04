@@ -6,7 +6,7 @@ export const BOARD = {
   /** Radius of the hole the player sits in (cm). */
   holeRadius: 25,
   /** The board is flat up to this radius, then rises (cm). */
-  flatTo: 90,
+  flatTo: 96,
   /** Rise per cm beyond flatTo, so far enemies face the player. */
   rise: 0.08,
   /** Outer edge of the board (cm). */
@@ -20,19 +20,21 @@ export const BOARD = {
   skirtColor: 0x6b5a45,
 };
 
+/**
+ * The castle. Its size is set by the reach band (REACH below): climbers on
+ * the rampart must stay in reach, so the wall cannot move further out.
+ */
 export const CASTLE = {
-  wallIn: 40,
-  wallOut: 46,
+  wallIn: 46,
+  wallOut: 52,
   wallHeight: 6,
   /** Grunts and runners stop this far outside the wall (cm). */
   wallStandOff: 5,
   /** Where climbers stand on the wall top (cm from center). */
-  rampartRadius: 43,
-  /** Courtyard ring where intruders wander (cm). Kept near the wall, away from the ring handle. */
-  courtyardMin: 34,
-  courtyardMax: 38,
-  /** Where the courtyard houses and stalls stand (cm from center). */
-  propRadius: 34,
+  rampartRadius: 49,
+  /** Courtyard ring where intruders wander (cm). Kept near the wall, away from the tool platforms. */
+  courtyardMin: 40,
+  courtyardMax: 44,
   towerCount: 6,
   /** Angle of the first tower (degrees, 0 = front). */
   towerStartDeg: 30,
@@ -61,6 +63,21 @@ export const XR = {
    * 72 gives 13.9 ms per frame instead of 11.1 ms at 90 (the Quest 3S default).
    */
   frameRate: 72,
+};
+
+/**
+ * The reach band (docs/controls-and-ui.md "Reach band"): distances from the
+ * eyes (cm) for everything the hands grab, pinch or poke. Meta's hands
+ * guidance puts direct touch at 42 to 46 cm and says to avoid 50 to 80 cm,
+ * where people reach and miss. Closer than tooClose the elbows jam and hand
+ * tracking near the body gets worse. Rarely reached things (climbers on the
+ * rampart, intruders) may sit up to `max`. Checked at start in the dev server.
+ */
+export const REACH = {
+  tooClose: 30,
+  sweetMin: 40,
+  sweetMax: 50,
+  max: 58,
 };
 
 /** Zones where the bare hands, the handles and the camera live. */
@@ -259,14 +276,14 @@ export const WAVES = {
 
 /**
  * The two flags (docs/castle-rules.md section 2). They live in boardLift:
- * they rise with the board but never spin. Just outside the ring handle,
- * one on each side, a little in front (cm, degrees).
+ * they rise with the board but never spin. Just behind the tool platforms,
+ * between the front ones and the middle ones, one on each side (cm, degrees).
  */
 export const FLAGS = {
-  radius: 31,
+  radius: 38.5,
   /** Red castle health flag on the left, blue wave flag on the right. */
-  healthAngleDeg: -44,
-  waveAngleDeg: 44,
+  healthAngleDeg: -43,
+  waveAngleDeg: 43,
   poleHeight: 26,
   poleRadius: 0.35,
   poleColor: 0x5a4330,
@@ -334,27 +351,28 @@ export const POKE = {
 };
 
 /**
- * The tutorial's hint sign: in front, just past the castle wall, so it is
- * behind the goblins at the front of the wall and on its rampart, never in
- * front of them. High enough to read without looking down (about 14 to 27
- * degrees below eye level), and big enough for its distance. Its Next
- * button stays within arm's reach (boardLift, cm; the eyes are about 36 cm
- * above the board).
+ * The tutorial's hint sign: in front, past the goblins at the castle wall,
+ * so it is behind them, never in front of them. High enough to read without
+ * looking down, and big enough for its distance. It is out of reach, so its
+ * Next button stands apart, in front between the tool platforms, in the
+ * reach band (boardLift, cm; the eyes are about 36 cm above the board).
  */
 export const HINT_SIGN = {
-  radius: 50,
+  radius: 62,
   /** Bottom edge above the board. */
   y: 12,
-  width: 30,
-  height: 12.3,
+  width: 36,
+  height: 14.8,
   tiltDeg: 15,
   /** A new instruction pops in over this long (seconds). */
   popTime: 0.25,
   /** A finished lesson shows its ticked box this long before the next one (seconds). */
   doneTime: 1.2,
-  /** Round "Next" poke button just outside the sign's right edge (cm). */
-  nextRadius: 2.2,
-  nextGap: 1,
+  /** Round "Next" poke button: its size, and its spot straight in front, tilted toward the eyes (cm, degrees). */
+  nextRadius: 2.6,
+  nextAt: 33.5,
+  nextY: 9,
+  nextTiltDeg: 40,
 };
 
 /** Ghost hands that show how to do each lesson (src/ui/ghostHand.ts). */
@@ -390,12 +408,6 @@ export const MARKERS = {
   lift: 0.02,
   bob: 0.012,
   bobSpeed: 4,
-  /** The target counts as out of view beyond this angle from where the head looks (degrees). */
-  offViewDeg: 50,
-  /** Out of view arrow on the ring: size (cm), angle off the front (degrees) and how far it slides. */
-  turnArrowSize: 6,
-  turnArrowDeg: 14,
-  turnArrowSlide: 6,
 };
 
 /** Debug spawning (keys and the stress test), apart from the director. */
@@ -429,25 +441,26 @@ export const FEEDBACK = {
 
 /**
  * Spots for the tool platforms around the player (docs/giant-tools.md
- * section 7). Fixed, they never turn with the board. 2 on each side, a bit
- * forward. All inside the ring handle, so the ring never passes through them
- * when the board moves up or down (cm, degrees: 0 = front, positive = right).
+ * section 7). They live in boardLift: they rise with the board but never
+ * turn. Just outside the ring handle and inside the courtyard, in the reach
+ * band (REACH). 2 on each side, a bit forward. The ring's tube ends at 28.4
+ * and the courtyard starts at 40, so a platform (8 wide) at 33.5 touches
+ * neither (cm, degrees: 0 = front, positive = right).
  */
 export const TOOL_SPOTS = {
-  slingshot: { angleDeg: 30, radius: 19 },
+  slingshot: { angleDeg: 30, radius: 33.5 },
   /** Megaphone and bell (build step 5). */
-  rightSide: { angleDeg: 82, radius: 19 },
+  rightSide: { angleDeg: 82, radius: 33.5 },
   /** Pepper shaker. */
-  leftFront: { angleDeg: -30, radius: 19 },
+  leftFront: { angleDeg: -30, radius: 33.5 },
   /** Fly swatter. */
-  leftSide: { angleDeg: -82, radius: 19 },
-  /** Platform top above the board's placed height (cm). Above the ring top. */
-  platformTop: 10,
+  leftSide: { angleDeg: -82, radius: 33.5 },
+  /** Platform top above the board (cm). Low, so the hand reaches it without lifting the arm. */
+  platformTop: 6,
   /** Platform width (cm). */
-  platformWidth: 11,
-  /** Post under each platform, down from its bottom (cm). */
-  postLength: 14,
-  postRadius: 1,
+  platformWidth: 8,
+  /** Post under each platform, down to the board. */
+  postRadius: 0.8,
   postColor: 0x3b2b1f,
 };
 
@@ -562,14 +575,14 @@ export const AIM_ASSIST = {
   hitRadius: 4,
 };
 
-/** The pebble bowl beside the slingshot. Soldiers keep topping it up. */
+/** The pebble bowl beside the slingshot, on a post like the platforms. Soldiers keep topping it up. */
 export const PEBBLE_BOWL = {
-  angleDeg: 60,
-  radius: 17,
-  /** Rim height above the board's placed height (cm). Lower than the platform. */
-  rimY: 4,
+  angleDeg: 58,
+  radius: 33.5,
+  /** Rim height above the board (cm). A little lower than the platforms. */
+  rimY: 5,
   /** Width and depth (cm). */
-  width: 11,
+  width: 9,
   depth: 2.5,
   color: 0x9a6a44,
   /** Pebbles it holds, and at the start. */
@@ -581,7 +594,6 @@ export const PEBBLE_BOWL = {
   /** Pile size (cm wide, when full) and its smallest share before it is empty. */
   pileWidth: 6,
   pileMinScale: 0.35,
-  postLength: 12,
 };
 
 /** A pebble thrown by hand. It only knocks a goblin back, dazed. Knocking out is the slingshot's job. */
@@ -617,19 +629,17 @@ export const FOOD = {
 
 /**
  * The food jar: a pot between the two left tool platforms, like the pebble
- * bowl on the right. Fixed, it never turns. The pot has a narrow neck, so the
- * food shows as a little heap of food balls on its mouth, one ball per food:
- * easy to read, like the pips. Its top stays below the platforms and it stays
- * inside the ring, so nothing ever touches (cm, degrees).
+ * bowl on the right. It rises with the board but never turns. The pot has a
+ * narrow neck, so the food shows as a little heap of food balls on its
+ * mouth, one ball per food: easy to read (cm, degrees).
  */
 export const FOOD_JAR = {
   angleDeg: -56,
-  radius: 18,
+  radius: 33.5,
   /** Pot height (the model is fitted to it). */
   height: 7,
-  /** Pot bottom above the board's placed height. */
-  bottomY: 1,
-  postLength: 12,
+  /** Pot bottom above the board. */
+  bottomY: 0,
   /** Food balls on the mouth: size, and how far the heap sits below the pot top (cm). */
   ballSize: 1.3,
   heapSink: 0.4,
@@ -642,16 +652,25 @@ export const FOOD_JAR = {
   popColors: [0xf2c14e, 0xc9772c, 0xffffff],
 };
 
-/** Food pips: a row of small balls on a ledge in front of each tool platform. Lit = can afford. */
-export const PIPS = {
-  size: 1.5,
-  gap: 0.35,
-  /** The ledge sits this far in front of (toward the player) and below the platform top (cm). */
-  inset: 6.2,
-  below: 0.4,
-  litColor: 0xffd23f,
-  dimColor: 0x3b2b1f,
-  ledgeColor: 0x3b2b1f,
+/**
+ * Price tag on each food tool's platform: a small wooden board with a food
+ * ball and the cost, on the front edge, tilted toward the eyes, beside the
+ * tool so the hand never covers it. The number is cream when the jar has
+ * enough, red when it does not, and a tick while a paid use runs (cm, degrees).
+ */
+export const PRICE_TAG = {
+  width: 4.6,
+  height: 2.8,
+  thickness: 0.35,
+  /** Toward the player from the platform center, and sideways toward the front (cm). */
+  inset: 2.6,
+  side: 2.2,
+  /** Leaning back from upright, toward the eyes (degrees). */
+  tiltDeg: 40,
+  woodColor: 0x6b4a2e,
+  okColor: '#fff4dc',
+  shortColor: '#ff5a4e',
+  paidColor: '#9be27a',
 };
 
 /** Shared rules for the food tools (swatter, pepper; the megaphone and bell in step 5). */
@@ -789,6 +808,8 @@ export const DEBUG = {
   stressGap: 0.25,
   /** Food added per "Add food" press. */
   foodAdd: 3,
+  /** "Start at wave": extra food per skipped wave, for the climbers that would have been eaten. */
+  startFoodPerWave: 1,
   /** Castle damage per "Damage castle" press (health is out of CASTLE_HEALTH.maxHealth). */
   castleDamage: 20,
   /** Board turn and height per debug page press (degrees, cm). */
@@ -827,11 +848,11 @@ export const FPS = {
   refresh: 0.5,
   /** The panel redraws at most this often, and only when its text changed (seconds). */
   drawEvery: 1,
-  /** Shown by default in the dev server. The deployed build shows it with ?fps in the URL. */
-  showInDev: true,
-  /** Panel spot: on the rim, left of front (between the hint sign and the left arrow), standing just above the ring (cm, degrees). */
+  /** Hidden by default. The debug page's "FPS on/off" button (or key F) shows it, and ?fps in the URL on the hosted build. */
+  showInDev: false,
+  /** Panel spot: on the ring, a little left of front (clear of the Next button), standing just above it (cm, degrees). */
   radius: 27,
-  angleDeg: -32,
+  angleDeg: -16,
   aboveRing: 1,
   /** Panel size (cm). Keep width / height at 2:1 like the canvas. */
   width: 13.6,

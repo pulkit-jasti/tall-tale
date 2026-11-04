@@ -9,6 +9,7 @@ export type PerfMark =
   | 'sound'
   | 'panel redraw'
   | 'hint sign'
+  | 'price tag'
   | 'debug send'
   | 'particles'
   | 'board placed'

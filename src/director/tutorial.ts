@@ -72,6 +72,12 @@ export const TUTORIAL_TIMING = {
   stuckAfter: 20,
   /** A lesson moves on after this long anyway, so it never gets stuck. */
   actionTimeout: 60,
+  /**
+   * Food tool use lessons wait longer: the goblins first have to walk to the
+   * wall. While one runs, the tool's use timer is held, so a tool paid for
+   * early never runs out before the goblins come.
+   */
+  toolUseTimeout: 120,
   /** Spinning the board this far (degrees) finishes the spin lesson. */
   spinGoal: 60,
   /** Moving the board this far (cm) finishes the height lesson. */
@@ -136,6 +142,8 @@ export interface TutorialApi {
   hintTool(tool: ToolName): void;
   /** The easier fallback for a tool, for example a pebble already in the slingshot pouch. */
   helpWithTool(tool: ToolName): void;
+  /** Holds a food tool's use timer while its use lesson runs (on), or lets it run again (off). */
+  holdToolTimer(tool: ToolName, on: boolean): void;
   /** How often the tool did its job since it appeared (slingshot: goblins knocked out, swatter: swatted, pepper: peppered). */
   toolUses(tool: ToolName): number;
   /** How often the tool was grabbed since it appeared. */
@@ -254,9 +262,9 @@ function introLessons(): TutorialStep[] {
 
 /**
  * Before wave 2: picking up and loading the slingshot. Shooting is taught once
- * goblins come. The slingshot can be used as soon as it appears (during the
- * "New tool" message), so these lessons count from that moment, not from when
- * each lesson starts: what the player already did counts, and they are never
+ * goblins come. The slingshot appears with its first lesson and can be used
+ * right away, so these lessons count from that moment, not from when each
+ * lesson starts: what the player already did counts, and they are never
  * asked to do it again.
  */
 const fromToolShown = (): number => 0;
@@ -270,7 +278,7 @@ function slingshotLessons(): TutorialStep[] {
       }),
       (api, since) => api.slingCount('grabbed') > since,
       fromToolShown,
-      { fallbacks: [(api) => api.hintTool('slingshot')], timeout: 45 },
+      { start: (api) => api.showTool('slingshot'), fallbacks: [(api) => api.hintTool('slingshot')], timeout: 45 },
     ),
     lessonStep(
       'learn-sling-pebble',
@@ -316,13 +324,13 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, { marker?: MarkerTarget; grabDemo?: Gh
   swatter: {
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
-    use: `Runners! Swat the goblins at the wall. The first swat costs ${cost('swatter')} food, then ${seconds('swatter')} seconds of swatting.`,
+    use: `Runners! Swat a goblin with it, anywhere. The first swat takes ${cost('swatter')} food from your jar, then swatting is free for ${seconds('swatter')} seconds.`,
     locked: `Not enough food for the swatter (${cost('swatter')}). Eat a goblin to fill your jar.`,
   },
   pepper: {
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
-    use: `Shake pepper over goblins. Peppered goblins give double food when eaten. The first shake costs ${cost('pepper')} food.`,
+    use: `Shake pepper over goblins. Peppered goblins give double food when eaten. The first shake takes ${cost('pepper')} food.`,
     locked: `Not enough food for the pepper (${cost('pepper')}). Eat a goblin to fill your jar.`,
   },
   megaphone: {
@@ -331,36 +339,90 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, { marker?: MarkerTarget; grabDemo?: Gh
   },
 };
 
-/** In the breather before its wave: grab the new food tool. Grabbing is free, so it is never locked. */
-function toolGrabLesson(tool: FoodTool): TutorialStep {
+/**
+ * Before the first food tool: what the food jar is and how to fill it, by
+ * doing. First the jar is shown (Next), then a climber pops up to eat, and
+ * its food drops into the jar. The tool's price tag comes right after.
+ */
+function foodLessons(): TutorialStep[] {
+  return [
+    infoStep(
+      'food-jar',
+      banner('Wave cleared! This jar on your left holds your food. Every goblin you eat drops food into it.', 'info', 'foodJar', {
+        header: 'Your food',
+      }),
+    ),
+    lessonStep(
+      'learn-food',
+      lesson('A goblin climbed up! Eat it and watch your food jar fill up.', 'pinch', 'lessonGoblin', {
+        whenDropped: 'Dropped it? Pinch it again and bring it to your mouth.',
+        demo: 'pinchGoblin',
+      }),
+      (api, since) => api.eaten() > since,
+      (api) => api.eaten(),
+      {
+        start: (api) => api.lessonClimber(false),
+        fallbacks: [(api) => api.lessonClimber(false), (api) => api.lessonClimber(true)],
+        timeout: 45,
+      },
+    ),
+  ];
+}
+
+/**
+ * In the breather before its wave: the new food tool appears and the player
+ * grabs it. Grabbing is free, so it is never locked. The text points at its
+ * price tag, so the player links food and tools.
+ */
+function toolGrabLesson(tool: FoodTool, afterFood: boolean, alsoShow?: ToolName): TutorialStep {
   const { marker, grabDemo } = FOOD_TOOL_LESSONS[tool];
+  const intro = afterFood ? 'Tools cost food.' : 'Wave cleared!';
   return lessonStep(
     `learn-${tool}-grab`,
-    lesson(`Wave cleared! Here is a new tool: ${TOOL_NAMES[tool]}. Grab it with your fist.`, 'grab', marker, { demo: grabDemo }),
+    lesson(
+      `${intro} Here is ${TOOL_NAMES[tool]}: its price tag says ${cost(tool)} food. Grab it with your fist.`,
+      'grab',
+      marker,
+      { demo: grabDemo },
+    ),
     (api, since) => api.toolGrabbed(tool) > since,
     // Counts from when the tool appeared, like the slingshot lessons.
     fromToolShown,
-    { fallbacks: [(api) => api.hintTool(tool)], timeout: 45 },
+    {
+      start: (api) => {
+        api.showTool(tool);
+        // The megaphone shares its platform with the bell and comes with the pepper (wave 4).
+        if (alsoShow) api.showTool(alsoShow);
+      },
+      fallbacks: [(api) => api.hintTool(tool)],
+      timeout: 45,
+    },
   );
 }
 
 /**
- * In its wave: use the food tool on goblins. Without enough food the sign
- * says so and a climber pops up in front to eat. The easier fallback tops up
- * the jar or brings a goblin in reach.
+ * In its wave: use the food tool on one goblin, anywhere. Done as soon as
+ * one goblin is hit. While it runs, the tool's use timer is held: a player
+ * who pays with an early swat before the goblins come keeps the tool until
+ * they do. Without enough food the sign says so and a climber pops up in
+ * front to eat. The easier fallback tops up the jar or brings a goblin in
+ * reach. A wave cleared another way also ends it, so it never waits forever.
  */
 function toolLesson(tool: FoodTool): TutorialStep {
   const text = FOOD_TOOL_LESSONS[tool];
   return lessonStep(
     `learn-${tool}`,
     lesson(text.use, 'target', undefined, { tool, whenLocked: text.locked }),
-    (api, since) => api.toolUses(tool) > since,
+    (api, since) => api.toolUses(tool) > since || api.waveCleared(),
     fromToolShown,
     {
       start: (api) => {
+        api.holdToolTimer(tool, true);
         if (!api.canAfford(tool)) api.lessonClimber(true);
       },
+      end: (api) => api.holdToolTimer(tool, false),
       fallbacks: [(api) => api.hintTool(tool), (api) => api.helpWithTool(tool)],
+      timeout: TUTORIAL_TIMING.toolUseTimeout,
       slowSpawns: true,
     },
   );
@@ -376,21 +438,33 @@ const TOOL_NAMES: Record<ToolName, string> = {
 /**
  * The full step list. `tools` lists the tools that are built: lessons for the
  * others are left out. Built fresh for each battle, since steps remember counts.
+ *
+ * `fromWave` (0 based, debug "Start at wave") leaves out everything before
+ * that wave: the list starts at the end of the wave before it, so its
+ * breather and the new tool's lessons still run. The battle shows the tools
+ * of the waves left out.
  */
-export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORIAL_WAVES): TutorialStep[] {
+export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORIAL_WAVES, fromWave = 0): TutorialStep[] {
   const has = (tool?: ToolName): tool is ToolName => !!tool && tools.includes(tool);
   const steps: TutorialStep[] = [];
   const waveTitle = (i: number): string => `Wave ${i + 1} of ${waves.length}`;
+  // The food jar is taught right before the first food tool, where food starts to matter.
+  let foodTaught = false;
   waves.forEach((wave, i) => {
     if (i === 0) steps.push(...introLessons());
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(...slingshotLessons());
-    else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolGrabLesson(wave.newTool));
+    else if (has(wave.newTool) && wave.newTool !== 'slingshot') {
+      const afterFood = !foodTaught;
+      if (afterFood) steps.push(...foodLessons());
+      foodTaught = true;
+      const alsoShow = wave.newTool === 'pepper' && has('megaphone') ? 'megaphone' : undefined;
+      steps.push(toolGrabLesson(wave.newTool, afterFood, alsoShow));
+    }
     // The two flags are explained before the first wave, while nothing attacks yet.
     if (i === 0) {
       const header = 'Your castle';
       steps.push(infoStep('flag-health', banner('Look at the red flag on your left. It is your castle health. Goblins at the wall pull it down.', 'info', 'healthFlag', { header })));
       steps.push(infoStep('flag-wave', banner('Now look at the blue flag on your right. It climbs one notch for every wave you clear.', 'info', 'waveFlag', { header })));
-      steps.push(infoStep('food-jar', banner('This jar on your left is your food. Eating goblins fills it. Tools cost food, so keep eating!', 'info', 'foodJar', { header })));
     }
     // A wave whose new tool has a lesson starts straight into that lesson: the
     // lesson's own text guides the player, and it moves on by their action, so
@@ -414,6 +488,8 @@ export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORI
     });
     steps.push(breatherStep(i, waves, has));
   });
+  const first = Math.min(fromWave, waves.length - 1);
+  if (first > 0) steps.splice(0, steps.findIndex((s) => s.id === `wave-${first}-cleared`));
   // Number the lessons and title the banners.
   const lessons = steps.filter((s) => s.hint?.kind === 'lesson');
   let wave = 0;
@@ -427,25 +503,21 @@ export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORI
 }
 
 /**
- * The wave is over: the flag climbs. Between waves, the next wave's new tool
- * appears during the breather, which is an info step: it waits for "Next".
- * After the last wave the battle is won (the win panel takes over, so there
- * is no hint).
+ * The wave is over: the flag climbs. Between waves without a new tool, the
+ * breather is an info step: it waits for "Next". Before a new tool, the
+ * tool's lessons take over (the tool appears with its first lesson). After
+ * the last wave the battle is won (the win panel takes over, so there is no
+ * hint).
  */
 function breatherStep(i: number, waves: WavePlan[], has: (tool?: ToolName) => tool is ToolName): TutorialStep {
   const last = i === waves.length - 1;
   const next = waves[i + 1];
   const tool = has(next?.newTool) ? next.newTool : undefined;
-  const start = (api: TutorialApi): void => {
-    api.clearWave();
-    if (tool) api.showTool(tool);
-    // The megaphone shares its platform with the bell and comes with the pepper (wave 4).
-    if (tool === 'pepper' && has('megaphone')) api.showTool('megaphone');
-  };
+  const start = (api: TutorialApi): void => api.clearWave();
   const id = `wave-${i + 1}-cleared`;
   // After the last wave the win panel takes over. Before a new tool, its first
-  // lesson takes over right away (it says the wave is cleared and names the
-  // tool), so the tool is learned by doing, with no Next button.
+  // lesson takes over right away (it says the wave is cleared), so the tool is
+  // learned by doing, with no Next button.
   if (last || tool) return { id, start, done: () => true, timeout: 0 };
   return infoStep(id, banner('Well done! Get ready for the next wave.', 'star', undefined, { header: `Wave ${i + 1} cleared!` }), start);
 }

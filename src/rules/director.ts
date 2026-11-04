@@ -20,6 +20,8 @@ export interface DirectorStep<C> {
   timeout: number;
   /** Runs when the timeout moves on without the goal. */
   onTimeout?(ctx: C): void;
+  /** Runs whenever the step ends: done, timed out or skipped. */
+  end?(ctx: C): void;
   /** While this step waits for the player, enemies come at half the spawn rate. */
   slowSpawns?: boolean;
 }
@@ -94,6 +96,7 @@ export class Director<C> {
 
   private end(how: StepEnd): void {
     const step = this.steps[this.index];
+    step.end?.(this.ctx);
     this.onStepEnd(step.id, how, this.time, this.used);
     this.begin(this.index + 1);
   }

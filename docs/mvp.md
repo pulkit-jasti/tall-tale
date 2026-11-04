@@ -37,7 +37,7 @@ Back to [GDD index](GDD.md).
 - No loadout, no unlocks. Each tool appears on its platform in its tutorial wave with a poof, and glows until grabbed. The tutorial's hint sign then teaches it step by step.
 - Slingshot aim assist ([giant-tools.md](giant-tools.md#slingshot-aim-assist)).
 - Food currency: eating fills the food jar, tools cost food. Start with 4 food. Food carries over between waves.
-- Tool platforms beside the player with food pips.
+- Tool platforms beside the player, just outside the ring handle, each food tool with a price tag (a food ball and the cost).
 
 **Enemies and army**
 - **Grunts, runners and climbers only** ([enemies.md](enemies.md)). Climbers are the main food source.
@@ -66,17 +66,20 @@ The tutorial is a hand-written script in code, not a JSON file, because it waits
 - **Learn by doing, with text.** Without text, players do not know what to do. Each lesson shows one short instruction on the hint sign, a bouncing marker on the thing to use, and waits until the player does it. Then its box is ticked with a chime and the next one appears. No "OK" buttons.
   - **Hint sign:** in front of the player (position below). It rises with the board, never spins and never follows the head. Kenney UI images (`public/ui/`) on a canvas texture. Shows "Step 3 of 8" for lessons and "Wave 2 of 5" banners for waves. **While a wave is fought it is gone**, so it never covers the enemies: after the wave banner's Next it disappears and comes back when the wave is cleared, or for a lesson. No goblin counter: the blue flag shows the progress.
   - **Marker:** a "!" with a down arrow above the target, drawn on top so the wall never hides it.
-  - **Out of view:** an arrow on the ring points left or right, and the sign says where to look.
+  - **Out of view:** nothing for now. (The arrows on the ring and the "it is to your left" line on the sign, from a head direction check, were removed after the step 4 review. A simple pointer arrow comes later.)
   - **Ghost hand:** a see-through 3D hand loops the gesture on the real target (Meta's onboarding guidance: animated hand demonstrations). It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`. After the first headset test (angles were wrong and hands went through the ring and the bowl), the hand is turned by named directions (bar or fingers, and palm) matched to axes measured from its own joints, a fist closes around the bar's center line, a pinch puts the tips on the object, and every approach comes from the open side. The accuracy rules are in AGENTS.md ("Ghost hand demos").
-  - **Hint sign position:** after the headset tests it sits just past the castle wall (50 cm out, bottom edge 12 cm above the board, about 14 to 27 degrees below eye level), so it is behind the goblins on and at the front wall, never in front of them. The Next button stays within reach.
+  - **Hint sign position:** it sits past the goblins at the front wall (62 cm out since the castle grew, bottom edge 12 cm above the board), so it is behind them, never in front of them. It is out of reach, so the **Next button stands apart**, on a post straight in front between the tool platforms, in the reach band (33.5 cm out, 9 cm up).
   - **Next button:** one click per push. After a click the finger must come back out about 2 cm and 0.6 s must pass, and a new step ignores it for 1 s, so a slow or resting finger never skips several steps.
   - **Flags** are explained before wave 1 starts ("Your castle"), while nothing attacks.
   - **Climbers** always climb between two towers (`CASTLE.towerClearDeg`), and the map's wall entries sit in the middle of the tower gaps.
-  - **Marker:** one bouncing down arrow over the target, or only the side arrow when the target is out of view.
+  - **Marker:** one bouncing down arrow over the target.
   - **Info steps** (wave banners, the flags, "wave cleared" and new tool breathers) only move on when the player pokes "Next" on the sign. Not by time, and not by looking at something: a player may turn toward a thing without noticing it, so they always get as long as they need. Only lessons, where the player does something with their hands, move on by themselves when it is done.
   - **New things are taught before their wave**, so no enemies press the player while learning. Lessons that need enemies (shooting a goblin) run at half the spawn rate.
-- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot (any shot counts, hit or miss: the player has learned how it works). Before wave 3 grab the swatter, then swat goblins; before wave 4 grab the pepper, then pepper goblins. Wave banners, the two flags and the food jar are explained as the battle starts. Lessons for the megaphone and bell are added in step 5.
-- **A new tool is taught by actions only, never with Next.** When a wave is cleared and a new tool comes, its first lesson starts at once ("Wave cleared! Here is a new tool..."), and the wave that brings it starts straight into its use lesson, with no banner in between. Tool lessons count from the moment the tool appears, so steps the player already did are never asked again.
+- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot (any shot counts, hit or miss: the player has learned how it works). Before wave 3 the **food jar** (below), then grab the swatter, then swat one goblin; before wave 4 grab the pepper, then pepper goblins. Wave banners and the two flags are explained as the battle starts. Lessons for the megaphone and bell are added in step 5.
+- **The food jar is taught right before the first food tool**, where food starts to matter (it used to be one info step before wave 1, which was easy to miss): "Wave cleared! This jar on your left holds your food..." (Next), then a climber pops up and the player eats it and watches the jar fill. Then the swatter appears with its price tag, and the grab lesson says "Tools cost food. Here is the fly swatter: its price tag says 4 food."
+- **A new tool is taught by actions only, never with Next** (the food jar's info step is the one exception). When a wave is cleared and a new tool comes, its first lesson starts at once, and the tool appears with it. The wave that brings it starts straight into its use lesson, with no banner in between. Tool lessons count from the moment the tool appears, so steps the player already did are never asked again.
+- **Food tool use lessons:** done as soon as one goblin is hit, anywhere. While one runs, the tool's use timer is held, so a player who pays with an early swat before the goblins arrive keeps the tool until they do (after the step 4 headset test, the timer ran out first and the tool went back to its platform). The timer starts with its full time when the lesson ends. The lesson waits up to 120 s (the goblins first walk to the wall) and also ends if the wave is cleared another way.
+- **Lesson climbers during a wave** wait on the rampart like any climber (8 s), not 90 s, so a fallback climber never holds the wave up long after its lesson.
 
 ### Rules that keep it safe
 
@@ -145,10 +148,19 @@ Each step should be playable on its own.
    - **Built (2026-11-04), waiting for the headset test.** What is in it ([giant-tools.md](giant-tools.md)):
      - Food rules `src/rules/food.ts` (start 4, max 10, +1 per goblin, +2 seasoned, costs and use timers in `FOOD` and `TOOLS`), tested in `food.test.ts`. Food carries over between waves and resets for a new battle.
      - Food jar `src/world/foodJar.ts`: a pot between the two left platforms with one food ball per food on its mouth.
-     - Shared food tool `src/tools/handTool.ts`: platform, pips, fist grab, follows the hand, grabbing is free, the first use pays, Locked (dimmed, rope, wobble, buzz), dropped mid-use it floats back to the hand area, use over it shrinks, poofs and pops back. The megaphone and bell in step 5 build on it.
+     - Shared food tool `src/tools/handTool.ts`: platform, price tag (first pips), fist grab, follows the hand, grabbing is free, the first use pays, Locked (dimmed, rope, wobble, buzz), dropped mid-use it floats back to the hand area, use over it shrinks, poofs and pops back. The megaphone and bell in step 5 build on it.
      - Fly swatter `src/tools/flySwatter.ts` (10 s, 4 food) and pepper shaker `src/tools/pepperShaker.ts` (8 s, 3 food, seasoned goblins).
      - Tutorial: a "food jar" info step after the flags, and for each new tool a grab lesson in the breather and a use lesson in its wave (swatter wave 3, pepper wave 4). Without enough food the use lesson says so and a climber pops up to eat. The easier fallback tops up the jar. Ghost hand demos `swatterGrab` and `pepperGrab` (left hand, need a headset check).
      - Debug keys: Y add 3 food, 0 empty the jar, 1 show both tools now, 2 swat the front of the wall, 3 pepper the front of the wall.
+   - **Changes after the first step 4 review (2026-11-04), waiting for the headset test:**
+     - **Reach band** ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)): every grab, pinch and poke target is 40 to 50 cm from the eyes (rare ones up to 58). `REACH` in config, a dev warning at start (`src/rules/reach.ts`).
+     - **Bigger castle:** wall 46 to 52 cm (was 40 to 46), courtyard 40 to 44, rampart 49, map wall entries and inner roads 6 cm further out. All courtyard houses, stalls and crates removed until the main gameplay is done.
+     - **Tools outside the ring:** platforms, pebble bowl and food jar 33.5 cm out (were 19), low (tops 6 cm above the board, were 10), in boardLift: they rise with the board, never turn. Flags just behind them (38.5 cm).
+     - **Price tags** replace the food pips: a food ball and the cost as a number on each food tool's platform (`src/ui/priceTag.ts`).
+     - **Tutorial:** the food jar lesson moved to right before the swatter, tools appear with their first lesson, food tool use lessons hold the tool timer and finish on one goblin hit (see "Tutorial director").
+     - **Removed:** the out-of-view arrows on the ring and the "it is to your left" line on the sign.
+     - **Hint sign** 62 cm out and a little bigger, its Next button on its own post in front, in reach.
+     - **Debug page** sorted into sections with icons. New: "Start at wave 1 to 5" (earlier lessons and waves left out, earlier tools out, a little more food; Play keeps starting there in this tab until "Restart game") and "Restart game". The pages table shows each page's tutorial step. The FPS panel is hidden by default (debug page or key F turns it on).
 5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.
    - Done when: a debug key triggers the megaphone, and the bell does the same by hand.
 6. **Pause:** wrist button, pause panel, auto-pause, Reset table.
@@ -171,7 +183,7 @@ To make these testable, game rules live in plain TypeScript functions with no Th
 ### Left to the coding agent
 
 - **Tuning numbers:** the agent picks sensible starting values and keeps them in config files. For example pebble bowl size and refill rate, how long an ignored climber waits, stun length, how long a fallen tree blocks a road, troop strength and spawn rate, castle damage and repair amounts, enemy speeds and group sizes, step timeouts, and any other number the docs do not give.
-- **Layout of the fixed things around the player:** tool platforms (and which tool sits on which), the ring handle, flags, food jar and pebble bowl. Nothing overlaps, and everything is within about 60 cm of the seat.
+- **Layout of the fixed things around the player:** tool platforms (and which tool sits on which), the ring handle, flags, food jar and pebble bowl. Nothing overlaps, and every interactive thing is in the reach band ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)).
 - **Where the troop gate sits** on the road graph.
 
 ---

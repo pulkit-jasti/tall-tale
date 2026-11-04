@@ -11,7 +11,7 @@ Back to [GDD index](GDD.md). Related: [mvp.md](mvp.md), [map.md](map.md#scale-fr
 - All paths below are relative to `public/gltf/`. Every model is a `.glb`.
 - **Palette:** Kenney models read their colors from `Textures/colormap.png` in their own folder. Keep the folder structure as it is. Goblin Camp and Nature Kit models need no image.
 - **Scale:** the kits use about 1 unit per tile. Scale each model in code so its bounding box matches the **target size** in the tables (1 unit in the game = 1 cm in [map.md](map.md#scale-from-the-mockup), check the real unit in the code).
-- **Load once, reuse:** load each file once and clone it. Use instancing for static things that repeat (trees, rocks, bushes, pebbles, pips). Check iwsdk-reference for the right way to load, clone and instance glTF in IWSDK.
+- **Load once, reuse:** load each file once and clone it. Use instancing for static things that repeat (trees, rocks, bushes, pebbles, food balls). Check iwsdk-reference for the right way to load, clone and instance glTF in IWSDK.
 - **Tint:** to change a color (enemy types, flags), multiply the material color in code. Do not edit the files.
 - **Variants:** where a row lists several files, pick one per placement with the seeded random function.
 
@@ -55,10 +55,10 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 
 | Thing | File | Target size | Notes |
 |---|---|---|---|
-| Castle wall | Code | 6 cm high, from 40 to 46 cm | Round, see [placeholder-shapes.md](placeholder-shapes.md) |
+| Castle wall | Code | 6 cm high, from 46 to 52 cm | Round, see [placeholder-shapes.md](placeholder-shapes.md) |
 | Towers on the wall (4 to 6) | `castle/castle-kit/tower-hexagon-base.glb` + `tower-hexagon-roof.glb` on top | About 10 cm tall, 5 cm wide | Stack the roof on the base |
-| Courtyard buildings (2 to 4) | `castle/castle-kit/tower-square-mid-door.glb` + `town/fantasy-town/roof-gable.glb` | About 5 cm tall | Small houses. Workers hide in them |
-| Courtyard stalls | `town/fantasy-town/stall-red.glb`, `stall-green.glb` | About 4 cm tall | |
+| Courtyard buildings (2 to 4) | `castle/castle-kit/tower-square-mid-door.glb` + `town/fantasy-town/roof-gable.glb` | About 5 cm tall | Small houses. Workers hide in them. **Left out for now** (the courtyard stays empty until the main gameplay is done) |
+| Courtyard stalls | `town/fantasy-town/stall-red.glb`, `stall-green.glb` | About 4 cm tall | Left out for now, like the houses |
 | Courtyard props | `town/fantasy-town/cart.glb`, `props/survival/box.glb`, `box-large.glb`, `props/mini-dungeon/barrel.glb` | Cart 4 cm long, boxes and barrels 1 to 1.5 cm | Things workers carry and drop |
 | Courtyard lanterns | `town/fantasy-town/lantern.glb` | 4 cm tall | Optional |
 

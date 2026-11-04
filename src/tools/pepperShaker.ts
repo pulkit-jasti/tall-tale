@@ -9,7 +9,7 @@
 // back on the one before is one stroke, two strokes close together are a shake.
 // No hand pose is needed, so it works with any grip.
 import { Vector3 } from 'three';
-import { PEPPER, TOOL_SPOTS } from '../config/game.js';
+import { CASTLE, PEPPER, TOOL_SPOTS } from '../config/game.js';
 import { pepperShaker } from '../world/shapes.js';
 import { HandTool, type ToolParts } from './handTool.js';
 
@@ -116,8 +116,8 @@ export class PepperShaker extends HandTool {
   /** Debug: peppers the goblins at the front of the wall, without hands. Pays the food like a real shake. */
   debugShake(): void {
     if (!this.debugStart()) return;
-    // Above the wall straight in front of the player (fixedRig).
-    this.stage.fixedRig.localToWorld(front.set(0, 20, -48));
+    // Above the goblins at the wall straight in front of the player (boardLift).
+    this.stage.boardLift.localToWorld(front.set(0, 20, -(CASTLE.wallOut + CASTLE.wallStandOff / 2)));
     this.sprinkle(PEPPER.speckEvery, front, PEPPER.radius * 2.5);
   }
 }

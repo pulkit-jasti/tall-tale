@@ -4,9 +4,13 @@
 //   boardLift (cm units: scale 0.01, moves up and down with the ring handle)
 //     boardSpin (turns with the ring handle: board, castle, roads, goblins)
 //     ring handle (rises with the board, turns only while held)
-//   fixedRig (cm units, never turns or moves after placing: later tools and flags)
+//     tools, platforms, pebble bowl, food jar, flags, hint sign (rise with the board, never turn)
+//   fixedRig (cm units, never turns or moves after placing: the end panel, and
+//     the frame the ring handle measures the hand in)
 //
 // Only boardSpin turns, so the sky, tools and flags stay still (comfort rule).
+// The tools rise with the board, so they always stand at the same height on
+// it, just outside the ring, and the ring never passes through them.
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { BOARD, HANDLES } from '../config/game.js';
 

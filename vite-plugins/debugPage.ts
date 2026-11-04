@@ -1,7 +1,7 @@
-// Dev only: a laptop page at /__debug with one button per debug action.
-// A click sends the action to every open game page (the headset included)
-// over Vite's own hot reload WebSocket, so the game reacts live with no
-// reload. Not part of the hosted build.
+// Dev only: a laptop page at /__debug with one button per debug action,
+// grouped in sections. A click sends the action to every open game page (the
+// headset included) over Vite's own hot reload WebSocket, so the game reacts
+// live with no reload. Not part of the hosted build.
 // The game sends its measured run numbers back the same way, and the page
 // shows the live run and a history of finished runs.
 import type { Plugin } from 'vite';
@@ -9,15 +9,40 @@ import { FPS } from '../src/config/game.js';
 import {
   DEBUG_ACTIONS,
   DEBUG_EVENT,
+  DEBUG_GROUPS,
   HEARTBEAT_EVENT,
   RUN_STATS_EVENT,
   STRESS_TEST_EVENT,
+  type DebugAction,
   type PageInfo,
   type RunStats,
   type StressTestReport,
 } from '../src/debug/debugKeys.js';
 
-const ids = new Set<string>(DEBUG_ACTIONS.map((a) => a.id));
+const actions = new Map<string, DebugAction>(DEBUG_ACTIONS.map((a) => [a.id, a]));
+
+const keyName = (code: string): string => code.replace('Key', '').replace('Digit', '');
+const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+/** One button, or a row of numbered buttons for an action with values (Start at wave 1 to 5). */
+function actionHtml(a: DebugAction): string {
+  if (a.args) {
+    const buttons = a.args
+      .map((v) => `<button class="num" data-id="${a.id}" data-arg="${v}" title="${escape(a.does)}">${v}</button>`)
+      .join('');
+    return `<div class="multi" title="${escape(a.does)}"><span class="icon">${a.icon}</span><span class="label">${a.label}</span><span class="nums">${buttons}</span></div>`;
+  }
+  const key = a.code ? `<kbd>${keyName(a.code)}</kbd>` : '';
+  return `<button data-id="${a.id}" title="${escape(a.does)}"><span class="icon">${a.icon}</span><span class="label">${a.label}</span>${key}</button>`;
+}
+
+function sectionsHtml(): string {
+  return DEBUG_GROUPS.map((g) => {
+    const items = DEBUG_ACTIONS.filter((a) => a.group === g.id);
+    if (!items.length) return '';
+    return `<section><h3><span class="icon">${g.icon}</span>${g.title}</h3><div class="grid">${items.map(actionHtml).join('')}</div></section>`;
+  }).join('\n');
+}
 /** Too short to trust, so not kept in the history (seconds). */
 const MIN_RUN_SECONDS = 5;
 const HISTORY_SIZE = 100;
@@ -30,9 +55,6 @@ const pages = new Map<string, PageInfo & { at: number }>();
 const PAGE_TIMEOUT = 6000;
 
 function page(): string {
-  const buttons = DEBUG_ACTIONS.map(
-    (a) => `<button data-id="${a.id}" title="${a.does}">${a.label}${a.code ? ` <small>${a.code.replace('Key', '').replace('Digit', '')}</small>` : ''}</button>`,
-  ).join('\n');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -40,16 +62,29 @@ function page(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tall Tale debug</title>
 <style>
-  body { font-family: system-ui, sans-serif; background: #1d1813; color: #eee6d8; margin: 0; padding: 24px; }
+  body { font-family: system-ui, sans-serif; background: #1d1813; color: #eee6d8; margin: 0; padding: 24px; max-width: 1200px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
   p { margin: 0 0 16px; color: #b9ae9c; font-size: 14px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-  button { font: inherit; font-size: 15px; padding: 14px 10px; border-radius: 10px; border: 1px solid #5a4330;
-    background: #3b2b1f; color: #f2e9da; cursor: pointer; }
+  .sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  section { background: #2a211a; border: 1px solid #4a372a; border-radius: 12px; padding: 12px 14px 14px; }
+  h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; color: #f2c14e; text-transform: uppercase; letter-spacing: 0.04em; }
+  h3 .icon { margin-right: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  button { font: inherit; font-size: 14px; padding: 10px; border-radius: 9px; border: 1px solid #5a4330;
+    background: #3b2b1f; color: #f2e9da; cursor: pointer; display: flex; align-items: center; gap: 8px; text-align: left; }
   button:hover { background: #4d3828; }
-  button:active { background: #f2c14e; color: #1d1813; }
-  small { opacity: 0.6; margin-left: 4px; }
-  #log { margin-top: 16px; font-size: 13px; color: #b9ae9c; min-height: 1.2em; }
+  button:active, button.sent { background: #f2c14e; color: #1d1813; }
+  button .label { flex: 1; }
+  .icon { font-size: 17px; line-height: 1; }
+  kbd { font: 11px ui-monospace, Menlo, monospace; padding: 2px 6px; border-radius: 5px; background: #1d1813; color: #b9ae9c; border: 1px solid #5a4330; }
+  .multi { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9px;
+    border: 1px solid #5a4330; background: #33261b; }
+  .multi .label { flex: 1; font-size: 14px; }
+  .nums { display: flex; gap: 6px; }
+  button.num { padding: 6px 12px; font-weight: 600; justify-content: center; }
+  .state { font-size: 13px; color: #b9ae9c; margin: 0 0 12px; }
+  .state b { color: #f2e9da; }
+  #log { margin: 12px 0 0; font-size: 13px; color: #b9ae9c; min-height: 1.2em; }
   h2 { font-size: 16px; margin: 28px 0 8px; }
   .live { display: flex; gap: 12px; flex-wrap: wrap; }
   .card { background: #2a211a; border: 1px solid #5a4330; border-radius: 10px; padding: 12px 16px; min-width: 260px; }
@@ -68,16 +103,17 @@ function page(): string {
 </head>
 <body>
 <h1>Tall Tale debug</h1>
-<p>Each button runs on every open game page (headset included) right away. Needs <code>npm run dev</code>.</p>
-<div class="grid">
-${buttons}
+<p>Each button runs on every open game page (headset included) right away. Needs <code>npm run dev</code>. Hover a button to see what it does. Keys work in the browser game too.</p>
+<div class="state" id="state">No game page connected.</div>
+<div class="sections">
+${sectionsHtml()}
 </div>
 <div id="log"></div>
 <h2>Connected game pages</h2>
 <p>Every open game page checks in every 2 s. "laptop" pages run on localhost (the emulator fakes a Quest there), "headset" pages on the Mac's network address. Close laptop game tabs before testing.</p>
 <table>
-  <thead><tr><th>page</th><th>device</th><th>in VR</th><th>state</th><th>fps</th><th>target</th><th>units</th></tr></thead>
-  <tbody id="pages"><tr><td colspan="7">No game page connected.</td></tr></tbody>
+  <thead><tr><th>page</th><th>device</th><th>in VR</th><th>state</th><th>step</th><th>Play at</th><th>fps</th><th>target</th><th>units</th></tr></thead>
+  <tbody id="pages"><tr><td colspan="9">No game page connected.</td></tr></tbody>
 </table>
 <h2>Automatic stress test</h2>
 <p>Put on the headset and enter VR, press <b>Run stress test</b> above, then sit still and look at the board in front of you until it says Done. Only a page in VR runs it. Paste the result text.</p>
@@ -110,12 +146,19 @@ ${buttons}
         ? data.pages
             .map(
               (p) => '<tr><td>' + p.page + '</td><td>' + p.device + '</td><td>' + (p.immersive ? 'yes' : 'no') +
-                '</td><td>' + (p.testing ? 'stress test' : p.paused ? 'paused' : 'playing') + '</td><td class="' +
+                '</td><td>' + (p.testing ? 'stress test' : p.paused ? 'paused' : 'playing') + '</td><td>' + (p.step || '') +
+                '</td><td>wave ' + (p.playFrom || 1) + '</td><td class="' +
                 cls(p.liveFps, p.targetFps) + '">' + p.liveFps.toFixed(0) + '</td><td>' + p.targetFps + '</td><td>' +
                 p.units + '</td></tr>',
             )
             .join('')
-        : '<tr><td colspan="7">No game page connected.</td></tr>';
+        : '<tr><td colspan="9">No game page connected.</td></tr>';
+      // Short summary at the top: what the first connected page is doing.
+      const first = data.pages.find((p) => p.device === 'headset') || data.pages[0];
+      document.getElementById('state').innerHTML = first
+        ? '<b>' + first.device + '</b> ' + (first.immersive ? 'in VR' : 'not in VR') + ', step <b>' + (first.step || '?') +
+          '</b>, Play starts at <b>wave ' + (first.playFrom || 1) + '</b>'
+        : 'No game page connected.';
       const live = document.getElementById('live');
       live.innerHTML = data.live.length
         ? data.live
@@ -193,11 +236,17 @@ ${buttons}
     await fetch('/__debug/clear', { method: 'POST' });
     refresh();
   });
-  for (const button of document.querySelectorAll('.grid button')) {
+  for (const button of document.querySelectorAll('.sections button')) {
     button.addEventListener('click', async () => {
+      const arg = button.dataset.arg ? '&arg=' + button.dataset.arg : '';
+      const name = button.dataset.arg
+        ? button.closest('.multi').querySelector('.label').textContent + ' ' + button.dataset.arg
+        : button.querySelector('.label').textContent;
       try {
-        const res = await fetch('/__debug/run?c=' + button.dataset.id, { method: 'POST' });
-        log.textContent = res.ok ? 'Sent: ' + button.textContent.trim() : 'Error: ' + res.status;
+        const res = await fetch('/__debug/run?c=' + button.dataset.id + arg, { method: 'POST' });
+        log.textContent = res.ok ? 'Sent: ' + name : 'Error: ' + res.status;
+        button.classList.add('sent');
+        setTimeout(() => button.classList.remove('sent'), 250);
       } catch (e) {
         log.textContent = 'Dev server not reachable';
       }
@@ -248,12 +297,20 @@ export function debugPage(): Plugin {
         }
         if (url.pathname === '/run') {
           const id = url.searchParams.get('c') ?? '';
-          if (!ids.has(id)) {
+          const action = actions.get(id);
+          if (!action) {
             res.statusCode = 400;
             res.end('unknown command');
             return;
           }
-          server.ws.send(DEBUG_EVENT, { id });
+          const argText = url.searchParams.get('arg');
+          const arg = argText === null ? undefined : Number(argText);
+          if (action.args && (arg === undefined || !action.args.includes(arg))) {
+            res.statusCode = 400;
+            res.end('bad value');
+            return;
+          }
+          server.ws.send(DEBUG_EVENT, { id, arg });
           res.end('ok');
           return;
         }

@@ -5,7 +5,7 @@
 // tutorial-only lives in those systems.
 import { Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { CASTLE_HEALTH, END_PANEL, GHOST_HAND, HANDLES, HINT_SIGN, TOOL_SPOTS, WAVES } from '../config/game.js';
+import { CASTLE_HEALTH, DEBUG, END_PANEL, GHOST_HAND, GOBLIN_RULES, HANDLES, HINT_SIGN, TOOL_SPOTS, WAVES } from '../config/game.js';
 import { WAVE_VOICES } from '../config/sounds.js';
 import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
@@ -82,6 +82,14 @@ export class Battle implements TutorialApi {
   running = false;
   private director: Director<TutorialApi> | null = null;
   private wave = -1;
+  /** True from a wave's start until it is cleared or ended. */
+  private inWave = false;
+  /**
+   * The wave (0 based) the Play button starts at. 0 is the whole tutorial.
+   * Set from the debug page's "Start at wave", so testing a later wave does
+   * not mean playing the earlier ones every time.
+   */
+  playFromWave = 0;
   private endTimer = -1;
   /** Time since anything last hurt the castle (seconds), for the stalemate check. */
   private sinceDamage = 0;
@@ -130,9 +138,20 @@ export class Battle implements TutorialApi {
     this.parts.food.reset();
   }
 
-  /** A new tutorial battle from the first lesson. */
-  start(): void {
-    const { goblins, spawner, slingshot, flags, panel, stage } = this.parts;
+  /** The step the tutorial is on, for the debug page. */
+  get stepId(): string {
+    return this.running ? (this.director?.current?.id ?? 'done') : 'stopped';
+  }
+
+  /**
+   * A new tutorial battle. From the first lesson, or (debug "Start at wave")
+   * from the end of the wave before `fromWave` (0 based): the earlier
+   * lessons and waves are left out, their tools are already on their
+   * platforms, and the jar has a little more food, like a player who got there.
+   */
+  start(fromWave = this.playFromWave): void {
+    const { goblins, spawner, slingshot, flags, panel, stage, food } = this.parts;
+    const from = Math.max(0, Math.min(fromWave, TUTORIAL_WAVES.length - 1));
     spawner.stop();
     goblins.killAll();
     panel.hide();
@@ -141,8 +160,11 @@ export class Battle implements TutorialApi {
     slingshot.beckon = false;
     this.resetTools();
     this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
-    flags.show(1, 0, true);
-    this.wave = -1;
+    // The flag starts one notch below: the first step clears the wave before `from`.
+    this.state.wavesCleared = Math.max(0, from - 1);
+    flags.show(1, this.state.wavesCleared / this.state.totalWaves, true);
+    this.wave = from - 1;
+    this.inWave = false;
     this.endTimer = -1;
     this.eatenCount = this.pickedCount = this.slingHits = this.spun = this.moved = 0;
     this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
@@ -151,7 +173,14 @@ export class Battle implements TutorialApi {
     this.lessonGoblin = null;
     this.shownStep = null;
     this.doneFlash = 0;
-    const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS), this);
+    // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
+    for (const wave of TUTORIAL_WAVES.slice(0, from)) {
+      const tool = wave.newTool;
+      if (tool === 'slingshot') slingshot.setVisible(true);
+      else if (tool) this.foodTool(tool)?.setVisible(true);
+    }
+    if (from > 0) food.add(from * DEBUG.startFoodPerWave);
+    const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from), this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
       // A lesson the player just did: tick its box for a moment, with a chime.
@@ -163,7 +192,7 @@ export class Battle implements TutorialApi {
     };
     this.director = director;
     this.running = true;
-    console.info('[battle] tutorial started');
+    console.info(from > 0 ? `[battle] tutorial started at wave ${from + 1}` : '[battle] tutorial started');
   }
 
   /**
@@ -227,7 +256,7 @@ export class Battle implements TutorialApi {
     }
     flags.show(healthShare(this.state), this.state.wavesCleared / this.state.totalWaves);
     flags.update(dt);
-    this.updateHint(dt, hands, head, forward);
+    this.updateHint(dt, hands, head);
     if (this.endTimer > 0) {
       this.endTimer -= dt;
       if (this.endTimer <= 0) panel.show(this.state.phase === 'won' ? 'won' : 'lost');
@@ -236,7 +265,7 @@ export class Battle implements TutorialApi {
   }
 
   /** The hint sign, the marker and the ghost hand for the current step. */
-  private updateHint(dt: number, hands: HandState[], head: Vector3, forward: Vector3): void {
+  private updateHint(dt: number, hands: HandState[], head: Vector3): void {
     const { sign, markers, goblins, ghost } = this.parts;
     sign.update(dt);
     if (!this.running || this.state.phase !== 'playing') {
@@ -264,15 +293,13 @@ export class Battle implements TutorialApi {
     }
     const target = this.markerPosition(hint.marker, markerAt);
     this.updateGhost(dt, hint.demo, hands, head);
-    const side = markers.update(dt, target, head, forward);
+    markers.update(dt, target);
     let text = hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
     // A food tool lesson without enough food says so (a climber comes to eat).
     if (hint.whenLocked && hint.tool && !this.canAfford(hint.tool)) text = hint.whenLocked;
-    let sub: string | undefined;
-    if (side) sub = `It is to your ${side}. Turn your head or spin the board.`;
-    this.shown = { kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], sub, next: hint.next };
+    this.shown = { kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], next: hint.next };
     sign.show(this.shown);
     // Info steps can be skipped with the sign's "Next" button.
     if (hint.next && sign.pokedNext(hands, dt)) this.director?.skip();
@@ -415,6 +442,7 @@ export class Battle implements TutorialApi {
 
   startWave(index: number): void {
     this.wave = index;
+    this.inWave = true;
     this.sinceDamage = 0;
     this.parts.spawner.start(TUTORIAL_WAVES[index]);
     const last = index === TUTORIAL_WAVES.length - 1;
@@ -427,11 +455,13 @@ export class Battle implements TutorialApi {
   }
 
   endWave(): void {
+    this.inWave = false;
     this.parts.spawner.stop();
     this.poofAll();
   }
 
   clearWave(): void {
+    this.inWave = false;
     clearWave(this.state, CASTLE_HEALTH);
     if (this.state.phase === 'playing') this.parts.audio.play('cheer');
   }
@@ -450,7 +480,10 @@ export class Battle implements TutorialApi {
     const spread = degToRad(WAVES.frontClimberSpread);
     // The board angle in front of the player right now.
     const angle = stage.spin + rng.range(-spread, spread);
-    const goblin = goblins.spawnClimberAt(angle, onRampart, TUTORIAL_TIMING.lessonClimberWait);
+    // Between waves it waits for the player. During a wave it acts like any
+    // climber, so it never holds the wave up long after its lesson is over.
+    const wait = this.inWave ? GOBLIN_RULES.rampartWait : TUTORIAL_TIMING.lessonClimberWait;
+    const goblin = goblins.spawnClimberAt(angle, onRampart, wait);
     if (goblin) this.lessonGoblin = goblin;
   }
 
@@ -476,7 +509,7 @@ export class Battle implements TutorialApi {
     this.slingHits = 0;
     const { angleDeg, radius } = TOOL_SPOTS.slingshot;
     const a = degToRad(angleDeg);
-    stage.fixedRig.localToWorld(temp.set(polarX(radius, a), TOOL_SPOTS.platformTop + 4, polarZ(radius, a)));
+    stage.boardLift.localToWorld(temp.set(polarX(radius, a), TOOL_SPOTS.platformTop + 4, polarZ(radius, a)));
     particles.burst(temp, POOF_COLORS, 14);
     audio.play('toolPoof', temp);
   }
@@ -499,6 +532,11 @@ export class Battle implements TutorialApi {
     // The easier way: enough food for one use, or a goblin in reach to use it on.
     if (!t.usable) this.parts.food.add(t.cost - this.parts.food.food);
     else this.lessonClimber(true);
+  }
+
+  holdToolTimer(tool: ToolName, on: boolean): void {
+    const t = this.foodTool(tool);
+    if (t) t.timerHeld = on;
   }
 
   toolUses(tool: ToolName): number {

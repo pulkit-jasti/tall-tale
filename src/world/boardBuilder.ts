@@ -151,35 +151,6 @@ async function buildCastle(): Promise<Group> {
   return group;
 }
 
-/** A few houses, stalls and crates in the courtyard (behind and beside the player). */
-async function buildCourtyard(rng: Random): Promise<Group> {
-  const group = new Group();
-  const body = await loadTemplate('castle/castle-kit/tower-square-mid-door.glb', { width: 3.5 });
-  const roof = await loadTemplate('town/fantasy-town/roof-gable.glb', { width: 4.1 });
-  const stallRed = await loadTemplate('town/fantasy-town/stall-red.glb', { height: 4 });
-  const stallGreen = await loadTemplate('town/fantasy-town/stall-green.glb', { height: 4 });
-  const crate = await loadTemplate('props/survival/box.glb', { height: 1.2 });
-  const barrel = await loadTemplate('props/mini-dungeon/barrel.glb', { height: 1.4 });
-  const r = CASTLE.propRadius;
-  const put = (object: Object3D, deg: number, radius: number, y = 0): void => {
-    const a = degToRad(deg);
-    object.position.set(polarX(radius, a), y, polarZ(radius, a));
-    // Front of the model (+z) faces the center.
-    object.rotation.y = Math.PI - a;
-    group.add(object);
-  };
-  for (const deg of [140, 205, 250]) {
-    put(cloneStatic(body), deg, r);
-    put(cloneStatic(roof), deg, r, body.size.y);
-  }
-  put(cloneStatic(stallRed), 105, r);
-  put(cloneStatic(stallGreen), -125, r);
-  for (const deg of [120, 160, 228, -100, -150]) {
-    put(cloneStatic(rng.next() < 0.5 ? crate : barrel), deg + rng.range(-6, 6), r + rng.range(-3, 3));
-  }
-  return group;
-}
-
 /** Camp hills with rocks, tents and a fire at the start of each road. */
 async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Object3D>): Promise<Group> {
   const group = new Group();
@@ -248,7 +219,7 @@ async function buildDecor(roads: Road[], camps: GraphNode[], rng: Random): Promi
     sets.forEach((s) => group.add(s.group));
     let placed = 0;
     for (let tries = 0; placed < kind.count && tries < kind.count * 20; tries++) {
-      const r = rng.range(65, 520);
+      const r = rng.range(72, 520);
       const a = rng.range(0, Math.PI * 2);
       const x = polarX(r, a);
       const z = polarZ(r, a);
@@ -284,12 +255,12 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   for (const road of network.roads) parent.add(road.buildMesh());
   const campNodes = network.graph.nodes.filter((n) => n.kind === 'camp');
   const hills = new Map<string, Object3D>();
-  const [castle, courtyard, camps, decor] = await Promise.all([
+  // The courtyard stays empty until the main gameplay is done (houses and stalls come back with the polish).
+  const [castle, camps, decor] = await Promise.all([
     buildCastle(),
-    buildCourtyard(createRandom(seed + 1)),
     buildCamps(campNodes, createRandom(seed + 2), hills),
     buildDecor(network.roads, campNodes, createRandom(seed + 3)),
   ]);
-  parent.add(castle, courtyard, camps, decor);
+  parent.add(castle, camps, decor);
   return { network, hills };
 }

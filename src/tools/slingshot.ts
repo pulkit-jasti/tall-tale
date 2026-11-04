@@ -29,9 +29,9 @@
 // goblins only, since they do not set off things.
 //   5. A hit area bigger than the pebble.
 //
-// The frame, pouch, bowl and pebbles in the hand live in fixedRig (cm, never
-// turns). Flying pebbles and dots live in boardSpin (cm), where the goblins
-// are, so hits are simple.
+// The frame, pouch, bowl and pebbles in the hand live in boardLift (cm, rises
+// with the board, never turns). Flying pebbles and dots live in boardSpin
+// (cm), where the goblins are, so hits are simple.
 import {
   CircleGeometry,
   Group,
@@ -129,7 +129,7 @@ interface FrameHolder {
 interface HandPebble {
   hand: HandState;
   mesh: Object3D;
-  /** Smoothed hand speed (fixedRig, cm per second), so letting go mid-swing throws it. */
+  /** Smoothed hand speed (boardLift, cm per second), so letting go mid-swing throws it. */
   readonly velocity: Vector3;
   readonly last: Vector3;
   hasLast: boolean;
@@ -186,10 +186,10 @@ export class Slingshot {
   /** Frame local points (cm). */
   private forkLocal = new Vector3();
   private pouchRestLocal = new Vector3();
-  /** Rest pose on the platform (fixedRig, cm). */
+  /** Rest pose on the platform (boardLift, cm). */
   private restPosition = new Vector3();
   private restQuaternion = new Quaternion();
-  /** Bowl center at the rim (fixedRig, cm). */
+  /** Bowl center at the rim (boardLift, cm). */
   private bowlCenter = new Vector3();
 
   private frameHolder: FrameHolder | null = null;
@@ -211,10 +211,10 @@ export class Slingshot {
   private refillTimer = 0;
   private time = 0;
   private lastCreak = 0;
-  /** The player's head (fixedRig, cm), so no shot points at the face. */
+  /** The player's head (boardLift, cm), so no shot points at the face. */
   private head = new Vector3();
 
-  /** Aim samples for the steady release: fork and pull (fixedRig, cm). */
+  /** Aim samples for the steady release: fork and pull (boardLift, cm). */
   private sampleTime = new Float32Array(SAMPLES);
   private sampleData = new Float32Array(SAMPLES * 6);
   private sampleCount = 0;
@@ -249,11 +249,11 @@ export class Slingshot {
    */
   partWorld(part: SlingPart | 'pebbles', out: Vector3): Vector3 {
     if (part === 'pouch') return this.pouchWorld(out);
-    if (part === 'bowl') return this.stage.fixedRig.localToWorld(out.copy(this.bowlCenter));
+    if (part === 'bowl') return this.stage.boardLift.localToWorld(out.copy(this.bowlCenter));
     if (part === 'pebbles') {
       out.copy(this.bowlCenter);
       out.y += -PEBBLE_BOWL.depth * 0.85 + (this.pile?.visible ? this.pile.scale.y * this.pileHeight : 0);
-      return this.stage.fixedRig.localToWorld(out);
+      return this.stage.boardLift.localToWorld(out);
     }
     return this.frame.localToWorld(out.set(0, SLINGSHOT.handleHeight * 0.5, 0));
   }
@@ -287,7 +287,7 @@ export class Slingshot {
     this.buildFrame();
     this.buildBowl(pile);
     this.buildPebbles(stone);
-    this.stage.fixedRig.add(this.root, this.frame);
+    this.stage.boardLift.add(this.root, this.frame);
   }
 
   private buildPlatform(platform: ModelTemplate): void {
@@ -298,7 +298,8 @@ export class Slingshot {
     const z = polarZ(radius, a);
     const stand = cloneStatic(platform);
     stand.position.set(x, top - platform.size.y, z);
-    const stem = post();
+    // The post reaches down to the board.
+    const stem = post(top - platform.size.y);
     stem.position.set(x, stem.position.y + top - platform.size.y, z);
     this.root.add(stand, stem);
     // Rest pose: on the platform, the shot direction (frame -z) pointing out.
@@ -327,12 +328,13 @@ export class Slingshot {
   }
 
   private buildBowl(pile: ModelTemplate): void {
-    const { angleDeg, radius, rimY, postLength, depth } = PEBBLE_BOWL;
+    const { angleDeg, radius, rimY, depth } = PEBBLE_BOWL;
     const a = degToRad(angleDeg);
     const bowl = new Group();
     this.bowlCenter.set(polarX(radius, a), rimY, polarZ(radius, a));
     bowl.position.copy(this.bowlCenter);
-    const stem = post(postLength);
+    // The post reaches down to the board.
+    const stem = post(rimY - depth);
     stem.position.y -= depth;
     const bowlMesh = pebbleBowl();
     this.bowlMaterials = [bowlMesh.material as MeshStandardMaterial];
@@ -409,7 +411,7 @@ export class Slingshot {
     }
     // Bowl: pinch to take a pebble.
     {
-      const d = hand.pinchPoint.distanceTo(this.stage.fixedRig.localToWorld(temp.copy(this.bowlCenter)));
+      const d = hand.pinchPoint.distanceTo(this.stage.boardLift.localToWorld(temp.copy(this.bowlCenter)));
       if (d < PEBBLE_BOWL.grabRadius && d < best) {
         best = d;
         part = 'bowl';
@@ -458,7 +460,7 @@ export class Slingshot {
     this.bowlCount--;
     this.updatePile();
     const mesh = cloneStatic(this.stoneTemplate);
-    this.stage.fixedRig.add(mesh);
+    this.stage.boardLift.add(mesh);
     this.handPebbles.push({ hand, mesh, velocity: new Vector3(), last: new Vector3(), hasLast: false });
     this.onEvent('pebbleTaken');
     this.placeHandPebble(hand, mesh);
@@ -552,7 +554,7 @@ export class Slingshot {
   update(dt: number, headWorld: Vector3): void {
     this.time += dt;
     this.head.copy(headWorld);
-    this.stage.fixedRig.worldToLocal(this.head);
+    this.stage.boardLift.worldToLocal(this.head);
     this.updateBowl(dt);
     this.updateFrame(dt);
     // Glow until grabbed. A hand near the handle shows Ready instead.
@@ -636,7 +638,7 @@ export class Slingshot {
         this.letGoOfHandle();
       } else if (hand.tracked && !pulling) {
         this.handWorldMatrix(holder.hand, holder.viaPinch, handMatrix);
-        matrix.copy(this.stage.fixedRig.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
+        matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
         matrix.decompose(targetPosition, targetQuaternion, targetScale);
         const k = 1 - Math.exp(-dt / SLINGSHOT.holdSmoothing);
         this.frame.position.lerp(targetPosition, k);
@@ -678,7 +680,7 @@ export class Slingshot {
       if (!this.loaded && this.frame.visible && hand.pinchPoint.distanceTo(this.pouchWorld(temp)) < SLINGSHOT.attachRadius) {
         this.loaded = true;
         if (this.pouchPebble) this.pouchPebble.visible = true;
-        this.stage.fixedRig.remove(p.mesh);
+        this.stage.boardLift.remove(p.mesh);
         this.handPebbles.splice(i, 1);
         this.audio.play('pebbleLoad', temp);
         this.onEvent('loaded');
@@ -687,7 +689,7 @@ export class Slingshot {
   }
 
   private placeHandPebble(hand: HandState, mesh: Object3D): void {
-    this.stage.fixedRig.worldToLocal(mesh.position.copy(hand.pinchPoint));
+    this.stage.boardLift.worldToLocal(mesh.position.copy(hand.pinchPoint));
     mesh.position.y -= this.pebbleHeight / 2;
   }
 
@@ -705,7 +707,7 @@ export class Slingshot {
 
   /** Let go of a carried pebble: back into the bowl if over it, otherwise it flies with the hand's speed. */
   private dropHandPebble(p: HandPebble): void {
-    this.stage.fixedRig.remove(p.mesh);
+    this.stage.boardLift.remove(p.mesh);
     const at = p.mesh.position;
     const dx = at.x - this.bowlCenter.x;
     const dz = at.z - this.bowlCenter.z;
@@ -713,7 +715,7 @@ export class Slingshot {
     if (overBowl) {
       this.bowlCount = Math.min(PEBBLE_BOWL.capacity, this.bowlCount + 1);
       this.updatePile();
-      this.audio.play('drop', this.stage.fixedRig.localToWorld(temp.copy(at)), 0.6);
+      this.audio.play('drop', this.stage.boardLift.localToWorld(temp.copy(at)), 0.6);
       return;
     }
     const v = p.velocity.multiplyScalar(PEBBLE_THROW.scale);
@@ -741,7 +743,7 @@ export class Slingshot {
     if (length > SLINGSHOT.maxPull) temp.multiplyScalar(SLINGSHOT.maxPull / length);
     this.pouch.position.copy(this.forkLocal).add(temp);
 
-    // Aim in fixedRig space: the fork and the pull (pouch minus fork).
+    // Aim in boardLift space: the fork and the pull (pouch minus fork).
     this.toRig(this.fork.copy(this.forkLocal));
     this.toRig(this.pull.copy(this.pouch.position)).sub(this.fork);
     this.addSample(this.fork, this.pull);
@@ -763,7 +765,7 @@ export class Slingshot {
     }
   }
 
-  /** Works out the launch from a fork point and a pull vector (fixedRig, cm). Sets aimValid. */
+  /** Works out the launch from a fork point and a pull vector (boardLift, cm). Sets aimValid. */
   private aim(fork: Vector3, pull: Vector3): void {
     const length = pull.length();
     this.aimValid = false;
@@ -1254,15 +1256,15 @@ export class Slingshot {
     return out.compose(viaPinch ? hand.pinchPoint : hand.palm, hand.quaternion, unitScale);
   }
 
-  /** Frame point (cm) to fixedRig point (cm). */
+  /** Frame point (cm) to boardLift point (cm). */
   private toRig(v: Vector3): Vector3 {
     this.frame.localToWorld(v);
-    return this.stage.fixedRig.worldToLocal(v);
+    return this.stage.boardLift.worldToLocal(v);
   }
 
-  /** fixedRig point (cm) to boardSpin point (cm). */
+  /** boardLift point (cm) to boardSpin point (cm). */
   private toBoard(v: Vector3): Vector3 {
-    this.stage.fixedRig.localToWorld(v);
+    this.stage.boardLift.localToWorld(v);
     return this.stage.boardSpin.worldToLocal(v);
   }
 

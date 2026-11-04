@@ -9,6 +9,7 @@ import {
   RUN_STATS_EVENT,
   STRESS_TEST_EVENT,
   type DebugCommand,
+  type DebugRequest,
   type PageInfo,
   type RunStats,
   type StressTestReport,
@@ -28,16 +29,17 @@ export const PAGE = {
 };
 
 const known = new Set<string>(DEBUG_ACTIONS.map((a) => a.id));
-const queue: DebugCommand[] = [];
+const queue: DebugRequest[] = [];
 
 if (import.meta.hot) {
-  import.meta.hot.on(DEBUG_EVENT, (data: { id?: string }) => {
-    if (data?.id && known.has(data.id)) queue.push(data.id as DebugCommand);
+  import.meta.hot.on(DEBUG_EVENT, (data: { id?: string; arg?: number }) => {
+    if (!data?.id || !known.has(data.id)) return;
+    queue.push({ id: data.id as DebugCommand, arg: typeof data.arg === 'number' ? data.arg : undefined });
   });
 }
 
 /** Commands that arrived since the last call. */
-export function takeRemoteCommands(): DebugCommand[] {
+export function takeRemoteCommands(): DebugRequest[] {
   return queue.splice(0, queue.length);
 }
 

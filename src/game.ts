@@ -28,6 +28,7 @@ import { BoardHandles } from './player/handles.js';
 import { HandTracker } from './player/hands.js';
 import { degToRad } from './rules/boardMath.js';
 import { createRandom, type Random } from './rules/random.js';
+import { checkReach } from './rules/reach.js';
 import { FlySwatter } from './tools/flySwatter.js';
 import type { HandTool } from './tools/handTool.js';
 import { PepperShaker } from './tools/pepperShaker.js';
@@ -40,6 +41,8 @@ import { Stage } from './world/stage.js';
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
 const headForward = new Vector3();
+/** Session storage key for the debug "Start at wave" choice. */
+const PLAY_FROM_KEY = 'tallTale.playFromWave';
 
 /** Set by the start page button: start a battle in the browser now, or in VR once the board is placed. */
 let pendingStart: 'browser' | 'vr' | null = null;
@@ -139,7 +142,7 @@ export class GameSystem extends createSystem({}) {
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
       panel: new EndPanel(this.stage.fixedRig, this.audio),
       sign: new HintSign(this.stage.boardLift, this.audio),
-      markers: new Markers(root, this.stage.boardLift),
+      markers: new Markers(root),
       ghost,
       audio: this.audio,
       particles: this.particles,
@@ -174,6 +177,8 @@ export class GameSystem extends createSystem({}) {
       report: sendStressTest,
     });
 
+    this.loadPlayFromWave();
+    if (import.meta.env.DEV) checkReach();
     this.placeBoard();
     this.ready = true;
     console.info('[game] ready');
@@ -256,6 +261,8 @@ export class GameSystem extends createSystem({}) {
         targetFps: this.fps.target,
         units: this.goblins.aliveCount,
         testing: this.stressTest.active,
+        step: this.battle.stepId,
+        playFrom: this.battle.playFromWave + 1,
       });
     }
     if (paused) return;
@@ -288,13 +295,39 @@ export class GameSystem extends createSystem({}) {
     this.particles.update(dt);
   }
 
+  /**
+   * The wave Play starts at (debug "Start at wave"). Kept for this tab, so a
+   * reload after a code change goes straight back to the wave being tested.
+   */
+  private setPlayFromWave(index: number): void {
+    this.battle.playFromWave = index;
+    try {
+      if (index > 0) sessionStorage.setItem(PLAY_FROM_KEY, String(index));
+      else sessionStorage.removeItem(PLAY_FROM_KEY);
+    } catch {
+      // No storage (private mode): it only lasts until the page reloads.
+    }
+  }
+
+  private loadPlayFromWave(): void {
+    try {
+      const index = Number(sessionStorage.getItem(PLAY_FROM_KEY) ?? 0);
+      if (index > 0 && index < TUTORIAL_WAVES.length) {
+        this.battle.playFromWave = index;
+        console.info(`[debug] Play starts at wave ${index + 1} (debug page: Restart game to start from the beginning)`);
+      }
+    } catch {
+      // No storage: Play starts from the beginning.
+    }
+  }
+
   private debugKeys(dt: number): void {
     const keys = this.input.keyboard;
     for (const action of DEBUG_ACTIONS) {
       if (action.code && keys.getKeyDown(action.code)) this.runDebug(action.id);
     }
     // Buttons on the laptop debug page (dev server only).
-    for (const id of takeRemoteCommands()) this.runDebug(id);
+    for (const { id, arg } of takeRemoteCommands()) this.runDebug(id, arg);
     let spin = 0;
     let height = 0;
     // A bigger spin moves the board to the left as seen from the seat.
@@ -307,7 +340,7 @@ export class GameSystem extends createSystem({}) {
     }
   }
 
-  private runDebug(id: DebugCommand): void {
+  private runDebug(id: DebugCommand, arg?: number): void {
     switch (id) {
       case 'skipWave':
         this.battle.skipWave();
@@ -322,8 +355,17 @@ export class GameSystem extends createSystem({}) {
         this.battle.damage(DEBUG.castleDamage);
         break;
       case 'restartBattle':
+        // The whole game again: Play starts from the first lesson from now on.
+        this.setPlayFromWave(0);
         this.battle.start();
         break;
+      case 'startWave': {
+        const wave = Math.round(arg ?? 1);
+        if (wave < 1 || wave > TUTORIAL_WAVES.length) break;
+        this.setPlayFromWave(wave - 1);
+        this.battle.start();
+        break;
+      }
       case 'grunts':
         this.spawner.sendGroup('grunt');
         break;

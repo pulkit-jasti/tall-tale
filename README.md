@@ -14,7 +14,7 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 - Build step 2 (Slingshot with aim assist and the pebble bowl) done and tested on the headset (2026-11-04). The slingshot is handheld: grab it by the handle, click a pebble from the bowl into the pouch, pull with the other hand. Pebbles can also be thrown by hand (they only knock a goblin back), and a held goblin can be loaded as a stronger shot. Details in [docs/mvp.md](docs/mvp.md#build-order).
 - Build step 3 (waves and flags) done and tested on the headset (2026-11-04): tutorial map blueprint, road graph, 5 tutorial waves, a guided, learn-by-doing tutorial (hint sign with text, ghost hands that show each gesture, markers), both flags, welcome, win and lose panels. Waves are small and castle damage is high for quick testing, until balancing with troops in step 5.
 - The stress test has not been re-run since step 2, on purpose: it waits until the game is built further. Gameplay feels smooth on the headset. Log it in [docs/performance.md](docs/performance.md) when it is run.
-- Build step 4 (fly swatter, pepper shaker, food jar and pips) built (2026-11-04), waiting for its headset test. Food tools are grabbed with a fist, the first swat or shake pays the food, Locked tools are dimmed and tied with a rope. Details in [docs/mvp.md](docs/mvp.md#build-order).
+- Build step 4 (fly swatter, pepper shaker, food jar and price tags) built (2026-11-04). Food tools are grabbed with a fist, the first swat or shake pays the food, Locked tools are dimmed and tied with a rope. After the first review: a reach band for every interactive thing (40 to 50 cm from the eyes), a bigger castle with an empty courtyard, tools just outside the ring, price tags instead of pips, the food jar taught right before the swatter, and a debug page with "Start at wave" for quick testing. Waiting for its headset test. Details in [docs/mvp.md](docs/mvp.md#build-order).
 - **Next step: build step 5** (triggers, troops, megaphone, bell and mic permission), then the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
@@ -307,6 +307,9 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 30. **A timer that ends each wave:** dropped. It ended waves while goblins were still attacking, which rewarded doing nothing. A wave now ends when cleared or when the castle falls.
 31. **A hint sign in front during waves and a goblin counter:** the sign now hides while a wave is fought, so it never covers enemies, and the counter is gone (the blue flag shows progress, no numbers).
 32. **A solid box slingshot pouch:** replaced by an open upright leather strip, because the loaded stone disappeared inside the box.
+33. **Tool platforms inside the ring, close to the body:** moved just outside the ring into a reach band (40 to 50 cm from the eyes, from Meta's hands guidance), low, rising with the board. The castle grew to the edge of that band. Food pips became price tags with a number.
+34. **Food jar explained before wave 1:** moved to right before the first food tool, and taught by eating a goblin, because a lone info step was easy to miss.
+35. **Out-of-view arrows and "it is to your left" hints from head direction:** removed. A simple pointer comes later.
 
 ---
 

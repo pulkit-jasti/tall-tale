@@ -1,7 +1,7 @@
 // What every food tool shares (docs/giant-tools.md sections 4 and 7): the fly
 // swatter and the pepper shaker now, the megaphone and bell in build step 5.
 //
-//   - It rests on its platform, with its cost as food pips on a ledge in front.
+//   - It rests on its platform, with its cost on a price tag at the front edge.
 //   - Grab it with a fist (TOOLS.acceptPinch also allows a pinch). It follows
 //     the hand. Grabbing is free: the first use (first swat, first shake) pays
 //     the food and starts the timer. Accidental grabs never waste food.
@@ -12,22 +12,15 @@
 //     above its platform. Its timer keeps running.
 //   - Use over: it blinks for the last seconds, then shrinks, poofs and pops
 //     back onto its platform.
+//   - The tutorial can hold the use timer (`timerHeld`) while it teaches the
+//     tool, so a tool paid for early never runs out before the goblins come.
 //
-// The platform and the tool live in fixedRig (cm, never turns). A subclass
-// builds the tool's body and decides what counts as a use while it is held.
-import {
-  Color,
-  Group,
-  InstancedMesh,
-  Matrix4,
-  Mesh,
-  MeshBasicMaterial,
-  Quaternion,
-  Vector3,
-  type MeshStandardMaterial,
-} from 'three';
+// The platform and the tool live in boardLift (cm, rises with the board,
+// never turns). A subclass builds the tool's body and decides what counts as
+// a use while it is held.
+import { Color, Group, Matrix4, Mesh, Quaternion, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { PIPS, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { PRICE_TAG, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
@@ -35,8 +28,9 @@ import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { createToolUse, stopToolUse, tickToolUse, toolUsable, useTool } from '../rules/food.js';
 import type { Goblins } from '../units/goblins.js';
 import type { FoodJar } from '../world/foodJar.js';
+import { PriceTag } from '../ui/priceTag.js';
 import { cloneStatic, loadTemplate } from '../world/models.js';
-import { pipGeometry, pipLedge, post, toolRope } from '../world/shapes.js';
+import { post, toolRope } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
 export type FoodToolName = 'swatter' | 'pepper';
@@ -88,11 +82,9 @@ const targetPosition = new Vector3();
 const targetQuaternion = new Quaternion();
 const targetScale = new Vector3();
 const wobbleQuaternion = new Quaternion();
-const pipMatrix = new Matrix4();
-const pipColor = new Color();
 
 export abstract class HandTool {
-  /** Platform, post, pips and rope (never move). */
+  /** Platform, post, price tag and rope (never move). */
   readonly root = new Group();
   /** The tool itself. Origin at the end the hand holds, the tool along +y. */
   protected readonly body = new Group();
@@ -114,9 +106,9 @@ export abstract class HandTool {
   private ready: ToolReady = 'idle';
   private wobble = 0;
   private dimmed = false;
-  private pips!: InstancedMesh;
-  private litPips = -1;
+  private price!: PriceTag;
   private rope!: Mesh;
+  private timerHold = false;
   protected time = 0;
 
   /** The tool glows (pulsing) until grabbed: a new tool, or a hint. */
@@ -171,6 +163,18 @@ export abstract class HandTool {
     return this.use.active;
   }
 
+  /**
+   * True while the tutorial holds the use timer (its use lesson): a paid use
+   * never runs out. Releasing the hold gives a running use its full time again.
+   */
+  get timerHeld(): boolean {
+    return this.timerHold;
+  }
+  set timerHeld(on: boolean) {
+    if (!on && this.timerHold && this.use.active) this.use.timeLeft = TOOLS.duration[this.name];
+    this.timerHold = on;
+  }
+
   get visible(): boolean {
     return this.root.visible;
   }
@@ -183,15 +187,15 @@ export abstract class HandTool {
     const z = polarZ(this.spot.radius, a);
     const stand = cloneStatic(platform);
     stand.position.set(x, top - platform.size.y, z);
-    const stem = post();
+    // The post reaches down to the board.
+    const stem = post(top - platform.size.y);
     stem.position.set(x, stem.position.y + top - platform.size.y, z);
     this.root.add(stand, stem);
-    this.buildPips(a);
+    this.buildPriceTag(a);
     this.build();
     this.baseColors = this.materials.map((m) => m.color.clone());
     // Rest pose: on the platform, its face toward the player, leaning back
-    // along the rim (away from the front), so a long tool stays inside the
-    // ring and its top is out of view.
+    // along the rim (away from the front), so its top is out of view.
     this.restPosition.set(x, top, z);
     const outward = temp.set(Math.sin(a), 0, -Math.cos(a));
     const side = a < 0 ? -1 : 1;
@@ -208,27 +212,27 @@ export abstract class HandTool {
     this.rope.position.set(x, top + 1.5, z);
     this.root.add(this.rope);
     this.placeAtRest();
-    this.stage.fixedRig.add(this.root, this.body);
+    this.stage.boardLift.add(this.root, this.body);
   }
 
-  private buildPips(a: number): void {
-    const count = this.cost;
-    const r = this.spot.radius - PIPS.inset;
-    const y = TOOL_SPOTS.platformTop - PIPS.below;
-    const row = new Group();
-    row.position.set(polarX(r, a), y, polarZ(r, a));
-    // Along the tangent (local x), facing the player.
-    row.rotation.y = -a;
-    row.add(pipLedge(count));
-    this.pips = new InstancedMesh(pipGeometry(), new MeshBasicMaterial({ color: 0xffffff }), count);
-    const step = PIPS.size + PIPS.gap;
-    for (let i = 0; i < count; i++) {
-      pipMatrix.makeTranslation((i - (count - 1) / 2) * step, PIPS.size / 2, 0);
-      this.pips.setMatrixAt(i, pipMatrix);
-      this.pips.setColorAt(i, pipColor.setHex(PIPS.dimColor));
-    }
-    row.add(this.pips);
-    this.root.add(row);
+  /**
+   * The price tag on the platform's front edge, toward the player and a
+   * little toward the front, so the hand on the tool never covers it. It
+   * stands tilted back toward the eyes, above the ring's line of sight.
+   */
+  private buildPriceTag(a: number): void {
+    const { inset, side, tiltDeg, height } = PRICE_TAG;
+    this.price = new PriceTag(this.cost);
+    const holder = new Group();
+    // Platform frame: x along the rim (toward the front is -x on the right side, +x on the left), z toward the player.
+    holder.rotation.y = -a;
+    holder.position.set(polarX(this.spot.radius, a), TOOL_SPOTS.platformTop, polarZ(this.spot.radius, a));
+    const toFront = a < 0 ? 1 : -1;
+    const tilt = degToRad(tiltDeg);
+    this.price.group.rotation.x = -tilt;
+    this.price.group.position.set(toFront * side, (height / 2) * Math.cos(tilt), inset);
+    holder.add(this.price.group);
+    this.root.add(holder);
   }
 
   // ---- Hands (called from GrabEat, which picks one target per hand) ----
@@ -278,6 +282,7 @@ export abstract class HandTool {
       this.holder = null;
       stopToolUse(this.use);
       this.beckon = false;
+      this.timerHold = false;
       this.placeAtRest();
     }
     this.root.visible = visible;
@@ -291,7 +296,7 @@ export abstract class HandTool {
     this.body.scale.setScalar(0.001);
     this.setPhase('popping');
     this.poof(this.restPosition, 14);
-    this.audio.play('toolPoof', this.stage.fixedRig.localToWorld(temp.copy(this.restPosition)));
+    this.audio.play('toolPoof', this.stage.boardLift.localToWorld(temp.copy(this.restPosition)));
     this.beckon = true;
   }
 
@@ -331,7 +336,7 @@ export abstract class HandTool {
     if (!this.root.visible) return;
     this.time += dt;
     this.phaseTime += dt;
-    if (tickToolUse(this.use, dt)) this.startShrink();
+    if (!this.timerHold && tickToolUse(this.use, dt)) this.startShrink();
     switch (this.phase) {
       case 'held':
         this.updateHeld(dt);
@@ -365,7 +370,7 @@ export abstract class HandTool {
     }
     if (hand.tracked) {
       this.handWorldMatrix(hand, holder.viaPinch, handMatrix);
-      matrix.copy(this.stage.fixedRig.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
+      matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
       matrix.decompose(targetPosition, targetQuaternion, targetScale);
       const k = 1 - Math.exp(-dt / TOOLS.holdSmoothing);
       this.body.position.lerp(targetPosition, k);
@@ -429,7 +434,7 @@ export abstract class HandTool {
     this.body.scale.setScalar(Math.max(0.001, 1 - t));
     if (t < 1) return;
     this.poof(this.body.position, 10);
-    this.audio.play('toolReturn', this.stage.fixedRig.localToWorld(temp.copy(this.body.position)));
+    this.audio.play('toolReturn', this.stage.boardLift.localToWorld(temp.copy(this.body.position)));
     this.placeAtRest();
     this.body.scale.setScalar(0.001);
     this.setPhase('popping');
@@ -443,7 +448,7 @@ export abstract class HandTool {
     if (t >= 1) this.setPhase('resting');
   }
 
-  /** Touch state, dimming, rope, beckon pulse, end-of-use blink and pips. */
+  /** Touch state, dimming, rope, beckon pulse, end-of-use blink and price tag. */
   private updateLook(dt: number): void {
     const usable = this.usable;
     const dim = !usable;
@@ -465,15 +470,7 @@ export abstract class HandTool {
       this.touch = state;
       applyTouchState(this.materials, state);
     }
-    this.updatePips(dt);
-  }
-
-  private updatePips(_dt: number): void {
-    const lit = this.use.active ? this.cost : Math.min(this.cost, Math.floor(this.food.food));
-    if (lit === this.litPips) return;
-    this.litPips = lit;
-    for (let i = 0; i < this.cost; i++) this.pips.setColorAt(i, pipColor.setHex(i < lit ? PIPS.litColor : PIPS.dimColor));
-    if (this.pips.instanceColor) this.pips.instanceColor.needsUpdate = true;
+    this.price.set(this.use.active ? 'paid' : usable ? 'ok' : 'short');
   }
 
   // ---- Helpers ----
@@ -493,16 +490,16 @@ export abstract class HandTool {
     this.body.updateMatrixWorld(true);
   }
 
-  /** A poof at a fixedRig point (cm). */
+  /** A poof at a boardLift point (cm). */
   private poof(at: Vector3, count: number): void {
-    this.particles.burst(this.stage.fixedRig.localToWorld(temp.copy(at)), POOF_COLORS, count, 0.18);
+    this.particles.burst(this.stage.boardLift.localToWorld(temp.copy(at)), POOF_COLORS, count, 0.18);
   }
 
   /** Distance (meters) from a world point to the grab zone on the body's axis. */
   private gripDistance(world: Vector3): number {
     this.body.worldToLocal(temp2.copy(world));
     const y = Math.min(this.grip.to, Math.max(this.grip.from, temp2.y));
-    // The body is in fixedRig (cm), but it may be scaled down while it pops in or out.
+    // The body is in boardLift (cm), but it may be scaled down while it pops in or out.
     return Math.hypot(temp2.x, temp2.y - y, temp2.z) * 0.01 * this.body.scale.x;
   }
 

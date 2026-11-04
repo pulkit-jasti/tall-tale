@@ -8,7 +8,7 @@
 // the head since the last frame, with a generous hit area, and slow slams
 // count too, not only fast swipes.
 import { Vector3 } from 'three';
-import { SWATTER, TOOL_SPOTS } from '../config/game.js';
+import { CASTLE, SWATTER, TOOL_SPOTS } from '../config/game.js';
 import { landingHeight } from '../rules/boardMath.js';
 import type { Goblin } from '../units/goblins.js';
 import { flySwatter } from '../world/shapes.js';
@@ -111,8 +111,8 @@ export class FlySwatter extends HandTool {
   /** Debug: swats the goblins at the front of the wall, without hands. Pays the food like a real swat. */
   debugSwat(): void {
     if (!this.debugStart()) return;
-    // The wall straight in front of the player (fixedRig), on the board.
-    this.stage.fixedRig.localToWorld(front.set(0, 0, -44));
+    // The goblins at the wall straight in front of the player (boardLift), on the board.
+    this.stage.boardLift.localToWorld(front.set(0, 0, -(CASTLE.wallOut + CASTLE.wallStandOff / 2)));
     this.stage.boardSpin.worldToLocal(front);
     this.hits.length = 0;
     const r = SWATTER.hitRadius * 2;

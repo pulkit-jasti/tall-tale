@@ -5,7 +5,8 @@ Status: first pass decided. Sample level mockup: `maps/castle-3d.html` (random l
 ### Scale (from the mockup)
 
 - Board height about 65 cm (placed about 36 cm below the eyes, then set per player with the ring handle), hole the player sits in about 25 cm radius.
-- Castle wall from 40 to 46 cm, **about 6 cm high** (the mockup still shows 10 cm).
+- Castle wall from 46 to 52 cm, **about 6 cm high** (the mockup still shows 40 to 46 cm and 10 cm high). Moved out after the step 4 review, as far as the reach band allows: climbers on the rampart (49 cm) stay in reach ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)).
+- The courtyard (40 to 44 cm for intruders) is empty for now. Houses, stalls and workers come back once the main gameplay is done.
 - Soldiers about 2.5 cm tall, goblins about 3.5 cm tall.
 
 ### No hidden strip outside the wall
@@ -31,7 +32,7 @@ Back to [GDD index](GDD.md). Related: [Enemies](enemies.md), [Giant tools](giant
 
 - The whole world is a raised round board at about hand height, like a big round table with a hole in the middle for the player.
 - Flat around the castle, then rising gently toward the horizon so far enemies face the player.
-- The castle sits in the middle with a low wall (about 6 cm) at about 40 to 46 cm from the player, within reach.
+- The castle sits in the middle with a low wall (about 6 cm) at about 46 to 52 cm from the player, within reach.
 - Zones: near (up to about 60 cm, in reach), middle (60 to 150 cm), far (beyond 150 cm).
 - The board is always a full 360 degree circle. The player rotates it and sets its height with the ring handle (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 

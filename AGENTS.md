@@ -13,7 +13,7 @@ Read README.md and docs/GDD.md for the full design before making gameplay decisi
 
 1. **Hands only.** The entire game must be playable with hand tracking. No controller is ever required. Controller support is optional and low priority.
 2. **Voice is never required.** Every voice action (the megaphone scream, later troop orders) must also have a hand-based way to do the same thing (for the megaphone: the bell, which is in the MVP).
-3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius. The board is always a full 360 degree circle that the player spins and raises or lowers with the ring handle, so nothing ever requires turning around. Only the board rotates. The sky, horizon, the player's tool platforms, food jar and the two flags stay fixed (comfort). See docs/controls-and-ui.md.
+3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius, and every grab, pinch and poke target sits in the reach band (below). The board is always a full 360 degree circle that the player spins and raises or lowers with the ring handle, so nothing ever requires turning around. Only the board rotates. The sky, horizon, the player's tool platforms, food jar and the two flags never turn (comfort); the platforms, jar and flags rise and fall with the board. See docs/controls-and-ui.md.
 4. **Performance first.** The game must hold a stable frame rate on a Meta Quest 3S. If a feature hurts frame rate, simplify it.
 5. **No copyrighted IP.** No names, logos, characters or lore from existing games, comics or films.
 6. **Cartoon violence only.** Enemies are non-human (goblins, orcs, etc.). No blood or gore. Eating enemies must stay funny, not disturbing.
@@ -50,6 +50,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 
 ## Hand interaction rules
 
+- **Reach band (measured from the eyes, with the board at its placed height, 36 cm below the eyes):** too close under 30 cm, **best 40 to 50 cm**, the edge 50 to 58 cm (only for things reached now and then, like climbers on the rampart and intruders), never past 58 cm. From Meta's hands guidance: direct touch works best at 42 to 46 cm, and 50 to 80 cm is the "middle distance" where people reach and miss. Every grab, pinch and poke target goes in this band, and the castle, ring handle and tool layout are sized from it. The numbers are `REACH` in `src/config/game.ts`, and the dev server warns at start about any spot outside it (`src/rules/reach.ts`). Add every new interactive thing to `reachSpots()`. Details in docs/controls-and-ui.md ("Reach band").
 - Prefer grab, drag, pull and release. These are the most reliable hand tracking actions.
 - Avoid relying on custom hand poses or gestures. If one is needed, add a short delay before it triggers so it does not flicker.
 - No haptics exist, so every action needs clear visual and sound feedback. Every grabbable or pokeable thing uses the same Idle, Ready, Held and Locked states, done with emissive color only. See "Interaction feedback" in docs/controls-and-ui.md.
@@ -78,7 +79,8 @@ The see-through tutorial hands (`src/ui/ghostHand.ts`, demos in `src/ui/ghostDem
 - The developer works on a Mac and tests on a Quest 3S over Wi-Fi in the Quest browser.
 - Make as much as possible testable in desktop Chrome with the Immersive Web Emulator, so the developer only needs the headset for feel and hand tracking checks.
 - Add debug shortcuts, for example keys that trigger the megaphone, skip a wave or add food, so features can be tested without a mic or a headset.
-- Every debug action goes in `DEBUG_ACTIONS` in `src/debug/debugKeys.ts` and gets a case in `GameSystem.runDebug`. It then works from a keyboard key and from the laptop debug page at `/__debug` on the dev server, which sends it live to the headset over Vite's hot reload WebSocket (`vite-plugins/debugPage.ts`, dev only).
+- Every debug action goes in `DEBUG_ACTIONS` in `src/debug/debugKeys.ts` (with its section `group` and an emoji `icon`) and gets a case in `GameSystem.runDebug`. It then works from a keyboard key and from the laptop debug page at `/__debug` on the dev server, which sends it live to the headset over Vite's hot reload WebSocket (`vite-plugins/debugPage.ts`, dev only). An action with `args` gets one button per value (for example "Start at wave 1 to 5").
+- **Rapid testing:** "Start at wave N" on the debug page starts the battle at that wave (earlier lessons and waves left out, earlier tools already out). Play then starts there too, even after a reload in the same tab, until "Restart game". The pages table shows each page's current tutorial step.
 - Keep game rules data driven (unit stats, tool costs, food values in config files), so tuning does not need code changes.
 - Keep three parts separate: the map blueprint (static JSON), the director (code that decides what happens when, for example the scripted tutorial) and the game systems. Directors only call systems. See docs/map.md section 8.
 - All randomness goes through one seeded random function. The tutorial uses a fixed seed.

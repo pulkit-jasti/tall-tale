@@ -18,7 +18,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { FOOD_JAR, HANDLES, PEBBLE_BOWL, PEPPER, PIPS, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { FOOD_JAR, HANDLES, PEBBLE_BOWL, PEPPER, PRICE_TAG, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -164,7 +164,8 @@ export function verticalDoubleArrow(material: MeshStandardMaterial, radius: numb
 }
 
 /** A post that holds a fixed thing up, going down from y = 0 (cm). */
-export function post(length = TOOL_SPOTS.postLength, radius = TOOL_SPOTS.postRadius): Mesh {
+export function post(length: number, radius = TOOL_SPOTS.postRadius): Mesh {
+  length = Math.max(0.1, length);
   const mesh = new Mesh(new CylinderGeometry(radius, radius * 1.2, length, 8), flatMaterial(TOOL_SPOTS.postColor));
   mesh.position.y = -length / 2;
   return mesh;
@@ -301,17 +302,12 @@ export function pepperShaker(): { group: Group; materials: MeshStandardMaterial[
   return { group, materials: [bodyMaterial, capMaterial], top: bodyHeight + bodyRadius };
 }
 
-/** A thin dark ledge for the food pips, along x, top at y = 0 (cm). */
-export function pipLedge(count: number): Mesh {
-  const length = count * (PIPS.size + PIPS.gap) + PIPS.gap;
-  const ledge = new Mesh(new BoxGeometry(length, 0.6, PIPS.size + 0.4), flatMaterial(PIPS.ledgeColor));
-  ledge.position.y = -0.3;
-  return ledge;
-}
-
-/** One pip ball (shared geometry for an instanced row). */
-export function pipGeometry(): SphereGeometry {
-  return new SphereGeometry(PIPS.size / 2, 8, 6);
+/** The wooden board of a price tag, centered, its face toward +z (cm). The text goes on a plane in front of it. */
+export function priceTagBoard(): Mesh {
+  const { width, height, thickness, woodColor } = PRICE_TAG;
+  const board = new Mesh(new BoxGeometry(width, height, thickness), flatMaterial(woodColor));
+  board.position.z = -thickness / 2;
+  return board;
 }
 
 /** The little rope that ties a locked tool down: a thin ring around it. */

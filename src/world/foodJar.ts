@@ -1,8 +1,8 @@
 // The food jar (docs/giant-tools.md section 7): one shared food bar shown as
 // a pot beside the left tool platforms. Eating fills it, tools empty it. The
 // food shows as a little heap of food balls on the pot's mouth, one ball per
-// food, that pop in and out. It lives in fixedRig, so it never turns with the
-// board. The rules are in rules/food.ts.
+// food, that pop in and out. It lives in boardLift, so it rises with the
+// board but never turns. The rules are in rules/food.ts.
 import { Color, Group, InstancedMesh, Matrix4, MeshStandardMaterial, Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { FOOD, FOOD_JAR } from '../config/game.js';
@@ -43,9 +43,11 @@ export class FoodJar {
     this.height = pot.size.y;
     const a = degToRad(FOOD_JAR.angleDeg);
     this.root.position.set(polarX(FOOD_JAR.radius, a), FOOD_JAR.bottomY, polarZ(FOOD_JAR.radius, a));
-    this.root.add(cloneStatic(pot), post(FOOD_JAR.postLength));
+    this.root.add(cloneStatic(pot));
+    // Standing above the board: a post reaches down to it.
+    if (FOOD_JAR.bottomY > 0) this.root.add(post(FOOD_JAR.bottomY));
     this.buildHeap();
-    this.stage.fixedRig.add(this.root);
+    this.stage.boardLift.add(this.root);
   }
 
   /** One ball per food, in layers on the pot's mouth, bottom first. */
@@ -121,7 +123,7 @@ export class FoodJar {
   /** The top of the pot's mouth (world), for the tutorial marker. */
   topWorld(out: Vector3): Vector3 {
     out.set(0, this.height, 0).add(this.root.position);
-    return this.stage.fixedRig.localToWorld(out);
+    return this.stage.boardLift.localToWorld(out);
   }
 
   update(dt: number): void {
