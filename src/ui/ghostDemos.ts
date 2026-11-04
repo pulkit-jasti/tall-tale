@@ -30,6 +30,7 @@ export type GhostAnchor =
   | 'pouch'
   | 'swatterHandle'
   | 'pepperHandle'
+  | 'megaphoneHandle'
   | 'bellHandle';
 
 export type Dir = [number, number, number];
@@ -74,6 +75,12 @@ const SWATTER_GRIP = {
   rod: [-Math.sin(lean), Math.cos(lean), 0] as Dir,
   palm: [Math.cos(lean), Math.sin(lean), 0] as Dir,
 };
+/**
+ * Right fist holding the megaphone up in front of the mouth: thumb up along
+ * the grip, palm facing in (left), so the cone points straight ahead. The
+ * palm never faces the headset (Quest menu).
+ */
+const SHOUT_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0] as Dir };
 /**
  * Right hand around the upright bell handle on the right side platform,
  * reaching out to the right like a handshake: thumb up along the handle,
@@ -199,6 +206,28 @@ export const GHOST_DEMOS = {
       key(0.8, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
       key(1.1, 'bellHandle', [0, 0, 0], 'fist', BELL_GRIP),
       key(2.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
+    ],
+  },
+  /** Right hand from the player's side, a little high, closes the fist around the upright megaphone grip, lifts it. */
+  megaphoneGrab: {
+    hand: 'right',
+    keys: [
+      key(0, 'megaphoneHandle', [0, 2, -8], 'open', BELL_GRIP),
+      key(0.8, 'megaphoneHandle', [0, 0, 0], 'open', BELL_GRIP),
+      key(1.1, 'megaphoneHandle', [0, 0, 0], 'fist', BELL_GRIP),
+      key(2.0, 'megaphoneHandle', [0, 5, -4], 'fist', BELL_GRIP),
+    ],
+  },
+  /** Grab the megaphone, bring it up in front of the mouth (the fist a little below and to the right), hold it there while shouting. */
+  megaphoneShout: {
+    hand: 'right',
+    keys: [
+      key(0, 'megaphoneHandle', [0, 2, -8], 'open', BELL_GRIP),
+      key(0.6, 'megaphoneHandle', [0, 0, 0], 'open', BELL_GRIP),
+      key(0.9, 'megaphoneHandle', [0, 0, 0], 'fist', BELL_GRIP),
+      key(1.4, 'megaphoneHandle', [0, 6, -4], 'fist', BELL_GRIP),
+      key(2.4, 'mouth', [3, -7, 4], 'fist', SHOUT_GRIP),
+      key(3.6, 'mouth', [3, -7, 4], 'fist', SHOUT_GRIP),
     ],
   },
   /** Grab the bell, lift it, shake it hard side to side a few times (each turn back is one ring). */

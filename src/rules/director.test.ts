@@ -164,15 +164,19 @@ describe('tutorial director', () => {
     expect(api.shown).toEqual(['slingshot', 'swatter', 'pepper']);
   });
 
-  it('teaches the megaphone and bell with the pepper: grab in the breather, stun in wave 4', () => {
+  it('brings one tool at a time: the megaphone gets its own breather and its own how-to box', () => {
     const api = idleApi();
     api.waveCleared = () => true;
     const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper', 'megaphone']);
     const ids = steps.map((s) => s.id);
-    expect(ids.indexOf('learn-megaphone-grab')).toBe(ids.indexOf('learn-pepper-grab') + 1);
-    expect(ids.indexOf('learn-megaphone-grab')).toBeLessThan(ids.indexOf('wave-4-start'));
-    expect(ids.indexOf('learn-megaphone')).toBeGreaterThan(ids.indexOf('learn-pepper'));
-    expect(ids.indexOf('learn-megaphone')).toBeLessThan(ids.indexOf('wave-4-clear'));
+    expect(ids.indexOf('learn-megaphone-grab')).toBeGreaterThan(ids.indexOf('wave-4-cleared'));
+    expect(ids.indexOf('megaphone-how')).toBe(ids.indexOf('learn-megaphone-grab') + 1);
+    expect(steps[ids.indexOf('megaphone-how')].hint?.next).toBe(true);
+    expect(ids.indexOf('wave-5-start')).toBeGreaterThan(ids.indexOf('megaphone-how'));
+    expect(ids.indexOf('learn-megaphone')).toBeGreaterThan(ids.indexOf('wave-5-start'));
+    // Every breather brings at most one tool.
+    const grabs = ids.filter((id) => id.endsWith('-grab'));
+    expect(new Set(grabs.map((id) => ids.slice(0, ids.indexOf(id)).filter((x) => x.endsWith('-cleared')).length)).size).toBe(grabs.length);
     const director = new Director<TutorialApi>(steps, api);
     runPokingNext(director, 60 * 40);
     expect(director.finished).toBe(true);

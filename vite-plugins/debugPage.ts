@@ -112,7 +112,7 @@ ${sectionsHtml()}
 <h2>Connected game pages</h2>
 <p>Every open game page checks in every 2 s. "laptop" pages run on localhost (the emulator fakes a Quest there), "headset" pages on the Mac's network address. Close laptop game tabs before testing.</p>
 <table>
-  <thead><tr><th>page</th><th>device</th><th>in VR</th><th>state</th><th>step</th><th>Play at</th><th>fps</th><th>target</th><th>units</th></tr></thead>
+  <thead><tr><th>page</th><th>device</th><th>in VR</th><th>state</th><th>step</th><th>Play at</th><th>fps</th><th>target</th><th>units</th><th>mic</th></tr></thead>
   <tbody id="pages"><tr><td colspan="9">No game page connected.</td></tr></tbody>
 </table>
 <h2>Automatic stress test</h2>
@@ -149,10 +149,10 @@ ${sectionsHtml()}
                 '</td><td>' + (p.testing ? 'stress test' : p.paused ? 'paused' : 'playing') + '</td><td>' + (p.step || '') +
                 '</td><td>wave ' + (p.playFrom || 1) + '</td><td class="' +
                 cls(p.liveFps, p.targetFps) + '">' + p.liveFps.toFixed(0) + '</td><td>' + p.targetFps + '</td><td>' +
-                p.units + '</td></tr>',
+                p.units + '</td><td>' + (p.mic || '') + '</td></tr>',
             )
             .join('')
-        : '<tr><td colspan="9">No game page connected.</td></tr>';
+        : '<tr><td colspan="10">No game page connected.</td></tr>';
       // Short summary at the top: what the first connected page is doing.
       const first = data.pages.find((p) => p.device === 'headset') || data.pages[0];
       document.getElementById('state').innerHTML = first

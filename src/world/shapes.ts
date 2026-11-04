@@ -10,6 +10,7 @@ import {
   Group,
   LatheGeometry,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Shape,
   SphereGeometry,
@@ -349,6 +350,44 @@ export function megaphone(): { group: Group; materials: MeshStandardMaterial[]; 
   mouthpiece.position.set(0, coneY, coneBack + 0.6);
   group.add(grip, cone, band, mouthpiece);
   return { group, materials: [bodyMaterial, bandMaterial, gripMaterial], mouth: new Vector3(0, coneY, coneBack - coneLength) };
+}
+
+/**
+ * The megaphone's loudness meter, lying on top of its cone from the
+ * mouthpiece toward the wide end: a dark track, a fill bar that grows along
+ * it (scale its z from 0 to 1), and a red target dot at MEGAPHONE.targetShare
+ * of its length. Unlit, so it reads in any light. Returns the parts (cm).
+ */
+export function megaphoneMeter(): {
+  group: Group;
+  fill: Mesh<BoxGeometry, MeshBasicMaterial>;
+  target: Mesh;
+} {
+  const { coneLength, coneMouth, coneEnd, coneBack, gripLength, meterWidth, meterLift, targetShare } = MEGAPHONE;
+  const coneY = gripLength + coneMouth * 0.6;
+  const radiusAt = (z: number): number => coneMouth + ((coneEnd - coneMouth) * (coneBack - z)) / coneLength;
+  const z1 = coneBack - 1.5;
+  const z2 = coneBack - coneLength + 1.5;
+  const rise = radiusAt(z2) - radiusAt(z1);
+  const length = Math.hypot(z1 - z2, rise);
+  const group = new Group();
+  group.position.set(0, coneY + radiusAt(z1) + meterLift, z1);
+  // Its length runs along local -z, tilted up with the cone's top line.
+  group.rotation.x = Math.atan2(rise, z1 - z2);
+  const track = new Mesh(new BoxGeometry(meterWidth + 0.2, 0.2, length + 0.2), new MeshBasicMaterial({ color: MEGAPHONE.meterTrackColor }));
+  track.position.z = -length / 2;
+  const fillGeometry = new BoxGeometry(meterWidth, 0.3, 1);
+  fillGeometry.translate(0, 0.05, -0.5);
+  const fill = new Mesh(fillGeometry, new MeshBasicMaterial({ color: MEGAPHONE.meterLowColor }));
+  fill.scale.z = 0.001;
+  // The fill grows from the start to the full length.
+  fill.userData.length = length;
+  const target = new Mesh(new SphereGeometry(0.42, 10, 8), new MeshBasicMaterial({ color: MEGAPHONE.targetColor }));
+  target.position.set(0, 0.45, -length * targetShare);
+  const notch = new Mesh(new BoxGeometry(meterWidth + 0.6, 0.36, 0.22), new MeshBasicMaterial({ color: MEGAPHONE.targetColor }));
+  notch.position.set(0, 0.05, -length * targetShare);
+  group.add(track, fill, notch, target);
+  return { group, fill, target };
 }
 
 /**

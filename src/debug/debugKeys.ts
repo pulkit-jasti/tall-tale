@@ -109,11 +109,11 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'bowlFill', group: 'slingshot', icon: '🫙', code: 'KeyI', label: 'Fill bowl', does: 'Fill the pebble bowl' },
   { id: 'addFood', group: 'food', icon: '➕', code: 'KeyY', label: 'Add food', does: 'Add 3 food to the jar (it stops at 10)' },
   { id: 'emptyFood', group: 'food', icon: '➖', code: 'Digit0', label: 'Empty food', does: 'Empty the food jar (the swatter and pepper show Locked)' },
-  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show food tools', does: 'The fly swatter, pepper shaker, megaphone and bell pop onto their platforms now (normally in waves 3 and 4)' },
+  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show food tools', does: 'The fly swatter, pepper shaker and megaphone (the bell without a mic) pop onto their platforms now (normally in waves 3, 4 and 5)' },
   { id: 'swat', group: 'food', icon: '🪰', code: 'Digit2', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (the first swat costs 4 food, then 10 s of swatting)' },
   { id: 'pepper', group: 'food', icon: '🌶️', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (the first shake costs 3 food, then 8 s). Peppered goblins give 2 food' },
-  { id: 'megaphone', group: 'food', icon: '📣', code: 'Digit4', label: 'Megaphone scream', does: 'Megaphone: a scream without a mic, every goblin is stunned (costs 6 food, works even when it is tied down)' },
-  { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands, every goblin is stunned (costs 6 food)' },
+  { id: 'megaphone', group: 'food', icon: '📣', code: 'Digit4', label: 'Megaphone scream', does: 'Megaphone: a scream without a mic, every goblin is stunned (costs 6 food, puts the megaphone out in place of the bell)' },
+  { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands, every goblin is stunned (costs 6 food, puts the bell out in place of the megaphone)' },
   { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send squad', does: 'A squad of soldiers marches out now toward a camp (normally every 10 s while a wave runs)' },
   { id: 'triggersReset', group: 'army', icon: '🛢️', code: 'Digit7', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
   { id: 'triggersFire', group: 'army', icon: '💣', code: 'Digit8', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },
@@ -187,6 +187,8 @@ export interface PageInfo {
   step: string;
   /** The wave (1 based) Play starts at. */
   playFrom: number;
+  /** Mic state, and the loudest level read since the last check in (only read while the megaphone is held). */
+  mic: string;
 }
 
 /** A debug command as it comes in from a key or the debug page. */

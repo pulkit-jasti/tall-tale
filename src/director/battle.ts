@@ -4,6 +4,7 @@
 // triggers, slingshot, food tools, food jar), and it counts what the player
 // does for the lessons. Nothing tutorial-only lives in those systems.
 import { Vector3 } from 'three';
+import { mic } from '../audio/mic.js';
 import type { GameAudio } from '../audio/sound.js';
 import {
   CALIBRATION,
@@ -253,8 +254,6 @@ export class Battle implements TutorialApi {
       const tool = wave.newTool;
       if (tool === 'slingshot') slingshot.setVisible(true);
       else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
-      // The megaphone and the bell come with the pepper.
-      if (tool === 'pepper') for (const t of this.foodTools('megaphone')) t.setVisible(true);
     }
     if (from > 0) food.add(from * DEBUG.startFoodPerWave);
     this.reach.stop();
@@ -376,9 +375,10 @@ export class Battle implements TutorialApi {
       return;
     }
     const target = this.markerPosition(hint.marker, markerAt);
-    this.updateGhost(dt, hint.demo, hands, head);
+    this.updateGhost(dt, !mic.on && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
     markers.update(dt, target);
-    let text = hint.text;
+    // No mic: the bell is out in place of the megaphone, with its own words and demo.
+    let text = !mic.on && hint.whenNoMic ? hint.whenNoMic : hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
     // A food tool lesson without enough food says so (a climber comes to eat).
@@ -468,6 +468,10 @@ export class Battle implements TutorialApi {
         return this.parts.tools.pepper.handleWorld(out);
       case 'bellHandle':
         return this.parts.tools.bell.handleWorld(out);
+      case 'megaphoneHandle':
+        return this.parts.tools.megaphone.handleWorld(out);
+      case 'stunTool':
+        return this.stunTool().handleWorld(out);
       case 'slingHandle':
         return slingshot.partWorld('handle', out);
       case 'bowl':
@@ -687,12 +691,21 @@ export class Battle implements TutorialApi {
     return this.foodTools(tool).some((t) => t.usable);
   }
 
-  /** The food tools of a tutorial tool name: the megaphone lessons are about the megaphone and the bell. */
+  /** The food tools of a tutorial tool name: the megaphone lessons are about the stun tool that is out. */
   private foodTools(tool: ToolName): HandTool[] {
     const { tools } = this.parts;
     if (tool === 'swatter' || tool === 'pepper') return [tools[tool]];
-    if (tool === 'megaphone') return [tools.megaphone, tools.bell];
+    if (tool === 'megaphone') return [this.stunTool()];
     return [];
+  }
+
+  /**
+   * The stun tool for this player: the megaphone when the mic is on, the
+   * bell when it is not. Only one of them is ever out. (A setting for a
+   * quiet bell with the mic on comes later.)
+   */
+  private stunTool(): HandTool {
+    return mic.on ? this.parts.tools.megaphone : this.parts.tools.bell;
   }
 
   boardSpun(): number {

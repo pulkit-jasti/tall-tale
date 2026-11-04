@@ -506,13 +506,11 @@ export const FEEDBACK = {
  */
 export const TOOL_SPOTS = {
   slingshot: { angleDeg: 30, radius: 33.5 },
-  /** The shared platform of the megaphone and the bell (it is wider, see stunPlatformWidth). */
+  /**
+   * The megaphone, or the bell when there is no mic. Only one of them is
+   * ever out, so they use the same spot.
+   */
   rightSide: { angleDeg: 82, radius: 33.5 },
-  /** The bell rests on the front half of that platform, the megaphone on the back half. */
-  bell: { angleDeg: 77, radius: 33.5 },
-  megaphone: { angleDeg: 88, radius: 33.5 },
-  /** Width of the megaphone and bell platform (cm), so both fit side by side. */
-  stunPlatformWidth: 11,
   /** Pepper shaker. */
   leftFront: { angleDeg: -30, radius: 33.5 },
   /** Fly swatter. */
@@ -938,9 +936,30 @@ export const MEGAPHONE = {
   gripFrom: 0,
   gripTo: 6,
   grabRadius: 0.06,
-  /** Mic loudness (RMS of the samples, 0 to 1) that counts as a scream, and how long it must last (seconds). */
-  screamLevel: 0.12,
-  screamHold: 0.12,
+  /**
+   * Mic loudness (RMS of the samples, 0 to 1) that counts as a scream, and
+   * how long it must last (seconds). Lowered from 0.12 after the first
+   * headset test (it did not trigger). The debug page's mic column shows the
+   * loudest level while the megaphone is held, to tune it.
+   */
+  screamLevel: 0.04,
+  screamHold: 0.1,
+  /**
+   * The loudness meter on top of the cone, shown while it is held: a thin
+   * bar that fills as the player gets louder, and a pulsing red dot at
+   * `targetShare` of its length, where the scream level is. Filling past the
+   * dot stuns (cm, seconds).
+   */
+  meterWidth: 0.5,
+  meterLift: 0.35,
+  targetShare: 0.8,
+  /** The bar drops back this slowly, so a shout is easy to read. */
+  meterFall: 0.18,
+  meterTrackColor: 0x2a2018,
+  meterLowColor: 0x5ad15a,
+  meterHighColor: 0xffd23f,
+  meterFullColor: 0xff4a2a,
+  targetColor: 0xff2a2a,
   /** The loudness is smoothed this much (seconds). */
   levelSmoothing: 0.05,
   /** Sound waves out of the cone while screaming: this often (seconds). */
@@ -1095,37 +1114,77 @@ export const TROOPS = {
 
 /**
  * The sky (decor only, no gameplay): the IWSDK gradient dome from the scene
- * file, plus a sun and a few slow low-poly clouds drifting with the wind.
- * Everything here is in meters, around the player, and never turns with the
- * board. One draw call for all the clouds, two for the sun.
+ * file, plus a cartoon sun and many low-poly white clouds drifting with the
+ * wind. The clouds float low, a few meters above the player's head, so the
+ * giant feels close to them. Meters, around the player, never turns with the
+ * board. One draw call for all the clouds, five small ones for the sun.
  */
 export const SKY = {
   enabled: true,
   /** Sun direction: compass angle from the player's first view (degrees, 0 = front, positive = right) and height above the horizon. */
   sunAngleDeg: -55,
-  sunElevationDeg: 32,
+  sunElevationDeg: 24,
   sunDistance: 150,
-  /** Sun disc and its soft glow (meters wide). */
-  sunSize: 9,
-  glowSize: 30,
-  sunColor: 0xfff4c8,
-  glowColor: 0xfff0b0,
-  /** Clouds: how many, puffs per cloud, and where they float (meters from the player, and heights). */
-  cloudCount: 11,
-  puffsPerCloud: 5,
-  cloudMinDistance: 55,
-  cloudMaxDistance: 125,
-  cloudMinHeight: 26,
-  cloudMaxHeight: 48,
+  /** Sun face (meters wide), and its glow as a share of that. */
+  sunSize: 12,
+  glowShare: 3.4,
+  /** Cartoon look: a yellow face, an orange rim, a pale shine spot, pointy rays (count, turning degrees per second). */
+  sunColor: 0xffd23f,
+  rimColor: 0xff9f1c,
+  shineColor: 0xfff3b0,
+  rayColor: 0xffc23a,
+  glowColor: 0xffb84a,
+  sunRays: 14,
+  raySpin: 3,
+  /** Clouds: how many, puffs per cloud, and where they float (meters from the player, and heights above the floor). */
+  cloudCount: 26,
+  puffsPerCloud: 6,
+  cloudMinDistance: 14,
+  cloudMaxDistance: 70,
+  cloudMinHeight: 3,
+  cloudMaxHeight: 10,
   /** Cloud size (meters across one cloud, from, to). */
-  cloudMinSize: 9,
-  cloudMaxSize: 18,
+  cloudMinSize: 3.5,
+  cloudMaxSize: 9,
   /** Wind: direction (degrees, 0 = front) and speed (meters per second). Slow, so it reads as calm. */
   windDeg: 70,
-  windSpeed: 0.9,
+  windSpeed: 0.35,
+  /** Top of each puff, and its underside: a light sky blue, so the faces read without looking stormy. */
   cloudColor: 0xffffff,
-  /** The cloud underside: a soft blue grey, so the flat low-poly faces read. */
-  cloudShade: 0x8ea4bc,
+  cloudShade: 0xd6e6f5,
+  /** The clouds are sorted far to near this often (seconds), so nearer ones paint over farther ones. */
+  sortEvery: 0.5,
+};
+
+/**
+ * Low-poly hills around the board, so the horizon is not empty (decor only).
+ * Foreground: small green hills on a grass ring just past the board's edge,
+ * in boardLift (cm, they rise and size with the board, never turn).
+ * Background: big hazy hills far away, in world space (meters, never move).
+ */
+export const HILLS = {
+  /** The grass ring under the foreground hills (cm from the center, and how much it rises to its outer edge). */
+  ringFrom: 590,
+  ringTo: 1700,
+  ringRise: 60,
+  ringColor: 0x86b552,
+  /** Foreground hills (cm): how many, where, how wide and how high. */
+  nearCount: 34,
+  nearFrom: 680,
+  nearTo: 1500,
+  nearWidth: [90, 260] as [number, number],
+  nearHeight: [25, 110] as [number, number],
+  nearColors: [0x7fb24f, 0x8fbf5a, 0x6fa246, 0x9cc46b],
+  /** Background hills (meters): how many, where, how wide and how high. Hazy blue greens, lighter farther away. */
+  farCount: 26,
+  farFrom: 28,
+  farTo: 85,
+  farWidth: [14, 36] as [number, number],
+  farHeight: [4, 13] as [number, number],
+  farNearColor: 0x7fa77a,
+  farFarColor: 0xa9c4c4,
+  /** Base height of the background hills above the floor (meters). */
+  farBase: 0.3,
 };
 
 export const PARTICLES = {

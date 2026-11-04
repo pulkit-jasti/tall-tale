@@ -1,7 +1,7 @@
 // The microphone, for the megaphone (docs/giant-tools.md): only its loudness,
 // no speech recognition. Permission is asked on the 2D start page before
-// entering VR (src/index.ts). Without it the megaphone is tied down and the
-// bell does the same job, so voice is never required.
+// entering VR (src/index.ts). Without it the bell comes instead of the
+// megaphone and does the same job by shaking, so voice is never required.
 //
 // Web Audio API: the mic stream goes into an AnalyserNode (never to the
 // speakers), and each frame reads the RMS of the latest samples.
@@ -17,6 +17,8 @@ export class Mic {
   private samples: Float32Array<ArrayBuffer> | null = null;
   /** Loudness of the last read (RMS, 0 to 1). */
   level = 0;
+  /** The loudest read since takePeak() (for the debug page, to tune the scream level). */
+  private peak = 0;
 
   get on(): boolean {
     return this.state === 'on';
@@ -69,11 +71,16 @@ export class Mic {
       const analyser = context.createAnalyser();
       analyser.fftSize = 512;
       source.connect(analyser);
+      // Some browsers only run a node that leads to the speakers: a silent gain closes the chain, so nothing is heard.
+      const silent = context.createGain();
+      silent.gain.value = 0;
+      analyser.connect(silent);
+      silent.connect(context.destination);
       this.analyser = analyser;
       this.samples = new Float32Array(analyser.fftSize);
       this.state = 'on';
     } catch (error) {
-      console.info('[mic] not allowed, the megaphone is tied down (the bell still works)', error);
+      console.info('[mic] not allowed: the bell comes instead of the megaphone', error);
       this.state = 'denied';
     }
     try {
@@ -92,7 +99,21 @@ export class Mic {
     let sum = 0;
     for (let i = 0; i < this.samples.length; i++) sum += this.samples[i] * this.samples[i];
     this.level = Math.sqrt(sum / this.samples.length);
+    this.peak = Math.max(this.peak, this.level);
     return this.level;
+  }
+
+  /** The loudest level since the last call, then starts over. */
+  takePeak(): number {
+    const peak = this.peak;
+    this.peak = 0;
+    return peak;
+  }
+
+  /** Short text for the debug page. */
+  describe(): string {
+    if (!this.on) return this.state;
+    return `on, peak ${this.takePeak().toFixed(3)}`;
   }
 }
 

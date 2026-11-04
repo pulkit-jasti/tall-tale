@@ -8,7 +8,7 @@
 //     the food and starts the timer. Accidental grabs never waste food.
 //   - Not enough food: dimmed and tied down with a little rope. A hand near it
 //     shows Locked, and closing the hand buzzes and wobbles it instead of grabbing.
-//     The megaphone is tied down the same way when there is no mic (`tiedDown`).
+//     `tiedDown` does the same whatever the food (the megaphone if it is ever out without a mic).
 //   - Let go before or after a use: it glides back to its platform.
 //   - Dropped mid-use: it hangs for a moment, then floats up to the hand area
 //     above its platform. Its timer keeps running.

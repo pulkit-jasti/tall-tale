@@ -23,8 +23,10 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Flag poles | Thin cylinders with a ball on top. The cloth is a flat plane (red for health, blue for waves) that slides up and down and sways. The wave pole has one small flat notch per wave. |
 | Food jar fill level | A heap of small low-poly food balls (instanced) on the pot's mouth, one ball per food, in layers of 6, 3 and 1. They pop in and out. (A disc inside does not show: the pot's neck is too narrow.) |
 | Particles: poof, stars, smoke, sparks, splat | Small instanced quads or low-poly spheres, pooled. |
-| Sun | Two unlit discs far away (150 m) facing the player: a warm disc and a soft additive glow behind it (radial gradient canvas). Decor only. |
-| Clouds | 11 clouds of 5 flattened low-poly puffs each (icosahedrons), all in one instanced mesh, lit and flat shaded, fog off. They drift slowly with the wind and shrink away at the edge of their wrap area. Decor only. |
+| Sun | A cartoon sun far away (150 m) facing the player, all unlit flat shapes: a warm additive glow, 14 pointy rays (long and short in turn, turning slowly), an orange rim, a yellow face and a pale shine spot. Never writes depth, drawn in a fixed order, so the layers never flicker. Decor only. |
+| Clouds | 26 clouds of 6 round low-poly puffs each (icosahedrons), all in one instanced mesh, unlit, white with a light sky blue underside baked into the face colors, fog off. Low and fairly close (3 to 10 m up, 14 to 70 m out), drifting slowly with the wind, shrinking away at the edge of their wrap area. Never write depth, sorted far to near. Decor only. |
+| Hills | Faceted low-poly mounds (a nudged half sphere, darker at the base), one instanced mesh per layer: 34 small green ones on a grass ring just past the board's edge (in boardLift), and 26 big hazy blue green ones far away (world, lighter farther away). Decor only. |
+| Grass ring | A flat ring from the board's edge out to 17 m, rising a little, under the foreground hills. |
 
 ## Waiting for a real model
 
@@ -34,8 +36,8 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Fly swatter | Long thin handle (cylinder, yellow) and a flat square head (thin red box with a darker rim and neck). Rests on its platform leaning back 18 degrees along the rim (head behind the left shoulder). Built in step 4. | 35 cm long, head 10 x 9 cm |
 | Pepper shaker | Red cylinder body with a light dome cap and 4 dark dots for holes. Built in step 4. | 11 cm tall |
 | Megaphone | Cone (open wide end, cream with a red band) lying on a short dark pistol grip, the mouthpiece toward the face. Rests standing on its grip, the cone pointing out. Built in step 5. | Cone 13 cm, grip 6 cm |
+| Megaphone loudness meter | Thin bar lying on top of the cone, shown while held: a dark track, a fill that grows with the mic loudness (green, yellow near the target, red past it), and a pulsing red dot with a notch at 80% of its length (the scream level). Unlit. | About 10 cm long, 0.5 cm wide |
 | Bell | Brass bell (lathe, flared mouth, a clapper inside) hanging below a short wooden handle with a knob. Rests on its mouth, handle up. Built in step 5. | 10 cm tall |
-| Megaphone and bell platform | One wider platform (11 cm, same model) on the right side for both, with one price tag toward the back. | 11 cm wide |
 | Stun shock ring | A thin flat ring (unlit, transparent) running out across the board from the castle when the megaphone or bell stuns. | Up to 2.6 m |
 | Dizzy stars | Two small yellow low-poly balls circling over each stunned goblin's head, all in one instanced mesh. | 0.55 cm |
 | Pebble bowl | Shallow open bowl (lathe), clay color, on a short post. Built in step 2 at 11 cm (`PEBBLE_BOWL.width`), so it fits between the slingshot platform and the ring handle. | 11 cm wide |

@@ -41,6 +41,7 @@ import { Slingshot } from './tools/slingshot.js';
 import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
 import { Troops } from './units/troops.js';
+import { Hills } from './world/hills.js';
 import { Sky } from './world/sky.js';
 import { Triggers } from './world/triggers.js';
 import { buildBoard } from './world/boardBuilder.js';
@@ -105,11 +106,14 @@ export class GameSystem extends createSystem({}) {
     const sun = new DirectionalLight(0xfff4e0, 1.6);
     sun.position.set(-3, 6, 2);
     root.add(sun);
-    this.scene.fog = new Fog(0xc9dce6, 3.5, 9);
-    // Decor only: a sun and slow clouds in front of the scene's gradient dome.
-    if (SKY.enabled) this.sky = new Sky(root, createRandom(seed + 700));
+    // Light haze. It starts past the castle and is full far beyond the board,
+    // so the hills around the board fade softly into the sky.
+    this.scene.fog = new Fog(0xc9dce6, 5, 24);
 
     this.stage = new Stage(root);
+    // Decor only: hills around the board, a sun and slow clouds in front of the scene's gradient dome.
+    new Hills(this.stage.boardLift, root, createRandom(seed + 710));
+    if (SKY.enabled) this.sky = new Sky(root, createRandom(seed + 700));
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
     this.particles = new Particles(root, createRandom(seed + 101));
     this.handles = new BoardHandles(this.stage);
@@ -301,6 +305,7 @@ export class GameSystem extends createSystem({}) {
         testing: this.stressTest.active,
         step: this.battle.stepId,
         playFrom: this.battle.playFromWave + 1,
+        mic: mic.describe(),
       });
     }
     if (paused) return;
@@ -329,7 +334,7 @@ export class GameSystem extends createSystem({}) {
     this.goblins.update(dt);
     this.troops.update(dt);
     this.triggers.update(dt);
-    // No mic (denied on the start page): the megaphone is tied down, the bell still works.
+    // No mic: the bell is out instead. If the megaphone is ever out anyway (debug), it is tied down.
     this.megaphone.tiedDown = !mic.on;
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
@@ -484,7 +489,11 @@ export class GameSystem extends createSystem({}) {
         console.info('[debug] food 0: the food tools show Locked');
         break;
       case 'showTools':
-        for (const tool of this.tools) if (!tool.visible) tool.appear();
+        // Only one stun tool is ever out: the megaphone with a mic, the bell without.
+        for (const tool of this.tools) {
+          if (tool === (mic.on ? this.bell : this.megaphone)) continue;
+          if (!tool.visible) tool.appear();
+        }
         break;
       case 'swat':
         this.swatter.debugSwat();
@@ -493,9 +502,12 @@ export class GameSystem extends createSystem({}) {
         this.pepper.debugShake();
         break;
       case 'megaphone':
+        // They share a spot: the other one goes away first.
+        this.bell.setVisible(false);
         this.megaphone.debugScream();
         break;
       case 'bell':
+        this.megaphone.setVisible(false);
         this.bell.debugRing();
         break;
       case 'troops':

@@ -10,6 +10,10 @@ import { TOOLS, type GoblinType } from '../config/game.js';
 import type { DirectorStep } from '../rules/director.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
+/**
+ * 'megaphone' is the stun tool: the megaphone when the mic is on, the bell
+ * when it is not. Only one of them is ever out (the game picks it).
+ */
 export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'megaphone';
 
 export interface WavePlan {
@@ -62,6 +66,8 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     camps: ['campNorth', 'campEast', 'campSouth'],
     counts: { grunt: 18, runner: 16, climber: 4 },
     spawnTime: 70,
+    // One new tool per wave: the megaphone (or the bell without a mic) has its own breather.
+    newTool: 'megaphone',
   },
 ];
 
@@ -99,6 +105,9 @@ export type MarkerTarget =
   | 'pouch'
   | 'swatterHandle'
   | 'pepperHandle'
+  /** The stun tool that is out: the megaphone, or the bell without a mic. */
+  | 'stunTool'
+  | 'megaphoneHandle'
   | 'bellHandle';
 
 export type HintIcon = 'pinch' | 'grab' | 'spin' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
@@ -116,6 +125,10 @@ export interface Hint {
   /** The food tool this lesson is about, and the text shown instead while it cannot be paid for. */
   tool?: ToolName;
   whenLocked?: string;
+  /** Shown instead when there is no mic: the bell is out in place of the megaphone. */
+  whenNoMic?: string;
+  /** The ghost hand demo instead when there is no mic. */
+  demoNoMic?: GhostDemoName;
   /** A ghost hand loops this demonstration next to the target. */
   demo?: GhostDemoName;
   /** Info steps: they wait for the "Next" button on the sign. */
@@ -357,10 +370,17 @@ const seconds = (tool: FoodTool): number => TOOLS.duration[tool];
 const free = TOOLS.freeInTutorial;
 
 /** Each food tool: where its handle is, the ghost hand demo for grabbing it, and its use lesson. */
-const FOOD_TOOL_LESSONS: Record<
-  FoodTool,
-  { marker?: MarkerTarget; grabDemo?: GhostDemoName; useDemo?: GhostDemoName; use: string; locked: string }
-> = {
+interface FoodToolLesson {
+  marker?: MarkerTarget;
+  grabDemo?: GhostDemoName;
+  useDemo?: GhostDemoName;
+  use: string;
+  locked: string;
+  /** The bell in place of the megaphone (no mic): its texts and demos. */
+  noMic?: { name: string; use: string; grabDemo: GhostDemoName; useDemo: GhostDemoName };
+}
+
+const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
   swatter: {
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
@@ -378,11 +398,17 @@ const FOOD_TOOL_LESSONS: Record<
     locked: `Not enough food for the pepper (${cost('pepper')}). Eat a goblin to fill your jar.`,
   },
   megaphone: {
-    marker: 'bellHandle',
-    grabDemo: 'bellGrab',
-    useDemo: 'bellRing',
-    use: 'Goblins everywhere! Shake the bell hard, or hold the megaphone and shout into it, to stun every goblin at once.',
-    locked: `Not enough food for the bell (${cost('megaphone')}). Eat a goblin to fill your jar.`,
+    marker: 'stunTool',
+    grabDemo: 'megaphoneGrab',
+    useDemo: 'megaphoneShout',
+    use: 'The final wave! When goblins pile up, shout into the megaphone until the bar passes the red dot.',
+    locked: `Not enough food for it (${cost('megaphone')}). Eat a goblin to fill your jar.`,
+    noMic: {
+      name: 'the bell',
+      use: 'The final wave! When goblins pile up, shake the bell hard to stun them all.',
+      grabDemo: 'bellGrab',
+      useDemo: 'bellRing',
+    },
   },
 };
 
@@ -421,22 +447,22 @@ function foodLessons(): TutorialStep[] {
  * grabs it. Grabbing is free, so it is never locked. The text points at its
  * price tag, so the player links food and tools (free while learning).
  */
-function toolGrabLesson(tool: FoodTool, afterFood: boolean, intro?: string): TutorialStep {
-  const { marker, grabDemo } = FOOD_TOOL_LESSONS[tool];
-  intro ??= afterFood ? 'Tools cost food, but they are free while you learn.' : 'Wave cleared!';
+function toolGrabLesson(tool: FoodTool, afterFood: boolean): TutorialStep {
+  const { marker, grabDemo, noMic } = FOOD_TOOL_LESSONS[tool];
+  const intro = afterFood ? 'Tools cost food, but they are free while you learn.' : 'Wave cleared!';
   const price = free ? 'its price tag says Free for now' : `its price tag says ${cost(tool)} food`;
-  const text =
-    tool === 'megaphone'
-      ? `${intro} Here are ${TOOL_NAMES[tool]} (${price.replace('its', 'their')}). Grab the bell with your fist.`
-      : `${intro} Here is ${TOOL_NAMES[tool]}: ${price}. Grab it with your fist.`;
+  const say = (name: string): string => `${intro} Here is ${name}: ${price}. Grab it with your fist.`;
   return lessonStep(
     `learn-${tool}-grab`,
-    lesson(text, 'grab', marker, { demo: grabDemo }),
+    lesson(say(TOOL_NAMES[tool]), 'grab', marker, {
+      demo: grabDemo,
+      whenNoMic: noMic && say(noMic.name),
+      demoNoMic: noMic?.grabDemo,
+    }),
     (api, since) => api.toolGrabbed(tool) > since,
     // Counts from when the tool appeared, like the slingshot lessons.
     fromToolShown,
     {
-      // The megaphone and the bell share a platform and come together.
       start: (api) => api.showTool(tool),
       fallbacks: [(api) => api.hintTool(tool)],
       timeout: 45,
@@ -456,7 +482,13 @@ function toolLesson(tool: FoodTool): TutorialStep {
   const text = FOOD_TOOL_LESSONS[tool];
   return lessonStep(
     `learn-${tool}`,
-    lesson(text.use, 'target', text.useDemo ? text.marker : undefined, { tool, whenLocked: text.locked, demo: text.useDemo }),
+    lesson(text.use, 'target', text.useDemo ? text.marker : undefined, {
+      tool,
+      whenLocked: text.locked,
+      demo: text.useDemo,
+      whenNoMic: text.noMic?.use,
+      demoNoMic: text.noMic?.useDemo,
+    }),
     (api, since) => api.toolUses(tool) > since || api.waveCleared(),
     fromToolShown,
     {
@@ -476,8 +508,28 @@ const TOOL_NAMES: Record<ToolName, string> = {
   slingshot: 'the slingshot',
   swatter: 'the fly swatter',
   pepper: 'the pepper shaker',
-  megaphone: 'the megaphone and the bell',
+  megaphone: 'the megaphone',
 };
+
+/**
+ * Right after the megaphone is grabbed, in its own box (Next): how to use
+ * it, in plain words. The loudness bar and its red dot are what make the
+ * scream work, so they get explained before the goblins come.
+ */
+function megaphoneInfo(): TutorialStep {
+  return infoStep(
+    'megaphone-how',
+    banner(
+      'Hold the megaphone near your mouth and shout! The bar on top shows how loud you are. Fill it up to the red dot to stun every goblin.',
+      'info',
+      'stunTool',
+      {
+        header: 'How to shout',
+        whenNoMic: 'Shake the bell hard to ring it. Every goblin stops, dizzy, for a few seconds. Ring it more for a longer stun.',
+      },
+    ),
+  );
+}
 
 /**
  * The full step list. `tools` lists the tools that are built: lessons for the
@@ -510,8 +562,7 @@ export function buildTutorialSteps(
       if (afterFood) steps.push(...foodLessons());
       foodTaught = true;
       steps.push(toolGrabLesson(wave.newTool, afterFood));
-      // The megaphone and the bell come with the pepper (wave 4), taught right after it.
-      if (wave.newTool === 'pepper' && has('megaphone')) steps.push(toolGrabLesson('megaphone', false, 'One more!'));
+      if (wave.newTool === 'megaphone') steps.push(megaphoneInfo());
     }
     // The two flags are explained before the first wave, while nothing attacks yet.
     if (i === 0) {
@@ -528,7 +579,6 @@ export function buildTutorialSteps(
     else steps.push(infoStep(`wave-${i + 1}-start`, banner(wave.intro, 'warning'), startWave));
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson());
     else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolLesson(wave.newTool));
-    if (wave.newTool === 'pepper' && has('megaphone')) steps.push(toolLesson('megaphone'));
     // While the wave is fought the sign stays away, so it never covers the enemies.
     // It comes back when the wave is cleared (the breather) or for a lesson.
     steps.push({

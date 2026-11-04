@@ -33,12 +33,12 @@ export class Bell extends HandTool {
     super(
       'bell',
       parts,
-      TOOL_SPOTS.bell,
+      TOOL_SPOTS.rightSide,
       { from: BELL.gripFrom, to: BELL.gripTo, radius: BELL.grabRadius },
       0,
       BELL.bellMouth + 0.5,
-      // It rests on the megaphone's platform, its mouth on the top and the handle up.
-      { platform: null, restLift: BELL.bellHeight },
+      // Its mouth rests on the platform, the handle up.
+      { restLift: BELL.bellHeight },
     );
   }
 

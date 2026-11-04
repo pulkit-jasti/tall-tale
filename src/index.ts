@@ -13,11 +13,11 @@ const keyList = document.getElementById('debug-keys') as HTMLUListElement;
 const micStatus = document.getElementById('mic-status') as HTMLParagraphElement;
 
 const MIC_TEXT: Record<string, string> = {
-  unknown: 'The megaphone needs your microphone. Tap the button to allow it (or say no: the bell works just as well).',
+  unknown: 'The megaphone needs your microphone. Tap the button to allow it (or say no: you get a bell instead, it works just as well).',
   asking: 'Allow the microphone in the browser prompt...',
   on: 'Microphone on: scream into the megaphone!',
-  denied: 'No microphone: the megaphone is tied down, and the bell works just as well.',
-  unsupported: 'No microphone in this browser: the bell works just as well.',
+  denied: 'No microphone: you get a bell instead of the megaphone. It works just as well.',
+  unsupported: 'No microphone in this browser: you get a bell instead of the megaphone.',
 };
 const showMic = (): void => {
   micStatus.textContent = MIC_TEXT[mic.state];
