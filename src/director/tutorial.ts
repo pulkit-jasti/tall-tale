@@ -78,6 +78,8 @@ export const TUTORIAL_TIMING = {
    * early never runs out before the goblins come.
    */
   toolUseTimeout: 120,
+  /** The reach check gives up after this long without a stretched arm (no hands in the browser). */
+  reachTimeout: 40,
   /** Spinning the board this far (degrees) finishes the spin lesson. */
   spinGoal: 60,
   /** Moving the board this far (cm) finishes the height lesson. */
@@ -118,6 +120,10 @@ export interface Hint {
   demo?: GhostDemoName;
   /** Info steps: they wait for the "Next" button on the sign. */
   next?: boolean;
+  /** The reach check: the sign shows its countdown while the arm is out. */
+  reachCheck?: boolean;
+  /** Shown instead of the instruction on the ticked sign when the lesson is done. */
+  doneText?: string;
 }
 
 export interface TutorialStep extends DirectorStep<TutorialApi> {
@@ -144,6 +150,12 @@ export interface TutorialApi {
   helpWithTool(tool: ToolName): void;
   /** Holds a food tool's use timer while its use lesson runs (on), or lets it run again (off). */
   holdToolTimer(tool: ToolName, on: boolean): void;
+  /** Starts the reach check: waits for a stretched arm, then counts down. */
+  startReachCheck(): void;
+  /** True once the reach check is done and the board is sized to the player. */
+  reachChecked(): boolean;
+  /** The reach check gave up (no hands): the board keeps its size. */
+  stopReachCheck(): void;
   /** How often the tool did its job since it appeared (slingshot: goblins knocked out, swatter: swatted, pepper: peppered). */
   toolUses(tool: ToolName): number;
   /** How often the tool was grabbed since it appeared. */
@@ -211,6 +223,29 @@ function lessonStep(
  */
 function infoStep(id: string, hint: Hint, start?: (api: TutorialApi) => void): TutorialStep {
   return { id, hint: { ...hint, next: true }, start, done: () => false, timeout: Infinity };
+}
+
+/**
+ * The very first step, once per player: the reach check sizes the board to
+ * their arms. A ghost hand shows the pose (arm straight out, hand flat, thumb
+ * up, fingers spread: the hand's side toward the eyes, never the palm), the
+ * sign counts down while the arm is out, and says when to rest. Without
+ * tracked hands it gives up after a while and the board keeps its size.
+ */
+function reachStep(): TutorialStep {
+  return {
+    id: 'reach-check',
+    hint: lesson(
+      'Show me how big you are, giant! Sit back and stretch one arm straight out: hand flat, thumb up, fingers spread.',
+      'target',
+      undefined,
+      { demo: 'reach', reachCheck: true, doneText: 'Done! You can rest your arm now.' },
+    ),
+    start: (api) => api.startReachCheck(),
+    done: (api) => api.reachChecked(),
+    onTimeout: (api) => api.stopReachCheck(),
+    timeout: TUTORIAL_TIMING.reachTimeout,
+  };
 }
 
 /** Before wave 1: moving the board, then picking up and eating the lesson climber. */
@@ -318,19 +353,25 @@ type FoodTool = Exclude<ToolName, 'slingshot'>;
 
 const cost = (tool: FoodTool): number => TOOLS.cost[tool];
 const seconds = (tool: FoodTool): number => TOOLS.duration[tool];
+/** Tools cost nothing in the tutorial (TOOLS.freeInTutorial), so the texts do not ask for food. */
+const free = TOOLS.freeInTutorial;
 
 /** Each food tool: where its handle is, the ghost hand demo for grabbing it, and its use lesson. */
 const FOOD_TOOL_LESSONS: Record<FoodTool, { marker?: MarkerTarget; grabDemo?: GhostDemoName; use: string; locked: string }> = {
   swatter: {
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
-    use: `Runners! Swat a goblin with it, anywhere. The first swat takes ${cost('swatter')} food from your jar, then swatting is free for ${seconds('swatter')} seconds.`,
+    use: free
+      ? 'Runners! Swat a goblin with it, anywhere. Slap it down so the swatter touches the goblin.'
+      : `Runners! Swat a goblin with it, anywhere. The first swat takes ${cost('swatter')} food from your jar, then swatting is free for ${seconds('swatter')} seconds.`,
     locked: `Not enough food for the swatter (${cost('swatter')}). Eat a goblin to fill your jar.`,
   },
   pepper: {
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
-    use: `Shake pepper over goblins. Peppered goblins give double food when eaten. The first shake takes ${cost('pepper')} food.`,
+    use: free
+      ? 'Shake pepper over goblins. Peppered goblins give double food when eaten.'
+      : `Shake pepper over goblins. Peppered goblins give double food when eaten. The first shake takes ${cost('pepper')} food.`,
     locked: `Not enough food for the pepper (${cost('pepper')}). Eat a goblin to fill your jar.`,
   },
   megaphone: {
@@ -372,15 +413,16 @@ function foodLessons(): TutorialStep[] {
 /**
  * In the breather before its wave: the new food tool appears and the player
  * grabs it. Grabbing is free, so it is never locked. The text points at its
- * price tag, so the player links food and tools.
+ * price tag, so the player links food and tools (free while learning).
  */
 function toolGrabLesson(tool: FoodTool, afterFood: boolean, alsoShow?: ToolName): TutorialStep {
   const { marker, grabDemo } = FOOD_TOOL_LESSONS[tool];
-  const intro = afterFood ? 'Tools cost food.' : 'Wave cleared!';
+  const intro = afterFood ? 'Tools cost food, but they are free while you learn.' : 'Wave cleared!';
+  const price = free ? 'its price tag says Free for now' : `its price tag says ${cost(tool)} food`;
   return lessonStep(
     `learn-${tool}-grab`,
     lesson(
-      `${intro} Here is ${TOOL_NAMES[tool]}: its price tag says ${cost(tool)} food. Grab it with your fist.`,
+      `${intro} Here is ${TOOL_NAMES[tool]}: ${price}. Grab it with your fist.`,
       'grab',
       marker,
       { demo: grabDemo },
@@ -443,8 +485,16 @@ const TOOL_NAMES: Record<ToolName, string> = {
  * that wave: the list starts at the end of the wave before it, so its
  * breather and the new tool's lessons still run. The battle shows the tools
  * of the waves left out.
+ *
+ * `measureReach` puts the reach check first (also before a later start wave),
+ * for a player whose reach is not known yet.
  */
-export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORIAL_WAVES, fromWave = 0): TutorialStep[] {
+export function buildTutorialSteps(
+  tools: ToolName[],
+  waves: WavePlan[] = TUTORIAL_WAVES,
+  fromWave = 0,
+  measureReach = false,
+): TutorialStep[] {
   const has = (tool?: ToolName): tool is ToolName => !!tool && tools.includes(tool);
   const steps: TutorialStep[] = [];
   const waveTitle = (i: number): string => `Wave ${i + 1} of ${waves.length}`;
@@ -490,6 +540,7 @@ export function buildTutorialSteps(tools: ToolName[], waves: WavePlan[] = TUTORI
   });
   const first = Math.min(fromWave, waves.length - 1);
   if (first > 0) steps.splice(0, steps.findIndex((s) => s.id === `wave-${first}-cleared`));
+  if (measureReach) steps.unshift(reachStep());
   // Number the lessons and title the banners.
   const lessons = steps.filter((s) => s.hint?.kind === 'lesson');
   let wave = 0;

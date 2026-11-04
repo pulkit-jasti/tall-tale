@@ -46,11 +46,12 @@ import {
   type MeshStandardMaterial,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { AIM_ASSIST, BOARD, GOBLIN_SHOT, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
+import { AIM_ASSIST, BOARD, GOBLIN_SHOT, HOLD, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
+import { holdMatrix } from '../player/hold.js';
 import { degToRad, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
 import { Goblin, type Goblins } from '../units/goblins.js';
 import { cloneStatic, InstancedPool, loadTemplate, type ModelTemplate } from '../world/models.js';
@@ -117,12 +118,14 @@ interface TraceResult {
 
 interface FrameHolder {
   hand: HandState;
-  /** Held with a pinch (follow the pinch point) or a fist (follow the palm). */
+  /** Held with a pinch (keeps the grab angle) or a fist (held like a real slingshot, HOLD). */
   viaPinch: boolean;
   openTime: number;
   /** Time the hand has been untracked (seconds). */
   lostTime: number;
-  /** Frame pose relative to the hand, from the moment of the grab. */
+  /** Time since the grab (seconds), for the ease into the fist. */
+  heldTime: number;
+  /** Frame pose relative to the hand, from the moment of the grab (pinch grabs). */
   readonly offset: Matrix4;
 }
 
@@ -473,7 +476,7 @@ export class Slingshot {
     this.frame.updateMatrixWorld(true);
     this.handWorldMatrix(hand, viaPinch, handMatrix);
     const offset = new Matrix4().copy(handMatrix).invert().multiply(this.frame.matrixWorld);
-    this.frameHolder = { hand, viaPinch, openTime: 0, lostTime: 0, offset };
+    this.frameHolder = { hand, viaPinch, openTime: 0, lostTime: 0, heldTime: 0, offset };
     this.returnLeft = 0;
     this.beckon = false;
     this.onEvent('grabbed');
@@ -637,10 +640,20 @@ export class Slingshot {
       if (holder.lostTime >= SLINGSHOT.holdLostGrace || holder.openTime >= SLINGSHOT.releaseHold) {
         this.letGoOfHandle();
       } else if (hand.tracked && !pulling) {
-        this.handWorldMatrix(holder.hand, holder.viaPinch, handMatrix);
-        matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
+        holder.heldTime += dt;
+        if (holder.viaPinch) {
+          // A pinch keeps the angle it grabbed at.
+          this.handWorldMatrix(holder.hand, true, handMatrix);
+          matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
+        } else {
+          // A fist holds it like a real slingshot: fork up past the thumb, the shot the way the knuckles point.
+          holdMatrix(holder.hand, 'slingshot', 0.01 * this.stage.boardScale, handMatrix);
+          matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix);
+        }
         matrix.decompose(targetPosition, targetQuaternion, targetScale);
-        const k = 1 - Math.exp(-dt / SLINGSHOT.holdSmoothing);
+        // Right after the grab it eases into the hand, so the snap never jumps.
+        const smoothing = holder.heldTime < HOLD.snapTime ? HOLD.snapSmoothing : SLINGSHOT.holdSmoothing;
+        const k = 1 - Math.exp(-dt / smoothing);
         this.frame.position.lerp(targetPosition, k);
         this.frame.quaternion.slerp(targetQuaternion, k);
       }
@@ -1248,7 +1261,8 @@ export class Slingshot {
   private handleDistance(world: Vector3): number {
     this.frame.worldToLocal(temp2.copy(world));
     const y = Math.min(SLINGSHOT.handleHeight, Math.max(0, temp2.y));
-    return Math.hypot(temp2.x, temp2.y - y, temp2.z) * 0.01;
+    // Board cm, sized by the reach check.
+    return Math.hypot(temp2.x, temp2.y - y, temp2.z) * 0.01 * this.stage.boardScale;
   }
 
   /** The hand's pose as a world matrix: pinch point or palm, and the wrist turn. */

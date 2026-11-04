@@ -128,7 +128,7 @@ All actions are simple grab, pull, shake, poke and release. No complex gestures.
 - **Comfort:** only the board spins. The sky, horizon, your tools and the two flags stay still. Snap rotation is a later comfort option.
 - **Threat cues:**
   1. Spatial audio from the real direction of the threat (main cue).
-  2. Visual cues (smoke, glow) as an accessibility option only.
+  2. Visual cues, on by default: the wall top flashes red with a dust puff where it is hit ([docs/controls-and-ui.md](docs/controls-and-ui.md#threat-cues)).
 - Threat cues matter for judging too ("FoV-aware design"), because Meta VR Glasses have a different field of view than Quest.
 
 ### Emergence
@@ -288,7 +288,7 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 11. **Fixed physical tools instead of AI constructs:** kept. Better for hand tracking, much smaller scope, more polish.
 12. **180 degree default with 120 and 360 presets:** replaced by a full 360 board the player spins and adjusts with two-handed handles. Unique, and fully seated.
 13. **Loadout before each battle:** dropped. Tools unlock and are always available.
-14. **Calibration screen:** replaced by auto placement on Play, the handles, and a "Reset table" button.
+14. **Calibration screen:** replaced by auto placement on Play, the handles, and a "Reset table" button. Later a short reach check came back (see 36): one move, a few seconds, framed as part of the welcome, not a settings screen.
 15. **Hunger meter:** replaced by the food jar, a resource that only fills by eating and never drains on its own.
 16. **Carts, machines and picking up troops as the core loop:** on hold. The giant's own tools and eating became the core. Machines will be decided after the first playtest.
 17. **Smashing, slapping and throwing enemies with bare hands:** dropped. Bare hands only grab and eat, so the fly swatter has a clear role and the hands stay simple.
@@ -310,6 +310,9 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 33. **Tool platforms inside the ring, close to the body:** moved just outside the ring into a reach band (40 to 50 cm from the eyes, from Meta's hands guidance), low, rising with the board. The castle grew to the edge of that band. Food pips became price tags with a number.
 34. **Food jar explained before wave 1:** moved to right before the first food tool, and taught by eating a goblin, because a lone info step was easy to miss.
 35. **Out-of-view arrows and "it is to your left" hints from head direction:** removed. A simple pointer comes later.
+36. **One board size for everyone:** after the second step 4 test everything still felt too close. Now a reach check ("Show me how big you are, giant!") measures the player's stretched arm once and scales the whole board so the rampart sits a little inside that reach. The board is also placed lower (46 cm below the eyes), so the player towers over the kingdom.
+37. **Tools held at the grab angle:** a fist grab now snaps the tool into the hand the way it is held in real life, because some grabs needed an awkward wrist.
+38. **Visual threat cues off by default:** now on by default (wall hit flash). With the sound off, goblins at the wall were hard to find. An attack compass arc with red marks was tried too and dropped: the wall flash was enough.
 
 ---
 

@@ -14,6 +14,7 @@ import { EndPanel } from './ui/endPanel.js';
 import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { Markers } from './ui/markers.js';
+import { ThreatCues } from './ui/threatCues.js';
 import { loadUiImages } from './ui/uiImages.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
@@ -66,6 +67,7 @@ export class GameSystem extends createSystem({}) {
   private pepper!: PepperShaker;
   private tools: HandTool[] = [];
   private particles!: Particles;
+  private threat!: ThreatCues;
   private spawner!: ToySpawner;
   private battle!: Battle;
   private debugRng!: Random;
@@ -122,6 +124,7 @@ export class GameSystem extends createSystem({}) {
         );
       }
     };
+    this.threat = new ThreatCues(this.stage, this.particles);
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
@@ -140,12 +143,13 @@ export class GameSystem extends createSystem({}) {
       tools: { swatter: this.swatter, pepper: this.pepper },
       food: this.food,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
-      panel: new EndPanel(this.stage.fixedRig, this.audio),
+      panel: new EndPanel(this.stage.boardLift, this.audio),
       sign: new HintSign(this.stage.boardLift, this.audio),
       markers: new Markers(root),
       ghost,
       audio: this.audio,
       particles: this.particles,
+      threat: this.threat,
       rng: createRandom(seed + 600),
       isHeld: (goblin) => this.grabEat.isHolding(goblin),
     });
@@ -284,6 +288,7 @@ export class GameSystem extends createSystem({}) {
     this.readHead();
     this.debugKeys(dt);
     this.stressTest.update(dt);
+    this.stage.update(dt);
     this.handles.update(dt);
     this.spawner.update(dt);
     this.battle.update(dt, this.hands.hands, headPosition, headForward);
@@ -292,6 +297,7 @@ export class GameSystem extends createSystem({}) {
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
     this.food.update(dt);
+    this.threat.update(dt);
     this.particles.update(dt);
   }
 
@@ -357,6 +363,11 @@ export class GameSystem extends createSystem({}) {
       case 'restartBattle':
         // The whole game again: Play starts from the first lesson from now on.
         this.setPlayFromWave(0);
+        this.battle.start();
+        break;
+      case 'measureReach':
+        // Forget the measured reach and measure again right away, before the wave Play starts at.
+        this.battle.forgetReach();
         this.battle.start();
         break;
       case 'startWave': {

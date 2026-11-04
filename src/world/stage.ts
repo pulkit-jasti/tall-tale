@@ -1,18 +1,18 @@
 // The scene graph around the player.
 //
 // root (meters, at the player's seat, turned to face where they looked)
-//   boardLift (cm units: scale 0.01, moves up and down with the ring handle)
+//   boardLift (cm units: scale 0.01 times boardScale, moves up and down with the ring handle)
 //     boardSpin (turns with the ring handle: board, castle, roads, goblins)
 //     ring handle (rises with the board, turns only while held)
-//     tools, platforms, pebble bowl, food jar, flags, hint sign (rise with the board, never turn)
-//   fixedRig (cm units, never turns or moves after placing: the end panel, and
-//     the frame the ring handle measures the hand in)
+//     tools, platforms, pebble bowl, food jar, flags, hint sign, end panel (rise with the board, never turn)
+//   fixedRig (real cm, never turns, moves or scales after placing: the frame
+//     the ring handle and the pepper shaker measure the hand in)
 //
 // Only boardSpin turns, so the sky, tools and flags stay still (comfort rule).
 // The tools rise with the board, so they always stand at the same height on
 // it, just outside the ring, and the ring never passes through them.
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
-import { BOARD, HANDLES } from '../config/game.js';
+import { BOARD, CALIBRATION, HANDLES } from '../config/game.js';
 
 const CM = 0.01;
 const forward = new Vector3();
@@ -27,6 +27,12 @@ export class Stage {
   private baseY = 0.7;
   /** Extra board height set with the height handle (cm). */
   private heightOffset = 0;
+  /**
+   * Size of everything in boardLift, from the reach check (1 = the sizes in
+   * config). It grows or shrinks smoothly toward `scaleTarget`.
+   */
+  private scaleNow = 1;
+  private scaleTarget = 1;
 
   constructor(parent: Object3D) {
     this.root.name = 'stage';
@@ -60,12 +66,44 @@ export class Stage {
     this.boardSpin.updateMatrixWorld(true);
   }
 
+  /**
+   * How much bigger the board is than its config size (the reach check sets
+   * it). A board cm is this many real cm. Code that turns board distances
+   * into meters by hand multiplies by it.
+   */
+  get boardScale(): number {
+    return this.scaleNow;
+  }
+
+  /** Sets the board size, at once or growing there smoothly (the end of the reach check). */
+  setBoardScale(scale: number, smooth: boolean): void {
+    this.scaleTarget = scale;
+    if (!smooth) {
+      this.scaleNow = scale;
+      this.applyScale();
+    }
+  }
+
+  /** Every frame: the smooth grow toward the new size. */
+  update(dt: number): void {
+    if (this.scaleNow === this.scaleTarget) return;
+    const k = 1 - Math.exp(-dt / CALIBRATION.growSmoothing);
+    this.scaleNow += (this.scaleTarget - this.scaleNow) * k;
+    if (Math.abs(this.scaleTarget - this.scaleNow) < 0.001) this.scaleNow = this.scaleTarget;
+    this.applyScale();
+  }
+
   get height(): number {
     return this.heightOffset;
   }
   set height(cm: number) {
     this.heightOffset = Math.min(HANDLES.heightMax, Math.max(HANDLES.heightMin, cm));
     this.applyHeight();
+  }
+
+  private applyScale(): void {
+    this.boardLift.scale.setScalar(CM * this.scaleNow);
+    this.root.updateMatrixWorld(true);
   }
 
   private applyHeight(): void {

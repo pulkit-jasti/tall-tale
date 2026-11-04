@@ -95,6 +95,9 @@ function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: s
     holdToolTimer(tool, on) {
       this.held[tool] = on;
     },
+    startReachCheck: () => {},
+    reachChecked: () => false,
+    stopReachCheck: () => {},
     toolUses: () => 0,
     toolGrabbed: () => 0,
     canAfford: () => true,
@@ -251,6 +254,16 @@ describe('tutorial director', () => {
     // The breather clears wave 2, then the food jar is shown before the swatter.
     expect(api.cleared).toBe(1);
     expect(director.current?.id).toBe('food-jar');
+  });
+
+  it('measures the reach first, once, even when starting at a later wave, and never gets stuck without hands', () => {
+    expect(buildTutorialSteps(['slingshot'], TUTORIAL_WAVES, 0, true)[0].id).toBe('reach-check');
+    expect(buildTutorialSteps(['slingshot'], TUTORIAL_WAVES, 2, true)[0].id).toBe('reach-check');
+    expect(buildTutorialSteps(['slingshot']).some((s) => s.id === 'reach-check')).toBe(false);
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot'], TUTORIAL_WAVES, 0, true), api);
+    run(director, 60);
+    expect(director.current?.id).not.toBe('reach-check');
   });
 
   it('numbers the lessons', () => {

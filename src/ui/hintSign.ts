@@ -12,7 +12,7 @@ import type { HandState } from '../player/hands.js';
 import { degToRad } from '../rules/boardMath.js';
 import { post } from '../world/shapes.js';
 import { PokeButton } from './pokeButton.js';
-import { drawIcon, drawNineSlice, wrapText, type UiImageName } from './uiImages.js';
+import { drawBanner, drawIcon, drawNineSlice, wrapText, type UiImageName } from './uiImages.js';
 
 export interface SignContent {
   /** 'lesson' shows a checkbox, 'banner' a wave title. */
@@ -138,7 +138,7 @@ export class HintSign {
     const headerH = 70;
     c.textBaseline = 'middle';
     if (content.kind === 'banner') {
-      drawNineSlice(c, 'banner', w * 0.2, pad, w * 0.6, headerH, 24, 30);
+      drawBanner(c, w * 0.2, pad, w * 0.6, headerH);
       c.fillStyle = '#fff4dc';
       c.textAlign = 'center';
       c.font = 'bold 40px sans-serif';

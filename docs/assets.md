@@ -56,7 +56,7 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Thing | File | Target size | Notes |
 |---|---|---|---|
 | Castle wall | Code | 6 cm high, from 46 to 52 cm | Round, see [placeholder-shapes.md](placeholder-shapes.md) |
-| Towers on the wall (4 to 6) | `castle/castle-kit/tower-hexagon-base.glb` + `tower-hexagon-roof.glb` on top | About 10 cm tall, 5 cm wide | Stack the roof on the base |
+| Towers on the wall (4 to 6) | `castle/castle-kit/tower-hexagon-base.glb` + `tower-hexagon-roof.glb` on top | About 19 cm tall, 8 cm across the wall | Stack the roof on the base. Turned so its widest side lies across the wall, which is thinner (6 cm), so the wall runs into the tower instead of poking out of it |
 | Courtyard buildings (2 to 4) | `castle/castle-kit/tower-square-mid-door.glb` + `town/fantasy-town/roof-gable.glb` | About 5 cm tall | Small houses. Workers hide in them. **Left out for now** (the courtyard stays empty until the main gameplay is done) |
 | Courtyard stalls | `town/fantasy-town/stall-red.glb`, `stall-green.glb` | About 4 cm tall | Left out for now, like the houses |
 | Courtyard props | `town/fantasy-town/cart.glb`, `props/survival/box.glb`, `box-large.glb`, `props/mini-dungeon/barrel.glb` | Cart 4 cm long, boxes and barrels 1 to 1.5 cm | Things workers carry and drop |

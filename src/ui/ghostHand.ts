@@ -28,6 +28,7 @@ import {
 } from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GHOST_HAND } from '../config/game.js';
+import { holdTilt, type HoldName } from '../player/hold.js';
 import { gltfUrl } from '../world/models.js';
 import { GHOST_DEMOS, type Dir, type GhostAnchor, type GhostDemo, type GhostDemoName, type GhostKey, type GhostPose } from './ghostDemos.js';
 
@@ -258,6 +259,13 @@ const contact = new Vector3();
 const axisW = new Vector3();
 const palmW = new Vector3();
 const third = new Vector3();
+const fingerward = new Vector3();
+/** Tool handles are held at the same slant as a real grab (src/player/hold.ts). The ring keeps its approved grip. */
+const TOOL_HANDLES: Partial<Record<GhostAnchor, HoldName>> = {
+  slingHandle: 'slingshot',
+  swatterHandle: 'swatter',
+  pepperHandle: 'pepper',
+};
 
 export class GhostHand {
   private models: Partial<Record<Side, GhostModel>> = {};
@@ -364,6 +372,17 @@ export class GhostHand {
     const rodKey = key.rod !== undefined;
     toWorld(rodKey ? key.rod! : (key.fingers ?? [0, 0, 1]), axisW);
     toWorld(key.palm, palmW);
+    const tool = rodKey ? TOOL_HANDLES[key.at] : undefined;
+    if (tool) {
+      // A fist holds a tool handle at a slant: the handle leans toward the
+      // fingers from the knuckle line. So the knuckle line is the handle
+      // turned back by the same angle around the palm's normal.
+      const tilt = holdTilt(tool);
+      axisW.normalize();
+      palmW.addScaledVector(axisW, -palmW.dot(axisW)).normalize();
+      fingerward.crossVectors(axisW, palmW).multiplyScalar(demo.hand === 'left' ? 1 : -1);
+      axisW.multiplyScalar(Math.cos(tilt)).addScaledVector(fingerward, -Math.sin(tilt));
+    }
     basis(rodKey ? model.knuckles : model.fingers, model.palm, localBasis);
     basis(axisW, palmW, worldBasis);
     outQuaternion.setFromRotationMatrix(worldBasis.multiply(localBasis.transpose()));

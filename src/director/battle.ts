@@ -5,10 +5,23 @@
 // tutorial-only lives in those systems.
 import { Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { CASTLE_HEALTH, DEBUG, END_PANEL, GHOST_HAND, GOBLIN_RULES, HANDLES, HINT_SIGN, TOOL_SPOTS, WAVES } from '../config/game.js';
+import {
+  CALIBRATION,
+  CASTLE_HEALTH,
+  DEBUG,
+  END_PANEL,
+  GHOST_HAND,
+  GOBLIN_RULES,
+  HANDLES,
+  HINT_SIGN,
+  TOOL_SPOTS,
+  TOOLS,
+  WAVES,
+} from '../config/game.js';
 import { WAVE_VOICES } from '../config/sounds.js';
 import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
+import { ReachCheck } from '../player/reachCheck.js';
 import { clearWave, createBattle, damageCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
 import { angleDelta, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { Director } from '../rules/director.js';
@@ -20,6 +33,7 @@ import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemo
 import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
 import type { HintSign, SignContent } from '../ui/hintSign.js';
 import type { Markers } from '../ui/markers.js';
+import type { ThreatCues } from '../ui/threatCues.js';
 import type { UiImageName } from '../ui/uiImages.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import type { WaveSpawner } from '../units/waveSpawner.js';
@@ -71,6 +85,8 @@ export interface BattleParts {
   ghost: GhostHand;
   audio: GameAudio;
   particles: Particles;
+  /** Wall hit flashes and the attack compass (seeing attacks without sound). */
+  threat: ThreatCues;
   rng: Random;
   /** True while a hand holds this goblin. */
   isHeld: (goblin: Goblin) => boolean;
@@ -90,6 +106,10 @@ export class Battle implements TutorialApi {
    * not mean playing the earlier ones every time.
    */
   playFromWave = 0;
+  /** The reach check at the start (only until the player's reach is known). */
+  private reach = new ReachCheck();
+  /** True once the board was sized to this player (saved in the browser). */
+  private reachKnown = false;
   private endTimer = -1;
   /** Time since anything last hurt the castle (seconds), for the stalemate check. */
   private sinceDamage = 0;
@@ -117,7 +137,8 @@ export class Battle implements TutorialApi {
   private forward = new Vector3();
 
   constructor(private parts: BattleParts) {
-    parts.goblins.onWallHit = () => {
+    parts.goblins.onWallHit = (goblin) => {
+      parts.threat.wallHit(goblin);
       if (!this.running) return;
       damageCastle(this.state, CASTLE_HEALTH.wallHitDamage);
       this.sinceDamage = 0;
@@ -128,11 +149,47 @@ export class Battle implements TutorialApi {
       tool.onUse = (count) => (this.toolUseCount[tool.name] += count);
       tool.onGrab = () => this.toolGrabCount[tool.name]++;
     }
+    // A tick on each second of the reach check's countdown.
+    this.reach.onTick = () => parts.audio.play('readyTick');
+    this.loadBoardScale();
   }
 
-  /** Every food tool hidden (it waits for its wave), and the jar back to the starting food. */
+  /** The board size saved by an earlier reach check, if any. */
+  private loadBoardScale(): void {
+    try {
+      const saved = Number(localStorage.getItem(CALIBRATION.storageKey));
+      if (saved >= CALIBRATION.minScale && saved <= CALIBRATION.maxScale) {
+        this.reachKnown = true;
+        this.parts.stage.setBoardScale(saved, false);
+        console.info(`[reach] board size ${saved.toFixed(2)} (saved)`);
+      }
+    } catch {
+      // No storage: the reach check runs at the start of each battle.
+    }
+  }
+
+  /**
+   * Debug: forgets the measured reach. The board goes back to its config size,
+   * and the reach check runs again at the start of the next battle.
+   */
+  forgetReach(): void {
+    this.reachKnown = false;
+    this.parts.stage.setBoardScale(1, true);
+    try {
+      localStorage.removeItem(CALIBRATION.storageKey);
+    } catch {
+      // Nothing saved.
+    }
+    console.info('[reach] forgotten: the reach check runs again');
+  }
+
+  /** Every food tool hidden (it waits for its wave), free while the tutorial runs, and the jar back to the starting food. */
   private resetTools(): void {
-    for (const tool of Object.values(this.parts.tools)) tool.setVisible(false);
+    for (const tool of Object.values(this.parts.tools)) {
+      tool.setVisible(false);
+      // The only battle is the tutorial for now.
+      tool.free = TOOLS.freeInTutorial;
+    }
     this.toolUseCount = { swatter: 0, pepper: 0 };
     this.toolGrabCount = { swatter: 0, pepper: 0 };
     this.parts.food.reset();
@@ -180,13 +237,15 @@ export class Battle implements TutorialApi {
       else if (tool) this.foodTool(tool)?.setVisible(true);
     }
     if (from > 0) food.add(from * DEBUG.startFoodPerWave);
-    const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from), this);
+    this.reach.stop();
+    const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from, !this.reachKnown), this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
       // A lesson the player just did: tick its box for a moment, with a chime.
       if (how === 'done' && this.shownStep?.id === id && this.shownStep.hint?.kind === 'lesson' && this.shown) {
         this.doneFlash = HINT_SIGN.doneTime;
-        this.doneContent = { ...this.shown, done: true, sub: 'Nice!' };
+        const doneText = this.shownStep.hint.doneText;
+        this.doneContent = { ...this.shown, text: doneText ?? this.shown.text, done: true, sub: 'Nice!' };
         this.parts.audio.play('lessonDone');
       }
     };
@@ -213,6 +272,7 @@ export class Battle implements TutorialApi {
   stop(): void {
     this.running = false;
     this.director = null;
+    this.reach.stop();
     this.parts.spawner.stop();
     this.parts.panel.hide();
     this.parts.sign.show(null);
@@ -249,6 +309,7 @@ export class Battle implements TutorialApi {
         this.endWave();
         this.sinceDamage = 0;
       }
+      this.reach.update(dt, hands, head);
       this.director?.update(dt);
       spawner.rate = this.director?.spawnRate ?? 1;
       spawner.update(dt);
@@ -299,6 +360,8 @@ export class Battle implements TutorialApi {
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
     // A food tool lesson without enough food says so (a climber comes to eat).
     if (hint.whenLocked && hint.tool && !this.canAfford(hint.tool)) text = hint.whenLocked;
+    // The reach check counts down while the arm is out, so the player knows when to rest.
+    if (hint.reachCheck && this.reach.phase === 'counting') text = `Great, hold it there... ${this.reach.secondsLeft}`;
     this.shown = { kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], next: hint.next };
     sign.show(this.shown);
     // Info steps can be skipped with the sign's "Next" button.
@@ -337,6 +400,15 @@ export class Battle implements TutorialApi {
         out.copy(this.forward).setY(0).normalize().multiplyScalar(GHOST_HAND.mouthForward).add(this.head);
         out.y -= GHOST_HAND.mouthDown;
         return out;
+      case 'reach': {
+        // The right hand stretched straight out in front of the right shoulder, a little low.
+        temp.copy(this.forward).setY(0).normalize();
+        out.copy(this.head).addScaledVector(temp, CALIBRATION.demoForward);
+        out.x += -temp.z * CALIBRATION.demoRight;
+        out.z += temp.x * CALIBRATION.demoRight;
+        out.y -= CALIBRATION.demoDown;
+        return out;
+      }
       case 'lessonGoblin': {
         // Also while held, so the eat demo can start from it.
         const g = this.lessonGoblin;
@@ -358,7 +430,7 @@ export class Battle implements TutorialApi {
         // Only while it is on the board: in the hand it needs no marker.
         if (!g || !goblins.isHittable(g) || this.parts.isHeld(g)) return null;
         goblins.centerWorld(g, out);
-        out.y += g.stats.height * 0.01;
+        out.y += g.stats.height * 0.01 * this.parts.stage.boardScale;
         return out;
       }
       case 'healthFlag':
@@ -537,6 +609,31 @@ export class Battle implements TutorialApi {
   holdToolTimer(tool: ToolName, on: boolean): void {
     const t = this.foodTool(tool);
     if (t) t.timerHeld = on;
+  }
+
+  startReachCheck(): void {
+    this.reach.start();
+  }
+
+  /** Done: the board grows (or shrinks) to the player's reach, and the size is saved. */
+  reachChecked(): boolean {
+    if (this.reach.phase !== 'done') return false;
+    this.reach.stop();
+    const scale = this.reach.scale;
+    this.reachKnown = true;
+    this.parts.stage.setBoardScale(scale, true);
+    try {
+      localStorage.setItem(CALIBRATION.storageKey, scale.toFixed(3));
+    } catch {
+      // No storage: it is measured again next battle.
+    }
+    console.info(`[reach] reach ${(this.reach.reach * 100).toFixed(0)} cm, board size ${scale.toFixed(2)}`);
+    return true;
+  }
+
+  stopReachCheck(): void {
+    this.reach.stop();
+    console.info('[reach] no stretched arm seen: the board keeps its size');
   }
 
   toolUses(tool: ToolName): number {

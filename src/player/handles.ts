@@ -9,6 +9,7 @@
 import { Group, MeshStandardMaterial, Vector3 } from 'three';
 import { HANDLES } from '../config/game.js';
 import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import { compassLetters } from '../world/compassLetters.js';
 import type { Stage } from '../world/stage.js';
 import { curvedDoubleArrow, flatMaterial, ringArc, ringBands, ringPoles, verticalDoubleArrow } from '../world/shapes.js';
 import { applyTouchState, type TouchState } from './feedback.js';
@@ -48,7 +49,8 @@ export class BoardHandles {
     this.materials = [ringMaterial, arrowMaterial];
     const { radius, ringY, ringRadius, sideArrowDeg, frontArrowHalfDeg } = HANDLES;
     const arrowY = ringY + ringRadius + 0.2;
-    this.ring.add(ringArc(ringMaterial), ringPoles(), ringBands(arrowMaterial));
+    // Compass letters in the bands' gold turn with the ring, which turns with the board.
+    this.ring.add(ringArc(ringMaterial), ringPoles(), ringBands(arrowMaterial), compassLetters(arrowMaterial));
     // The arrows never turn: they always sit in front of the player.
     const arrows = new Group();
     arrows.add(curvedDoubleArrow(arrowMaterial, radius, 0, frontArrowHalfDeg, arrowY));
@@ -116,6 +118,8 @@ export class BoardHandles {
   /** Debug keys: turn the board and change its height without hands. */
   nudge(spinRadians: number, heightCm: number): void {
     this.stage.spin += spinRadians;
+    // The ring turns along, so its compass letters keep matching the board.
+    this.turn = angleDelta(0, this.turn + spinRadians);
     this.stage.height += heightCm;
   }
 
@@ -124,7 +128,8 @@ export class BoardHandles {
     const angle = angleOf(temp.x, temp.z);
     const moved = angleDelta(holder.startAngle, angle);
     if (holder.axis === 'none') {
-      const side = Math.abs(moved * HANDLES.radius);
+      // Real cm along the ring (the board, and so the ring, is sized by the reach check).
+      const side = Math.abs(moved * HANDLES.radius * this.stage.boardScale);
       const up = Math.abs(temp.y - holder.startY);
       if (Math.max(side, up) < HANDLES.axisLock) return;
       // Lock the bigger direction and start moving from here, so nothing jumps.
@@ -167,7 +172,7 @@ export class BoardHandles {
     const local = Math.min(span, Math.max(-span, angleDelta(0, angleOf(temp.x, temp.z) + this.turn)));
     const a = local - this.turn;
     ringPoint.set(polarX(HANDLES.radius, a), HANDLES.ringY, polarZ(HANDLES.radius, a));
-    return temp.distanceTo(ringPoint) * CM;
+    return temp.distanceTo(ringPoint) * CM * this.stage.boardScale;
   }
 
   private setState(state: TouchState): void {

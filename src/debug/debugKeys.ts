@@ -12,6 +12,7 @@ export type DebugCommand =
   | 'damageCastle'
   | 'restartBattle'
   | 'startWave'
+  | 'measureReach'
   | 'grunts'
   | 'runners'
   | 'climberFront'
@@ -76,6 +77,13 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     label: 'Start at wave',
     does: 'Start the battle at this wave, with the earlier tools already out and a little more food. Play and Play again then start here too, until Restart game (kept across reloads in this tab)',
     args: TUTORIAL_WAVES.map((_, i) => i + 1),
+  },
+  {
+    id: 'measureReach',
+    group: 'game',
+    icon: '📏',
+    label: 'Measure reach again',
+    does: 'Forget the saved reach (the board goes back to its normal size) and start the battle with the reach check ("Show me how big you are, giant!"), then the wave Play starts at',
   },
   { id: 'skipStep', group: 'game', icon: '⏭️', code: 'KeyS', label: 'Skip step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
   { id: 'skipWave', group: 'game', icon: '⏩', code: 'KeyW', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },

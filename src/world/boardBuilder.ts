@@ -135,7 +135,9 @@ async function buildCastle(): Promise<Group> {
   crenels.count = placed;
   group.add(crenels);
 
-  // Towers: hexagon base with the roof stacked on top.
+  // Towers: hexagon base with the roof stacked on top. The model is widest
+  // along its x, so it is turned a quarter to lay that across the wall: the
+  // tower covers the wall's full thickness and the wall runs into it.
   const base = await loadTemplate('castle/castle-kit/tower-hexagon-base.glb', { width: CASTLE.towerWidth });
   const roof = await loadTemplate('castle/castle-kit/tower-hexagon-roof.glb', {
     width: CASTLE.towerWidth * (0.976 / 0.9),
@@ -144,8 +146,8 @@ async function buildCastle(): Promise<Group> {
   const roofs = new InstancedModel(roof, towerAngles.length);
   const r = (wallIn + wallOut) / 2;
   for (const a of towerAngles) {
-    bases.add(placeMatrix(polarX(r, a), 0, polarZ(r, a), -a));
-    roofs.add(placeMatrix(polarX(r, a), base.size.y, polarZ(r, a), -a));
+    bases.add(placeMatrix(polarX(r, a), 0, polarZ(r, a), Math.PI / 2 - a));
+    roofs.add(placeMatrix(polarX(r, a), base.size.y, polarZ(r, a), Math.PI / 2 - a));
   }
   group.add(bases.group, roofs.group);
   return group;

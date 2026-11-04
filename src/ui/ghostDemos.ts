@@ -20,7 +20,16 @@ import { SWATTER } from '../config/game.js';
 
 export type GhostPose = 'open' | 'pinch' | 'fist';
 
-export type GhostAnchor = 'ring' | 'lessonGoblin' | 'mouth' | 'slingHandle' | 'pebbles' | 'pouch' | 'swatterHandle' | 'pepperHandle';
+export type GhostAnchor =
+  | 'ring'
+  | 'lessonGoblin'
+  | 'mouth'
+  | 'reach'
+  | 'slingHandle'
+  | 'pebbles'
+  | 'pouch'
+  | 'swatterHandle'
+  | 'pepperHandle';
 
 export type Dir = [number, number, number];
 
@@ -70,6 +79,13 @@ const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Di
 const PULL_GRIP = { fingers: [0, 0, 1] as Dir, palm: [1, 0, 0] as Dir };
 /** Bringing food to the mouth: fingers toward the face, thumb up, palm facing in. Never toward the headset (Quest menu). */
 const MOUTH_GRIP = { fingers: [0, 0.25, -1] as Dir, palm: [-1, 0, 0] as Dir };
+/**
+ * Right arm stretched straight out for the reach check: hand flat with the
+ * fingers pointing forward, thumb up, palm facing in (left). The hand's
+ * side faces the eyes, so the cameras see every finger, and the palm never
+ * faces the headset (Quest menu).
+ */
+const REACH_GRIP = { fingers: [0, 0, 1] as Dir, palm: [-1, 0, 0] as Dir };
 
 type Grip = { rod?: Dir; fingers?: Dir; palm: Dir };
 const key = (t: number, at: GhostAnchor, offset: Dir, pose: GhostPose, grip: Grip, arcDeg?: number): GhostKey => ({
@@ -82,6 +98,16 @@ const key = (t: number, at: GhostAnchor, offset: Dir, pose: GhostPose, grip: Gri
 });
 
 export const GHOST_DEMOS = {
+  /** Reach check: from in front of the chest, stretch the arm straight out, hold it there (the countdown), bring it back to rest. */
+  reach: {
+    hand: 'right',
+    keys: [
+      key(0, 'reach', [-3, -8, -32], 'open', REACH_GRIP),
+      key(1.0, 'reach', [0, 0, 0], 'open', REACH_GRIP),
+      key(2.8, 'reach', [0, 0, 0], 'open', REACH_GRIP),
+      key(3.6, 'reach', [-3, -8, -32], 'open', REACH_GRIP),
+    ],
+  },
   /** Come down onto the ring from above, close the fist, follow the ring to the left, let go, lift off. */
   spin: {
     hand: 'right',

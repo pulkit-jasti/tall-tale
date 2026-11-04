@@ -213,6 +213,7 @@ Rules:
 Built in step 4 for the swatter and the pepper (`src/tools/handTool.ts`, shared by every food tool). Food rules are plain functions in `src/rules/food.ts`, tested in `food.test.ts`. The jar is `src/world/foodJar.ts`.
 
 - **Grabbing is free. First use costs food** (first swat, first shake, first scream). Accidental grabs never waste food.
+- **Free in the tutorial** (`TOOLS.freeInTutorial`): while the tutorial runs, food tools cost nothing and their price tags say "Free", so a player who used up the jar is never locked out of the next tool. The costs apply in later battles.
 - **When the use is over**, the tool shrinks, poofs and reappears on its platform.
 - **If dropped mid-use**, it floats back to the hand area after about 1 second. Its timer keeps running.
 - **In the tutorial, the timer waits:** while a tool's use lesson runs, its timer is held, so a player who pays with an early swat before the goblins arrive keeps the tool until they do. The lesson is done when one goblin is hit, anywhere. Then the timer starts with its full time (`timerHeld` in `src/tools/handTool.ts`).

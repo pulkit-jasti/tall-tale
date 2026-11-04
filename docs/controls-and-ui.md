@@ -15,7 +15,7 @@ Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md), [Castle rul
 |---|---|
 | Castle health | The red flag on its pole ([castle-rules.md](castle-rules.md#2-the-two-flags)) |
 | Battle progress | The blue wave flag, one notch per wave |
-| Where damage is happening | Cracks, smoke and fires on the wall, plus spatial sound |
+| Where damage is happening | The wall top flashes red with a dust puff on each hit (see "Threat cues"). Later cracks, smoke and fires on the wall. Plus spatial sound |
 | Food | A jar or basket beside the tool platforms |
 | Tool cost | A small wooden price tag on each tool platform: a food ball and the cost as a number, like a price on a market stall. Cream number = the jar has enough, red = not enough, a tick = a paid use is running |
 | Tool locked (not enough food) | Tool dimmed or tied down with a rope |
@@ -47,14 +47,47 @@ Every grab, pinch and poke target must be a comfortable reach from the chair. To
 | Under 30 cm | Too close | Nothing (it also overlaps the eat zone, 22 cm from the face) |
 | 30 to 40 cm | Close | Nothing that is reached often |
 | **40 to 50 cm** | **Best** | Everything the hands use often: the ring handle, the tool handles, the pebble bowl, the Next and panel buttons |
-| 50 to 58 cm | Edge | Only things reached now and then: climbers on the rampart, intruders in the courtyard |
-| Over 58 cm | Out of reach | Only things the tools reach (the slingshot, the swatter's long handle), and things to look at (the hint sign) |
+| 50 to 63 cm | Edge | Only things reached now and then: climbers on the rampart, intruders in the courtyard |
+| Over 63 cm | Out of reach | Only things the tools reach (the slingshot, the swatter's long handle), and things to look at (the hint sign) |
 
 - **Where the numbers come from:** Meta's hands guidance ("Hands UI best practices", "Spatial UI inside interactive 3D scenes") puts direct touch at 42 to 46 cm and says to avoid 50 to 80 cm, the "middle distance" where people reach, miss and give up. It also says frequent actions belong low, because raised arms tire quickly. The close limit is our own, from the eat zone and the first headset tests.
-- **Measured from the eyes** with the board at its placed height (36 cm below the eyes). Board spots convert with `reachDistance()` in `src/rules/reach.ts`: for example 33.5 cm out and 10 cm above the board is about 42 cm.
-- **Everything is sized from it:** the ring handle (27 cm out, about 41 cm from the eyes), the tool platforms just outside it (33.5 cm out, tops 6 cm above the board, handles about 42 cm), and the castle: the wall moved out to 46 to 52 cm, as far as it can go with climbers on the rampart still in reach (about 56 cm).
+- **Measured from the eyes** with the board at its placed height (46 cm below the eyes, lowered from 36 and then 40 after the step 4 tests, so the player towers over the kingdom) and its default size. Board spots convert with `reachDistance()` in `src/rules/reach.ts`: for example 33.5 cm out and 10 cm above the board is about 49 cm.
+- **Everything is sized from it:** the ring handle (27 cm out, about 48 cm from the eyes), the tool platforms just outside it (33.5 cm out, tops 6 cm above the board, handles about 49 cm), and the castle: the wall at 46 to 52 cm, with climbers on the rampart at about 62 cm.
+- **Then sized to the player:** the reach check (below) scales all of it to the player's arms.
 - **Low:** tool platforms sit low (6 cm above the board), so the hand reaches them without lifting the arm.
 - **Checked in code:** `REACH` in `src/config/game.ts`. The dev server warns at start about any spot in `reachSpots()` outside the band. Add every new interactive thing there.
+
+### Reach check ("Show me how big you are, giant!")
+
+Arm length varies a lot between players, and the default size felt too close in the step 4 test. So the first tutorial step measures the player's reach and sizes the whole board to it.
+
+- **What the player does:** the sign says "Show me how big you are, giant! Sit back and stretch one arm straight out: hand flat, thumb up, fingers spread." A see-through ghost hand loops the move: from the chest, the right arm goes straight out, holds, and comes back.
+- **The pose:** hand flat with the thumb up and the palm facing in, so the hand's side faces the headset and the cameras see every finger. The palm never faces the headset (that is the Quest menu gesture).
+- **Countdown:** as soon as a hand is stretched out (more than 33 cm from the head, level), the sign shows "Great, hold it there... 3", then 2, then 1, with a tick each second (the text pops on each number). If the arm drops for more than 0.4 s, it waits again. When it ends, a chime plays and the ticked sign says "Done! You can rest your arm now."
+- **What it measures:** the farthest the pinch point gets, as a level distance from the head (not the seat, so leaning forward does not count), smoothed so a tracking spike never counts.
+- **What it changes:** the whole board (everything in `boardLift`: board, castle, goblins, ring, tools, flags, sign, panels) scales so the rampart sits at 88% of the measured reach, a comfortable reach rather than a full stretch. Everything keeps its place relative to the wall. The scale stays within 0.85 to 1.45, and the board grows or shrinks to it smoothly, so the player sees it fit them.
+- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. Debug page: "Measure reach again" forgets it and runs the check again. A "measure again" option in the pause menu comes later.
+- Numbers in `CALIBRATION` in `src/config/game.ts`, code in `src/player/reachCheck.ts`.
+
+### Holding a tool
+
+After the step 4 test, tools stuck to the hand at whatever angle the grab happened, so some needed an awkward wrist to use. Now a fist grab **snaps the tool into the fist the way it is held in real life**, so there is nothing to learn:
+
+- The handle runs through the fist and the tool sticks out past the thumb. Like a real handle lying across the palm, it leans forward (toward the fingers) about 35 degrees from the knuckle line (25 felt too upright in the headset), so it lines up with the knuckle bones (`HOLD.tiltDeg`). The ghost hand's tool grab demos close the fist at the same slant.
+- **Fly swatter:** held near the end of the handle, its flat face square to the palm (it first sat in line with the palm, which felt wrong in the headset). It leans 10 degrees more than the other tools (45), because its head must touch the goblin or the ground to swat, and the extra lean gets it there without bending the wrist.
+- **Pepper shaker:** upright in the fist, holes above the thumb. Tip the wrist to point the holes down.
+- **Slingshot:** fork up past the thumb, arms spread across the palm, the shot going the way the knuckles point (arm stretched out, thumb up).
+- The fist frame comes from the knuckle joints (wrist to middle knuckle, pinky knuckle to index knuckle), not from the wrist joint's own angle, so it matches what the player sees.
+- Right after the grab the tool eases into place over about 0.15 s, so it never jumps.
+- A pinch grab (the slingshot handle, or the food tools if `TOOLS.acceptPinch` is on) keeps the angle it grabbed at.
+- Numbers in `HOLD` in `src/config/game.ts` (where the fist holds each tool, which way it faces), code in `src/player/hold.ts`. The ghost hand grab demos already close the fist this way.
+
+### Threat cues
+
+Players who cannot hear, or play with the sound off, still need to know where goblins are hurting the castle. On by default (`THREAT` in config, `src/ui/threatCues.ts`):
+
+- **Wall hit flash:** every hit makes that part of the wall top flash red and fade, with a small dust puff. The wall top is easy to see from the seat, also out of the corner of the eye.
+- An "attack compass" arc with red marks inside the ring was tried and removed after the headset test: the wall flash alone reads well enough.
 
 ### Pinch and grab (the two hand actions)
 
@@ -89,6 +122,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
   - **Up or down:** the board rises or lowers with the hand 1:1, within a wide range (about 25 cm down and 35 cm up). On release the board stays at the new height.
 - It never spins and changes height in the same grab, so a swinging arm does not make the board bob.
 - **Letting go:** the ring lets go only when the hand is clearly open for about a quarter second, so tracking flickers do not drop it.
+- **Compass letters:** all 8 directions (N, NE, E, SE, S, SW, W, NW) raised in blocky gold on the ring's inner face, where it turns up toward the eyes, in the same gold as the bands (they light up with the ring). The four main letters are bigger, like a real compass. The ring has 8 bands, one between each two letters. They turn with the ring and the board, so N always points at the north of the map (the north camp). A cosmetic touch that also gives directions a name: the sign can say "goblins from the east!" (`HANDLES.compass`, `src/world/compassLetters.ts`). Wooden plaques with flat letters were tried first.
 - Arrows: a curved double arrow lies on top of the ring at the front, and a small up and down arrow stands on it 50 degrees left and right of front. The arrows never turn: they always stay in front of the player. The bands and poles turn with the ring.
 - The ring follows the standard Ready and Held states (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)). The arrows light up together with it.
 - Oversized grab zone, so it is easy to grab without looking closely.
@@ -178,7 +212,7 @@ None of these are in the MVP. They come after the first playtest (see [mvp.md](m
 - **Snap rotation:** the board turns in 30 degree steps instead of smoothly.
 - **Stronger slingshot aim assist** (see [giant-tools.md](giant-tools.md#slingshot-aim-assist)).
 - **Reduced effects:** softer flashes and less shaking (planned).
-- **Visual threat cues:** smoke or a glow at enemy camps and approaching groups, for players with hearing impairment or playing with low sound. Off by default, because listening for direction is part of the gameplay.
+- **More visual threat cues:** smoke or a glow at enemy camps and approaching groups. (The wall hit flash is already in, on by default, see "Threat cues".)
 
 ---
 

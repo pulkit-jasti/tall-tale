@@ -5,7 +5,7 @@ All CC0 from Kenney packs (license in each folder). Flat PNGs, drawn onto canvas
 | Folder | Pack | Files | Planned use |
 |---|---|---|---|
 | `adventure/` | UI Pack Adventure | `panel_brown*`, `panel_border_brown*` | Tutorial hint sign, win and lose panels (9-slice background) |
-| | | `banner_hanging`, `banner_classic_curtain`, `banner_modern` | "Wave 2 of 5" banner, win and lose titles |
+| | | `banner_hanging`, `banner_classic_curtain`, `banner_modern` | Not used: their cream inner frame showed as a white box around the title. The title banner is drawn in code (`drawBanner` in `src/ui/uiImages.ts`) |
 | | | `button_brown`, `button_red`, `button_grey`, `round_brown*` | Poke buttons (Play again, pause panel) |
 | | | `checkbox_*_checked`, `checkbox_*_empty` | Tutorial step list, step done check |
 | | | `minimap_arrow_a` to `_d` | Arrow toward a highlighted thing that is out of view |

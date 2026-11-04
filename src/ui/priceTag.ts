@@ -9,7 +9,8 @@ import { mark } from '../debug/perfMarks.js';
 import { priceTagBoard } from '../world/shapes.js';
 import { drawIcon } from './uiImages.js';
 
-export type PriceState = 'ok' | 'short' | 'paid';
+/** 'free' while tools cost nothing (the tutorial): the tag says "Free". */
+export type PriceState = 'ok' | 'short' | 'paid' | 'free';
 
 const CANVAS_WIDTH = 256;
 
@@ -47,6 +48,18 @@ export class PriceTag {
     const w = this.canvas.width;
     const h = this.canvas.height;
     c.clearRect(0, 0, w, h);
+    if (state === 'free') {
+      c.font = `bold ${Math.round(h * 0.62)}px sans-serif`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.lineWidth = h * 0.08;
+      c.strokeStyle = '#3b2b1f';
+      c.strokeText('Free', w / 2, h / 2 + h * 0.03);
+      c.fillStyle = PRICE_TAG.paidColor;
+      c.fillText('Free', w / 2, h / 2 + h * 0.03);
+      this.texture.needsUpdate = true;
+      return;
+    }
     // The food ball icon on the left, in the jar's ball color.
     const r = h * 0.3;
     const cx = w * 0.27;

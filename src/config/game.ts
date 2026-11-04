@@ -13,8 +13,12 @@ export const BOARD = {
   outerRadius: 600,
   /** How far the board edges hang down, like a table skirt (cm). */
   skirtDepth: 80,
-  /** Board surface height below the eyes when placed (meters). */
-  eyeToBoard: 0.36,
+  /**
+   * Board surface height below the eyes when placed (meters). Lowered from
+   * 0.36 and then 0.40 after the step 4 tests: towering high over the
+   * kingdom is what makes the player feel like a giant.
+   */
+  eyeToBoard: 0.46,
   /** Grass colors, picked per vertex for a slightly varied look. */
   grassColors: [0x8fbf5a, 0x9cc46b, 0x86b552, 0xa3c972],
   skirtColor: 0x6b5a45,
@@ -38,7 +42,11 @@ export const CASTLE = {
   towerCount: 6,
   /** Angle of the first tower (degrees, 0 = front). */
   towerStartDeg: 30,
-  towerWidth: 5,
+  /**
+   * Tower size across the wall (cm). Wider than the wall (wallOut - wallIn),
+   * so the wall runs into the tower instead of poking out of its sides.
+   */
+  towerWidth: 8,
   /** Climbers keep at least this far from a tower's center (degrees), so they are never inside one. */
   towerClearDeg: 12,
   stoneColor: 0xc9c2b4,
@@ -67,7 +75,8 @@ export const XR = {
 
 /**
  * The reach band (docs/controls-and-ui.md "Reach band"): distances from the
- * eyes (cm) for everything the hands grab, pinch or poke. Meta's hands
+ * eyes (cm) for everything the hands grab, pinch or poke, at the default
+ * board size (before the reach check sizes it to the player). Meta's hands
  * guidance puts direct touch at 42 to 46 cm and says to avoid 50 to 80 cm,
  * where people reach and miss. Closer than tooClose the elbows jam and hand
  * tracking near the body gets worse. Rarely reached things (climbers on the
@@ -77,7 +86,39 @@ export const REACH = {
   tooClose: 30,
   sweetMin: 40,
   sweetMax: 50,
-  max: 58,
+  max: 63,
+};
+
+/**
+ * The reach check at the start of the tutorial ("Show me how big you are,
+ * giant!", docs/controls-and-ui.md "Reach check"). The player stretches one
+ * arm straight out, hand flat, thumb up, fingers spread, and holds it for a
+ * short countdown. The farthest the hand gets (level distance from the head)
+ * sizes the whole board, so the rampart sits a little inside that reach and
+ * everything else keeps its place relative to the wall.
+ */
+export const CALIBRATION = {
+  /** The rampart ends up at this share of the measured reach: a comfortable reach, not a full stretch. */
+  rampartShare: 0.88,
+  /** The board size stays within this range, whatever the measurement says. */
+  minScale: 0.85,
+  maxScale: 1.45,
+  /** A hand farther than this from the head (level, meters) counts as stretched out and starts the countdown. */
+  startReach: 0.33,
+  /** Countdown while the arm stays out (seconds). The hand can rest when it ends. */
+  holdSeconds: 3,
+  /** The arm may drop back this long before the countdown starts over (seconds), so a tracking blink does not reset it. */
+  dropGrace: 0.4,
+  /** Hand distance smoothing, so a tracking spike never counts as reach (seconds). */
+  smoothing: 0.12,
+  /** The board grows or shrinks to its new size with this smoothing (seconds). */
+  growSmoothing: 0.25,
+  /** The ghost hand demo: where the stretched hand ends, from the head (meters forward, right, down). */
+  demoForward: 0.55,
+  demoRight: 0.16,
+  demoDown: 0.2,
+  /** Saved in the browser, so it runs only once (debug page: "Measure reach again"). */
+  storageKey: 'tallTale.boardScale',
 };
 
 /** Zones where the bare hands, the handles and the camera live. */
@@ -101,14 +142,30 @@ export const HANDLES = {
   poleRadius: 0.6,
   /** Poles under the ring, spread evenly from the front. */
   poleCount: 8,
-  /** Small bands around the ring (arrow color), spread evenly, so its turning is easy to see. */
-  bandCount: 12,
+  /** Small bands around the ring (arrow color), spread evenly, so its turning is easy to see. 8, so one sits between each two compass letters. */
+  bandCount: 8,
   /** Small up and down arrows stand on the ring this far left and right of front (degrees). */
   sideArrowDeg: 50,
   /** Arrow size (1 = the first build's size). */
   arrowSize: 0.6,
   /** Half length of the curved arrow at the front (degrees). */
   frontArrowHalfDeg: 8,
+  /**
+   * Compass letters on the ring: N, NE, E, SE, S, SW, W, NW, in raised
+   * blocky gold (the same gold as the bands, lit with the ring), set into
+   * the ring's inner face where it turns up toward the eyes. The four main
+   * ones are bigger, like a real compass. They turn with the ring and the
+   * board, so N always points at the north of the map (the north camp).
+   * `cell` is one block of a letter (cm), `minorScale` shrinks the in-between
+   * letters, `depth` is how far they stand out, and `faceDeg` is where on the
+   * tube they sit (degrees up from the side that faces the player).
+   */
+  compass: {
+    cell: 0.27,
+    minorScale: 0.62,
+    depth: 0.35,
+    faceDeg: 45,
+  },
   /** The hand moves this far before one direction (spin or height) locks for the grab (cm). */
   axisLock: 4,
   /** How far the board can move down and up from where it was placed (cm). */
@@ -355,7 +412,7 @@ export const POKE = {
  * so it is behind them, never in front of them. High enough to read without
  * looking down, and big enough for its distance. It is out of reach, so its
  * Next button stands apart, in front between the tool platforms, in the
- * reach band (boardLift, cm; the eyes are about 36 cm above the board).
+ * reach band (boardLift, cm; the eyes are about 46 cm above the board).
  */
 export const HINT_SIGN = {
   radius: 62,
@@ -579,8 +636,8 @@ export const AIM_ASSIST = {
 export const PEBBLE_BOWL = {
   angleDeg: 58,
   radius: 33.5,
-  /** Rim height above the board (cm). A little lower than the platforms. */
-  rimY: 5,
+  /** Rim height above the board (cm). A little above the platforms, so it stays in the reach band now that the board sits lower. */
+  rimY: 9,
   /** Width and depth (cm). */
   width: 9,
   depth: 2.5,
@@ -675,6 +732,12 @@ export const PRICE_TAG = {
 
 /** Shared rules for the food tools (swatter, pepper; the megaphone and bell in step 5). */
 export const TOOLS = {
+  /**
+   * Food tools cost nothing while the tutorial runs, so a player who used up
+   * the jar is never locked out of a tool they are about to learn. Their
+   * price tags say "Free". The costs below apply in later battles.
+   */
+  freeInTutorial: true,
   /** Food each one costs on its first use (docs/giant-tools.md). */
   cost: { swatter: 4, pepper: 3, megaphone: 6 },
   /** How long one paid use lasts (seconds). */
@@ -707,6 +770,60 @@ export const TOOLS = {
   wobbleTime: 0.45,
   wobbleDeg: 7,
   ropeColor: 0xb08850,
+};
+
+/**
+ * How a tool sits in a closed fist (docs/controls-and-ui.md "Holding a
+ * tool"). A fist grab snaps the tool into the hand the way it is held in
+ * real life, whatever angle the hand grabbed it at: the handle runs through
+ * the fist and the tool sticks out past the thumb. `at` is where the fist
+ * holds it, along the handle from its end (board cm). `face` is where the
+ * tool's front (its +z) points: 'palm' (out of the palm) or 'back' (toward
+ * the wrist: the slingshot's shot goes the way the knuckles point, and the
+ * swatter's flat face stands square to the palm, after the headset test).
+ * A pinch grab keeps the angle it was grabbed at.
+ */
+export const HOLD = {
+  /** The fist's hole, from the palm center: toward the knuckles and out of the palm (meters). */
+  gripForward: 0.02,
+  gripOut: 0.025,
+  /**
+   * A fist holds a handle across the palm at a slant, not square to the
+   * forearm: the tool leans forward (toward the fingers) by this much from
+   * the knuckle line, so it lines up with the knuckle bones (degrees).
+   */
+  tiltDeg: 35,
+  /** Right after the grab the tool eases into the hand over about this long (seconds)... */
+  snapTime: 0.15,
+  /** ...with this smoothing, slower than when it is held, so it does not jump (seconds). */
+  snapSmoothing: 0.05,
+  /** `tiltDeg` on a pose replaces the shared tiltDeg for that tool. */
+  poses: {
+    // The swatter leans 10 degrees more, so its head reaches the ground without bending the wrist.
+    swatter: { at: 3.5, face: 'back', tiltDeg: 45 },
+    pepper: { at: 4.5, face: 'palm' },
+    slingshot: { at: 3.5, face: 'back' },
+  } as Record<'swatter' | 'pepper' | 'slingshot', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
+};
+
+/**
+ * Seeing attacks without sound (docs/controls-and-ui.md "Threat cues"): a
+ * goblin hitting the wall flashes that part of the wall top red with a dust
+ * puff. On by default: it helps players who cannot hear, and players with
+ * the sound off.
+ */
+export const THREAT = {
+  enabled: true,
+  /** Wall top flash: width along the wall (cm), how long it fades (seconds), and the most at once. */
+  flashWidth: 7,
+  flashTime: 0.6,
+  flashPool: 12,
+  flashColor: 0xff3b2f,
+  flashOpacity: 0.85,
+  /** Dust puff on each hit. */
+  dustColors: [0xc9b79a, 0xa8957a, 0xe0d4bd],
+  dustCount: 5,
+  dustSpeed: 0.18,
 };
 
 /** The fly swatter (docs/giant-tools.md). Crowd clearing near the wall. */

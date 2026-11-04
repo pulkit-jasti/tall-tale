@@ -10,7 +10,6 @@
 const FILES = {
   panel: 'rpg/panel_beige.png',
   panelInset: 'rpg/panelInset_beige.png',
-  banner: 'adventure/banner_hanging.png',
   checkOn: 'vector/checkbox_beige_checked.svg',
   checkOff: 'vector/checkbox_beige_empty.svg',
   marker: 'vector/minimap_icon_exclamation_yellow.svg',
@@ -125,6 +124,39 @@ function tintCanvas(image: HTMLImageElement, tint?: string): HTMLCanvasElement {
   }
   tinted.set(key, canvas);
   return canvas;
+}
+
+/**
+ * A title banner drawn in code: a red ribbon with a dark outline and a darker
+ * bottom lip. The Kenney banner image has a cream frame line inside it, which
+ * showed as a white box around the title, so it is not used.
+ */
+export function drawBanner(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const r = h * 0.18;
+  const ribbon = (top: number, height: number): void => {
+    c.beginPath();
+    c.roundRect(x, top, w, height, r);
+  };
+  c.save();
+  // The darker lip shows below the ribbon, like the fold of the cloth.
+  ribbon(y + h * 0.1, h * 0.9);
+  c.fillStyle = '#a8392f';
+  c.fill();
+  ribbon(y, h * 0.9);
+  c.fillStyle = '#e2685c';
+  c.fill();
+  c.lineWidth = Math.max(2, h * 0.05);
+  c.strokeStyle = '#7a2a22';
+  c.stroke();
+  c.restore();
+}
+
+/** Sets the largest bold font, from `size` down to `minSize`, that fits `text` in `maxWidth`. */
+export function fitFont(c: CanvasRenderingContext2D, text: string, maxWidth: number, size: number, minSize = size * 0.5): void {
+  for (let s = size; s >= minSize; s -= 2) {
+    c.font = `bold ${s}px sans-serif`;
+    if (c.measureText(text).width <= maxWidth) return;
+  }
 }
 
 /** Splits text into lines that fit a width with the current font. */

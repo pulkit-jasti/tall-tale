@@ -2,8 +2,8 @@
 // swatter and the pepper shaker now, the megaphone and bell in build step 5.
 //
 //   - It rests on its platform, with its cost on a price tag at the front edge.
-//   - Grab it with a fist (TOOLS.acceptPinch also allows a pinch). It follows
-//     the hand. Grabbing is free: the first use (first swat, first shake) pays
+//   - Grab it with a fist (TOOLS.acceptPinch also allows a pinch). It snaps
+//     into the fist the way it is held in real life (HOLD) and follows the hand. Grabbing is free: the first use (first swat, first shake) pays
 //     the food and starts the timer. Accidental grabs never waste food.
 //   - Not enough food: dimmed and tied down with a little rope. A hand near it
 //     shows Locked, and closing the hand buzzes and wobbles it instead of grabbing.
@@ -20,10 +20,11 @@
 // a use while it is held.
 import { Color, Group, Matrix4, Mesh, Quaternion, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { PRICE_TAG, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { HOLD, PRICE_TAG, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
+import { holdMatrix } from '../player/hold.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { createToolUse, stopToolUse, tickToolUse, toolUsable, useTool } from '../rules/food.js';
 import type { Goblins } from '../units/goblins.js';
@@ -106,7 +107,7 @@ export abstract class HandTool {
   private ready: ToolReady = 'idle';
   private wobble = 0;
   private dimmed = false;
-  private price!: PriceTag;
+  private priceTag!: PriceTag;
   private rope!: Mesh;
   private timerHold = false;
   protected time = 0;
@@ -154,9 +155,20 @@ export abstract class HandTool {
     return TOOLS.cost[this.name];
   }
 
-  /** True when the tool can be used right now: paid for already, or affordable. */
+  /**
+   * Free of cost (the tutorial, TOOLS.freeInTutorial): never locked, a use
+   * takes no food. The price tag says "Free".
+   */
+  free = false;
+
+  /** What a use takes from the jar right now. */
+  private get price(): number {
+    return this.free ? 0 : this.cost;
+  }
+
+  /** True when the tool can be used right now: free, paid for already, or affordable. */
   get usable(): boolean {
-    return toolUsable(this.food.state, this.use, this.cost);
+    return toolUsable(this.food.state, this.use, this.price);
   }
 
   get active(): boolean {
@@ -222,16 +234,16 @@ export abstract class HandTool {
    */
   private buildPriceTag(a: number): void {
     const { inset, side, tiltDeg, height } = PRICE_TAG;
-    this.price = new PriceTag(this.cost);
+    this.priceTag = new PriceTag(this.cost);
     const holder = new Group();
     // Platform frame: x along the rim (toward the front is -x on the right side, +x on the left), z toward the player.
     holder.rotation.y = -a;
     holder.position.set(polarX(this.spot.radius, a), TOOL_SPOTS.platformTop, polarZ(this.spot.radius, a));
     const toFront = a < 0 ? 1 : -1;
     const tilt = degToRad(tiltDeg);
-    this.price.group.rotation.x = -tilt;
-    this.price.group.position.set(toFront * side, (height / 2) * Math.cos(tilt), inset);
-    holder.add(this.price.group);
+    this.priceTag.group.rotation.x = -tilt;
+    this.priceTag.group.position.set(toFront * side, (height / 2) * Math.cos(tilt), inset);
+    holder.add(this.priceTag.group);
     this.root.add(holder);
   }
 
@@ -312,14 +324,15 @@ export abstract class HandTool {
    * food and starts the timer. Without enough food it buzzes and does nothing.
    */
   protected tryUse(): boolean {
-    const result = useTool(this.food.state, this.use, this.cost, TOOLS.duration[this.name]);
+    const price = this.price;
+    const result = useTool(this.food.state, this.use, price, TOOLS.duration[this.name]);
     if (result === 'locked') {
       this.refuse();
       return false;
     }
     if (result === 'started') {
-      this.food.spent();
-      console.info(`[tools] ${this.name} used: ${this.cost} food, ${TOOLS.duration[this.name]} s`);
+      if (price > 0) this.food.spent();
+      console.info(`[tools] ${this.name} used: ${price} food, ${TOOLS.duration[this.name]} s`);
     }
     return true;
   }
@@ -369,10 +382,19 @@ export abstract class HandTool {
       return;
     }
     if (hand.tracked) {
-      this.handWorldMatrix(hand, holder.viaPinch, handMatrix);
-      matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
+      if (holder.viaPinch) {
+        // A pinch keeps the angle it grabbed at.
+        this.handWorldMatrix(hand, true, handMatrix);
+        matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
+      } else {
+        // A fist holds it the way it is held in real life (src/player/hold.ts).
+        holdMatrix(hand, this.name, 0.01 * this.stage.boardScale, handMatrix);
+        matrix.copy(this.stage.boardLift.matrixWorld).invert().multiply(handMatrix);
+      }
       matrix.decompose(targetPosition, targetQuaternion, targetScale);
-      const k = 1 - Math.exp(-dt / TOOLS.holdSmoothing);
+      // Right after the grab it eases into the hand, so the snap never jumps.
+      const smoothing = this.phaseTime < HOLD.snapTime ? HOLD.snapSmoothing : TOOLS.holdSmoothing;
+      const k = 1 - Math.exp(-dt / smoothing);
       this.body.position.lerp(targetPosition, k);
       this.body.quaternion.slerp(targetQuaternion, k);
     }
@@ -470,7 +492,7 @@ export abstract class HandTool {
       this.touch = state;
       applyTouchState(this.materials, state);
     }
-    this.price.set(this.use.active ? 'paid' : usable ? 'ok' : 'short');
+    this.priceTag.set(this.free ? 'free' : this.use.active ? 'paid' : usable ? 'ok' : 'short');
   }
 
   // ---- Helpers ----
@@ -499,8 +521,8 @@ export abstract class HandTool {
   private gripDistance(world: Vector3): number {
     this.body.worldToLocal(temp2.copy(world));
     const y = Math.min(this.grip.to, Math.max(this.grip.from, temp2.y));
-    // The body is in boardLift (cm), but it may be scaled down while it pops in or out.
-    return Math.hypot(temp2.x, temp2.y - y, temp2.z) * 0.01 * this.body.scale.x;
+    // The body is in boardLift (board cm, sized by the reach check), and it may be scaled down while it pops in or out.
+    return Math.hypot(temp2.x, temp2.y - y, temp2.z) * 0.01 * this.stage.boardScale * this.body.scale.x;
   }
 
   private handWorldMatrix(hand: HandState, viaPinch: boolean, out: Matrix4): Matrix4 {
