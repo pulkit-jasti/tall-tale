@@ -5,6 +5,10 @@
 // start page. No Three.js here: vite.config.ts reads this file too.
 
 export type DebugCommand =
+  | 'skipWave'
+  | 'loseCastle'
+  | 'damageCastle'
+  | 'restartBattle'
   | 'grunts'
   | 'runners'
   | 'climberFront'
@@ -38,11 +42,15 @@ export interface DebugAction {
 }
 
 export const DEBUG_ACTIONS: DebugAction[] = [
+  { id: 'skipWave', code: 'KeyW', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
+  { id: 'loseCastle', code: 'KeyH', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
+  { id: 'damageCastle', code: 'KeyD', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
+  { id: 'restartBattle', code: 'KeyA', label: 'Restart battle', does: 'Start the tutorial battle again from wave 1 (same as the panel button)' },
   { id: 'grunts', code: 'KeyG', label: 'Grunts', does: 'Send a group of grunts' },
   { id: 'runners', code: 'KeyR', label: 'Runners', does: 'Send a group of runners' },
   { id: 'climberFront', code: 'KeyC', label: 'Climber in front', does: 'A climber pops up right in front of you' },
   { id: 'climberRoad', code: 'KeyV', label: 'Climber on a road', does: 'A climber walks in on a random road' },
-  { id: 'auto', code: 'KeyT', label: 'Auto spawn on/off', does: 'Auto spawning on or off' },
+  { id: 'auto', code: 'KeyT', label: 'Auto spawn on/off', does: 'Extra auto spawning on or off (on top of the waves)' },
   { id: 'clear', code: 'KeyK', label: 'Remove all goblins', does: 'Remove all goblins' },
   { id: 'eatFront', code: 'KeyB', label: 'Eat front goblin', does: 'Eat the goblin nearest the front of the wall' },
   { id: 'place', code: 'KeyP', label: 'Place board again', does: 'Place the board again in front of you' },
@@ -54,7 +62,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'fps', code: 'KeyF', label: 'FPS on/off', does: 'FPS counter on or off (add ?fps to the URL on the hosted build)' },
   { id: 'stress', code: 'KeyM', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },
   { id: 'resetRun', code: 'KeyN', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },
-  { id: 'autoTest', label: 'Run stress test', does: 'Automatic stress test: adds grunts step by step until FPS fails, then clears the board' },
+  { id: 'autoTest', label: 'Run stress test', does: 'Automatic stress test: stops the battle, adds grunts step by step until FPS fails, then clears the board' },
   { id: 'stopTest', label: 'Stop stress test', does: 'Stop the automatic stress test and clear the board' },
   { id: 'spinLeft', label: 'Spin left', does: 'Turn the board left one step' },
   { id: 'spinRight', label: 'Spin right', does: 'Turn the board right one step' },

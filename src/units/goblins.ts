@@ -21,7 +21,8 @@ import { angleOf, boardHeight, landingHeight, polarX, polarZ, zoneAt } from '../
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
-import type { Road } from '../world/roads.js';
+import type { Step } from '../rules/roadGraph.js';
+import type { Road, RoadNetwork } from '../world/roads.js';
 
 export type GoblinMode =
   | 'dead'
@@ -57,6 +58,8 @@ export class Goblin {
   stats: GoblinStats = GOBLINS.grunt;
   mode: GoblinMode = 'dead';
   road: Road | null = null;
+  /** The graph road being walked and which way (see RoadGraph.next). */
+  readonly step: Step = { road: -1, dir: 1 };
   distance = 0;
   offset = 0;
   speed = 0;
@@ -148,13 +151,19 @@ export class Goblins {
   private aimed: Goblin | null = null;
   private template!: ModelTemplate;
   private baseColor = new Color(1, 1, 1);
+  private camps: number[];
+
+  /** Called on each wall hit from a grunt or runner (castle damage). */
+  onWallHit: (goblin: Goblin) => void = () => {};
 
   constructor(
     private board: Object3D,
-    private roads: Road[],
+    private network: RoadNetwork,
     private rng: Random,
     private audio: GameAudio,
-  ) {}
+  ) {
+    this.camps = network.graph.camps;
+  }
 
   async load(): Promise<void> {
     this.template = await loadTemplate('characters/mini-dungeon/character-orc.glb', { height: 1 }, true);
@@ -163,7 +172,16 @@ export class Goblins {
   }
 
   get aliveCount(): number {
-    return this.list.filter((g) => g.mode !== 'dead').length;
+    let count = 0;
+    for (const g of this.list) if (g.mode !== 'dead') count++;
+    return count;
+  }
+
+  /** Goblins in one mode right now (for example intruders, for castle damage). */
+  countMode(mode: GoblinMode): number {
+    let count = 0;
+    for (const g of this.list) if (g.mode === mode) count++;
+    return count;
   }
 
   private obtain(type: GoblinType): Goblin | null {
@@ -185,28 +203,61 @@ export class Goblins {
     return goblin;
   }
 
-  /** Spawns a goblin at the camp end of a road. Returns null at the unit cap. */
-  spawnOnRoad(type: GoblinType, roadIndex: number): Goblin | null {
-    const road = this.roads[roadIndex % this.roads.length];
+  /** Spawns a goblin at a camp (graph node index). It picks its roads as it goes. Returns null at the unit cap. */
+  spawnAtCamp(type: GoblinType, camp: number): Goblin | null {
+    const step = this.network.graph.next(camp, this.rng);
+    if (!step) return null;
     const goblin = this.obtain(type);
     if (!goblin) return null;
     goblin.mode = 'walking';
-    goblin.road = road;
-    goblin.distance = 0;
     goblin.offset = this.rng.range(-ROADS.laneJitter, ROADS.laneJitter);
-    road.pointAt(0, goblin.offset, goblin.root.position);
+    this.setRoad(goblin, step);
     goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
     return goblin;
   }
 
-  /** Spawns a climber already climbing the wall at a board angle (radians). */
-  spawnClimberAt(angle: number): Goblin | null {
+  /** Debug spawning: the camp by its place in the blueprint's camp list. */
+  spawnOnRoad(type: GoblinType, campIndex: number): Goblin | null {
+    return this.spawnAtCamp(type, this.camps[campIndex % this.camps.length]);
+  }
+
+  /**
+   * Spawns a climber at the wall at a board angle (radians), climbing, or
+   * already up on the rampart (`onRampart`, in reach right away).
+   */
+  spawnClimberAt(angle: number, onRampart = false): Goblin | null {
     const goblin = this.obtain('climber');
     if (!goblin) return null;
     const r = CASTLE.wallOut + 0.6;
     goblin.root.position.set(polarX(r, angle), 0, polarZ(r, angle));
-    this.startClimbing(goblin);
+    if (onRampart) this.popUp(goblin);
+    else this.startClimbing(goblin);
     return goblin;
+  }
+
+  /** A road was closed (a fallen tree): goblins on it turn back to the point they came from. */
+  turnBack(road: number): void {
+    for (const g of this.list) {
+      if (g.mode !== 'walking' || g.step.road !== road) continue;
+      g.step.dir = g.step.dir === 1 ? -1 : 1;
+    }
+  }
+
+  private setRoad(g: Goblin, step: Step): void {
+    g.step.road = step.road;
+    g.step.dir = step.dir;
+    g.road = this.network.roads[step.road];
+    g.distance = step.dir === 1 ? 0 : g.road.length;
+    g.road.pointAt(g.distance, g.offset * step.dir, g.root.position);
+  }
+
+  /** At the end of a road: a wall entry leads to the wall, a junction to the next road. */
+  private arrive(g: Goblin): void {
+    const graph = this.network.graph;
+    const node = graph.endOf(g.step);
+    const next = graph.isWall(node) ? null : graph.next(node, this.rng);
+    if (next) this.setRoad(g, next);
+    else this.headToWall(g);
   }
 
   kill(goblin: Goblin): void {
@@ -346,11 +397,13 @@ export class Goblins {
     switch (g.mode) {
       case 'walking': {
         const road = g.road!;
-        g.distance += g.speed * dt;
-        road.pointAt(g.distance, g.offset, p);
+        const dir = g.step.dir;
+        g.distance += g.speed * dt * dir;
+        // The lane offset flips with the direction, so a goblin keeps its side of the road.
+        road.pointAt(g.distance, g.offset * dir, p);
         road.directionAt(g.distance, temp);
-        g.face(temp.x, temp.z);
-        if (g.distance >= road.length) this.headToWall(g);
+        g.face(temp.x * dir, temp.z * dir);
+        if (dir === 1 ? g.distance >= road.length : g.distance <= 0) this.arrive(g);
         break;
       }
       case 'toWall': {
@@ -368,6 +421,7 @@ export class Goblins {
           g.attackRight = !g.attackRight;
           g.play(g.attackRight ? 'attack-melee-right' : 'attack-melee-left', false);
           this.audio.play('wallHit', this.worldPosition(g, temp), 1, GOBLIN_RULES.wallHitSoundGap);
+          this.onWallHit(g);
         }
         break;
       }

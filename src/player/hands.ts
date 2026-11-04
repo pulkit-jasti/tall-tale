@@ -13,6 +13,8 @@ export class HandState {
   usingHand = false;
   /** Midpoint of thumb and index tips (world, meters). */
   readonly pinchPoint = new Vector3();
+  /** Index fingertip, for poking buttons (world, meters). */
+  readonly indexTip = new Vector3();
   /** Center of the palm (world, meters). */
   readonly palm = new Vector3();
   /** Wrist orientation (world). Used to carry tools like the slingshot. */
@@ -126,6 +128,7 @@ export class HandTracker {
     const pinchDistance = thumb.distanceTo(index);
     state.usingHand = true;
     state.pinchPoint.copy(thumb).add(index).multiplyScalar(0.5).applyMatrix4(playerMatrix);
+    state.indexTip.copy(index).applyMatrix4(playerMatrix);
     state.palm.copy(palmLocal).applyMatrix4(playerMatrix);
     const o = wristPose.transform.orientation;
     state.quaternion.set(o.x, o.y, o.z, o.w).premultiply(playerQuaternion);
@@ -151,6 +154,7 @@ export class HandTracker {
     // Pinch point a little in front of the grip.
     gripMatrix.compose(gripPosition.set(p.x, p.y, p.z), gripQuaternion.set(o.x, o.y, o.z, o.w), unitScale);
     state.pinchPoint.set(0, -0.01, -0.05).applyMatrix4(gripMatrix).applyMatrix4(playerMatrix);
+    state.indexTip.copy(state.pinchPoint);
     state.quaternion.copy(gripQuaternion).premultiply(playerQuaternion);
     const buttons = source.gamepad!.buttons;
     const trigger = (buttons[0]?.value ?? 0) > 0.6;

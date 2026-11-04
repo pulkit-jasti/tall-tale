@@ -1,4 +1,5 @@
 // Roads as curves on the board, and the flat ribbons that draw them.
+// RoadNetwork pairs the road graph (src/rules/roadGraph.ts) with one curve per road.
 import {
   BufferGeometry,
   CatmullRomCurve3,
@@ -8,6 +9,7 @@ import {
 } from 'three';
 import { ROADS } from '../config/game.js';
 import { boardHeight, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import type { RoadGraph } from '../rules/roadGraph.js';
 import { flatMaterial } from './shapes.js';
 
 const up = new Vector3(0, 1, 0);
@@ -94,5 +96,21 @@ export class Road {
       best = Math.min(best, Math.hypot(p.x - x, p.z - z));
     }
     return best;
+  }
+}
+
+/** The road graph plus one curve per graph road (same index). */
+export class RoadNetwork {
+  readonly roads: Road[];
+
+  constructor(readonly graph: RoadGraph) {
+    this.roads = graph.roads.map((r) => new Road(r.points));
+  }
+
+  /** Board position of a graph point (cm, on the ground). */
+  nodePosition(node: number, out: Vector3): Vector3 {
+    const [r, deg] = this.graph.nodes[node].at;
+    const a = degToRad(deg);
+    return out.set(polarX(r, a), boardHeight(r), polarZ(r, a));
   }
 }

@@ -201,10 +201,106 @@ export const GOBLIN_RULES = {
   fade: 0.15,
 };
 
-/** Toy test spawning (build step 1 only, replaced by the director in step 3). */
-export const TOY_SPAWN = {
-  /** Auto trickle on at start. */
-  autoTrickle: true,
+/** Route choice at junctions (docs/map.md section 4). */
+export const ROUTES = {
+  /**
+   * A route this much longer than the shortest one (cm) is half as likely.
+   * Smaller = goblins stick to the shortest road more.
+   */
+  detourScale: 60,
+};
+
+/** Castle health, damage and repair (docs/castle-rules.md). Health is the red flag's height. */
+export const CASTLE_HEALTH = {
+  maxHealth: 100,
+  /** Damage per wall hit from a grunt or runner (one hit every GOBLIN_RULES.wallHitInterval). */
+  wallHitDamage: 0.35,
+  /** Damage per second from each intruder in the courtyard. Faster than outside attacks. */
+  intruderDamagePerSec: 1.2,
+  /** Share of the missing health repaired in each breather. */
+  repairShare: 0.35,
+};
+
+/** How a wave's enemies come out of their camps (the numbers per wave are in src/director/tutorial.ts). */
+export const WAVES = {
+  /** Goblins per group. Climbers come alone. */
+  gruntGroup: 3,
+  runnerGroup: 4,
+  /** A camp rumbles this long before its group comes out (seconds). */
+  rumbleLead: 3,
+  /** Gap between goblins of one group leaving the camp (seconds). */
+  groupGap: 0.8,
+  /** Group times follow t = spawnTime * x^curve: below 1, the start is calm and the end is a push. */
+  curve: 0.75,
+  /** Random shift of each group time, as a share of the gap between groups. */
+  jitter: 0.3,
+  /** The first group comes this long after the wave starts (seconds), after its rumble. */
+  firstGroupAt: 1,
+  /** A camp sinks this much (share of its height) when all its enemies of the wave are out. */
+  campSink: 0.35,
+  /** The scripted climber in front comes from this far off the exact front (degrees). */
+  frontClimberSpread: 8,
+};
+
+/**
+ * The two flags (docs/castle-rules.md section 2). They live in boardLift:
+ * they rise with the board but never spin. Just outside the ring handle,
+ * one on each side, a little in front (cm, degrees).
+ */
+export const FLAGS = {
+  radius: 31,
+  /** Red castle health flag on the left, blue wave flag on the right. */
+  healthAngleDeg: -44,
+  waveAngleDeg: 44,
+  poleHeight: 26,
+  poleRadius: 0.35,
+  poleColor: 0x5a4330,
+  ballColor: 0xf2c14e,
+  /** Cloth size (cm) and colors. */
+  clothWidth: 6,
+  clothHeight: 4,
+  healthColor: 0xd23c28,
+  waveColor: 0x2f6fd8,
+  /** Lowest and highest cloth top on the pole (cm above the board). */
+  clothBottom: 5,
+  clothTop: 25,
+  /** The cloth glides to its new height at this speed (share per second). Slow, so repairs are seen. */
+  slideSpeed: 1.5,
+  /** Waving: sway angle (degrees) and speed. */
+  swayDeg: 12,
+  swaySpeed: 3,
+  /** Below this health share the red cloth darkens and droops (tears and smoke come with the juice step). */
+  lowShare: 0.3,
+  notchColor: 0xddd6c8,
+};
+
+/** Win and lose panels, and the poke buttons on them (docs/castle-rules.md section 4). */
+export const END_PANEL = {
+  /** Panel spot, fixed in front of the player (fixedRig, cm): over the front wall, within reach. */
+  radius: 36,
+  y: 20,
+  /** Tilted back a little, toward the eyes (degrees). */
+  tiltDeg: 20,
+  width: 32,
+  height: 20,
+  /** The round poke button below the text, in front of the panel (cm). */
+  buttonRadius: 3.5,
+  buttonDepth: 1.6,
+  buttonColor: 0x6fae4a,
+  /** Poke: Ready when the fingertip is this close in front of the button face (cm). */
+  readyDistance: 5,
+  /** Pressed when the fingertip pushes this deep into the button (cm). */
+  pressDepth: 0.6,
+  /** How far the button sinks when pressed (cm). */
+  travel: 0.8,
+  /** The panel appears this long after the battle ends, after the last poofs (seconds). */
+  showDelay: 1.2,
+};
+
+/** Debug spawning (keys and the stress test), apart from the director. */
+export const DEBUG_SPAWN = {
+  /** Auto trickle on at start. Off: the tutorial director spawns the waves. */
+  autoTrickle: false,
   /** Seconds between auto groups. */
   trickleInterval: 9,
   gruntGroup: 3,
@@ -215,8 +311,6 @@ export const TOY_SPAWN = {
   climberEvery: 2,
   /** Every Nth auto group is runners instead of grunts. */
   runnerEvery: 4,
-  /** Seed for the toy test (fixed, so every run is the same). */
-  seed: 1234,
 };
 
 export const FEEDBACK = {
@@ -415,6 +509,8 @@ export const DEBUG = {
   stressMax: 120,
   /** Gap between stress test grunts leaving their camps (seconds). */
   stressGap: 0.25,
+  /** Castle damage per "Damage castle" press (health is out of CASTLE_HEALTH.maxHealth). */
+  castleDamage: 20,
   /** Board turn and height per debug page press (degrees, cm). */
   spinStepDeg: 30,
   heightStepCm: 5,

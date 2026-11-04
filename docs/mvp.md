@@ -111,6 +111,16 @@ Each step should be playable on its own.
      - Not done yet: re-run the stress test and log it in [performance.md](performance.md).
 3. **Waves and flags:** blueprint loader and `tutorial.json`, road graph, camps, seeded random, the tutorial director, both flags, win and lose panels.
    - Done when: the 5 tutorial waves play from start to win, debug keys skip a wave and lose the castle, and the director and win/lose tests pass.
+   - **Built (2026-11-04), waiting for the headset test.** What is in it:
+     - Blueprint `src/maps/tutorial.json` (4 camps, junctions, a ring road with gaps, 6 wall entries, gate and trigger spots for step 5), checked by `src/rules/blueprint.ts`.
+     - Road graph `src/rules/roadGraph.ts`: weighted random at junctions, shorter routes more likely, roads can close (goblins on it turn back). Nothing closes a road yet (trees come in step 5).
+     - Waves `src/units/waveSpawner.ts`: camps rumble, small groups, a calm start and a push at the end, camps sink as their goblins come out. Numbers in `TUTORIAL_WAVES` (`src/director/tutorial.ts`) and `WAVES`.
+     - Director `src/rules/director.ts` and the step list in `src/director/tutorial.ts`. Wave 1 waits for a goblin to be eaten (a climber pops up in front), wave 2 for a slingshot hit. Steps for tools not built yet are skipped.
+     - Castle health in `src/rules/battle.ts` (`CASTLE_HEALTH`): wall hits and intruders damage it, each breather repairs 35% of the damage.
+     - Both flags (`src/world/flags.ts`) in boardLift: they rise with the board, never spin.
+     - Win and lose panels with a round poke button (`src/ui/endPanel.ts`). Text is a canvas texture like the FPS panel, not IWSDK UI.
+     - The battle starts when the start page button is pressed (after the board is placed in VR). Leaving VR ends it. The slingshot is hidden until wave 2, then poofs in and glows until grabbed.
+     - Debug keys: W skip wave, H lose castle, D damage castle, A restart battle. The stress test stops the battle.
 4. **Fly swatter, pepper shaker, food jar and pips.**
    - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
 5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.

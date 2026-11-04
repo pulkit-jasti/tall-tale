@@ -1,12 +1,18 @@
-// The game loop. Builds the world once, then runs the small systems in a
-// fixed order every frame: hands, handles, director, goblins, grab and eat,
-// slingshot, effects.
+// The game loop. Builds the world once from the map blueprint, then runs the
+// small systems in a fixed order every frame: hands, handles, battle (director,
+// waves, flags, end panel), goblins, grab and eat, slingshot, effects.
 import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { GameAudio } from './audio/sound.js';
-import { DEBUG, FPS, HANDLES, STAGE, TOY_SPAWN, XR } from './config/game.js';
-import { TOY_ROADS } from './config/toyMap.js';
+import { DEBUG, FPS, HANDLES, STAGE, XR } from './config/game.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
+import { Battle } from './director/battle.js';
+import { TUTORIAL_WAVES } from './director/tutorial.js';
+import tutorialMap from './maps/tutorial.json';
+import { parseBlueprint } from './rules/blueprint.js';
+import { EndPanel } from './ui/endPanel.js';
+import { WaveSpawner } from './units/waveSpawner.js';
+import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';
 import { mark } from './debug/perfMarks.js';
 import { sendHeartbeat, sendRunStats, sendStressTest, takeRemoteCommands } from './debug/remote.js';
@@ -27,6 +33,14 @@ const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
 const headForward = new Vector3();
 
+/** Set by the start page button: start a battle in the browser now, or in VR once the board is placed. */
+let pendingStart: 'browser' | 'vr' | null = null;
+
+/** Called from the start page's button. */
+export function requestBattleStart(inVr: boolean): void {
+  pendingStart = inVr ? 'vr' : 'browser';
+}
+
 export class GameSystem extends createSystem({}) {
   private ready = false;
   private stage!: Stage;
@@ -38,6 +52,7 @@ export class GameSystem extends createSystem({}) {
   private slingshot!: Slingshot;
   private particles!: Particles;
   private spawner!: ToySpawner;
+  private battle!: Battle;
   private debugRng!: Random;
   private fps!: FpsCounter;
   private stressTest!: StressTest;
@@ -52,7 +67,9 @@ export class GameSystem extends createSystem({}) {
 
   private async setup(): Promise<void> {
     const root: Object3D = this.world.getPersistentRoot();
-    const seed = TOY_SPAWN.seed;
+    const blueprint = parseBlueprint(tutorialMap);
+    // The tutorial uses the blueprint's fixed seed, so every run plays the same.
+    const seed = blueprint.seed;
 
     const sun = new DirectionalLight(0xfff4e0, 1.6);
     sun.position.set(-3, 6, 2);
@@ -66,10 +83,10 @@ export class GameSystem extends createSystem({}) {
     this.fps = new FpsCounter(this.stage.boardLift);
 
     const [built] = await Promise.all([
-      buildBoard(this.stage.boardSpin, TOY_ROADS, seed),
+      buildBoard(this.stage.boardSpin, blueprint),
       this.audio.load(),
     ]);
-    this.goblins = new Goblins(this.stage.boardSpin, built.roads, createRandom(seed + 200), this.audio);
+    this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
     await Promise.all([this.goblins.load(), this.slingshot.load()]);
     this.fps.countUnits = () => this.goblins.aliveCount;
@@ -83,10 +100,33 @@ export class GameSystem extends createSystem({}) {
       }
     };
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.audio, this.particles);
-    this.spawner = new ToySpawner(this.goblins, built.roads.length, createRandom(seed + 300));
+    this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
+    this.battle = new Battle({
+      stage: this.stage,
+      goblins: this.goblins,
+      spawner: new WaveSpawner(
+        this.stage.boardSpin,
+        built.network,
+        this.goblins,
+        built.hills,
+        this.audio,
+        createRandom(seed + 500),
+      ),
+      slingshot: this.slingshot,
+      flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
+      panel: new EndPanel(this.stage.fixedRig, this.audio),
+      audio: this.audio,
+      particles: this.particles,
+      rng: createRandom(seed + 600),
+    });
+    this.grabEat.onEat = () => this.battle.noteEaten();
+    // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
+    this.slingshot.setVisible(false);
     this.stressTest = new StressTest({
       clear: () => {
+        // A clean measurement: no battle, no auto trickle.
+        this.battle.stop();
         this.spawner.auto = false;
         this.spawner.clear();
         this.goblins.killAll();
@@ -150,6 +190,11 @@ export class GameSystem extends createSystem({}) {
       this.placeTimer = STAGE.placeDelay;
       this.requestFrameRate();
     }
+    // Leaving VR ends the battle. The start page's button starts a new one.
+    if (!immersive && this.wasImmersive) {
+      this.battle.stop();
+      this.goblins.killAll();
+    }
     this.wasImmersive = immersive;
     // Simple auto-pause while the Quest menu is open (full pause is build step 6).
     // Read the XR session directly too, and the page itself, in case one of
@@ -189,6 +234,11 @@ export class GameSystem extends createSystem({}) {
       this.placeTimer -= dt;
       if (this.placeTimer <= 0) this.placeBoard();
     }
+    // The battle starts once the board is in place (in VR, after the auto placement).
+    if (pendingStart === 'browser' || (pendingStart === 'vr' && immersive && this.placeTimer <= 0)) {
+      pendingStart = null;
+      this.battle.start();
+    }
 
     this.player.updateWorldMatrix(true, false);
     this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
@@ -197,6 +247,7 @@ export class GameSystem extends createSystem({}) {
     this.stressTest.update(dt);
     this.handles.update(dt);
     this.spawner.update(dt);
+    this.battle.update(dt, this.hands.hands);
     this.goblins.update(dt);
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
@@ -224,6 +275,18 @@ export class GameSystem extends createSystem({}) {
 
   private runDebug(id: DebugCommand): void {
     switch (id) {
+      case 'skipWave':
+        this.battle.skipWave();
+        break;
+      case 'loseCastle':
+        this.battle.loseNow();
+        break;
+      case 'damageCastle':
+        this.battle.damage(DEBUG.castleDamage);
+        break;
+      case 'restartBattle':
+        this.battle.start();
+        break;
       case 'grunts':
         this.spawner.sendGroup('grunt');
         break;
@@ -288,7 +351,8 @@ export class GameSystem extends createSystem({}) {
         // Raise the unit cap for this session so the real limit can be found.
         this.goblins.cap = Math.min(DEBUG.stressMax, Math.max(this.goblins.cap, this.goblins.aliveCount + DEBUG.stressAdd));
         // A clean test: no auto trickle changing the count, and the run
-        // starts once all the new grunts are out.
+        // starts once all the new grunts are out. The battle stops too.
+        this.battle.stop();
         this.spawner.auto = false;
         this.fps.resetRun(DEBUG.stressAdd * DEBUG.stressGap);
         this.spawner.sendMany('grunt', DEBUG.stressAdd);

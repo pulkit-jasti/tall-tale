@@ -1,6 +1,7 @@
-// Toy test spawner (build step 1 only). A stand-in for the tutorial director
-// that comes in step 3. Like a director, it only calls the goblin system.
-import { DEBUG, TOY_SPAWN, type GoblinType } from '../config/game.js';
+// Debug spawner from the toy test (build step 1): the debug keys, the stress
+// test and the optional auto trickle use it, apart from the tutorial
+// director. Like a director, it only calls the goblin system.
+import { DEBUG, DEBUG_SPAWN as TOY_SPAWN, type GoblinType } from '../config/game.js';
 import type { Random } from '../rules/random.js';
 import type { Goblins } from '../units/goblins.js';
 

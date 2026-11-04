@@ -230,8 +230,10 @@ export class Slingshot {
   /** Circle on the ground where the aimed shot will land. */
   private marker!: Mesh;
 
-  /** Called with each goblin a pebble knocks out (for the director later). */
+  /** Called with each goblin a pebble knocks out (the tutorial director counts them). */
   onHit: (goblin: Goblin) => void = () => {};
+  /** The frame glows (pulsing) until the handle is grabbed: a new tool, or a hint. */
+  beckon = false;
 
   constructor(
     private stage: Stage,
@@ -433,6 +435,7 @@ export class Slingshot {
     const offset = new Matrix4().copy(handMatrix).invert().multiply(this.frame.matrixWorld);
     this.frameHolder = { hand, viaPinch, openTime: 0, lostTime: 0, offset };
     this.returnLeft = 0;
+    this.beckon = false;
     this.audio.play('grab', hand.palm);
   }
 
@@ -512,6 +515,10 @@ export class Slingshot {
     this.stage.fixedRig.worldToLocal(this.head);
     this.updateBowl(dt);
     this.updateFrame(dt);
+    // Glow until grabbed. A hand near the handle shows Ready instead.
+    if (this.beckon && this.handleTouch === 'idle') {
+      applyTouchState(this.woodMaterials, Math.sin(this.time * 6) > 0 ? 'ready' : 'idle');
+    }
     this.updateHandPebbles(dt);
 
     const hand = this.pouchHolder;
@@ -1290,6 +1297,12 @@ export class Slingshot {
     this.loaded = true;
     if (this.pouchPebble) this.pouchPebble.visible = true;
     this.audio.play('pebbleLoad', this.pouchWorld(temp));
+  }
+
+  /** The easier fallback when the player is stuck: a full bowl and a pebble already in the pouch. */
+  loadForPlayer(): void {
+    this.debugBowl(true);
+    if (!this.loaded) this.debugLoad();
   }
 
   /** Debug: empty or fill the bowl. */

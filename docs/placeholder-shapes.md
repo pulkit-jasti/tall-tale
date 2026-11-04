@@ -20,7 +20,7 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Board | Flat disc with a hole for the player, rising gently toward the horizon (see [map.md](map.md#2-the-board)). Grass color, slightly varied. |
 | Roads | Flat ribbons along the road curves, sandy color, slightly above the board. |
 | Castle wall | Round ring wall, 6 cm high, from 40 to 46 cm. Crenellations as small boxes on top (instanced). Stone grey with a lighter top. Cracks and scorch marks as darker decals or vertex colors when damaged. |
-| Flag poles | Thin cylinders with a ball on top. |
+| Flag poles | Thin cylinders with a ball on top. The cloth is a flat plane (red for health, blue for waves) that slides up and down and sways. The wave pole has one small flat notch per wave. |
 | Food jar fill level | Disc inside the jar that moves up and down. |
 | Particles: poof, stars, smoke, sparks, splat | Small instanced quads or low-poly spheres, pooled. |
 
@@ -42,7 +42,7 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Arrows for the ring handle | Flat arrow shapes (extruded 2D shape), bright color: a curved double arrow lying on the ring at the front, and a small up and down arrow standing on it 50 degrees left and right of front. They never turn with the ring. Kept small (`arrowSize` in config). | About 5 to 8 cm |
 | Play button (in VR) | Big round button (short cylinder) on a small post. | 10 cm wide |
 | Wrist pause button | Small round button (short cylinder) on the inside of the left wrist. | 3 cm wide |
-| Pause, win and lose panels | Rounded flat panel with big poke buttons. Use IWSDK UI (check iwsdk-reference) for the text. | About 40 cm wide |
+| Pause, win and lose panels | Rounded flat panel with big poke buttons. Win and lose (step 3): text on a canvas texture like the FPS panel, and one round button (short cylinder) poked with the index finger. | 32 x 20 cm (40 cm was too wide this close) |
 | FPS counter (debug) | Small flat panel with a canvas texture Top: live FPS, worst frame in ms, units on the board, "paused". Bottom: the measured run (avg FPS, 1% low, missed frames). Standing just above the ring handle, left of front. Rises with the board, never spins. On in the dev server, `?fps` on the hosted build, F or the debug page toggles it. | 13.6 x 6.8 cm |
 | Giant's mouth feedback | None in the world. Use a sound and a small burst of particles at the face when a goblin is eaten. | |
 | Goblin helmet (only if helmets are used) | Small half sphere on the head. | 1 cm |

@@ -1,0 +1,57 @@
+{
+  "name": "tutorial",
+  "seed": 1234,
+  "nodes": [
+    { "id": "campNorth", "kind": "camp", "at": [210, 6], "size": 24 },
+    { "id": "campEast", "kind": "camp", "at": [232, 86], "size": 28 },
+    { "id": "campSouth", "kind": "camp", "at": [220, 196], "size": 22 },
+    { "id": "campWest", "kind": "camp", "at": [182, -82], "size": 18 },
+
+    { "id": "jNorth", "kind": "junction", "at": [132, 2] },
+    { "id": "jNorthEast", "kind": "junction", "at": [138, 44] },
+    { "id": "jEast", "kind": "junction", "at": [140, 92] },
+    { "id": "jSouth", "kind": "junction", "at": [132, 190] },
+    { "id": "jWest", "kind": "junction", "at": [124, -76] },
+
+    { "id": "kNorth", "kind": "junction", "at": [84, 8] },
+    { "id": "kEast", "kind": "junction", "at": [86, 100] },
+    { "id": "kSouth", "kind": "junction", "at": [84, 180] },
+    { "id": "kWest", "kind": "junction", "at": [84, -62] },
+
+    { "id": "wNorth", "kind": "wall", "at": [52, 0] },
+    { "id": "wNorthEast", "kind": "wall", "at": [52, 34] },
+    { "id": "wEast", "kind": "wall", "at": [52, 94] },
+    { "id": "wSouth", "kind": "wall", "at": [52, 174] },
+    { "id": "wSouthWest", "kind": "wall", "at": [52, 228] },
+    { "id": "wWest", "kind": "wall", "at": [52, -66] }
+  ],
+  "roads": [
+    { "from": "campNorth", "to": "jNorth", "via": [[176, 9]] },
+    { "from": "jNorth", "to": "kNorth", "via": [[108, -4]] },
+    { "from": "kNorth", "to": "wNorth", "via": [[66, 4]] },
+    { "from": "kNorth", "to": "wNorthEast", "via": [[68, 24]] },
+    { "from": "jNorth", "to": "jNorthEast", "via": [[138, 22]] },
+    { "from": "jNorthEast", "to": "wNorthEast", "via": [[100, 42], [72, 37]] },
+
+    { "from": "campEast", "to": "jEast", "via": [[188, 84]] },
+    { "from": "jEast", "to": "jNorthEast", "via": [[142, 68]] },
+    { "from": "jEast", "to": "kEast", "via": [[112, 96]] },
+    { "from": "kEast", "to": "wEast", "via": [[66, 92]] },
+
+    { "from": "campSouth", "to": "jSouth", "via": [[176, 200]] },
+    { "from": "jSouth", "to": "kSouth", "via": [[108, 183]] },
+    { "from": "kSouth", "to": "wSouth", "via": [[66, 176]] },
+    { "from": "jSouth", "to": "wSouthWest", "via": [[112, 214], [76, 226]] },
+
+    { "from": "campWest", "to": "jWest", "via": [[152, -84]] },
+    { "from": "jWest", "to": "kWest", "via": [[104, -70]] },
+    { "from": "kWest", "to": "wWest", "via": [[66, -64]] },
+    { "from": "jWest", "to": "jNorth", "via": [[130, -40]] }
+  ],
+  "gate": { "at": [46, 180] },
+  "triggers": [
+    { "kind": "keg", "wave": 2, "at": [118, -2] },
+    { "kind": "boulder", "wave": 4, "at": [126, 104] },
+    { "kind": "tree", "wave": 4, "at": [100, 190] }
+  ]
+}

@@ -17,11 +17,12 @@ import {
   Vector3,
 } from 'three';
 import { BOARD, CASTLE } from '../config/game.js';
-import type { ToyRoad } from '../config/toyMap.js';
+import type { Blueprint } from '../rules/blueprint.js';
+import { RoadGraph, type GraphNode } from '../rules/roadGraph.js';
 import { boardHeight, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { createRandom, type Random } from '../rules/random.js';
 import { cloneStatic, InstancedModel, loadTemplate } from './models.js';
-import { Road } from './roads.js';
+import { RoadNetwork, type Road } from './roads.js';
 import { flatMaterial } from './shapes.js';
 
 const yAxis = new Vector3(0, 1, 0);
@@ -180,7 +181,7 @@ async function buildCourtyard(rng: Random): Promise<Group> {
 }
 
 /** Camp hills with rocks, tents and a fire at the start of each road. */
-async function buildCamps(roads: ToyRoad[], rng: Random): Promise<Group> {
+async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Object3D>): Promise<Group> {
   const group = new Group();
   const hill = await loadTemplate('props/castle-kit/ground-hills.glb', { width: 1 });
   const rocks = await Promise.all(
@@ -192,22 +193,24 @@ async function buildCamps(roads: ToyRoad[], rng: Random): Promise<Group> {
     loadTemplate('camp/nature/tent_smallClosed.glb', { height: 4.5 }),
   ]);
   const fire = await loadTemplate('camp/survival/campfire-pit.glb', { width: 2 });
-  const rockSets = rocks.map((t) => new InstancedModel(t, roads.length * 6));
+  const rockSets = rocks.map((t) => new InstancedModel(t, camps.length * 6));
   rockSets.forEach((s) => group.add(s.group));
-  for (const road of roads) {
-    const [cr, cdeg] = road.camp.at;
+  for (const camp of camps) {
+    const [cr, cdeg] = camp.at;
+    const size = camp.size;
     const ca = degToRad(cdeg);
     const cx = polarX(cr, ca);
     const cz = polarZ(cr, ca);
     const cy = boardHeight(cr);
     const hillObject = cloneStatic(hill);
-    hillObject.scale.set(road.camp.size, road.camp.size * 0.8, road.camp.size);
+    hillObject.scale.set(size, size * 0.8, size);
     hillObject.position.set(cx, cy - 0.3, cz);
     group.add(hillObject);
+    hills.set(camp.id, hillObject);
     const rockCount = 3 + rng.int(3);
     for (let i = 0; i < rockCount; i++) {
       const a = rng.range(0, Math.PI * 2);
-      const d = road.camp.size * rng.range(0.45, 0.65);
+      const d = size * rng.range(0.45, 0.65);
       const x = cx + Math.cos(a) * d;
       const z = cz + Math.sin(a) * d;
       rng.pick(rockSets).add(placeMatrix(x, boardHeight(Math.hypot(x, z)), z, rng.range(0, 6.28), rng.range(0.75, 1.4)));
@@ -216,14 +219,14 @@ async function buildCamps(roads: ToyRoad[], rng: Random): Promise<Group> {
     for (let i = 0; i < tentCount; i++) {
       // Tents sit behind the hill, away from the castle.
       const a = ca + rng.range(-0.25, 0.25);
-      const d = cr + road.camp.size * 0.7 + rng.range(2, 6);
+      const d = cr + size * 0.7 + rng.range(2, 6);
       const tent = cloneStatic(rng.pick(tents));
       tent.position.set(polarX(d, a), boardHeight(d), polarZ(d, a));
       tent.rotation.y = rng.range(0, Math.PI * 2);
       group.add(tent);
     }
     const fireObject = cloneStatic(fire);
-    const fd = cr + road.camp.size * 0.6;
+    const fd = cr + size * 0.6;
     const fa = ca + 0.12;
     fireObject.position.set(polarX(fd, fa), boardHeight(fd), polarZ(fd, fa));
     group.add(fireObject);
@@ -232,7 +235,7 @@ async function buildCamps(roads: ToyRoad[], rng: Random): Promise<Group> {
 }
 
 /** Instanced trees, rocks and plants, kept off the roads and camps. */
-async function buildDecor(roads: Road[], toyRoads: ToyRoad[], rng: Random): Promise<Group> {
+async function buildDecor(roads: Road[], camps: GraphNode[], rng: Random): Promise<Group> {
   const group = new Group();
   const kinds: { files: string[]; height: [number, number]; count: number; radius: number }[] = [
     { files: ['trees/nature/tree_default', 'trees/nature/tree_oak', 'trees/nature/tree_cone', 'trees/nature/tree_fat'], height: [6, 12], count: 70, radius: 4 },
@@ -253,9 +256,9 @@ async function buildDecor(roads: Road[], toyRoads: ToyRoad[], rng: Random): Prom
       const clear = kind.radius + 5;
       if (roads.some((road) => road.distanceTo(x, z) < clear)) continue;
       if (
-        toyRoads.some((t) => {
-          const ca = degToRad(t.camp.at[1]);
-          return Math.hypot(polarX(t.camp.at[0], ca) - x, polarZ(t.camp.at[0], ca) - z) < t.camp.size + 10;
+        camps.some((c) => {
+          const ca = degToRad(c.at[1]);
+          return Math.hypot(polarX(c.at[0], ca) - x, polarZ(c.at[0], ca) - z) < c.size + 10;
         })
       )
         continue;
@@ -267,21 +270,26 @@ async function buildDecor(roads: Road[], toyRoads: ToyRoad[], rng: Random): Prom
 }
 
 export interface BuiltBoard {
-  roads: Road[];
+  network: RoadNetwork;
+  /** Camp hills by camp id, so a camp can sink as its enemies come out. */
+  hills: Map<string, Object3D>;
 }
 
-/** Builds everything that turns with the board into `parent`. */
-export async function buildBoard(parent: Object3D, toyRoads: ToyRoad[], seed: number): Promise<BuiltBoard> {
+/** Builds everything in a map blueprint that turns with the board into `parent`. */
+export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promise<BuiltBoard> {
+  const seed = blueprint.seed;
   // Each part gets its own seeded stream, so loading order never changes the layout.
   parent.add(buildBoardMesh(createRandom(seed)));
-  const roads = toyRoads.map((t) => new Road(t.points));
-  for (const road of roads) parent.add(road.buildMesh());
+  const network = new RoadNetwork(new RoadGraph(blueprint));
+  for (const road of network.roads) parent.add(road.buildMesh());
+  const campNodes = network.graph.nodes.filter((n) => n.kind === 'camp');
+  const hills = new Map<string, Object3D>();
   const [castle, courtyard, camps, decor] = await Promise.all([
     buildCastle(),
     buildCourtyard(createRandom(seed + 1)),
-    buildCamps(toyRoads, createRandom(seed + 2)),
-    buildDecor(roads, toyRoads, createRandom(seed + 3)),
+    buildCamps(campNodes, createRandom(seed + 2), hills),
+    buildDecor(network.roads, campNodes, createRandom(seed + 3)),
   ]);
   parent.add(castle, courtyard, camps, decor);
-  return { roads };
+  return { network, hills };
 }

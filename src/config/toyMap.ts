@@ -1,5 +1,5 @@
-// Simple roads for the toy test (build step 1). Step 3 replaces this with the
-// tutorial.json blueprint and the road graph.
+// Simple roads for the toy test (build step 1). No longer used: step 3
+// replaced this with src/maps/tutorial.json and the road graph. Safe to delete.
 // Points are [distance from center in cm, angle in degrees]. Angle 0 is the
 // front of the board (in front of the player), positive angles go to the right.
 // Each road runs from its camp to the wall.
