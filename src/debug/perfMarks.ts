@@ -10,7 +10,8 @@ export type PerfMark =
   | 'panel redraw'
   | 'debug send'
   | 'particles'
-  | 'board placed';
+  | 'board placed'
+  | 'pebble shot';
 
 const marks = new Set<PerfMark>();
 

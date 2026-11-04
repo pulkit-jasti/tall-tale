@@ -26,6 +26,14 @@ export const SOUNDS = {
     positional: true,
   },
   poof: { files: ['impact/impactGeneric_light_000.ogg', 'impact/impactGeneric_light_001.ogg'], volume: 0.6, positional: true },
+  slingStretch: { files: ['rpg/creak1.ogg', 'rpg/creak2.ogg', 'rpg/creak3.ogg'], volume: 0.5, positional: true },
+  slingRelease: { files: ['interface/pluck_001.ogg', 'interface/pluck_002.ogg'], volume: 0.9, positional: true },
+  pebbleHit: {
+    files: ['impact/impactPunch_medium_000.ogg', 'impact/impactPunch_medium_001.ogg', 'impact/impactPunch_medium_002.ogg'],
+    volume: 0.9,
+    positional: true,
+  },
+  locked: { files: ['interface/error_004.ogg', 'interface/error_006.ogg'], volume: 0.5, positional: false },
   // Missing in the packs (placeholder chime until build step 7).
   gulp: { files: [CHIME], volume: 0.4, positional: false },
   squeal: { files: [CHIME], volume: 0.15, positional: true },

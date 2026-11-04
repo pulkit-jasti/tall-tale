@@ -224,6 +224,117 @@ export const FEEDBACK = {
   locked: 0x000000,
   /** Eat zone pulse while a held goblin is near the mouth. */
   eatPulse: 0xffffff,
+  /** Glow on the enemy the slingshot is about to hit (not a touch state). */
+  aimed: 0xd23c28,
+  aimedIntensity: 0.8,
+};
+
+/**
+ * Spots for the tool platforms around the player (docs/giant-tools.md
+ * section 7). Fixed, they never turn with the board. 2 on each side, a bit
+ * forward. All inside the ring handle, so the ring never passes through them
+ * when the board moves up or down (cm, degrees: 0 = front, positive = right).
+ */
+export const TOOL_SPOTS = {
+  slingshot: { angleDeg: 30, radius: 19 },
+  /** Filled in build steps 4 and 5. */
+  rightSide: { angleDeg: 82, radius: 19 },
+  leftFront: { angleDeg: -30, radius: 19 },
+  leftSide: { angleDeg: -82, radius: 19 },
+  /** Platform top above the board's placed height (cm). Above the ring top. */
+  platformTop: 10,
+  /** Platform width (cm). */
+  platformWidth: 11,
+  /** Post under each platform, down from its bottom (cm). */
+  postLength: 14,
+  postRadius: 1,
+  postColor: 0x3b2b1f,
+};
+
+/** The slingshot: pinch the pouch, pull back, let go (docs/giant-tools.md). */
+export const SLINGSHOT = {
+  /** Y frame height on the platform (cm). */
+  frameHeight: 15,
+  handleHeight: 7,
+  /** Angle of each fork arm from vertical (degrees). */
+  armSpreadDeg: 25,
+  woodColor: 0x8a5a34,
+  bandColor: 0x6e2f22,
+  pouchColor: 0x5a3a24,
+  /** The pouch rests this far behind the fork, toward the player (cm). */
+  pouchRest: 2.5,
+  /** Pinch zone around the pouch (meters). Generous, like the goblins. */
+  grabRadius: 0.06,
+  /** Pulls shorter than this do not shoot, the pebble stays (cm). */
+  minPull: 4,
+  /** Longest pull (cm). The pouch stops here. */
+  maxPull: 16,
+  /** Launch speed at the shortest and longest pull (cm per second). */
+  minSpeed: 140,
+  maxSpeed: 560,
+  /** Gravity for pebbles (cm per second squared). Lower than real, so arcs read well. */
+  gravity: 700,
+  /** A shot must point at least this much away from the player (dot of the flat directions). */
+  minOutward: 0.2,
+  /** Time after a shot before the next pebble sits in the pouch (seconds). Limits spamming. */
+  reloadTime: 0.45,
+  /** Pouch spring back speed after a shot (per second). */
+  springBack: 18,
+  /** A stretch creak plays every this many cm of pull. */
+  creakEvery: 4,
+  /** Pebbles in flight at once (pool size). */
+  maxPebbles: 6,
+  /** Pebble size (cm). */
+  pebbleSize: 1.5,
+  /** Longest flight before a pebble is dropped (seconds). */
+  maxFlight: 4,
+  /** Below this height (cm, board) a pebble that fell into the hole is gone. */
+  killBelow: -60,
+};
+
+/** Slingshot aim assist (docs/giant-tools.md "Slingshot aim assist"). Strengths are tuned in playtests. */
+export const AIM_ASSIST = {
+  /** 1. The shot uses the average pull of this window before the release (seconds)... */
+  steadyWindow: 0.1,
+  /** ...skipping this last bit, while the fingers already open. */
+  steadySkip: 0.05,
+  /** 2. Trajectory dots while pulling: count and share of the flight shown. */
+  dotCount: 10,
+  dotShare: 0.5,
+  dotSize: 0.45,
+  dotColor: 0xffffff,
+  /** Prediction step for the dots and the target glow (seconds). */
+  traceStep: 1 / 60,
+  /** 4. Gentle pull toward a target within this cone after release (degrees). */
+  coneDeg: 7,
+  /** Most it bends per second (degrees). Times `strength`. */
+  turnDegPerSec: 30,
+  /** Overall assist strength (0 = off, 1 = normal). An accessibility option later. */
+  strength: 1,
+  /** Assist share per enemy type. Weak on runners: the slingshot is meant to be weak against them. */
+  typeShare: { grunt: 1, runner: 0.3, climber: 1 } as Record<GoblinType, number>,
+  /** 5. Hit area around the pebble's center, bigger than it looks (cm). */
+  hitRadius: 2.2,
+};
+
+/** The pebble bowl beside the slingshot. Soldiers keep topping it up. */
+export const PEBBLE_BOWL = {
+  angleDeg: 60,
+  radius: 17,
+  /** Rim height above the board's placed height (cm). Lower than the platform. */
+  rimY: 4,
+  /** Width and depth (cm). */
+  width: 11,
+  depth: 2.5,
+  color: 0x9a6a44,
+  /** Pebbles it holds, and at the start. */
+  capacity: 10,
+  /** One pebble is added this often while not full (seconds). */
+  refillEvery: 2.5,
+  /** Pile size (cm wide, when full) and its smallest share before it is empty. */
+  pileWidth: 6,
+  pileMinScale: 0.35,
+  postLength: 12,
 };
 
 export const PARTICLES = {

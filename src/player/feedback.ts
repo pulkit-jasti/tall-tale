@@ -22,3 +22,11 @@ export function applyTouchState(materials: MeshStandardMaterial[], state: TouchS
     }
   }
 }
+
+/** The slingshot's target glow on the enemy about to be hit. Not a touch state. */
+export function applyAimGlow(materials: MeshStandardMaterial[]): void {
+  for (const m of materials) {
+    m.emissive.setHex(FEEDBACK.aimed);
+    m.emissiveIntensity = FEEDBACK.aimedIntensity;
+  }
+}

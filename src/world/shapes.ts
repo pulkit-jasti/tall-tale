@@ -1,19 +1,23 @@
 // Code-made placeholder shapes (docs/placeholder-shapes.md). Each shape lives
 // in its own small function so a real model can replace it later.
 import {
+  BoxGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
+  DoubleSide,
   ExtrudeGeometry,
   Group,
+  LatheGeometry,
   Mesh,
   MeshStandardMaterial,
   Shape,
   SphereGeometry,
   TorusGeometry,
   TubeGeometry,
+  Vector2,
   Vector3,
 } from 'three';
-import { HANDLES } from '../config/game.js';
+import { HANDLES, PEBBLE_BOWL, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -156,4 +160,66 @@ export function verticalDoubleArrow(material: MeshStandardMaterial, radius: numb
   // Shape faces +z. Point it at the center (the player).
   mesh.rotation.y = -degToRad(angleDeg);
   return mesh;
+}
+
+/** A post that holds a fixed thing up, going down from y = 0 (cm). */
+export function post(length = TOOL_SPOTS.postLength, radius = TOOL_SPOTS.postRadius): Mesh {
+  const mesh = new Mesh(new CylinderGeometry(radius, radius * 1.2, length, 8), flatMaterial(TOOL_SPOTS.postColor));
+  mesh.position.y = -length / 2;
+  return mesh;
+}
+
+/**
+ * Slingshot Y frame (3 cylinders), standing on y = 0, fork opening along x.
+ * Returns the frame and the fork tip positions in its own space (cm).
+ */
+export function slingshotFrame(material: MeshStandardMaterial): { frame: Group; tips: [Vector3, Vector3] } {
+  const { frameHeight, handleHeight, armSpreadDeg } = SLINGSHOT;
+  const frame = new Group();
+  const handle = new Mesh(new CylinderGeometry(0.6, 0.75, handleHeight, 8), material);
+  handle.position.y = handleHeight / 2;
+  frame.add(handle);
+  const spread = degToRad(armSpreadDeg);
+  const armLength = (frameHeight - handleHeight) / Math.cos(spread);
+  const armGeometry = new CylinderGeometry(0.45, 0.55, armLength, 8);
+  const tips: Vector3[] = [];
+  for (const side of [-1, 1]) {
+    const arm = new Mesh(armGeometry, material);
+    // Tilt around z, so the arm leans out along x.
+    arm.rotation.z = -side * spread;
+    arm.position.set((side * Math.sin(spread) * armLength) / 2, handleHeight + (Math.cos(spread) * armLength) / 2, 0);
+    frame.add(arm);
+    tips.push(new Vector3(side * Math.sin(spread) * armLength, frameHeight, 0));
+  }
+  return { frame, tips: tips as [Vector3, Vector3] };
+}
+
+/** One slingshot band: a unit long thin cylinder along y, stretched between two points in code. */
+export function slingshotBand(material: MeshStandardMaterial): Mesh {
+  const geometry = new CylinderGeometry(0.22, 0.22, 1, 5);
+  return new Mesh(geometry, material);
+}
+
+/** The leather pouch that is pinched: a small flattened box. */
+export function slingshotPouch(material: MeshStandardMaterial): Mesh {
+  return new Mesh(new BoxGeometry(2.6, 1.3, 1.4), material);
+}
+
+/** Shallow open bowl (lathe) with its rim at y = 0 (cm). */
+export function pebbleBowl(): Mesh {
+  const { width, depth } = PEBBLE_BOWL;
+  const r = width / 2;
+  const profile = [
+    new Vector2(0, -depth),
+    new Vector2(r * 0.55, -depth),
+    new Vector2(r * 0.85, -depth * 0.6),
+    new Vector2(r, 0),
+    new Vector2(r * 0.92, 0),
+    new Vector2(r * 0.78, -depth * 0.55),
+    new Vector2(r * 0.5, -depth * 0.85),
+    new Vector2(0, -depth * 0.85),
+  ];
+  const material = flatMaterial(PEBBLE_BOWL.color);
+  material.side = DoubleSide;
+  return new Mesh(new LatheGeometry(profile, 12), material);
 }

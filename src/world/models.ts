@@ -117,3 +117,53 @@ export class InstancedModel {
     }
   }
 }
+
+/**
+ * A fixed pool of copies of one model that move every frame (pebbles).
+ * One InstancedMesh per mesh part. Hidden copies are scaled to zero.
+ */
+export class InstancedPool {
+  readonly group = new Group();
+  private parts: { mesh: InstancedMesh; local: Matrix4 }[] = [];
+  private temp = new Matrix4();
+  private hidden = new Matrix4().makeScale(0, 0, 0);
+  private dirty = false;
+
+  constructor(
+    template: ModelTemplate,
+    readonly capacity: number,
+  ) {
+    template.object.updateMatrixWorld(true);
+    template.object.traverse((child: Object3D) => {
+      const mesh = child as Mesh;
+      if (!mesh.isMesh) return;
+      const instanced = new InstancedMesh(mesh.geometry, mesh.material, capacity);
+      // Copies fly all over the board, so skip culling instead of recomputing bounds.
+      instanced.frustumCulled = false;
+      for (let i = 0; i < capacity; i++) instanced.setMatrixAt(i, this.hidden);
+      this.parts.push({ mesh: instanced, local: mesh.matrixWorld.clone() });
+      this.group.add(instanced);
+    });
+  }
+
+  /** Places copy `index`. The matrix places the template in the group's space. */
+  set(index: number, matrix: Matrix4): void {
+    for (const part of this.parts) {
+      this.temp.multiplyMatrices(matrix, part.local);
+      part.mesh.setMatrixAt(index, this.temp);
+    }
+    this.dirty = true;
+  }
+
+  hide(index: number): void {
+    for (const part of this.parts) part.mesh.setMatrixAt(index, this.hidden);
+    this.dirty = true;
+  }
+
+  /** Sends the changes to the GPU once per frame. */
+  commit(): void {
+    if (!this.dirty) return;
+    for (const part of this.parts) part.mesh.instanceMatrix.needsUpdate = true;
+    this.dirty = false;
+  }
+}
