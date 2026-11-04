@@ -19,7 +19,7 @@ import { mark } from '../debug/perfMarks.js';
 import { CASTLE, GOBLIN_RULES, GOBLINS, ROADS, type GoblinStats, type GoblinType } from '../config/game.js';
 import { angleOf, boardHeight, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
-import { applyTouchState, type TouchState } from '../player/feedback.js';
+import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
 import type { Road } from '../world/roads.js';
 
@@ -144,6 +144,8 @@ export class Goblins {
   readonly list: Goblin[] = [];
   /** Most goblins at once. The debug stress test can raise it. */
   cap = GOBLIN_RULES.maxGoblins;
+  /** The goblin the slingshot is about to hit (glows while aiming). */
+  private aimed: Goblin | null = null;
   private template!: ModelTemplate;
   private baseColor = new Color(1, 1, 1);
 
@@ -208,6 +210,7 @@ export class Goblins {
   }
 
   kill(goblin: Goblin): void {
+    if (this.aimed === goblin) this.setAimed(null);
     goblin.mode = 'dead';
     goblin.root.visible = false;
     goblin.road = null;
@@ -220,7 +223,26 @@ export class Goblins {
   setTouch(goblin: Goblin, state: TouchState): void {
     if (goblin.touch === state) return;
     goblin.touch = state;
-    applyTouchState(goblin.materials, state);
+    this.applyLook(goblin);
+  }
+
+  /** Marks the goblin the slingshot is about to hit (null for none). Touch states win over it. */
+  setAimed(goblin: Goblin | null): void {
+    if (this.aimed === goblin) return;
+    const previous = this.aimed;
+    this.aimed = goblin;
+    if (previous) this.applyLook(previous);
+    if (goblin) this.applyLook(goblin);
+  }
+
+  private applyLook(goblin: Goblin): void {
+    if (goblin === this.aimed && goblin.touch === 'idle') applyAimGlow(goblin.materials);
+    else applyTouchState(goblin.materials, goblin.touch);
+  }
+
+  /** Goblins a pebble can hit: everything alive except the ones in the giant's hand. */
+  isHittable(goblin: Goblin): boolean {
+    return goblin.mode !== 'dead' && goblin.mode !== 'held';
   }
 
   /** Grab point of a goblin (its middle) in world space. */

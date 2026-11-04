@@ -100,6 +100,7 @@ use tools -> enemies stunned / disarmed -> troops capture them
 - **Use:** pull back and release. Projectile path, so a short trajectory preview is fine here (see aim assist below).
 - **Cost:** no food. Uses pebbles from a bowl beside the player.
 - **Limit:** soldiers keep topping up the bowl from a stone pile. The refill rate and the pull-back time limit spamming. The player always has one direct action, even with no food.
+- **Built (step 2):** the slingshot stands fixed on its platform (right front). The player pinches the pouch, pulls back and lets go. A short pull (under 4 cm) or a pull toward the player does not shoot. After each shot the next pebble drops into the pouch from the bowl by itself after a short reload, so the player never has to pick up a pebble. The pile in the bowl shrinks as pebbles are used and refills over time. An empty bowl shows the pouch as Locked (wobble and buzz). One pebble hit knocks out any goblin. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
 
 #### Slingshot aim assist
 

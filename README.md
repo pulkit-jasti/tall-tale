@@ -10,8 +10,9 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 
 ## Status
 
-- Stage: MVP build step 1 (Toy test) **done** and passed the headset test on 2026-11-03. Scale, pinching goblins, eating, the ring handle, throws, auto-pause and wall visibility all work. Changes from the plan after testing: eating is hold near the mouth (no letting go or head tilt, which opened the Quest menu), one ring handle replaced the two handles, the board starts higher, the game runs at 72 Hz, and the unit budget is about 50 goblins ([docs/performance.md](docs/performance.md)).
-- Next step: build step 2 (slingshot), then the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
+- Stage: MVP build step 1 (Toy test) done and tested on the headset. Scale and pinching goblins work. Fixes from the test: eating no longer needs letting go or a head tilt (it opened the Quest menu), one ring handle replaces the two handles, and the board starts higher.
+- Build step 2 (Slingshot with aim assist and the pebble bowl) is built. Waiting for a headset check.
+- Next step: build step 3 (waves and flags) and the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---

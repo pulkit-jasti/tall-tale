@@ -1,5 +1,6 @@
 // The game loop. Builds the world once, then runs the small systems in a
-// fixed order every frame: hands, handles, director, goblins, grab and eat, effects.
+// fixed order every frame: hands, handles, director, goblins, grab and eat,
+// slingshot, effects.
 import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { GameAudio } from './audio/sound.js';
@@ -17,6 +18,7 @@ import { BoardHandles } from './player/handles.js';
 import { HandTracker } from './player/hands.js';
 import { degToRad } from './rules/boardMath.js';
 import { createRandom, type Random } from './rules/random.js';
+import { Slingshot } from './tools/slingshot.js';
 import { Goblins } from './units/goblins.js';
 import { buildBoard } from './world/boardBuilder.js';
 import { Stage } from './world/stage.js';
@@ -33,6 +35,7 @@ export class GameSystem extends createSystem({}) {
   private handles!: BoardHandles;
   private goblins!: Goblins;
   private grabEat!: GrabEat;
+  private slingshot!: Slingshot;
   private particles!: Particles;
   private spawner!: ToySpawner;
   private debugRng!: Random;
@@ -67,7 +70,8 @@ export class GameSystem extends createSystem({}) {
       this.audio.load(),
     ]);
     this.goblins = new Goblins(this.stage.boardSpin, built.roads, createRandom(seed + 200), this.audio);
-    await this.goblins.load();
+    this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
+    await Promise.all([this.goblins.load(), this.slingshot.load()]);
     this.fps.countUnits = () => this.goblins.aliveCount;
     this.fps.onReport = (stats) => {
       sendRunStats(stats);
@@ -78,7 +82,7 @@ export class GameSystem extends createSystem({}) {
         );
       }
     };
-    this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.audio, this.particles);
+    this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.roads.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
     this.stressTest = new StressTest({
@@ -195,6 +199,7 @@ export class GameSystem extends createSystem({}) {
     this.spawner.update(dt);
     this.goblins.update(dt);
     this.grabEat.update(dt, headPosition, headForward);
+    this.slingshot.update(dt);
     this.particles.update(dt);
   }
 
@@ -260,6 +265,15 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'place':
         this.placeBoard();
+        break;
+      case 'slingShot':
+        this.slingshot.debugShoot();
+        break;
+      case 'bowlEmpty':
+        this.slingshot.debugBowl(false);
+        break;
+      case 'bowlFill':
+        this.slingshot.debugBowl(true);
         break;
       case 'fps':
         this.fps.toggle();

@@ -28,12 +28,14 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 
 | Thing | Shape | Size |
 |---|---|---|
-| Slingshot | Y shaped wooden frame (3 cylinders) on the platform, a band (2 thin lines or stretched boxes) and a leather pouch (small flattened box) that is pinched. | Frame 15 cm tall |
+| Slingshot | Y shaped wooden frame (3 cylinders) on the platform, 2 bands (thin cylinders stretched from the fork tips to the pouch) and a leather pouch (small flattened box) that is pinched. The frame turns to face the shot while pulled. Built in step 2. | Frame 15 cm tall |
 | Fly swatter | Long thin handle (cylinder) and a flat square mesh head (thin box, a grid texture made in code is optional). | 35 cm long |
 | Pepper shaker | Cylinder body with a dome top and a few dark dots for holes. Red or black. | 12 cm tall |
 | Megaphone | Cone (open wide end) with a short cylinder handle. | 20 cm long |
 | Bell | Bell shape (lathe or cone with a rounded top) with a small handle on top. Brass color. | 10 cm tall |
-| Pebble bowl | Shallow open cylinder (lathe), wood or clay color. | 15 cm wide |
+| Pebble bowl | Shallow open bowl (lathe), clay color, on a short post. Built in step 2 at 11 cm (`PEBBLE_BOWL.width`), so it fits between the slingshot platform and the ring handle. | 11 cm wide |
+| Tool platform posts | Dark wooden cylinder under each tool platform and under the pebble bowl. | 1 cm thick, 12 to 14 cm long |
+| Slingshot trajectory dots | Small white low-poly spheres, one instanced mesh, along the first half of the arc while pulling. | 0.9 cm |
 | Food pips | Small spheres in a row on each tool platform. Lit = can afford, dim = cannot. | 1.5 cm each |
 | Ring handle | Full circle rail (closed tube) around the player on 8 short poles (cylinders), with 12 small bands (thin tori, arrow color) spread evenly around it so its turning is easy to see. Testing a full circle; `halfSpanDeg` in config makes it an arc again (with round ends). | 27 cm from center, 2.8 cm thick, 5 cm high |
 | Arrows for the ring handle | Flat arrow shapes (extruded 2D shape), bright color: a curved double arrow lying on the ring at the front, and a small up and down arrow standing on it 50 degrees left and right of front. They never turn with the ring. Kept small (`arrowSize` in config). | About 5 to 8 cm |
