@@ -10,7 +10,7 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 
 ## Status
 
-- Stage: MVP build step 1 (Toy test) done: board, castle wall, handles, goblins on simple roads, grab and eat. Waiting for the first headset test.
+- Stage: MVP build step 1 (Toy test) done and tested on the headset. Scale and pinching goblins work. Fixes from the test: eating no longer needs letting go or a head tilt (it opened the Quest menu), one ring handle replaces the two handles, and the board starts higher. Waiting for a headset check of these fixes.
 - Next step: the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
@@ -93,12 +93,12 @@ Each zone is the backup for the one before it.
 
 All actions are simple grab, pull, shake, poke and release. No complex gestures. Details in [docs/giant-tools.md](docs/giant-tools.md) and [docs/controls-and-ui.md](docs/controls-and-ui.md).
 
-- **Grab and eat:** pinch a tiny goblin, bring it to your face, tilt your head up and let go. Your bare hands only grab and eat. No smashing or throwing.
+- **Grab and eat:** pinch a tiny goblin and hold it near your mouth for a moment. Your bare hands only grab and eat. No smashing or throwing.
 - **Slingshot (free):** pull back and release to shoot pebbles. Precise, middle and far.
 - **Fly swatter (4 food):** about 10 seconds of swatting groups near the wall.
 - **Pepper shaker (3 food):** enemies sneeze off their gear and become "seasoned" (worth more food).
 - **Megaphone or bell (6 food):** scream into the megaphone, or shake the bell, to stun every enemy. Both sit on the same platform, so voice is never needed.
-- **Move the board:** slide the rotate handle sideways to spin the board, slide the height handle up or down to raise or lower it. Each has a big arrow beside it.
+- **Move the board:** grab the ring handle in front of you. Pull sideways to spin the board, or up or down to raise or lower it. Each grab locks to one direction.
 
 ### Food
 
@@ -120,7 +120,7 @@ All actions are simple grab, pull, shake, poke and release. No complex gestures.
 ### Surround play and comfort
 
 - The battlefield wraps around you.
-- **Always a full 360 degree board.** Two handles in front of you, one to spin the board and one to set its height, so you never need to turn around. Works in any chair.
+- **Always a full 360 degree board.** One ring handle in front of you spins the board and sets its height, so you never need to turn around. Works in any chair.
 - **Comfort:** only the board spins. The sky, horizon, your tools and the two flags stay still. Snap rotation is a later comfort option.
 - **Threat cues:**
   1. Spatial audio from the real direction of the threat (main cue).
@@ -230,9 +230,9 @@ Known costs of IWSDK vs Unity:
 
 These are checked during the first MVP build steps ([docs/mvp.md](docs/mvp.md#build-order)).
 
-- [ ] Pinching tiny (about 3.5 cm) goblins with the snap pinch zone feels reliable
-- [ ] "Eat" trigger near the face works reliably
-- [ ] Spinning the board with the rotate handle and setting its height feel comfortable
+- [x] Pinching tiny (about 3.5 cm) goblins with the snap pinch zone feels reliable
+- [ ] "Eat" trigger near the face works reliably (first try opened the Quest menu, now hold near the mouth instead)
+- [ ] Spinning the board with the ring handle and setting its height feel comfortable
 - [ ] Enemies at the wall are visible from the seat (no hidden strip)
 - [ ] Slingshot release direction is steady with hand tracking
 - [ ] Pepper shake and swatter swings are detected well
@@ -292,6 +292,9 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 20. **Palm-up wrist menu:** replaced by a wrist button poked with the other hand, because Quest reserves the palm-facing pinch for its own menu.
 21. **Two-handed handles (twist to spin, lift for height):** replaced by two one-handed handles with one job each and a big arrow beside each. Clearer, and works with one hand.
 22. **Bell only after the MVP:** the bell is now in the MVP next to the megaphone, because voice must never be required.
+23. **Two one-job handles (rotate knob and height bar):** replaced after the first headset test by one ring handle in front of the player. Each grab locks to spin or height, both 1:1. The knob's track was too short for 360 degrees and the fist grab was shaky, so the ring accepts a pinch too.
+24. **Eat by letting go with the head tilted up:** replaced after the first headset test by holding the goblin near the mouth for a moment. The old pose turned the palm toward the headset, and the pinch opened the Quest menu.
+25. **Goblins drop straight down when let go:** after the first headset test they keep the hand's speed and fly in a simple arc. Still no throwing as an attack (see 17): a toss does no damage.
 
 ---
 

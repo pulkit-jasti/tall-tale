@@ -1,94 +1,66 @@
-// The two board handles in front of the player, each with one job and a big
-// arrow (docs/controls-and-ui.md, section 2). Grab with a fist.
-//   Rotate handle (right): slide the knob along its curved track, the board
-//   turns with it 1:1. On release the knob glides back, the board stays.
-//   Height handle (left): slide the bar up or down, the board follows 1:1.
-import { Group, MeshStandardMaterial, Object3D, Vector3 } from 'three';
+// The ring handle: one curved rail in front of the player that moves the
+// board (docs/controls-and-ui.md, section 2). Grab it anywhere with a fist or
+// a pinch. The first few cm of hand movement lock one direction for the grab:
+//   Sideways: the board spins with the hand 1:1. On release the ring glides
+//   back to its rest angle and the board stays. Let go and grab again for more.
+//   Up or down: the board rises or lowers with the hand 1:1.
+// The ring lives in boardLift, so it rises with the board, and turns on its
+// own group so it follows the hand while spinning.
+import { Group, MeshStandardMaterial, Vector3 } from 'three';
 import { HANDLES } from '../config/game.js';
 import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import type { Stage } from '../world/stage.js';
-import {
-  curvedDoubleArrow,
-  flatMaterial,
-  heightBar,
-  heightRails,
-  rotateKnob,
-  rotateTrack,
-  verticalDoubleArrow,
-} from '../world/shapes.js';
+import { curvedDoubleArrow, flatMaterial, ringArc, ringPoles, verticalDoubleArrow } from '../world/shapes.js';
 import { applyTouchState, type TouchState } from './feedback.js';
 import type { HandState } from './hands.js';
 
-export type HandleKind = 'rotate' | 'height';
+type Axis = 'none' | 'spin' | 'height';
 
-interface HandleInfo {
-  kind: HandleKind;
-  materials: MeshStandardMaterial[];
-  /** Point to measure grab distance from. */
-  grabPoint: Object3D;
-  state: TouchState;
+interface Holder {
+  hand: HandState;
+  /** Held with a pinch (follow the pinch point) or a fist (follow the palm). */
+  viaPinch: boolean;
+  axis: Axis;
+  openTime: number;
+  /** Hand and board values where the current movement started. */
+  startAngle: number;
+  startY: number;
+  startSpin: number;
+  startHeight: number;
+  startTurn: number;
 }
 
+const CM = 0.01;
 const temp = new Vector3();
+const ringPoint = new Vector3();
 
 export class BoardHandles {
-  private knob: Group;
-  private bar: Group;
-  private rotate: HandleInfo;
-  private height: HandleInfo;
-  /** Knob position on its track (radians from the track center). */
-  private knobOffset = 0;
-  private holder: { hand: HandState; kind: HandleKind } | null = null;
-  private grabHandAngle = 0;
-  private grabKnobOffset = 0;
-  private grabSpin = 0;
-  private grabHandY = 0;
-  private grabHeight = 0;
+  private ring = new Group();
+  private materials: MeshStandardMaterial[];
+  private state: TouchState = 'idle';
+  private holder: Holder | null = null;
+  /** Ring turn away from its rest angle (radians, same sense as the board spin). */
+  private turn = 0;
 
   constructor(private stage: Stage) {
-    const rig = stage.fixedRig;
-    const knobMaterial = flatMaterial(HANDLES.woodColor);
-    const rotateArrowMaterial = flatMaterial(HANDLES.arrowColor);
-    const barMaterial = flatMaterial(HANDLES.woodColor);
-    const heightArrowMaterial = flatMaterial(HANDLES.arrowColor);
-
-    rig.add(rotateTrack());
-    this.knob = rotateKnob(knobMaterial);
-    rig.add(this.knob);
-    rig.add(curvedDoubleArrow(rotateArrowMaterial, 11));
-    this.placeKnob();
-
-    rig.add(heightRails());
-    this.bar = heightBar(barMaterial);
-    rig.add(this.bar);
-    rig.add(verticalDoubleArrow(heightArrowMaterial));
-    this.placeBar();
-
-    this.rotate = {
-      kind: 'rotate',
-      materials: [knobMaterial, rotateArrowMaterial],
-      grabPoint: this.knob.getObjectByName('knob') ?? this.knob,
-      state: 'idle',
-    };
-    this.height = { kind: 'height', materials: [barMaterial, heightArrowMaterial], grabPoint: this.bar, state: 'idle' };
-  }
-
-  /** Distance (meters) from a hand's palm to a handle, or Infinity if held by the other hand. */
-  distanceTo(kind: HandleKind, hand: HandState): number {
-    if (this.holder && this.holder.hand !== hand) return Infinity;
-    const info = kind === 'rotate' ? this.rotate : this.height;
-    info.grabPoint.getWorldPosition(temp);
-    return temp.distanceTo(hand.palm);
-  }
-
-  /** Nearest handle within the grab zone of this hand. */
-  nearest(hand: HandState): { kind: HandleKind; distance: number } | null {
-    let best: { kind: HandleKind; distance: number } | null = null;
-    for (const kind of ['rotate', 'height'] as HandleKind[]) {
-      const d = this.distanceTo(kind, hand);
-      if (d < HANDLES.grabRadius && (!best || d < best.distance)) best = { kind, distance: d };
+    const ringMaterial = flatMaterial(HANDLES.woodColor);
+    const arrowMaterial = flatMaterial(HANDLES.arrowColor);
+    this.materials = [ringMaterial, arrowMaterial];
+    const { radius, halfSpanDeg, ringY, ringRadius } = HANDLES;
+    const arrowY = ringY + ringRadius + 0.2;
+    this.ring.add(ringArc(ringMaterial), ringPoles());
+    this.ring.add(curvedDoubleArrow(arrowMaterial, radius, 0, 12, arrowY));
+    for (const side of [-1, 1]) {
+      this.ring.add(verticalDoubleArrow(arrowMaterial, radius, side * (halfSpanDeg - 10), arrowY));
     }
-    return best;
+    stage.boardLift.add(this.ring);
+  }
+
+  /** Distance (meters) from a hand to the ring, or null if out of the grab zone or held by the other hand. */
+  reach(hand: HandState): number | null {
+    if (this.holder && this.holder.hand !== hand) return null;
+    const d = Math.min(this.distanceTo(hand.palm), this.distanceTo(hand.pinchPoint));
+    return d < HANDLES.grabRadius ? d : null;
   }
 
   isHeldBy(hand: HandState): boolean {
@@ -99,48 +71,48 @@ export class BoardHandles {
     return this.holder !== null;
   }
 
-  grab(kind: HandleKind, hand: HandState): void {
-    this.holder = { hand, kind };
-    this.stage.fixedRig.worldToLocal(temp.copy(hand.palm));
-    this.grabHandAngle = angleOf(temp.x, temp.z);
-    this.grabKnobOffset = this.knobOffset;
-    this.grabSpin = this.stage.spin;
-    this.grabHandY = temp.y;
-    this.grabHeight = this.stage.height;
+  grab(hand: HandState, viaPinch: boolean): void {
+    this.holder = {
+      hand,
+      viaPinch,
+      axis: 'none',
+      openTime: 0,
+      startAngle: 0,
+      startY: 0,
+      startSpin: 0,
+      startHeight: 0,
+      startTurn: 0,
+    };
+    this.restart(this.holder);
   }
 
   release(): void {
     this.holder = null;
   }
 
-  /** Sets the Ready look (or Idle) for a handle. Held is managed here. */
-  setReady(kind: HandleKind | null): void {
-    for (const info of [this.rotate, this.height]) {
-      const held = this.holder?.kind === info.kind;
-      this.setState(info, held ? 'held' : info.kind === kind ? 'ready' : 'idle');
-    }
+  /** Sets the Ready look (or Idle). Held is managed here. */
+  setReady(ready: boolean): void {
+    this.setState(this.holder ? 'held' : ready ? 'ready' : 'idle');
   }
 
   update(dt: number): void {
     const holder = this.holder;
     if (holder) {
-      this.stage.fixedRig.worldToLocal(temp.copy(holder.hand.palm));
-      if (holder.kind === 'rotate') {
-        const span = degToRad(HANDLES.rotateSpanDeg);
-        const moved = angleDelta(this.grabHandAngle, angleOf(temp.x, temp.z));
-        const offset = Math.min(span, Math.max(-span, this.grabKnobOffset + moved));
-        // The board turns 1:1 with the knob (only while the knob is on its track).
-        this.stage.spin = this.grabSpin - (offset - this.grabKnobOffset);
-        this.knobOffset = offset;
+      // Let go only when the hand is clearly open for a moment, so tracking
+      // flickers (fingers hidden behind the palm) do not drop the ring.
+      const closed = holder.hand.pinch.on || holder.hand.fist.on;
+      holder.openTime = closed ? 0 : holder.openTime + dt;
+      if (!holder.hand.tracked || holder.openTime >= HANDLES.releaseHold) {
+        this.release();
       } else {
-        this.stage.height = this.grabHeight + (temp.y - this.grabHandY);
+        this.follow(holder);
       }
-    } else if (this.knobOffset !== 0) {
-      this.knobOffset *= Math.exp(-HANDLES.knobReturnRate * dt);
-      if (Math.abs(this.knobOffset) < 1e-4) this.knobOffset = 0;
     }
-    this.placeKnob();
-    this.placeBar();
+    if (!this.holder && this.turn !== 0) {
+      this.turn *= Math.exp(-HANDLES.returnRate * dt);
+      if (Math.abs(this.turn) < 1e-4) this.turn = 0;
+    }
+    this.ring.rotation.y = this.turn;
   }
 
   /** Debug keys: turn the board and change its height without hands. */
@@ -149,19 +121,59 @@ export class BoardHandles {
     this.stage.height += heightCm;
   }
 
-  private placeKnob(): void {
-    const a = degToRad(HANDLES.rotateAngleDeg) + this.knobOffset;
-    this.knob.position.set(polarX(HANDLES.radius, a), 0, polarZ(HANDLES.radius, a));
+  private follow(holder: Holder): void {
+    this.handLocal(holder);
+    const angle = angleOf(temp.x, temp.z);
+    const moved = angleDelta(holder.startAngle, angle);
+    if (holder.axis === 'none') {
+      const side = Math.abs(moved * HANDLES.radius);
+      const up = Math.abs(temp.y - holder.startY);
+      if (Math.max(side, up) < HANDLES.axisLock) return;
+      // Lock the bigger direction and start moving from here, so nothing jumps.
+      holder.axis = side >= up ? 'spin' : 'height';
+      this.restart(holder);
+      return;
+    }
+    if (holder.axis === 'spin') {
+      // A bigger spin moves the board to the left, so a hand moving right lowers it.
+      this.stage.spin = holder.startSpin - moved;
+      this.turn = holder.startTurn - moved;
+    } else {
+      this.stage.height = holder.startHeight + (temp.y - holder.startY);
+    }
   }
 
-  private placeBar(): void {
-    const a = degToRad(HANDLES.heightAngleDeg);
-    this.bar.position.set(polarX(HANDLES.radius, a), HANDLES.barRestY + this.stage.height, polarZ(HANDLES.radius, a));
+  private restart(holder: Holder): void {
+    this.handLocal(holder);
+    holder.startAngle = angleOf(temp.x, temp.z);
+    holder.startY = temp.y;
+    holder.startSpin = this.stage.spin;
+    holder.startHeight = this.stage.height;
+    holder.startTurn = this.turn;
   }
 
-  private setState(info: HandleInfo, state: TouchState): void {
-    if (info.state === state) return;
-    info.state = state;
-    applyTouchState(info.materials, state);
+  /** Hand point in fixedRig space (cm), which does not move with the height. */
+  private handLocal(holder: Holder): void {
+    temp.copy(holder.viaPinch ? holder.hand.pinchPoint : holder.hand.palm);
+    this.stage.fixedRig.worldToLocal(temp);
+  }
+
+  /** Distance (meters) from a world point to the nearest point on the ring. */
+  private distanceTo(world: Vector3): number {
+    this.stage.boardLift.worldToLocal(temp.copy(world));
+    // The zone is a band on and above the ring, so a hand resting below it never grabs.
+    if (temp.y < HANDLES.ringY - HANDLES.grabBelow) return Infinity;
+    const span = degToRad(HANDLES.halfSpanDeg);
+    // The ring group turns by `turn`, which moves its points by -turn in board angles.
+    const local = Math.min(span, Math.max(-span, angleDelta(0, angleOf(temp.x, temp.z) + this.turn)));
+    const a = local - this.turn;
+    ringPoint.set(polarX(HANDLES.radius, a), HANDLES.ringY, polarZ(HANDLES.radius, a));
+    return temp.distanceTo(ringPoint) * CM;
+  }
+
+  private setState(state: TouchState): void {
+    if (this.state === state) return;
+    this.state = state;
+    applyTouchState(this.materials, state);
   }
 }

@@ -159,7 +159,7 @@ async function buildCourtyard(rng: Random): Promise<Group> {
   const stallGreen = await loadTemplate('town/fantasy-town/stall-green.glb', { height: 4 });
   const crate = await loadTemplate('props/survival/box.glb', { height: 1.2 });
   const barrel = await loadTemplate('props/mini-dungeon/barrel.glb', { height: 1.4 });
-  const r = (CASTLE.courtyardMin + CASTLE.courtyardMax) / 2 + 1;
+  const r = CASTLE.propRadius;
   const put = (object: Object3D, deg: number, radius: number, y = 0): void => {
     const a = degToRad(deg);
     object.position.set(polarX(radius, a), y, polarZ(radius, a));

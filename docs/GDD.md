@@ -5,7 +5,7 @@ Top level overview and index. Each topic gets its own file once its design is lo
 ## Overview
 
 - **Pitch:** You are a giant sitting in the middle of a tiny castle. Help your little army win the battle around you by using giant tools, and by grabbing enemies and eating them.
-- **Board:** a full 360 degree round board you spin and adjust with one-handed handles. A seated game with a big world you bring to you.
+- **Board:** a full 360 degree round board you spin and adjust with a one-handed ring handle. A seated game with a big world you bring to you.
 - **Platform:** Meta Quest (3S target), WebXR with IWSDK.
 - **Play style:** seated, hands only, voice optional.
 - **Session:** short battles in waves, with a gentle intensity curve and short breathers between them.

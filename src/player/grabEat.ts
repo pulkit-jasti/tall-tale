@@ -1,20 +1,25 @@
-// What the bare hands do: pinch a goblin to pick it up, bring it to the face
-// with the head tilted up and let go to eat it. Fist grabs the board handles.
+// What the bare hands do: pinch a goblin to pick it up and hold it near the
+// mouth to eat it (no letting go, no head tilt, so the palm never has to face
+// the headset and open the Quest menu). Fist or pinch grabs the ring handle.
 // Only the nearest thing in range of each hand shows Ready.
 import { Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { EAT, HANDS } from '../config/game.js';
+import { EAT, HANDLES, HANDS } from '../config/game.js';
 import type { Particles } from '../fx/particles.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
-import type { BoardHandles, HandleKind } from './handles.js';
+import type { BoardHandles } from './handles.js';
 import type { HandState, HandTracker } from './hands.js';
 
-type Target = { kind: 'goblin'; goblin: Goblin } | { kind: 'handle'; handle: HandleKind } | null;
+type Target = { kind: 'goblin'; goblin: Goblin } | { kind: 'ring' } | null;
 
 interface HandSlot {
   held: Goblin | null;
   target: Target;
   inEatZone: boolean;
+  /** Time the held goblin has been near the mouth (seconds). */
+  eatTimer: number;
+  /** Time the open hand has been in the ring's grab zone (seconds). */
+  ringOpenTime: number;
 }
 
 const EAT_COLORS = [0x6a8f3a, 0x8fb04a, 0xffffff, 0xf2c14e];
@@ -36,45 +41,55 @@ export class GrabEat {
     private audio: GameAudio,
     private particles: Particles,
   ) {
-    for (const hand of hands.hands) this.slots.set(hand, { held: null, target: null, inEatZone: false });
+    for (const hand of hands.hands) this.slots.set(hand, { held: null, target: null, inEatZone: false, eatTimer: 0, ringOpenTime: 0 });
   }
 
   update(dt: number, headPosition: Vector3, headForward: Vector3): void {
     this.time += dt;
-    const pitchDeg = (Math.asin(Math.max(-1, Math.min(1, headForward.y))) * 180) / Math.PI;
-    const headUp = pitchDeg >= EAT.minHeadPitchDeg;
     const nowReady = new Set<Goblin>();
-    let readyHandle: HandleKind | null = null;
+    let ringReady = false;
 
     for (const hand of this.hands.hands) {
       const slot = this.slots.get(hand)!;
 
       if (slot.held) {
         const goblin = slot.held;
-        this.goblins.holdAt(goblin, hand.pinchPoint, headPosition);
-        const inZone = headUp && hand.pinchPoint.distanceTo(headPosition) < EAT.mouthDistance;
+        this.goblins.holdAt(goblin, hand.pinchPoint, headPosition, dt);
+        const mouth = hand.pinchPoint.distanceTo(headPosition);
+        const inZone = mouth < EAT.mouthDistance;
         if (inZone && !slot.inEatZone) this.audio.play('readyTick');
         slot.inEatZone = inZone;
+        slot.eatTimer = inZone ? slot.eatTimer + dt : 0;
         // Near the mouth the goblin pulses white, otherwise it shows Held.
         const pulse = Math.sin(this.time * 18) > 0;
         this.goblins.setTouch(goblin, inZone && pulse ? 'ready' : 'held');
-        if (hand.pinch.ended || !hand.pinch.on) {
-          if (slot.inEatZone) this.eat(goblin, headPosition, headForward);
-          else this.goblins.drop(goblin);
-          slot.held = null;
-          slot.inEatZone = false;
+        const letGo = hand.pinch.ended || !hand.pinch.on;
+        // Held near the mouth for a moment: eaten. If the pinch breaks close to
+        // the face (tracking or the Quest menu gesture), it is eaten too.
+        if (slot.eatTimer >= EAT.holdTime || (letGo && mouth < EAT.graceDistance)) {
+          this.eat(goblin, headPosition, headForward);
+          this.clearHeld(slot);
+        } else if (letGo) {
+          this.goblins.drop(goblin);
+          this.clearHeld(slot);
         }
         continue;
       }
 
-      if (this.handles.isHeldBy(hand)) {
-        if (hand.fist.ended || !hand.fist.on) this.handles.release();
-        continue;
-      }
+      // The ring handle lets go by itself (see BoardHandles.update).
+      if (this.handles.isHeldBy(hand)) continue;
 
       const target = this.findTarget(hand);
-      if (!sameTarget(target, slot.target) && target) this.audio.play('readyTick', undefined, 1, 0.05);
+      if (!sameTarget(target, slot.target) && target?.kind === 'goblin') this.audio.play('readyTick', undefined, 1, 0.05);
       slot.target = target;
+
+      // The ring only grabs after the hand was open in its zone for a moment,
+      // so a hand that curls up while resting or drifting by never grabs it.
+      const wasRingReady = slot.ringOpenTime >= HANDLES.readyTime;
+      if (target?.kind !== 'ring') slot.ringOpenTime = 0;
+      else if (!hand.pinch.on && !hand.fist.on) slot.ringOpenTime += dt;
+      const ringArmed = slot.ringOpenTime >= HANDLES.readyTime;
+      if (ringArmed && !wasRingReady) this.audio.play('readyTick', undefined, 1, 0.05);
 
       if (target?.kind === 'goblin') {
         if (hand.pinch.started) {
@@ -85,14 +100,15 @@ export class GrabEat {
           continue;
         }
         nowReady.add(target.goblin);
-      } else if (target?.kind === 'handle') {
-        if (hand.fist.started && !this.handles.busy) {
-          this.handles.grab(target.handle, hand);
+      } else if (target?.kind === 'ring' && ringArmed) {
+        if ((hand.fist.started || hand.pinch.started) && !this.handles.busy) {
+          this.handles.grab(hand, !hand.fist.started);
           this.audio.play('grab', hand.palm);
           slot.target = null;
+          slot.ringOpenTime = 0;
           continue;
         }
-        readyHandle = target.handle;
+        ringReady = true;
       }
     }
 
@@ -101,7 +117,7 @@ export class GrabEat {
     }
     for (const goblin of nowReady) this.goblins.setTouch(goblin, 'ready');
     this.readyGoblins = nowReady;
-    this.handles.setReady(readyHandle);
+    this.handles.setReady(ringReady);
 
     if (this.pendingGulp > 0) {
       this.pendingGulp -= dt;
@@ -112,14 +128,16 @@ export class GrabEat {
   private findTarget(hand: HandState): Target {
     if (!hand.tracked) return null;
     const goblin = this.goblins.nearestGrabbable(hand.pinchPoint, HANDS.pinchRadius);
-    const handle = this.handles.busy ? null : this.handles.nearest(hand);
-    if (goblin && handle) {
-      const goblinDistance = this.goblins.centerWorld(goblin, burstAt).distanceTo(hand.pinchPoint);
-      return goblinDistance <= handle.distance ? { kind: 'goblin', goblin } : { kind: 'handle', handle: handle.kind };
-    }
+    // A goblin in pinch range always wins, so reaching for one never grabs the ring.
     if (goblin) return { kind: 'goblin', goblin };
-    if (handle) return { kind: 'handle', handle: handle.kind };
-    return null;
+    const ring = this.handles.busy ? null : this.handles.reach(hand);
+    return ring !== null ? { kind: 'ring' } : null;
+  }
+
+  private clearHeld(slot: HandSlot): void {
+    slot.held = null;
+    slot.inEatZone = false;
+    slot.eatTimer = 0;
   }
 
   /** Chomp: the goblin is gone, with a sound and crumbs in front of the face. */
@@ -151,7 +169,7 @@ export class GrabEat {
   releaseAll(): void {
     for (const slot of this.slots.values()) {
       if (slot.held) this.goblins.drop(slot.held);
-      slot.held = null;
+      this.clearHeld(slot);
     }
     this.handles.release();
   }
@@ -160,6 +178,5 @@ export class GrabEat {
 function sameTarget(a: Target, b: Target): boolean {
   if (!a || !b) return a === b;
   if (a.kind === 'goblin' && b.kind === 'goblin') return a.goblin === b.goblin;
-  if (a.kind === 'handle' && b.kind === 'handle') return a.handle === b.handle;
-  return false;
+  return a.kind === b.kind;
 }

@@ -35,12 +35,12 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Bell | Bell shape (lathe or cone with a rounded top) with a small handle on top. Brass color. | 10 cm tall |
 | Pebble bowl | Shallow open cylinder (lathe), wood or clay color. | 15 cm wide |
 | Food pips | Small spheres in a row on each tool platform. Lit = can afford, dim = cannot. | 1.5 cm each |
-| Rotate handle | Big knob (sphere) on a short curved track (curved thin box), with a curved double arrow above it. | Knob 6 cm |
-| Height handle | Bar (cylinder) between two upright rails, with a vertical double arrow beside it. | Bar 12 cm wide |
-| Arrows for the handles | Flat arrow shapes (extruded 2D shape), bright color. | 10 to 15 cm |
+| Ring handle | Curved rail (tube along a 120 degree arc) with round ends (spheres), on 4 short poles (cylinders). | 27 cm from center, 2.8 cm thick, 5 cm high |
+| Arrows for the ring handle | Flat arrow shapes (extruded 2D shape), bright color: a curved double arrow lying on the ring at the front, and a small up and down arrow standing near each end. | 8 to 12 cm |
 | Play button (in VR) | Big round button (short cylinder) on a small post. | 10 cm wide |
 | Wrist pause button | Small round button (short cylinder) on the inside of the left wrist. | 3 cm wide |
 | Pause, win and lose panels | Rounded flat panel with big poke buttons. Use IWSDK UI (check iwsdk-reference) for the text. | About 40 cm wide |
+| FPS counter (debug) | Small flat panel with a canvas texture (average FPS and worst frame in ms), standing just above the ring handle, left of front. Rises with the board, never spins. On in the dev server, `?fps` on the hosted build, F toggles it. | 9 cm wide |
 | Giant's mouth feedback | None in the world. Use a sound and a small burst of particles at the face when a goblin is eaten. | |
 | Goblin helmet (only if helmets are used) | Small half sphere on the head. | 1 cm |
 | Goblins (only as the performance fallback) | Code-made body parts (capsule body, sphere head, cylinder limbs), one InstancedMesh per part, animated in code. See [assets.md](assets.md#2-characters-troops-goblins-workers). | 3.5 cm tall |

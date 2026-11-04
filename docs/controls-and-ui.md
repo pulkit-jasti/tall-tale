@@ -43,10 +43,12 @@ Every grabbable or pokeable thing (goblins, tools, handles, buttons, the wrist b
 | Action | How | Used for |
 |---|---|---|
 | **Pinch** | Thumb and index finger together | Small things: picking up goblins, pulling back the slingshot pouch, pebbles, other small actions |
-| **Grab** | Close the whole hand into a fist | Big things: fly swatter, pepper shaker, megaphone, bell, the rotate and height handles |
+| **Grab** | Close the whole hand into a fist | Big things: fly swatter, pepper shaker, megaphone, bell, the ring handle |
 
 - Buttons (Play, pause panel, wrist button) are poked with the index finger, not pinched or grabbed.
 - Each object accepts only its own action, so a pinch never picks up the swatter and a fist never picks up a goblin.
+- Exception: the ring handle accepts a pinch too. In the first headset test a fist with the back of the hand toward the headset tracked poorly, because the fingers are hidden.
+- A fist counts when 3 of 4 fingers are curled, so one badly tracked finger does not break it.
 
 ---
 
@@ -56,23 +58,30 @@ The board is a full circle all the time. There are no 120 or 180 degree modes. A
 
 ### Rotating and adjusting by hand
 
-Two handles on the inner rim, right in front of the player, below where the hands do most of the work. **Each handle has one job and a big arrow beside it**, so it is clear what it does without any text. Each works with one hand, which also helps players who can only use one hand.
+One **ring handle** on the inner rim, right in front of the player, below where the hands do most of the work. It is a curved wooden rail on a few short poles, about 120 degrees wide (from the left knee to the right knee), a little lower than the wall top. It works with one hand, which also helps players who can only use one hand.
 
-| Handle | Where | Arrow | How it works |
-|---|---|---|---|
-| **Rotate handle** | Right of center | Curved double arrow along the rim, above the handle | A big knob on a short curved track. Grab it and slide it sideways along the track. The board turns with it 1:1 (around the vertical axis only, no tilting). On release the knob glides back to the middle of its track and the board stays where it is. For a big turn, slide, let go, and slide again. |
-| **Height handle** | Left of center | Vertical double arrow (up and down) beside the handle | A bar between two upright rails. Grab it and slide it up or down. The board follows 1:1, within a sensible range. On release the board stays at the new height. |
-
-- The handles only move along their own track (sideways or up and down). Any other hand motion is ignored.
-- The handles follow the standard Ready and Held states (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)). The arrow lights up together with its handle.
-- Oversized grab zones, so they are easy to grab without looking closely.
-- Handedness (later) swaps the two sides.
+- **Grab it anywhere** with a fist or a pinch, from on top of it.
+- **No accidental grabs** (second headset test: resting hands on the lap and goblins in the courtyard both set it off):
+  - The grab zone is a band on and above the ring (about 6 cm). A hand below the ring, like one resting on the lap, never grabs it.
+  - The hand must be open in the zone for a moment (about 0.15 seconds) first. Then the ring glows Ready with a tick, and closing the hand grabs it. A hand that curls up while drifting by does nothing.
+  - A goblin in pinch range always wins over the ring.
+  - Goblins inside the castle stay near the wall (courtyard band 34 to 38 cm), away from the ring.
+- **The first 4 cm of hand movement lock one direction** for that grab. Smaller drifts do nothing:
+  - **Sideways:** the board spins with the hand 1:1 (around the vertical axis only, no tilting). The ring turns with it. On release the ring glides back to its rest angle and the board stays where it is. For a big turn, pull, let go, grab again and pull again (about 4 to 6 pulls for a full turn).
+  - **Up or down:** the board rises or lowers with the hand 1:1, within a wide range (about 25 cm down and 35 cm up). On release the board stays at the new height.
+- It never spins and changes height in the same grab, so a swinging arm does not make the board bob.
+- **Letting go:** the ring lets go only when the hand is clearly open for about a quarter second, so tracking flickers do not drop it.
+- Arrows: a curved double arrow lies on top of the ring at the front, and a small up and down arrow stands near each end. They turn with the ring.
+- The ring follows the standard Ready and Held states (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)). The arrows light up together with it.
+- Oversized grab zone, so it is easy to grab without looking closely.
+- It is an arc, not a full circle, so the sides stay clear for the tool platforms and reaching for climbers.
 - Turning is a choice: the player can turn their head, or spin the board. Spinning takes a hand off the battle, so "spin to the new threat now, or finish this group first?" is a real decision.
 - Enemy sounds sit on the board, so they turn with it automatically.
 
 ### Rejected
 
 - **One pair of two-handed handles (twist to spin, lift to change height):** two jobs on one control, nothing on the handles explained them, and it needed both hands.
+- **Two one-job handles (a rotate knob on a short track and a height bar on rails):** the first headset test showed the knob's track was too short for a 360 degree board, the height range was too small, and the fist grab was shaky. Replaced by the ring handle.
 
 ### Comfort rules
 
@@ -101,12 +110,17 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 ### Eat
 
-1. Bring the held goblin toward the face (hand within about 25 cm) and tilt the head up. The giant's mouth opens. It must not require touching the mouth.
-2. Let go. The goblin drops into the mouth, which closes. Chomp, gulp, small burp. Food is added to the food jar.
+1. Bring the held goblin toward the face, like eating a snack (hand within about 22 cm). The goblin pulses. It must not require touching the mouth.
+2. Keep it there for a moment (about 0.2 seconds). It is eaten without letting go. Chomp, gulp, small burp. Food is added to the food jar.
+
+- **No letting go and no head tilt.** In the first headset test, holding a goblin above the face with the head tilted up turned the palm toward the headset, and the pinch opened the Quest menu. Now the palm can face down or sideways the whole time.
+- If the pinch breaks close to the face anyway (tracking loss or the menu gesture), the goblin is still eaten instead of dropped.
 
 ### Letting go anywhere else
 
-- The goblin drops back onto the board, dazed for a moment, then carries on.
+- The goblin keeps the hand's speed, so letting go mid-swing tosses it in an arc. It lands on whatever is under it (courtyard, wall top or field), bounces once on a hard landing, is dazed for a moment, then carries on. Letting go of a still hand drops it straight down.
+- A toss does no damage and is not an attack. It is only there so goblins feel like real little things.
+- Simple projectile math per flying goblin (gravity, ground height, one bounce), no physics engine, so it costs almost nothing. The hand speed is smoothed and capped, so tracking jitter cannot fling a goblin off the map. Numbers are in `GOBLIN_RULES` in `src/config/game.ts`.
 
 ---
 
@@ -165,7 +179,7 @@ Not raw joint positions (they change as the whole hand moves). Instead, a few si
 
 | Measure | How | Used for |
 |---|---|---|
-| Finger curl | Fingertip distance to the palm | Grab (fist) for big tools and handles |
+| Finger curl | Fingertip distance to the palm (3 of 4 fingers) | Grab (fist) for big tools and the ring handle |
 | Pinch | Thumb tip to index tip distance | Pinch for goblins and the slingshot pouch |
 | Palm direction | Which way the palm faces | Palm toward the face shows the wrist pause button |
 | Speed | Hand movement over the last few frames | Shake (pepper, bell), swat |

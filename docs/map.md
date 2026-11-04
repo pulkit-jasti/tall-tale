@@ -4,7 +4,7 @@ Status: first pass decided. Sample level mockup: `maps/castle-3d.html` (random l
 
 ### Scale (from the mockup)
 
-- Board height about 65 cm (set per player by the height handle), hole the player sits in about 25 cm radius.
+- Board height about 65 cm (placed about 36 cm below the eyes, then set per player with the ring handle), hole the player sits in about 25 cm radius.
 - Castle wall from 40 to 46 cm, **about 6 cm high** (the mockup still shows 10 cm).
 - Soldiers about 2.5 cm tall, goblins about 3.5 cm tall.
 
@@ -33,7 +33,7 @@ Back to [GDD index](GDD.md). Related: [Enemies](enemies.md), [Giant tools](giant
 - Flat around the castle, then rising gently toward the horizon so far enemies face the player.
 - The castle sits in the middle with a low wall (about 6 cm) at about 40 to 46 cm from the player, within reach.
 - Zones: near (up to about 60 cm, in reach), middle (60 to 150 cm), far (beyond 150 cm).
-- The board is always a full 360 degree circle. The player rotates it with the rotate handle and sets its height with the height handle (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
+- The board is always a full 360 degree circle. The player rotates it and sets its height with the ring handle (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 
 ---
 

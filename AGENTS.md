@@ -13,7 +13,7 @@ Read README.md and docs/GDD.md for the full design before making gameplay decisi
 
 1. **Hands only.** The entire game must be playable with hand tracking. No controller is ever required. Controller support is optional and low priority.
 2. **Voice is never required.** Every voice action (the megaphone scream, later troop orders) must also have a hand-based way to do the same thing (for the megaphone: the bell, which is in the MVP).
-3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius. The board is always a full 360 degree circle that the player spins with the rotate handle and raises or lowers with the height handle, so nothing ever requires turning around. Only the board rotates. The sky, horizon, the player's tool platforms, food jar and the two flags stay fixed (comfort). See docs/controls-and-ui.md.
+3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius. The board is always a full 360 degree circle that the player spins and raises or lowers with the ring handle, so nothing ever requires turning around. Only the board rotates. The sky, horizon, the player's tool platforms, food jar and the two flags stay fixed (comfort). See docs/controls-and-ui.md.
 4. **Performance first.** The game must hold a stable frame rate on a Meta Quest 3S. If a feature hurts frame rate, simplify it.
 5. **No copyrighted IP.** No names, logos, characters or lore from existing games, comics or films.
 6. **Cartoon violence only.** Enemies are non-human (goblins, orcs, etc.). No blood or gore. Eating enemies must stay funny, not disturbing.
@@ -50,11 +50,11 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - Avoid relying on custom hand poses or gestures. If one is needed, add a short delay before it triggers so it does not flicker.
 - No haptics exist, so every action needs clear visual and sound feedback. Every grabbable or pokeable thing uses the same Idle, Ready, Held and Locked states, done with emissive color only. See "Interaction feedback" in docs/controls-and-ui.md.
 - Make handles and tools oversized with generous grab zones.
-- Handles only move along their own track: the rotate handle slides sideways along a curve, the height handle slides up and down. Each has one job and a big arrow beside it.
-- The player's bare hands only grab and eat. No smashing, slapping or throwing.
-- Two hand actions: **pinch** (thumb and index) for small things like goblins and the slingshot pouch, and **grab** (fist) for big things like the swatter, pepper shaker, megaphone, bell and handles. See "Pinch and grab" in docs/controls-and-ui.md.
+- The ring handle is one curved rail in front of the player. The first few cm of each grab lock one direction: sideways spins the board, up or down changes its height, both 1:1 with the hand. It never does both in one grab.
+- The player's bare hands only grab and eat. No smashing or slapping. Letting go mid-swing tosses the goblin with simple projectile math (no physics engine), and it lands dazed. A toss is not an attack: it does no damage.
+- Two hand actions: **pinch** (thumb and index) for small things like goblins and the slingshot pouch, and **grab** (fist) for big things like the swatter, pepper shaker, megaphone and bell. The ring handle accepts both, because a fist with the back of the hand toward the headset tracks poorly. See "Pinch and grab" in docs/controls-and-ui.md.
 - Goblins are tiny (about 3.5 cm). The pinch zone is about 5 to 6 cm and snaps to the nearest goblin. See docs/controls-and-ui.md.
-- Hand tracking gets unreliable very close to the headset. The "eat" action triggers when the hand is within about 25 cm of the face with the head tilted up. It must not require touching the mouth.
+- Hand tracking gets unreliable very close to the headset. The "eat" action triggers when a held goblin stays within about 22 cm of the face for a moment. No letting go and no head tilt, because a pinch with the palm toward the headset opens the Quest menu. It must not require touching the mouth.
 - Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a wrist button poked with the other hand.
 
 ## Development workflow

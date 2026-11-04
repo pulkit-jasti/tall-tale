@@ -103,18 +103,23 @@ export class HandTracker {
       return false;
     }
     palmLocal.copy(wrist).add(knuckle).multiplyScalar(0.5);
-    let curl = 0;
+    // Count fingers instead of averaging them: with the back of the hand toward
+    // the headset some fingers are hidden and guessed, so one bad finger must
+    // not break the fist.
+    let curled = 0;
+    let open = 0;
     for (const name of TIPS) {
       if (!readJoint(frame, hand, name, space, tip)) return false;
-      curl += tip.distanceTo(palmLocal);
+      const d = tip.distanceTo(palmLocal);
+      if (d < HANDS.fingerCurled) curled++;
+      else if (d > HANDS.fingerOpen) open++;
     }
-    curl /= TIPS.length;
     const pinchDistance = thumb.distanceTo(index);
     state.usingHand = true;
     state.pinchPoint.copy(thumb).add(index).multiplyScalar(0.5).applyMatrix4(playerMatrix);
     state.palm.copy(palmLocal).applyMatrix4(playerMatrix);
     state.pinch.update(pinchDistance < HANDS.pinchStart, pinchDistance > HANDS.pinchEnd, dt);
-    state.fist.update(curl < HANDS.fistStart, curl > HANDS.fistEnd, dt);
+    state.fist.update(curled >= HANDS.fistFingers, open >= HANDS.fistFingers, dt);
     return true;
   }
 

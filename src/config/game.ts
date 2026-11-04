@@ -14,7 +14,7 @@ export const BOARD = {
   /** How far the board edges hang down, like a table skirt (cm). */
   skirtDepth: 80,
   /** Board surface height below the eyes when placed (meters). */
-  eyeToBoard: 0.48,
+  eyeToBoard: 0.36,
   /** Grass colors, picked per vertex for a slightly varied look. */
   grassColors: [0x8fbf5a, 0x9cc46b, 0x86b552, 0xa3c972],
   skirtColor: 0x6b5a45,
@@ -28,9 +28,11 @@ export const CASTLE = {
   wallStandOff: 5,
   /** Where climbers stand on the wall top (cm from center). */
   rampartRadius: 43,
-  /** Courtyard ring where intruders wander (cm). */
-  courtyardMin: 29,
-  courtyardMax: 37,
+  /** Courtyard ring where intruders wander (cm). Kept near the wall, away from the ring handle. */
+  courtyardMin: 34,
+  courtyardMax: 38,
+  /** Where the courtyard houses and stalls stand (cm from center). */
+  propRadius: 34,
   towerCount: 6,
   /** Angle of the first tower (degrees, 0 = front). */
   towerStartDeg: 30,
@@ -58,30 +60,34 @@ export const STAGE = {
   desktopEyeHeight: 1.15,
 };
 
+/** The ring handle: one curved rail in front of the player that spins and lifts the board. */
 export const HANDLES = {
-  /** Distance of both handles from the center (cm). */
+  /** Distance of the ring from the center (cm). */
   radius: 27,
-  /** Rotate handle: center of its track (degrees, right of front). */
-  rotateAngleDeg: 22,
-  /** Half length of the rotate track (degrees). */
-  rotateSpanDeg: 13,
-  /** Knob size (cm). */
-  knobRadius: 3,
-  knobPostHeight: 4,
-  /** How fast the knob glides back to the middle after release (1/s). */
-  knobReturnRate: 6,
-  /** Height handle: angle (degrees, left of front is negative). */
-  heightAngleDeg: -22,
-  /** Bar width and thickness (cm). */
-  barWidth: 12,
-  barRadius: 1.2,
-  /** Bar rest height above the board base (cm). */
-  barRestY: 6,
+  /** Half of the ring arc, centered on the front (degrees). */
+  halfSpanDeg: 60,
+  /** Ring height above the board (cm). A little lower than the wall top. */
+  ringY: 5,
+  /** Ring tube thickness (cm). */
+  ringRadius: 1.4,
+  poleRadius: 0.6,
+  /** Where the poles stand under the ring (degrees). */
+  poleAnglesDeg: [-60, -20, 20, 60],
+  /** The hand moves this far before one direction (spin or height) locks for the grab (cm). */
+  axisLock: 4,
+  /** How fast the ring glides back to its rest angle after release (1/s). */
+  returnRate: 6,
   /** How far the board can move down and up from where it was placed (cm). */
-  heightMin: -10,
-  heightMax: 12,
-  /** Grab zone around a handle (meters). Oversized on purpose. */
-  grabRadius: 0.085,
+  heightMin: -25,
+  heightMax: 35,
+  /** Grab zone around the ring (meters). */
+  grabRadius: 0.06,
+  /** The grab zone ends this far below the ring center, so hands resting below it never grab (cm). */
+  grabBelow: 1,
+  /** The hand must be open in the grab zone this long before closing it grabs (seconds). */
+  readyTime: 0.15,
+  /** The ring lets go only after the hand is open this long (seconds). */
+  releaseHold: 0.25,
   woodColor: 0x5a4330,
   trackColor: 0x3b2b1f,
   arrowColor: 0xf2c14e,
@@ -95,9 +101,12 @@ export const HANDS = {
   pinchStart: 0.018,
   /** Pinch ends above this distance (meters). Higher than start, so no flicker. */
   pinchEnd: 0.035,
-  /** Fist: average fingertip to palm distance to start and end (meters). */
-  fistStart: 0.055,
-  fistEnd: 0.07,
+  /** Fist: a fingertip closer than this to the palm counts as curled (meters). */
+  fingerCurled: 0.06,
+  /** A fingertip farther than this from the palm counts as open (meters). */
+  fingerOpen: 0.08,
+  /** Fingers (of 4) that must be curled to start a fist, or open to end it. */
+  fistFingers: 3,
   /** A pose must hold this long before it counts (seconds). */
   poseHold: 0.06,
   fistHold: 0.12,
@@ -109,9 +118,11 @@ export const HANDS = {
 
 export const EAT = {
   /** The held goblin must be this close to the head (meters). */
-  mouthDistance: 0.25,
-  /** Head pitch must be at least this (degrees, 0 = level, up is positive). */
-  minHeadPitchDeg: -8,
+  mouthDistance: 0.22,
+  /** Held this long near the mouth, the goblin is eaten. No letting go (seconds). */
+  holdTime: 0.2,
+  /** If the pinch breaks this close to the head, the goblin is eaten, not dropped (meters). */
+  graceDistance: 0.35,
   /** Where the eat burst shows, in front of the face (meters). */
   burstForward: 0.16,
   burstDown: 0.06,
@@ -154,6 +165,18 @@ export const GOBLIN_RULES = {
   dazedTime: 1.4,
   /** Gravity for dropped goblins (cm per second squared). */
   gravity: 980,
+  /** Hand speed smoothing while held, so tracking jitter does not fling goblins (seconds). */
+  throwSmoothing: 0.06,
+  /** Thrown goblins keep this share of the hand speed. */
+  throwScale: 1,
+  /** Fastest throw, so a tracking glitch cannot launch a goblin off the map (cm per second). */
+  maxThrowSpeed: 350,
+  /** Landing faster than this bounces once more (cm per second, downward). */
+  bounceSpeed: 120,
+  /** Share of the downward speed kept on a bounce. */
+  bounceKeep: 0.3,
+  /** Share of the sideways speed kept on a bounce. */
+  bounceSlide: 0.5,
   /** Intruders pause this long between short walks (seconds). */
   intruderPause: 1.2,
   /** Animation cross fade (seconds). */
@@ -195,6 +218,23 @@ export const PARTICLES = {
   life: 0.55,
   speed: 0.35,
   gravity: 0.9,
+};
+
+/** Live frame rate panel for performance checks (debug). */
+export const FPS = {
+  /** Frame rate the headset should hold (Quest browser default). */
+  target: 72,
+  /** Redraw the numbers this often (seconds). */
+  refresh: 0.5,
+  /** Shown by default in the dev server. The deployed build shows it with ?fps in the URL. */
+  showInDev: true,
+  /** Panel spot: on the rim, left of front, standing just above the ring (cm, degrees). */
+  radius: 27,
+  angleDeg: -36,
+  aboveRing: 3,
+  /** Panel size (cm). */
+  width: 9,
+  height: 3.4,
 };
 
 /** Mouse look in the browser (not used in VR). */

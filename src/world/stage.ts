@@ -1,9 +1,10 @@
 // The scene graph around the player.
 //
 // root (meters, at the player's seat, turned to face where they looked)
-//   boardLift (cm units: scale 0.01, moves up and down with the height handle)
-//     boardSpin (turns with the rotate handle: board, castle, roads, goblins)
-//   fixedRig (cm units, never turns or moves after placing: handles, later tools and flags)
+//   boardLift (cm units: scale 0.01, moves up and down with the ring handle)
+//     boardSpin (turns with the ring handle: board, castle, roads, goblins)
+//     ring handle (rises with the board, turns only while held)
+//   fixedRig (cm units, never turns or moves after placing: later tools and flags)
 //
 // Only boardSpin turns, so the sky, tools and flags stay still (comfort rule).
 import { Group, Object3D, Quaternion, Vector3 } from 'three';

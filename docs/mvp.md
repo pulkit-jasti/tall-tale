@@ -10,7 +10,7 @@ Back to [GDD index](GDD.md).
 
 **World**
 - The raised board, the castle with its low wall, courtyard and workers ([map.md](map.md)).
-- Full 360 degree board. The player spins it with the rotate handle and sets its height with the height handle, each marked with a big arrow ([controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
+- Full 360 degree board. The player spins it and sets its height with the ring handle, marked with big arrows ([controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 - Low wall (about 6 cm) and wall attackers standing a little out from it, so there is no hidden strip ([map.md](map.md#no-hidden-strip-outside-the-wall)).
 - Roads and enemy camps (sand and rock hills, bigger camp means more enemies).
 - Triggers: boulder, powder keg and leaning tree only.
@@ -95,7 +95,7 @@ Each step should be playable on its own.
 
 **Every step is done when:** `npm run typecheck`, `npm run build` and `npm test` pass, the step's items below exist, and the step is committed and pushed. The developer then checks it on the headset from the GitHub Pages link.
 
-1. **Toy test:** remove the starter template files. Board, castle wall, the rotate and height handles with their arrows, a few goblins walking in on simple roads, grab and eat. Prove that grabbing tiny goblins works and that enemies at the wall are visible from the seat.
+1. **Toy test:** remove the starter template files. Board, castle wall, the ring handle with its arrows (first built as two handles, replaced after the first headset test), a few goblins walking in on simple roads, grab and eat. Prove that grabbing tiny goblins works and that enemies at the wall are visible from the seat.
    - Done when: a debug key spawns goblins, and the handles, grab and eat work in the code. The developer must test this step on the headset before step 2 builds on it.
 2. **Slingshot** with aim assist, and the pebble bowl.
    - Done when: a pebble can be pulled, released and hits goblins, and the bowl refills.
@@ -125,7 +125,7 @@ To make these testable, game rules live in plain TypeScript functions with no Th
 ### Left to the coding agent
 
 - **Tuning numbers:** the agent picks sensible starting values and keeps them in config files. For example pebble bowl size and refill rate, how long an ignored climber waits, stun length, how long a fallen tree blocks a road, troop strength and spawn rate, castle damage and repair amounts, enemy speeds and group sizes, step timeouts, and any other number the docs do not give.
-- **Layout of the fixed things around the player:** tool platforms (and which tool sits on which), handles, flags, food jar and pebble bowl. Nothing overlaps, and everything is within about 60 cm of the seat.
+- **Layout of the fixed things around the player:** tool platforms (and which tool sits on which), the ring handle, flags, food jar and pebble bowl. Nothing overlaps, and everything is within about 60 cm of the seat.
 - **Where the troop gate sits** on the road graph.
 
 ---

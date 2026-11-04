@@ -12,5 +12,6 @@ export const DEBUG_KEYS: { code: string; key: string; does: string }[] = [
   { code: 'KeyQ', key: 'Q / E', does: 'Turn the board left / right (hold)' },
   { code: 'KeyZ', key: 'Z / X', does: 'Board down / up (hold)' },
   { code: 'KeyP', key: 'P', does: 'Place the board again in front of you' },
+  { code: 'KeyF', key: 'F', does: 'FPS counter on or off (add ?fps to the URL to show it on the hosted build)' },
   { code: '', key: 'Mouse', does: 'Drag to look around, scroll to zoom (browser only)' },
 ];

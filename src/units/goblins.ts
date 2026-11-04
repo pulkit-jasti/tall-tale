@@ -60,8 +60,13 @@ export class Goblin {
   offset = 0;
   speed = 0;
   timer = 0;
+  /** Velocity while falling or flying, and the smoothed hand speed while held (cm per second). */
+  vx = 0;
   vy = 0;
-  landY: number | null = 0;
+  vz = 0;
+  /** Position last frame while held, to measure the hand speed. */
+  readonly lastHeld = new Vector3();
+  hasLastHeld = false;
   landAs: 'dazed' | 'intruder' = 'dazed';
   attackRight = true;
   touch: TouchState = 'idle';
@@ -241,25 +246,46 @@ export class Goblins {
 
   grab(goblin: Goblin): void {
     goblin.mode = 'held';
+    goblin.vx = goblin.vy = goblin.vz = 0;
+    goblin.hasLastHeld = false;
     goblin.play('fall', true, 1.6);
     this.audio.play('grab', this.worldPosition(goblin, temp));
     this.audio.play('squeal', temp);
   }
 
-  /** Keeps a held goblin dangling from the pinch point, looking at the giant. */
-  holdAt(goblin: Goblin, pinchWorld: Vector3, headWorld: Vector3): void {
+  /**
+   * Keeps a held goblin dangling from the pinch point, looking at the giant.
+   * Also measures the hand speed (smoothed), so letting go mid-swing throws it.
+   */
+  holdAt(goblin: Goblin, pinchWorld: Vector3, headWorld: Vector3, dt: number): void {
+    const p = goblin.root.position;
     this.board.worldToLocal(temp.copy(pinchWorld));
-    goblin.root.position.set(temp.x, temp.y - goblin.stats.height * 0.85, temp.z);
+    p.set(temp.x, temp.y - goblin.stats.height * 0.85, temp.z);
+    if (goblin.hasLastHeld && dt > 0) {
+      const k = 1 - Math.exp(-dt / GOBLIN_RULES.throwSmoothing);
+      goblin.vx += ((p.x - goblin.lastHeld.x) / dt - goblin.vx) * k;
+      goblin.vy += ((p.y - goblin.lastHeld.y) / dt - goblin.vy) * k;
+      goblin.vz += ((p.z - goblin.lastHeld.z) / dt - goblin.vz) * k;
+    }
+    goblin.lastHeld.copy(p);
+    goblin.hasLastHeld = true;
     this.board.worldToLocal(temp2.copy(headWorld));
     goblin.face(temp2.x - temp.x, temp2.z - temp.z);
   }
 
-  /** Lets go anywhere but the mouth: the goblin falls back onto the board. */
+  /** Lets go anywhere but the mouth: the goblin flies with the hand's speed, then lands. */
   drop(goblin: Goblin): void {
-    const p = goblin.root.position;
+    goblin.vx *= GOBLIN_RULES.throwScale;
+    goblin.vy *= GOBLIN_RULES.throwScale;
+    goblin.vz *= GOBLIN_RULES.throwScale;
+    const speed = Math.hypot(goblin.vx, goblin.vy, goblin.vz);
+    if (speed > GOBLIN_RULES.maxThrowSpeed) {
+      const s = GOBLIN_RULES.maxThrowSpeed / speed;
+      goblin.vx *= s;
+      goblin.vy *= s;
+      goblin.vz *= s;
+    }
     goblin.mode = 'falling';
-    goblin.vy = 0;
-    goblin.landY = landingHeight(Math.hypot(p.x, p.z));
     goblin.landAs = 'dazed';
     goblin.play('fall', true, 1);
   }
@@ -322,17 +348,9 @@ export class Goblins {
         }
         break;
       }
-      case 'falling': {
-        g.vy -= GOBLIN_RULES.gravity * dt;
-        p.y += g.vy * dt;
-        if (g.landY === null) {
-          if (p.y < -60) this.kill(g);
-        } else if (p.y <= g.landY) {
-          p.y = g.landY;
-          this.land(g);
-        }
+      case 'falling':
+        this.fly(g, dt);
         break;
-      }
       case 'dazed': {
         g.timer -= dt;
         if (g.timer < GOBLIN_RULES.dazedTime * 0.5) g.play('idle');
@@ -402,10 +420,49 @@ export class Goblins {
     p.x = polarX(r, a);
     p.z = polarZ(r, a);
     g.mode = 'falling';
+    g.vx = g.vz = 0;
     g.vy = 45;
-    g.landY = 0;
     g.landAs = 'intruder';
     g.play('jump', false);
+  }
+
+  /**
+   * Simple projectile motion: gravity, the ground height under the goblin,
+   * one small bounce on a hard landing. No physics engine, just a few lines
+   * of math per flying goblin.
+   */
+  private fly(g: Goblin, dt: number): void {
+    const p = g.root.position;
+    g.vy -= GOBLIN_RULES.gravity * dt;
+    const x = p.x + g.vx * dt;
+    const z = p.z + g.vz * dt;
+    // Flying into something higher than the goblin (the wall side): stop
+    // moving sideways and slide down it instead of popping on top.
+    const ahead = landingHeight(Math.hypot(x, z));
+    if (ahead !== null && ahead > p.y) {
+      g.vx = g.vz = 0;
+    } else {
+      p.x = x;
+      p.z = z;
+    }
+    p.y += g.vy * dt;
+    const ground = landingHeight(Math.hypot(p.x, p.z));
+    if (ground === null) {
+      // Over the hole or past the edge: falls out of the world.
+      if (p.y < -60) this.kill(g);
+      return;
+    }
+    if (p.y > ground || g.vy > 0) return;
+    p.y = ground;
+    if (-g.vy > GOBLIN_RULES.bounceSpeed) {
+      g.vy = -g.vy * GOBLIN_RULES.bounceKeep;
+      g.vx *= GOBLIN_RULES.bounceSlide;
+      g.vz *= GOBLIN_RULES.bounceSlide;
+      this.audio.play('drop', this.worldPosition(g, temp), 1, 0.1);
+      return;
+    }
+    g.vx = g.vy = g.vz = 0;
+    this.land(g);
   }
 
   private land(g: Goblin): void {

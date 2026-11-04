@@ -5,6 +5,7 @@ import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { GameAudio } from './audio/sound.js';
 import { HANDLES, STAGE, TOY_SPAWN } from './config/game.js';
 import { TOY_ROADS } from './config/toyMap.js';
+import { FpsCounter } from './debug/fpsCounter.js';
 import { ToySpawner } from './director/toySpawner.js';
 import { Particles } from './fx/particles.js';
 import { GrabEat } from './player/grabEat.js';
@@ -31,6 +32,7 @@ export class GameSystem extends createSystem({}) {
   private particles!: Particles;
   private spawner!: ToySpawner;
   private debugRng!: Random;
+  private fps!: FpsCounter;
   private placeTimer = -1;
   private wasImmersive = false;
 
@@ -51,6 +53,7 @@ export class GameSystem extends createSystem({}) {
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
     this.particles = new Particles(root, createRandom(seed + 101));
     this.handles = new BoardHandles(this.stage);
+    this.fps = new FpsCounter(this.stage.boardLift);
 
     const [built] = await Promise.all([
       buildBoard(this.stage.boardSpin, TOY_ROADS, seed),
@@ -88,6 +91,7 @@ export class GameSystem extends createSystem({}) {
 
   update(delta: number): void {
     if (!this.ready) return;
+    this.fps.update(delta);
     // Entering VR: place the board once the head pose has settled.
     const immersive = this.immersive;
     if (immersive && !this.wasImmersive) this.placeTimer = STAGE.placeDelay;
@@ -132,6 +136,7 @@ export class GameSystem extends createSystem({}) {
     }
     if (keys.getKeyDown('KeyB')) this.grabEat.debugEat(headPosition, headForward);
     if (keys.getKeyDown('KeyP')) this.placeBoard();
+    if (keys.getKeyDown('KeyF')) this.fps.toggle();
     let spin = 0;
     let height = 0;
     // A bigger spin moves the board to the left as seen from the seat.

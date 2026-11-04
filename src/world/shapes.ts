@@ -30,33 +30,44 @@ function arc(r: number, a0: number, a1: number, y: number): CatmullRomCurve3 {
   return new CatmullRomCurve3(points);
 }
 
-/** Rotate handle track: a curved rail along the inner rim. */
-export function rotateTrack(): Mesh {
-  const { radius, rotateAngleDeg: a, rotateSpanDeg: s } = HANDLES;
-  return new Mesh(
-    new TubeGeometry(arc(radius, a - s, a + s, 1), 24, 0.6, 6),
-    flatMaterial(HANDLES.trackColor),
-  );
+/** Ring handle: a curved rail in front of the player, with round ends. Origin at the board center. */
+export function ringArc(material: MeshStandardMaterial): Group {
+  const { radius, halfSpanDeg: s, ringY, ringRadius } = HANDLES;
+  const group = new Group();
+  group.add(new Mesh(new TubeGeometry(arc(radius, -s, s, ringY), 32, ringRadius, 8), material));
+  for (const end of [-s, s]) {
+    const cap = new Mesh(new SphereGeometry(ringRadius, 8, 6), material);
+    cap.position.copy(polar(radius, end, ringY));
+    group.add(cap);
+  }
+  return group;
 }
 
-/** Rotate handle knob: a big ball on a short post. Origin at the track. */
-export function rotateKnob(material: MeshStandardMaterial): Group {
+/** Short poles that hold the ring up from the board. */
+export function ringPoles(): Group {
+  const { radius, ringY, poleRadius, poleAnglesDeg } = HANDLES;
   const group = new Group();
-  const post = new Mesh(new CylinderGeometry(0.8, 0.8, HANDLES.knobPostHeight, 8), material);
-  post.position.y = HANDLES.knobPostHeight / 2 + 1;
-  const knob = new Mesh(new SphereGeometry(HANDLES.knobRadius, 12, 8), material);
-  knob.position.y = HANDLES.knobPostHeight + 1 + HANDLES.knobRadius * 0.6;
-  knob.name = 'knob';
-  group.add(post, knob);
+  for (const angle of poleAnglesDeg) {
+    const pole = new Mesh(new CylinderGeometry(poleRadius, poleRadius, ringY, 6), flatMaterial(HANDLES.trackColor));
+    pole.position.copy(polar(radius, angle, ringY / 2));
+    group.add(pole);
+  }
   return group;
 }
 
 /**
- * Curved double arrow lying flat above the rotate track, following the rim.
+ * Curved double arrow lying flat, following the rim around `centerDeg`.
  * Built from a flat 2D shape in polar space, then bent onto the arc.
  */
-export function curvedDoubleArrow(material: MeshStandardMaterial, y: number): Mesh {
-  const { radius, rotateAngleDeg: a, rotateSpanDeg: s } = HANDLES;
+export function curvedDoubleArrow(
+  material: MeshStandardMaterial,
+  radius: number,
+  centerDeg: number,
+  halfSpanDeg: number,
+  y: number,
+): Mesh {
+  const a = centerDeg;
+  const s = halfSpanDeg;
   const half = 0.9; // half band width (cm)
   const headHalf = 2.2;
   const headLen = 3; // cm along the arc
@@ -93,35 +104,9 @@ export function curvedDoubleArrow(material: MeshStandardMaterial, y: number): Me
   return new Mesh(geometry, material);
 }
 
-/** Height handle rails: two upright posts. */
-export function heightRails(): Group {
-  const group = new Group();
-  const { radius, heightAngleDeg: a, barWidth, barRestY, heightMin, heightMax } = HANDLES;
-  const bottom = barRestY + heightMin - 2;
-  const top = barRestY + heightMax + 2;
-  const tangentDeg = (barWidth / 2 + 1) / radius / (Math.PI / 180);
-  for (const side of [-1, 1]) {
-    const rail = new Mesh(new CylinderGeometry(0.5, 0.5, top - bottom, 6), flatMaterial(HANDLES.trackColor));
-    rail.position.copy(polar(radius, a + side * tangentDeg, (top + bottom) / 2));
-    group.add(rail);
-  }
-  return group;
-}
-
-/** Height handle bar: a thick horizontal bar between the rails. Origin at its center. */
-export function heightBar(material: MeshStandardMaterial): Group {
-  const group = new Group();
-  const bar = new Mesh(new CylinderGeometry(HANDLES.barRadius, HANDLES.barRadius, HANDLES.barWidth, 10), material);
-  bar.rotation.z = Math.PI / 2; // lie along local x
-  group.add(bar);
-  // Turn so local x runs along the rim (tangent at the handle angle).
-  group.rotation.y = -degToRad(HANDLES.heightAngleDeg);
-  return group;
-}
-
-/** Vertical double arrow beside the height handle. Faces the player. */
-export function verticalDoubleArrow(material: MeshStandardMaterial): Mesh {
-  const halfLen = 7;
+/** Vertical double arrow standing at `angleDeg` on the rim, bottom at `y`. Faces the player. */
+export function verticalDoubleArrow(material: MeshStandardMaterial, radius: number, angleDeg: number, y: number): Mesh {
+  const halfLen = 4;
   const half = 0.9;
   const headHalf = 2.2;
   const headLen = 3;
@@ -140,12 +125,8 @@ export function verticalDoubleArrow(material: MeshStandardMaterial): Mesh {
   const geometry = new ExtrudeGeometry(shape, { depth: 0.7, bevelEnabled: false });
   geometry.translate(0, 0, -0.35);
   const mesh = new Mesh(geometry, material);
-  // Beside the bar on its outer side (away from the rotate handle), facing the player.
-  const { radius, heightAngleDeg, barWidth, barRestY } = HANDLES;
-  const offsetDeg = (barWidth / 2 + 3) / radius / (Math.PI / 180);
-  const angle = heightAngleDeg + Math.sign(heightAngleDeg || -1) * offsetDeg;
-  mesh.position.copy(polar(radius, angle, barRestY + 2));
+  mesh.position.copy(polar(radius, angleDeg, y + halfLen));
   // Shape faces +z. Point it at the center (the player).
-  mesh.rotation.y = -degToRad(angle);
+  mesh.rotation.y = -degToRad(angleDeg);
   return mesh;
 }
