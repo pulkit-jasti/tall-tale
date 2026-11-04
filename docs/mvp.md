@@ -97,6 +97,7 @@ Each step should be playable on its own.
 
 1. **Toy test:** remove the starter template files. Board, castle wall, the ring handle with its arrows (first built as two handles, replaced after the first headset test), a few goblins walking in on simple roads, grab and eat. Prove that grabbing tiny goblins works and that enemies at the wall are visible from the seat.
    - Done when: a debug key spawns goblins, and the handles, grab and eat work in the code. The developer must test this step on the headset before step 2 builds on it.
+   - **Done (2026-11-03), headset test passed.** Changes from the plan after testing: hold a goblin near the mouth to eat (no letting go or head tilt), one ring handle instead of two handles (full circle for now), the board starts higher, let-go goblins fly in a simple arc, auto-pause on the Quest menu, 72 Hz, unit budget about 50 goblins ([performance.md](performance.md)). Added for testing: FPS panel, laptop debug page at `/__debug` with an automatic stress test.
 2. **Slingshot** with aim assist, and the pebble bowl.
    - Done when: a pebble can be pulled, released and hits goblins, and the bowl refills.
 3. **Waves and flags:** blueprint loader and `tutorial.json`, road graph, camps, seeded random, the tutorial director, both flags, win and lose panels.

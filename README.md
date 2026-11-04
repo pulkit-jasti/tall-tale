@@ -10,8 +10,8 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 
 ## Status
 
-- Stage: MVP build step 1 (Toy test) done and tested on the headset. Scale and pinching goblins work. Fixes from the test: eating no longer needs letting go or a head tilt (it opened the Quest menu), one ring handle replaces the two handles, and the board starts higher. Waiting for a headset check of these fixes.
-- Next step: the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
+- Stage: MVP build step 1 (Toy test) **done** and passed the headset test on 2026-11-03. Scale, pinching goblins, eating, the ring handle, throws, auto-pause and wall visibility all work. Changes from the plan after testing: eating is hold near the mouth (no letting go or head tilt, which opened the Quest menu), one ring handle replaced the two handles, the board starts higher, the game runs at 72 Hz, and the unit budget is about 50 goblins ([docs/performance.md](docs/performance.md)).
+- Next step: build step 2 (slingshot), then the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---
@@ -232,9 +232,9 @@ Known costs of IWSDK vs Unity:
 These are checked during the first MVP build steps ([docs/mvp.md](docs/mvp.md#build-order)).
 
 - [x] Pinching tiny (about 3.5 cm) goblins with the snap pinch zone feels reliable
-- [ ] "Eat" trigger near the face works reliably (first try opened the Quest menu, now hold near the mouth instead)
-- [ ] Spinning the board with the ring handle and setting its height feel comfortable
-- [ ] Enemies at the wall are visible from the seat (no hidden strip)
+- [x] "Eat" trigger near the face works reliably (first try opened the Quest menu, now hold near the mouth instead)
+- [x] Spinning the board with the ring handle and setting its height feel comfortable
+- [x] Enemies at the wall are visible from the seat (no hidden strip)
 - [ ] Slingshot release direction is steady with hand tracking
 - [ ] Pepper shake and swatter swings are detected well
 - [ ] Microphone works inside the immersive session on Quest browser, and the scream threshold works
