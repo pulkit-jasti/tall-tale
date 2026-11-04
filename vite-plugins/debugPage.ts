@@ -31,7 +31,7 @@ const PAGE_TIMEOUT = 6000;
 
 function page(): string {
   const buttons = DEBUG_ACTIONS.map(
-    (a) => `<button data-id="${a.id}" title="${a.does}">${a.label}${a.code ? ` <small>${a.code.replace('Key', '')}</small>` : ''}</button>`,
+    (a) => `<button data-id="${a.id}" title="${a.does}">${a.label}${a.code ? ` <small>${a.code.replace('Key', '').replace('Digit', '')}</small>` : ''}</button>`,
   ).join('\n');
   return `<!doctype html>
 <html lang="en">

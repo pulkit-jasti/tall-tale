@@ -16,7 +16,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { CASTLE, GOBLIN_RULES, GOBLINS, ROADS, type GoblinStats, type GoblinType } from '../config/game.js';
+import { CASTLE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, type GoblinStats, type GoblinType } from '../config/game.js';
 import { angleOf, boardHeight, clearOfTowers, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
@@ -49,6 +49,8 @@ const GRABBABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
 /** Modes where a goblin is near or in the player's hands (never part of a stalemate). */
 const IN_REACH: ReadonlySet<GoblinMode> = new Set<GoblinMode>(['toWall', 'atWall', 'climbing', 'rampart', 'intruder', 'held']);
 
+const tint = new Color();
+
 export class Goblin {
   readonly root = new Group();
   readonly body = new Group();
@@ -78,6 +80,8 @@ export class Goblin {
   /** How long this goblin waits on the rampart before jumping in (seconds). Longer for a tutorial climber. */
   rampartWait: number = GOBLIN_RULES.rampartWait;
   attackRight = true;
+  /** Peppered: gives more food when eaten. Shown with a dusty tint. */
+  seasoned = false;
   touch: TouchState = 'idle';
   readonly target = new Vector3();
   hasTarget = false;
@@ -104,8 +108,14 @@ export class Goblin {
     this.type = type;
     this.stats = GOBLINS[type];
     this.body.scale.setScalar(this.stats.height);
+    this.applyColor();
+  }
+
+  /** Model color times the type tint, and the seasoned tint when peppered. */
+  applyColor(): void {
     const [r, g, b] = this.stats.tint;
-    this.materials[0].color.copy(this.baseColor).multiply(new Color(r, g, b));
+    const color = this.materials[0].color.copy(this.baseColor).multiply(tint.setRGB(r, g, b));
+    if (this.seasoned) color.multiply(tint.setRGB(...PEPPER.seasonedTint));
   }
 
   play(name: string, loop = true, timeScale = 1): void {
@@ -208,6 +218,7 @@ export class Goblins {
       this.list.push(goblin);
     }
     mark('goblin spawn');
+    goblin.seasoned = false;
     goblin.setType(type);
     goblin.speed = goblin.stats.speed * (1 + this.rng.range(-GOBLIN_RULES.speedJitter, GOBLIN_RULES.speedJitter));
     goblin.root.visible = true;
@@ -399,6 +410,45 @@ export class Goblins {
     goblin.landAs = 'dazed';
     goblin.play('fall', true, 1);
     this.audio.play('squeal', this.worldPosition(goblin, temp), 1, 0.1);
+  }
+
+  /**
+   * Peppered (docs/giant-tools.md): it sneezes and is seasoned, worth more
+   * food when eaten. A goblin outside the wall stumbles back a little, one on
+   * the wall or in the courtyard sneezes where it stands. A climber keeps
+   * climbing. Returns false if it was seasoned already or cannot be peppered.
+   */
+  pepper(goblin: Goblin): boolean {
+    if (!this.isHittable(goblin) || goblin.seasoned) return false;
+    goblin.seasoned = true;
+    goblin.applyColor();
+    this.audio.play('sneeze', this.worldPosition(goblin, temp), 1, 0.12);
+    switch (goblin.mode) {
+      case 'walking':
+      case 'toWall':
+      case 'atWall': {
+        // Back away from the castle: outward from the board center.
+        const p = goblin.root.position;
+        const d = Math.hypot(p.x, p.z) || 1;
+        goblin.vx = (p.x / d) * PEPPER.stumbleSpeed;
+        goblin.vz = (p.z / d) * PEPPER.stumbleSpeed;
+        goblin.vy = PEPPER.stumbleHop;
+        goblin.mode = 'falling';
+        goblin.landAs = 'dazed';
+        goblin.play('emote-no', false);
+        break;
+      }
+      case 'rampart':
+      case 'intruder':
+      case 'dazed':
+        goblin.mode = 'dazed';
+        goblin.timer = PEPPER.sneezeTime;
+        goblin.play('emote-no', false);
+        break;
+      default:
+        break;
+    }
+    return true;
   }
 
   update(dt: number): void {

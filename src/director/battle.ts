@@ -1,7 +1,7 @@
 // Runs one battle: the tutorial director, the win and lose rules, the flags,
 // the hint sign with its markers, and the end panel. It is the TutorialApi:
 // each director call goes to a game system (wave spawner, goblins,
-// slingshot), and it counts what the player does for the lessons. Nothing
+// slingshot, food tools, food jar), and it counts what the player does for the lessons. Nothing
 // tutorial-only lives in those systems.
 import { Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
@@ -13,6 +13,7 @@ import { clearWave, createBattle, damageCastle, healthShare, loseCastle, type Ba
 import { angleDelta, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
+import type { FoodToolName, HandTool } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { EndPanel } from '../ui/endPanel.js';
 import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemos.js';
@@ -23,6 +24,7 @@ import type { UiImageName } from '../ui/uiImages.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import type { WaveSpawner } from '../units/waveSpawner.js';
 import type { Flags } from '../world/flags.js';
+import type { FoodJar } from '../world/foodJar.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
@@ -37,7 +39,7 @@ import {
 
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
-const BUILT_TOOLS: ToolName[] = ['slingshot'];
+const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper'];
 const ICONS: Record<HintIcon, UiImageName> = {
   pinch: 'target',
   grab: 'target',
@@ -59,6 +61,9 @@ export interface BattleParts {
   goblins: Goblins;
   spawner: WaveSpawner;
   slingshot: Slingshot;
+  /** The food tools by name (the megaphone and bell come in build step 5). */
+  tools: Record<FoodToolName, HandTool>;
+  food: FoodJar;
   flags: Flags;
   panel: EndPanel;
   sign: HintSign;
@@ -85,6 +90,8 @@ export class Battle implements TutorialApi {
   private eatenCount = 0;
   private pickedCount = 0;
   private slingHits = 0;
+  private toolUseCount: Record<FoodToolName, number> = { swatter: 0, pepper: 0 };
+  private toolGrabCount: Record<FoodToolName, number> = { swatter: 0, pepper: 0 };
   private sling: Record<SlingEvent, number> = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
   private spun = 0;
   private moved = 0;
@@ -109,6 +116,18 @@ export class Battle implements TutorialApi {
     };
     parts.slingshot.onHit = () => this.slingHits++;
     parts.slingshot.onEvent = (event) => this.sling[event]++;
+    for (const tool of Object.values(parts.tools)) {
+      tool.onUse = (count) => (this.toolUseCount[tool.name] += count);
+      tool.onGrab = () => this.toolGrabCount[tool.name]++;
+    }
+  }
+
+  /** Every food tool hidden (it waits for its wave), and the jar back to the starting food. */
+  private resetTools(): void {
+    for (const tool of Object.values(this.parts.tools)) tool.setVisible(false);
+    this.toolUseCount = { swatter: 0, pepper: 0 };
+    this.toolGrabCount = { swatter: 0, pepper: 0 };
+    this.parts.food.reset();
   }
 
   /** A new tutorial battle from the first lesson. */
@@ -120,6 +139,7 @@ export class Battle implements TutorialApi {
     // Every tool waits for its wave (docs/giant-tools.md section 6).
     slingshot.setVisible(false);
     slingshot.beckon = false;
+    this.resetTools();
     this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
     flags.show(1, 0, true);
     this.wave = -1;
@@ -154,6 +174,7 @@ export class Battle implements TutorialApi {
     this.stop();
     this.parts.goblins.killAll();
     this.parts.slingshot.setVisible(false);
+    this.resetTools();
     this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
     this.parts.flags.show(1, 0, true);
     this.parts.panel.show('welcome');
@@ -247,6 +268,8 @@ export class Battle implements TutorialApi {
     let text = hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
+    // A food tool lesson without enough food says so (a climber comes to eat).
+    if (hint.whenLocked && hint.tool && !this.canAfford(hint.tool)) text = hint.whenLocked;
     let sub: string | undefined;
     if (side) sub = `It is to your ${side}. Turn your head or spin the board.`;
     this.shown = { kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], sub, next: hint.next };
@@ -315,6 +338,12 @@ export class Battle implements TutorialApi {
         return flags.clothWorld('health', out);
       case 'waveFlag':
         return flags.clothWorld('wave', out);
+      case 'foodJar':
+        return this.parts.food.topWorld(out);
+      case 'swatterHandle':
+        return this.parts.tools.swatter.handleWorld(out);
+      case 'pepperHandle':
+        return this.parts.tools.pepper.handleWorld(out);
       case 'slingHandle':
         return slingshot.partWorld('handle', out);
       case 'bowl':
@@ -364,6 +393,7 @@ export class Battle implements TutorialApi {
     this.parts.spawner.stop();
     this.poofAll();
     this.parts.slingshot.release();
+    for (const tool of Object.values(this.parts.tools)) tool.release();
     this.parts.audio.play(this.state.phase === 'won' ? 'win' : 'lose');
     this.endTimer = END_PANEL.showDelay;
     console.info(`[battle] ${this.state.phase}, castle health ${this.state.health.toFixed(0)}`);
@@ -426,7 +456,16 @@ export class Battle implements TutorialApi {
 
   showTool(tool: ToolName): void {
     if (!BUILT_TOOLS.includes(tool)) {
-      console.info(`[battle] ${tool} is not built yet (build steps 4 and 5)`);
+      console.info(`[battle] ${tool} is not built yet (build step 5)`);
+      return;
+    }
+    if (tool !== 'slingshot') {
+      const t = this.foodTool(tool);
+      if (!t) return;
+      // The lessons count what the player does with it from now on.
+      this.toolUseCount[t.name] = 0;
+      this.toolGrabCount[t.name] = 0;
+      t.appear();
       return;
     }
     const { slingshot, stage, particles, audio } = this.parts;
@@ -444,17 +483,42 @@ export class Battle implements TutorialApi {
 
   hintTool(tool: ToolName): void {
     if (tool === 'slingshot') this.parts.slingshot.beckon = true;
+    const t = this.foodTool(tool);
+    if (t) t.beckon = true;
   }
 
   helpWithTool(tool: ToolName): void {
     if (tool === 'slingshot') {
       this.parts.slingshot.loadForPlayer();
       this.parts.slingshot.beckon = true;
+      return;
     }
+    const t = this.foodTool(tool);
+    if (!t) return;
+    t.beckon = true;
+    // The easier way: enough food for one use, or a goblin in reach to use it on.
+    if (!t.usable) this.parts.food.add(t.cost - this.parts.food.food);
+    else this.lessonClimber(true);
   }
 
   toolUses(tool: ToolName): number {
-    return tool === 'slingshot' ? this.slingHits : 0;
+    if (tool === 'slingshot') return this.slingHits;
+    return tool === 'swatter' || tool === 'pepper' ? this.toolUseCount[tool] : 0;
+  }
+
+  toolGrabbed(tool: ToolName): number {
+    if (tool === 'slingshot') return this.sling.grabbed;
+    return tool === 'swatter' || tool === 'pepper' ? this.toolGrabCount[tool] : 0;
+  }
+
+  canAfford(tool: ToolName): boolean {
+    if (tool === 'slingshot') return true;
+    return this.foodTool(tool)?.usable ?? false;
+  }
+
+  /** The food tool by its tutorial name, if it is built. */
+  private foodTool(tool: ToolName): HandTool | null {
+    return tool === 'swatter' || tool === 'pepper' ? this.parts.tools[tool] : null;
   }
 
   boardSpun(): number {

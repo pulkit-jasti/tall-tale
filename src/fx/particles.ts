@@ -65,6 +65,24 @@ export class Particles {
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 
+  /** Specks falling from a world point, spread a little sideways (pepper). `spread` and `speed` in meters. */
+  drizzle(at: Vector3, colors: number[], count: number, spread: number, speed: number): void {
+    mark('particles');
+    for (let n = 0; n < count; n++) {
+      const i = this.next;
+      this.next = (this.next + 1) % this.pool.length;
+      const p = this.pool[i];
+      p.alive = true;
+      p.age = 0;
+      p.position.copy(at);
+      p.position.x += this.rng.range(-spread, spread);
+      p.position.z += this.rng.range(-spread, spread);
+      p.velocity.set(this.rng.range(-0.04, 0.04), -speed * this.rng.range(0.6, 1), this.rng.range(-0.04, 0.04));
+      this.mesh.setColorAt(i, this.color.setHex(this.rng.pick(colors)));
+    }
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+  }
+
   update(dt: number): void {
     let changed = false;
     for (let i = 0; i < this.pool.length; i++) {

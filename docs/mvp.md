@@ -75,7 +75,7 @@ The tutorial is a hand-written script in code, not a JSON file, because it waits
   - **Marker:** one bouncing down arrow over the target, or only the side arrow when the target is out of view.
   - **Info steps** (wave banners, the flags, "wave cleared" and new tool breathers) only move on when the player pokes "Next" on the sign. Not by time, and not by looking at something: a player may turn toward a thing without noticing it, so they always get as long as they need. Only lessons, where the player does something with their hands, move on by themselves when it is done.
   - **New things are taught before their wave**, so no enemies press the player while learning. Lessons that need enemies (shooting a goblin) run at half the spawn rate.
-- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot (any shot counts, hit or miss: the player has learned how it works). Wave banners and the two flags are explained as the battle starts. Lessons for the swatter, pepper, megaphone and bell are added when those tools are built.
+- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot (any shot counts, hit or miss: the player has learned how it works). Before wave 3 grab the swatter, then swat goblins; before wave 4 grab the pepper, then pepper goblins. Wave banners, the two flags and the food jar are explained as the battle starts. Lessons for the megaphone and bell are added in step 5.
 - **A new tool is taught by actions only, never with Next.** When a wave is cleared and a new tool comes, its first lesson starts at once ("Wave cleared! Here is a new tool..."), and the wave that brings it starts straight into its use lesson, with no banner in between. Tool lessons count from the moment the tool appears, so steps the player already did are never asked again.
 
 ### Rules that keep it safe
@@ -142,6 +142,13 @@ Each step should be playable on its own.
      - Not done on purpose: the stress test waits until the game is built further. Gameplay feels smooth on the headset for now.
 4. **Fly swatter, pepper shaker, food jar and pips.**
    - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
+   - **Built (2026-11-04), waiting for the headset test.** What is in it ([giant-tools.md](giant-tools.md)):
+     - Food rules `src/rules/food.ts` (start 4, max 10, +1 per goblin, +2 seasoned, costs and use timers in `FOOD` and `TOOLS`), tested in `food.test.ts`. Food carries over between waves and resets for a new battle.
+     - Food jar `src/world/foodJar.ts`: a pot between the two left platforms with one food ball per food on its mouth.
+     - Shared food tool `src/tools/handTool.ts`: platform, pips, fist grab, follows the hand, grabbing is free, the first use pays, Locked (dimmed, rope, wobble, buzz), dropped mid-use it floats back to the hand area, use over it shrinks, poofs and pops back. The megaphone and bell in step 5 build on it.
+     - Fly swatter `src/tools/flySwatter.ts` (10 s, 4 food) and pepper shaker `src/tools/pepperShaker.ts` (8 s, 3 food, seasoned goblins).
+     - Tutorial: a "food jar" info step after the flags, and for each new tool a grab lesson in the breather and a use lesson in its wave (swatter wave 3, pepper wave 4). Without enough food the use lesson says so and a climber pops up to eat. The easier fallback tops up the jar. Ghost hand demos `swatterGrab` and `pepperGrab` (left hand, need a headset check).
+     - Debug keys: Y add 3 food, 0 empty the jar, 1 show both tools now, 2 swat the front of the wall, 3 pepper the front of the wall.
 5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.
    - Done when: a debug key triggers the megaphone, and the bell does the same by hand.
 6. **Pause:** wrist button, pause panel, auto-pause, Reset table.

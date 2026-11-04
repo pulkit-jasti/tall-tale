@@ -23,6 +23,11 @@ export type DebugCommand =
   | 'slingGoblin'
   | 'bowlEmpty'
   | 'bowlFill'
+  | 'addFood'
+  | 'emptyFood'
+  | 'showTools'
+  | 'swat'
+  | 'pepper'
   | 'fps'
   | 'stress'
   | 'resetRun'
@@ -61,6 +66,11 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'slingGoblin', code: 'KeyJ', label: 'Goblin in slingshot', does: 'Put the goblin nearest the castle in the slingshot pouch (then L shoots it)' },
   { id: 'bowlEmpty', code: 'KeyU', label: 'Empty bowl', does: 'Empty the pebble bowl (the bowl shows Locked until it refills)' },
   { id: 'bowlFill', code: 'KeyI', label: 'Fill bowl', does: 'Fill the pebble bowl' },
+  { id: 'addFood', code: 'KeyY', label: 'Add food', does: 'Add 3 food to the jar (it stops at 10)' },
+  { id: 'emptyFood', code: 'Digit0', label: 'Empty food', does: 'Empty the food jar (the swatter and pepper show Locked)' },
+  { id: 'showTools', code: 'Digit1', label: 'Show food tools', does: 'The fly swatter and pepper shaker pop onto their platforms now (normally in waves 3 and 4)' },
+  { id: 'swat', code: 'Digit2', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (the first swat costs 4 food, then 10 s of swatting)' },
+  { id: 'pepper', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (the first shake costs 3 food, then 8 s). Peppered goblins give 2 food' },
   { id: 'fps', code: 'KeyF', label: 'FPS on/off', does: 'FPS counter on or off (add ?fps to the URL on the hosted build)' },
   { id: 'stress', code: 'KeyM', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },
   { id: 'resetRun', code: 'KeyN', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },
@@ -74,7 +84,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
 
 /** The key list for the start page (single press actions plus the hold keys). */
 export const DEBUG_KEYS: { key: string; does: string }[] = [
-  ...DEBUG_ACTIONS.filter((a) => a.code).map((a) => ({ key: a.code!.replace('Key', ''), does: a.does })),
+  ...DEBUG_ACTIONS.filter((a) => a.code).map((a) => ({ key: a.code!.replace('Key', '').replace('Digit', ''), does: a.does })),
   { key: 'Q / E', does: 'Turn the board left / right (hold)' },
   { key: 'Z / X', does: 'Board down / up (hold)' },
   { key: 'Mouse', does: 'Drag to look around, scroll to zoom (browser only)' },

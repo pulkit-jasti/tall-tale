@@ -435,9 +435,11 @@ export const FEEDBACK = {
  */
 export const TOOL_SPOTS = {
   slingshot: { angleDeg: 30, radius: 19 },
-  /** Filled in build steps 4 and 5. */
+  /** Megaphone and bell (build step 5). */
   rightSide: { angleDeg: 82, radius: 19 },
+  /** Pepper shaker. */
   leftFront: { angleDeg: -30, radius: 19 },
+  /** Fly swatter. */
   leftSide: { angleDeg: -82, radius: 19 },
   /** Platform top above the board's placed height (cm). Above the ring top. */
   platformTop: 10,
@@ -604,8 +606,172 @@ export const GOBLIN_SHOT = {
   spin: 14,
 };
 
+/** Food (docs/giant-tools.md section 3). Costs are in TOOLS below. */
+export const FOOD = {
+  start: 4,
+  max: 10,
+  eatBasic: 1,
+  /** A peppered goblin is seasoned. */
+  eatSeasoned: 2,
+};
+
+/**
+ * The food jar: a pot between the two left tool platforms, like the pebble
+ * bowl on the right. Fixed, it never turns. The pot has a narrow neck, so the
+ * food shows as a little heap of food balls on its mouth, one ball per food:
+ * easy to read, like the pips. Its top stays below the platforms and it stays
+ * inside the ring, so nothing ever touches (cm, degrees).
+ */
+export const FOOD_JAR = {
+  angleDeg: -56,
+  radius: 18,
+  /** Pot height (the model is fitted to it). */
+  height: 7,
+  /** Pot bottom above the board's placed height. */
+  bottomY: 1,
+  postLength: 12,
+  /** Food balls on the mouth: size, and how far the heap sits below the pot top (cm). */
+  ballSize: 1.3,
+  heapSink: 0.4,
+  /** Balls per layer of the heap, bottom first (the last number repeats). */
+  layers: [6, 3, 1],
+  ballColors: [0xf2c14e, 0xc9772c, 0x8fb04a, 0xd23c28, 0xe8d8b0],
+  /** A ball pops in or out over this long (seconds). */
+  popTime: 0.25,
+  /** Crumbs that pop out of the jar when food goes in or out. */
+  popColors: [0xf2c14e, 0xc9772c, 0xffffff],
+};
+
+/** Food pips: a row of small balls on a ledge in front of each tool platform. Lit = can afford. */
+export const PIPS = {
+  size: 1.5,
+  gap: 0.35,
+  /** The ledge sits this far in front of (toward the player) and below the platform top (cm). */
+  inset: 6.2,
+  below: 0.4,
+  litColor: 0xffd23f,
+  dimColor: 0x3b2b1f,
+  ledgeColor: 0x3b2b1f,
+};
+
+/** Shared rules for the food tools (swatter, pepper; the megaphone and bell in step 5). */
+export const TOOLS = {
+  /** Food each one costs on its first use (docs/giant-tools.md). */
+  cost: { swatter: 4, pepper: 3, megaphone: 6 },
+  /** How long one paid use lasts (seconds). */
+  duration: { swatter: 10, pepper: 8, megaphone: 0 },
+  /** The hand must be open near the tool this long before closing it grabs (seconds). Same as the ring. */
+  readyTime: 0.15,
+  /** A held tool lets go only after the hand is open this long (seconds). */
+  releaseHold: 0.25,
+  /** The holding hand lost tracking (fast swings blur it): the tool stays this long before it lets go (seconds). */
+  holdLostGrace: 0.6,
+  /** Fist only, as in docs/controls-and-ui.md. True also accepts a pinch, like the ring and slingshot handles. */
+  acceptPinch: false,
+  /** Smoothing of a held tool, so tracking jitter does not shake it (seconds). */
+  holdSmoothing: 0.02,
+  /** Let go before or after a use: it glides back to its platform in this long (seconds). */
+  returnTime: 0.35,
+  /** Dropped mid-use: it hangs this long, then floats up to the hand area above its platform (seconds). */
+  looseWait: 1,
+  looseFloat: 0.5,
+  /** The hand area: this far above the platform top (cm). */
+  looseLift: 9,
+  /** Use over: it shrinks, poofs and pops back onto its platform (seconds). */
+  shrinkTime: 0.2,
+  popTime: 0.25,
+  /** It blinks in the last seconds of a use, so the end is no surprise. */
+  warnTime: 2,
+  /** Locked (not enough food): the colors are dimmed to this share. */
+  dimShare: 0.45,
+  /** Locked wobble after a refused grab (seconds, degrees). */
+  wobbleTime: 0.45,
+  wobbleDeg: 7,
+  ropeColor: 0xb08850,
+};
+
+/** The fly swatter (docs/giant-tools.md). Crowd clearing near the wall. */
+export const SWATTER = {
+  handleLength: 25,
+  handleRadius: 0.7,
+  /** Flat head at the end (cm). */
+  headWidth: 10,
+  headHeight: 9,
+  headThickness: 0.5,
+  handleColor: 0xf2c14e,
+  headColor: 0xd23c28,
+  frameColor: 0x8a1f14,
+  /** Grab zone along the bottom of the handle (cm from the end) and around it (meters). */
+  gripFrom: 0,
+  gripTo: 11,
+  grabRadius: 0.06,
+  /**
+   * Resting on its platform, leaning back along the rim (away from the front)
+   * this far from upright (degrees). Its head is then behind the left
+   * shoulder, out of view, and the whole swatter stays inside the ring, so
+   * the ring never passes through it. Grabbed thumb up like the slingshot
+   * handle, the hand only turns a little (the ghost hand demo uses the same lean).
+   */
+  restLeanDeg: 18,
+  /**
+   * Hits are found along the whole path of the head since the last frame, so
+   * fast swings that blur tracking still count. A goblin this close to that
+   * path is hit (cm). Generous, like the goblins' pinch zone.
+   */
+  hitRadius: 6.5,
+  /** The head must move at least this fast to hit (cm per second). Slow slams count. */
+  minHitSpeed: 35,
+  /** The head touches the ground (a swat) when its center is this close to it (cm)... */
+  groundContact: 3.5,
+  /** ...and must lift this high again before the next ground swat (cm). */
+  rearmHeight: 6,
+  /** Whoosh sound above this head speed (cm per second), at most this often (seconds). */
+  whooshSpeed: 160,
+  whooshGap: 0.35,
+  splatColors: [0x6a8f3a, 0x8fb04a, 0xffffff, 0xd23c28],
+};
+
+/** The pepper shaker (docs/giant-tools.md). Seasons goblins for more food. */
+export const PEPPER = {
+  bodyHeight: 9,
+  bodyRadius: 2.2,
+  bodyColor: 0xb3261e,
+  capColor: 0xd9d4c7,
+  holeColor: 0x2a2018,
+  /** Grab zone along the body (cm from the bottom) and around it (meters). */
+  gripFrom: 1,
+  gripTo: 8,
+  grabRadius: 0.06,
+  /**
+   * Shake detection: the shaker's speed is smoothed over `speedSmoothing`.
+   * A move faster than `shakeSpeed` that turns back on the last one is one
+   * shake stroke. Two strokes within `shakeWindow` mean shaking, and pepper
+   * keeps falling for `shakeHold` after the last stroke (seconds, cm per second).
+   */
+  speedSmoothing: 0.04,
+  shakeSpeed: 22,
+  shakeWindow: 0.7,
+  shakeHold: 0.35,
+  /** Goblins this close to the spot under the shaker are peppered (cm, flat distance), up to this far below it. */
+  radius: 7,
+  maxDrop: 70,
+  /** Pepper specks: this often while shaking (seconds), this many each time. */
+  speckEvery: 0.05,
+  speckCount: 3,
+  speckColors: [0x2a2018, 0x4a3a2a, 0x6b5a45],
+  /** Shake sound at most this often (seconds). */
+  soundGap: 0.22,
+  /** A peppered goblin sneezes: dazed this long (seconds), and a goblin outside the wall stumbles back (cm per second). */
+  sneezeTime: 1.2,
+  stumbleSpeed: 22,
+  stumbleHop: 45,
+  /** A seasoned goblin's colors are multiplied by this (dusty brown). */
+  seasonedTint: [0.85, 0.68, 0.55] as [number, number, number],
+};
+
 export const PARTICLES = {
-  poolSize: 96,
+  /** Raised from 96 for the falling pepper. */
+  poolSize: 128,
   /** Particle size (meters). */
   size: 0.006,
   life: 0.55,
@@ -621,6 +787,8 @@ export const DEBUG = {
   stressMax: 120,
   /** Gap between stress test grunts leaving their camps (seconds). */
   stressGap: 0.25,
+  /** Food added per "Add food" press. */
+  foodAdd: 3,
   /** Castle damage per "Damage castle" press (health is out of CASTLE_HEALTH.maxHealth). */
   castleDamage: 20,
   /** Board turn and height per debug page press (degrees, cm). */

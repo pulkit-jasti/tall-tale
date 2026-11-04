@@ -16,10 +16,11 @@
 //            knuckles), `palm` where the palm faces.
 // The contact point is the fist's hole for rod keys and the pinch tips for
 // pinch keys, so it is placed exactly on the anchor and never inside an object.
+import { SWATTER } from '../config/game.js';
 
 export type GhostPose = 'open' | 'pinch' | 'fist';
 
-export type GhostAnchor = 'ring' | 'lessonGoblin' | 'mouth' | 'slingHandle' | 'pebbles' | 'pouch';
+export type GhostAnchor = 'ring' | 'lessonGoblin' | 'mouth' | 'slingHandle' | 'pebbles' | 'pouch' | 'swatterHandle' | 'pepperHandle';
 
 export type Dir = [number, number, number];
 
@@ -49,6 +50,20 @@ export interface GhostDemo {
 const RING_GRIP = { rod: [-1, 0, 0] as Dir, palm: [0, -1, 0.25] as Dir };
 /** Right hand around the upright slingshot handle: thumb up, palm facing in (left) and a bit forward. */
 const HANDLE_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.35] as Dir };
+/** Left hand around the upright pepper shaker (front left): the mirror of HANDLE_GRIP. Thumb up, palm facing in (right). */
+const LEFT_HANDLE_GRIP = { rod: [0, 1, 0] as Dir, palm: [1, 0, 0.35] as Dir };
+/**
+ * Left hand around the swatter handle on the left side, reaching out to the
+ * left like a handshake, from behind the handle: palm toward the player's
+ * front (right in this frame, where forward points left), thumb up along the
+ * handle, which leans back (left here) by SWATTER.restLeanDeg. The palm turns
+ * up by the same angle, so it stays square to the handle.
+ */
+const lean = (SWATTER.restLeanDeg * Math.PI) / 180;
+const SWATTER_GRIP = {
+  rod: [-Math.sin(lean), Math.cos(lean), 0] as Dir,
+  palm: [Math.cos(lean), Math.sin(lean), 0] as Dir,
+};
 /** Pinch from above: fingers down and forward, palm down and toward the player. */
 const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Dir };
 /** Left hand pinching the pouch from behind, like a bow string: fingers along the shot, palm facing in (right). */
@@ -120,6 +135,26 @@ export const GHOST_DEMOS = {
       key(0.8, 'slingHandle', [0, 0, 0], 'open', HANDLE_GRIP),
       key(1.1, 'slingHandle', [0, 0, 0], 'fist', HANDLE_GRIP),
       key(2.0, 'slingHandle', [0, 6, -4], 'fist', HANDLE_GRIP),
+    ],
+  },
+  /** Left hand from behind and the player's side, low (clear of the head above), closes the fist around the handle, lifts it. */
+  swatterGrab: {
+    hand: 'left',
+    keys: [
+      key(0, 'swatterHandle', [-6, 0, -4], 'open', SWATTER_GRIP),
+      key(0.8, 'swatterHandle', [0, 0, 0], 'open', SWATTER_GRIP),
+      key(1.1, 'swatterHandle', [0, 0, 0], 'fist', SWATTER_GRIP),
+      key(2.0, 'swatterHandle', [0, 6, -3], 'fist', SWATTER_GRIP),
+    ],
+  },
+  /** Left hand from the left and behind (the mirror of slingGrab), closes the fist around the shaker, lifts it. */
+  pepperGrab: {
+    hand: 'left',
+    keys: [
+      key(0, 'pepperHandle', [-5, 1, -6], 'open', LEFT_HANDLE_GRIP),
+      key(0.8, 'pepperHandle', [0, 0, 0], 'open', LEFT_HANDLE_GRIP),
+      key(1.1, 'pepperHandle', [0, 0, 0], 'fist', LEFT_HANDLE_GRIP),
+      key(2.0, 'pepperHandle', [0, 6, -4], 'fist', LEFT_HANDLE_GRIP),
     ],
   },
   /** The other hand comes down into the bowl and pinches a pebble off the top of the pile. */

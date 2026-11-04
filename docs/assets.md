@@ -93,7 +93,7 @@ Not in the MVP map: siege machines, bridge, forest, mud, hill features, cage, ca
 | Castle health flag | `castle/castle-kit/flag-banner-long.glb` | Banner 8 cm tall | Tint red. Slides down a code-made pole as health drops |
 | Wave flag | `castle/castle-kit/flag-pennant.glb` | 6 cm tall | Tint blue. Rises one notch per wave on a code-made pole |
 | Tool platforms | `castle/castle-kit/tower-hexagon-top.glb` | 12 to 15 cm wide | One per tool |
-| Food jar | `props/mini-dungeon/pot.glb` | 10 cm tall | Fill level is a code-made disc inside |
+| Food jar | `props/mini-dungeon/pot.glb` | 7 cm tall (10 did not fit between the platforms) | The pot has a narrow neck, so the food shows as a code-made heap of food balls on its mouth, one per food |
 | Pebbles | `rocks/survival/resource-stone.glb` | 2.5 cm (bigger than first planned, easier to see and hit) | Instanced and pooled |
 | Pebble pile in the bowl | `rocks/survival/resource-stone-large.glb` | 6 cm | Shrinks as pebbles are taken |
 | Slingshot target (tutorial only, optional) | `props/mini-forest/target.glb` | 8 cm | |

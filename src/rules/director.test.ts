@@ -92,6 +92,8 @@ function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: s
     hintTool: () => {},
     helpWithTool: () => {},
     toolUses: () => 0,
+    toolGrabbed: () => 0,
+    canAfford: () => true,
     boardSpun: () => 0,
     boardMoved: () => 0,
     picked: () => 0,
@@ -109,6 +111,7 @@ function eagerApi(): ReturnType<typeof idleApi> {
     ...idleApi(),
     waveCleared: () => true,
     toolUses: more,
+    toolGrabbed: more,
     boardSpun: more,
     boardMoved: more,
     picked: more,
@@ -138,6 +141,20 @@ describe('tutorial director', () => {
     expect(api.cleared).toBe(TUTORIAL_WAVES.length);
     // Only built tools are shown.
     expect(api.shown).toEqual(['slingshot']);
+  });
+
+  it('teaches every built food tool in its wave: grab in the breather, then use it', () => {
+    const api = idleApi();
+    api.waveCleared = () => true;
+    const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper']);
+    const ids = steps.map((s) => s.id);
+    expect(ids.indexOf('learn-swatter-grab')).toBeLessThan(ids.indexOf('wave-3-start'));
+    expect(ids.indexOf('wave-3-start')).toBeLessThan(ids.indexOf('learn-swatter'));
+    expect(ids.indexOf('learn-pepper-grab')).toBeLessThan(ids.indexOf('wave-4-start'));
+    const director = new Director<TutorialApi>(steps, api);
+    runPokingNext(director, 60 * 40);
+    expect(director.finished).toBe(true);
+    expect(api.shown).toEqual(['slingshot', 'swatter', 'pepper']);
   });
 
   it('a wave has no timer: it waits until it is cleared (ignoring it loses the castle)', () => {

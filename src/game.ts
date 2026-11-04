@@ -1,6 +1,6 @@
 // The game loop. Builds the world once from the map blueprint, then runs the
 // small systems in a fixed order every frame: hands, handles, battle (director,
-// waves, flags, end panel), goblins, grab and eat, slingshot, effects.
+// waves, flags, end panel), goblins, grab and eat, slingshot, food tools, food jar, effects.
 import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { GameAudio } from './audio/sound.js';
@@ -28,9 +28,13 @@ import { BoardHandles } from './player/handles.js';
 import { HandTracker } from './player/hands.js';
 import { degToRad } from './rules/boardMath.js';
 import { createRandom, type Random } from './rules/random.js';
+import { FlySwatter } from './tools/flySwatter.js';
+import type { HandTool } from './tools/handTool.js';
+import { PepperShaker } from './tools/pepperShaker.js';
 import { Slingshot } from './tools/slingshot.js';
 import { Goblins } from './units/goblins.js';
 import { buildBoard } from './world/boardBuilder.js';
+import { FoodJar } from './world/foodJar.js';
 import { Stage } from './world/stage.js';
 
 const headPosition = new Vector3();
@@ -54,6 +58,10 @@ export class GameSystem extends createSystem({}) {
   private goblins!: Goblins;
   private grabEat!: GrabEat;
   private slingshot!: Slingshot;
+  private food!: FoodJar;
+  private swatter!: FlySwatter;
+  private pepper!: PepperShaker;
+  private tools: HandTool[] = [];
   private particles!: Particles;
   private spawner!: ToySpawner;
   private battle!: Battle;
@@ -95,7 +103,12 @@ export class GameSystem extends createSystem({}) {
     ]);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
-    await Promise.all([this.goblins.load(), this.slingshot.load()]);
+    this.food = new FoodJar(this.stage, this.audio, this.particles);
+    const toolParts = { stage: this.stage, goblins: this.goblins, food: this.food, audio: this.audio, particles: this.particles };
+    this.swatter = new FlySwatter(toolParts);
+    this.pepper = new PepperShaker(toolParts);
+    this.tools = [this.swatter, this.pepper];
+    await Promise.all([this.goblins.load(), this.slingshot.load(), this.food.load(), ...this.tools.map((t) => t.load())]);
     this.fps.countUnits = () => this.goblins.aliveCount;
     this.fps.onReport = (stats) => {
       sendRunStats(stats);
@@ -106,7 +119,7 @@ export class GameSystem extends createSystem({}) {
         );
       }
     };
-    this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.audio, this.particles);
+    this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
     this.battle = new Battle({
@@ -121,6 +134,8 @@ export class GameSystem extends createSystem({}) {
         createRandom(seed + 500),
       ),
       slingshot: this.slingshot,
+      tools: { swatter: this.swatter, pepper: this.pepper },
+      food: this.food,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
       panel: new EndPanel(this.stage.fixedRig, this.audio),
       sign: new HintSign(this.stage.boardLift, this.audio),
@@ -131,10 +146,14 @@ export class GameSystem extends createSystem({}) {
       rng: createRandom(seed + 600),
       isHeld: (goblin) => this.grabEat.isHolding(goblin),
     });
-    this.grabEat.onEat = () => this.battle.noteEaten();
+    this.grabEat.onEat = (goblin) => {
+      this.food.eat(goblin.seasoned);
+      this.battle.noteEaten();
+    };
     this.grabEat.onGrab = () => this.battle.notePicked();
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
+    for (const tool of this.tools) tool.setVisible(false);
     this.stressTest = new StressTest({
       clear: () => {
         // A clean measurement: no battle, no auto trickle.
@@ -264,6 +283,8 @@ export class GameSystem extends createSystem({}) {
     this.goblins.update(dt);
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
+    for (const tool of this.tools) tool.update(dt);
+    this.food.update(dt);
     this.particles.update(dt);
   }
 
@@ -359,6 +380,23 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'bowlFill':
         this.slingshot.debugBowl(true);
+        break;
+      case 'addFood':
+        this.food.add(DEBUG.foodAdd);
+        console.info(`[debug] food ${this.food.food}`);
+        break;
+      case 'emptyFood':
+        this.food.spend(this.food.food);
+        console.info('[debug] food 0: the food tools show Locked');
+        break;
+      case 'showTools':
+        for (const tool of this.tools) if (!tool.visible) tool.appear();
+        break;
+      case 'swat':
+        this.swatter.debugSwat();
+        break;
+      case 'pepper':
+        this.pepper.debugShake();
         break;
       case 'fps':
         this.fps.toggle();

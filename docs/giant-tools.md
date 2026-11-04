@@ -134,6 +134,7 @@ Rules:
 - **Cost:** 4 food.
 - **Weakness:** cannot break shields or armor.
 - **Hand tracking note:** fast swings can blur tracking. Detect hits along the whole swing path, use a generous hit area, and let slams count, not only fast swipes.
+- **How it works (step 4):** it rests on the left side platform, leaning back 18 degrees along the rim, so its head is behind the left shoulder and the whole swatter stays inside the ring. Grab the handle with a fist (`TOOLS.acceptPinch` allows a pinch too, if the fist tracks poorly). A swat is the head touching a goblin, or the ground on the way down. The first swat pays the food and starts the timer. Each swat knocks out every goblin within 6.5 cm of the head's path since the last frame, at any speed above 35 cm/s, so slow slams count. A swish sound plays on fast swings. Numbers are in `SWATTER` and `TOOLS` in `src/config/game.ts`. Debug key 2 swats the front of the wall.
 
 ### Pepper shaker
 
@@ -144,6 +145,7 @@ Rules:
 - **Seasoned:** every peppered enemy counts as seasoned and gives +2 food when eaten. Funny, and a possible achievement ("seasoned before eating").
 - **Cost:** 3 food.
 - **Combo:** pepper a shield group at the wall, then swat them, let the rampart machines finish them, or eat them.
+- **How it works (step 4):** it rests on the front left platform. Grab it with a fist and shake it: a quick move that turns back on the one before is one stroke, and two strokes within 0.7 s are a shake, so no hand pose is needed. The first shake pays the food and starts the timer. While shaking, pepper specks fall straight down from the shaker, and every goblin within 7 cm of the spot below it is peppered once: it sneezes and turns a dusty brown (seasoned). Goblins outside the wall stumble back, goblins on the wall or in the courtyard sneeze in place, climbers keep climbing. No gear flies off yet, because MVP goblins wear none. Numbers are in `PEPPER` and `TOOLS`. Debug key 3 peppers the front of the wall.
 
 ### Megaphone (voice) / Bell (quiet mode)
 
@@ -208,15 +210,19 @@ Rules:
 
 ### Using and returning
 
+Built in step 4 for the swatter and the pepper (`src/tools/handTool.ts`, shared by every food tool). Food rules are plain functions in `src/rules/food.ts`, tested in `food.test.ts`. The jar is `src/world/foodJar.ts`.
+
 - **Grabbing is free. First use costs food** (first swat, first shake, first scream). Accidental grabs never waste food.
 - **When the use is over**, the tool shrinks, poofs and reappears on its platform.
 - **If dropped mid-use**, it floats back to the hand area after about 1 second. Its timer keeps running.
-- **Not enough food:** the tool looks dimmed or tied down with a little rope, so it reads as locked without any text.
+- **Not enough food:** the tool looks dimmed or tied down with a little rope, so it reads as locked without any text. Step 4 does both: dimmed colors and a rope ring around its base. A hand near it shows Locked (wobble), and closing the hand buzzes instead of grabbing. A tool already paid for stays usable with an empty jar until its timer ends.
+- **End of a use:** the tool blinks during the last 2 seconds, so the end is no surprise.
 
 ### Cost and food display
 
 - Each platform shows the tool's cost as **food pips** on its front, not numbers. Pips the player can afford light up.
-- The **food meter is an object**: a jar or basket beside the tool platforms that fills with little food items. The player sees it naturally when reaching for a tool.
+- The **food meter is an object**: a jar or basket beside the tool platforms that fills with little food items. The player sees it naturally when reaching for a tool. Step 4: a pot between the two left platforms with a heap of food balls on its mouth, one ball per food. Crumbs pop out and a chime plays when food goes in.
+- **Layout (step 4):** slingshot front right (30 degrees) with the pebble bowl beside it, megaphone and bell right side (82, step 5), pepper front left (-30), swatter left side (-82), food jar between the two left platforms (-56). All inside the ring handle (`TOOL_SPOTS`, `FOOD_JAR`).
 - No floating panels in front of the player. The battlefield stays clear. See [controls-and-ui.md](controls-and-ui.md).
 
 ---

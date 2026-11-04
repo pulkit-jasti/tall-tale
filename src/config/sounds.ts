@@ -38,6 +38,15 @@ export const SOUNDS = {
   buttonClick: { files: ['interface/click_001.ogg', 'interface/click_002.ogg', 'interface/select_001.ogg'], volume: 0.8, positional: false },
   lessonDone: { files: ['interface/confirmation_002.ogg'], volume: 0.7, positional: false },
   toolPoof: { files: ['interface/maximize_008.ogg'], volume: 0.7, positional: true },
+  toolReturn: { files: ['interface/minimize_008.ogg'], volume: 0.7, positional: true },
+  foodAdded: { files: ['interface/confirmation_001.ogg', 'interface/confirmation_002.ogg'], volume: 0.5, positional: true },
+  swatWhoosh: { files: ['rpg/knifeSlice.ogg', 'rpg/drawKnife1.ogg', 'rpg/drawKnife2.ogg'], volume: 0.6, positional: true },
+  swatSplat: {
+    files: ['impact/impactSoft_heavy_000.ogg', 'impact/impactSoft_heavy_001.ogg', 'impact/impactSoft_heavy_002.ogg'],
+    volume: 1,
+    positional: true,
+  },
+  pepperShake: { files: ['rpg/handleCoins.ogg', 'rpg/handleCoins2.ogg'], volume: 0.6, positional: true },
   round1: { files: ['voice/round_1.ogg'], volume: 0.7, positional: false },
   round2: { files: ['voice/round_2.ogg'], volume: 0.7, positional: false },
   round3: { files: ['voice/round_3.ogg'], volume: 0.7, positional: false },
@@ -50,6 +59,7 @@ export const SOUNDS = {
   squeal: { files: [CHIME], volume: 0.15, positional: true },
   campRumble: { files: [CHIME], volume: 0.5, positional: true },
   cheer: { files: [CHIME], volume: 0.5, positional: false },
+  sneeze: { files: [CHIME], volume: 0.25, positional: true },
 } satisfies Record<string, SoundDef>;
 
 export type SoundName = keyof typeof SOUNDS;

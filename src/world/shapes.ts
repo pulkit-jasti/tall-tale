@@ -1,10 +1,12 @@
 // Code-made placeholder shapes (docs/placeholder-shapes.md). Each shape lives
 // in its own small function so a real model can replace it later.
 import {
+  BoxGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
   DoubleSide,
   ExtrudeGeometry,
+  IcosahedronGeometry,
   Group,
   LatheGeometry,
   Mesh,
@@ -16,7 +18,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { HANDLES, PEBBLE_BOWL, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
+import { FOOD_JAR, HANDLES, PEBBLE_BOWL, PEPPER, PIPS, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -246,4 +248,78 @@ export function pebbleBowl(): Mesh {
   const material = flatMaterial(PEBBLE_BOWL.color);
   material.side = DoubleSide;
   return new Mesh(new LatheGeometry(profile, 12), material);
+}
+
+/**
+ * Fly swatter: a long thin handle along +y from y = 0 (the end the hand
+ * holds) and a flat square head with a darker rim at the top. The head's
+ * face looks along z. Returns the group and its materials.
+ */
+export function flySwatter(): { group: Group; materials: MeshStandardMaterial[] } {
+  const { handleLength, handleRadius, headWidth, headHeight, headThickness } = SWATTER;
+  const handleMaterial = flatMaterial(SWATTER.handleColor);
+  const headMaterial = flatMaterial(SWATTER.headColor);
+  const frameMaterial = flatMaterial(SWATTER.frameColor);
+  const group = new Group();
+  const handle = new Mesh(new CylinderGeometry(handleRadius * 0.8, handleRadius, handleLength, 8), handleMaterial);
+  handle.position.y = handleLength / 2;
+  const head = new Mesh(new BoxGeometry(headWidth, headHeight, headThickness), headMaterial);
+  head.position.y = handleLength + headHeight / 2;
+  // A thin rim around the head, so the flat shape reads from any side.
+  const rim = new Mesh(new BoxGeometry(headWidth + 0.6, headHeight + 0.6, headThickness * 0.6), frameMaterial);
+  rim.position.copy(head.position);
+  const neck = new Mesh(new BoxGeometry(handleRadius * 2.4, 1.2, headThickness * 1.4), frameMaterial);
+  neck.position.y = handleLength + 0.2;
+  group.add(handle, rim, head, neck);
+  return { group, materials: [handleMaterial, headMaterial, frameMaterial] };
+}
+
+/**
+ * Pepper shaker: a cylinder body standing on y = 0 with a dome cap and a few
+ * dark dots for holes. Returns the group, its materials and the cap top (cm).
+ */
+export function pepperShaker(): { group: Group; materials: MeshStandardMaterial[]; top: number } {
+  const { bodyHeight, bodyRadius } = PEPPER;
+  const bodyMaterial = flatMaterial(PEPPER.bodyColor);
+  const capMaterial = flatMaterial(PEPPER.capColor);
+  const holeMaterial = flatMaterial(PEPPER.holeColor);
+  const group = new Group();
+  const body = new Mesh(new CylinderGeometry(bodyRadius * 0.92, bodyRadius, bodyHeight, 10), bodyMaterial);
+  body.position.y = bodyHeight / 2;
+  const cap = new Mesh(new SphereGeometry(bodyRadius, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), capMaterial);
+  cap.position.y = bodyHeight;
+  group.add(body, cap);
+  const hole = new SphereGeometry(0.28, 5, 4);
+  const dots: [number, number][] = [[0, 0], [0.5, 0], [0.5, 120], [0.5, 240]];
+  for (const [share, deg] of dots) {
+    const a = degToRad(deg);
+    const r = bodyRadius * share;
+    const dot = new Mesh(hole, holeMaterial);
+    dot.position.set(Math.cos(a) * r, bodyHeight + Math.sqrt(bodyRadius * bodyRadius - r * r), Math.sin(a) * r);
+    group.add(dot);
+  }
+  return { group, materials: [bodyMaterial, capMaterial], top: bodyHeight + bodyRadius };
+}
+
+/** A thin dark ledge for the food pips, along x, top at y = 0 (cm). */
+export function pipLedge(count: number): Mesh {
+  const length = count * (PIPS.size + PIPS.gap) + PIPS.gap;
+  const ledge = new Mesh(new BoxGeometry(length, 0.6, PIPS.size + 0.4), flatMaterial(PIPS.ledgeColor));
+  ledge.position.y = -0.3;
+  return ledge;
+}
+
+/** One pip ball (shared geometry for an instanced row). */
+export function pipGeometry(): SphereGeometry {
+  return new SphereGeometry(PIPS.size / 2, 8, 6);
+}
+
+/** The little rope that ties a locked tool down: a thin ring around it. */
+export function toolRope(radius: number): Mesh {
+  return new Mesh(new TorusGeometry(radius, 0.35, 5, 14), flatMaterial(TOOLS.ropeColor));
+}
+
+/** One food ball for the jar's heap (shared geometry for an instanced heap). */
+export function foodBallGeometry(): IcosahedronGeometry {
+  return new IcosahedronGeometry(FOOD_JAR.ballSize / 2, 0);
 }
