@@ -3,6 +3,7 @@ import { AudioContext as ThreeAudioContext } from 'three';
 import projectOptions from 'virtual:iwsdk-project';
 import { DEBUG_KEYS } from './debug/debugKeys.js';
 import { GameSystem } from './game.js';
+import { MouseLookSystem } from './player/mouseLook.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const startPage = document.getElementById('start-page') as HTMLDivElement;
@@ -17,6 +18,7 @@ for (const { key, does } of DEBUG_KEYS) {
 
 World.create(container, projectOptions).then(async (world) => {
   world.registerSystem(GameSystem);
+  world.registerSystem(MouseLookSystem);
 
   const vrSupported = (await navigator.xr?.isSessionSupported('immersive-vr').catch(() => false)) ?? false;
   enterButton.disabled = false;

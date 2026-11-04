@@ -196,3 +196,16 @@ export const PARTICLES = {
   speed: 0.35,
   gravity: 0.9,
 };
+
+/** Mouse look in the browser (not used in VR). */
+export const MOUSE_LOOK = {
+  /** Degrees the view turns per pixel of mouse drag. */
+  degPerPixel: 0.25,
+  /** How far the view can tilt up or down (degrees). */
+  maxPitchDeg: 80,
+  /** Field of view limits for the scroll wheel zoom (degrees). */
+  minFov: 30,
+  maxFov: 80,
+  /** Field of view change per scroll wheel step (degrees). */
+  fovPerWheelStep: 3,
+};
