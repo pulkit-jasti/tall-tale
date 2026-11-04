@@ -100,11 +100,20 @@ Each step should be playable on its own.
    - **Done (2026-11-03), headset test passed.** Changes from the plan after testing: hold a goblin near the mouth to eat (no letting go or head tilt), one ring handle instead of two handles (full circle for now), the board starts higher, let-go goblins fly in a simple arc, auto-pause on the Quest menu, 72 Hz, unit budget about 50 goblins ([performance.md](performance.md)). Added for testing: FPS panel, laptop debug page at `/__debug` with an automatic stress test.
 2. **Slingshot** with aim assist, and the pebble bowl.
    - Done when: a pebble can be pulled, released and hits goblins, and the bowl refills.
+   - **Done (2026-11-04), headset test passed.** Changes from the plan after testing ([giant-tools.md](giant-tools.md#slingshot-starter-free)):
+     - The slingshot is picked up by its handle and aimed by turning the body. Pinch a pebble from the bowl, click it into the pouch, pull with the other hand. No auto reload.
+     - Once the pull starts, the slingshot locks in place and only the pulling hand aims, because the holding hand often hides behind it. Short tracking-loss graces for both hands. A pull is never shot by a lost hand.
+     - Aim assist: dots along the whole arc, a landing circle on the ground, target glow, a 10 degree bend, 4 cm hit area.
+     - Aim assist targets are generic: goblins plus any `SlingTarget` added with `slingshot.addTarget()`. The step 5 triggers (boulder, tree, keg) must register this way.
+     - Pebbles thrown by hand only knock a goblin back, dazed (half assist, goblins only, never set off triggers).
+     - A held goblin can be loaded into the pouch: it knocks out what it hits and knocks back goblins around it, at the cost of a meal.
+     - Debug keys: L shoot, O load a pebble, J load a goblin, U and I empty and fill the bowl.
+     - Not done yet: re-run the stress test and log it in [performance.md](performance.md).
 3. **Waves and flags:** blueprint loader and `tutorial.json`, road graph, camps, seeded random, the tutorial director, both flags, win and lose panels.
    - Done when: the 5 tutorial waves play from start to win, debug keys skip a wave and lose the castle, and the director and win/lose tests pass.
 4. **Fly swatter, pepper shaker, food jar and pips.**
    - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
-5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required).
+5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.
    - Done when: a debug key triggers the megaphone, and the bell does the same by hand.
 6. **Pause:** wrist button, pause panel, auto-pause, Reset table.
    - Done when: the battle freezes and resumes, and Reset table places the board again.

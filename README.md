@@ -11,8 +11,9 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 ## Status
 
 - Stage: MVP build step 1 (Toy test) done and tested on the headset. Scale and pinching goblins work. Fixes from the test: eating no longer needs letting go or a head tilt (it opened the Quest menu), one ring handle replaces the two handles, and the board starts higher.
-- Build step 2 (Slingshot with aim assist and the pebble bowl) is built. After the first slingshot headset test it became handheld: grab it by the handle, click a pebble from the bowl into the pouch, pull with the other hand. Bigger pebbles and hit area. Waiting for a headset check.
-- Next step: build step 3 (waves and flags) and the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
+- Build step 2 (Slingshot with aim assist and the pebble bowl) done and tested on the headset (2026-11-04). The slingshot is handheld: grab it by the handle, click a pebble from the bowl into the pouch, pull with the other hand. Pebbles can also be thrown by hand (they only knock a goblin back), and a held goblin can be loaded as a stronger shot. Details in [docs/mvp.md](docs/mvp.md#build-order).
+- The stress test has not been re-run since step 2. Do it later and log it in [docs/performance.md](docs/performance.md).
+- **Next step: build step 3 (waves and flags)**, then the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---
@@ -236,7 +237,7 @@ These are checked during the first MVP build steps ([docs/mvp.md](docs/mvp.md#bu
 - [x] "Eat" trigger near the face works reliably (first try opened the Quest menu, now hold near the mouth instead)
 - [x] Spinning the board with the ring handle and setting its height feel comfortable
 - [x] Enemies at the wall are visible from the seat (no hidden strip)
-- [ ] Slingshot release direction is steady with hand tracking
+- [x] Slingshot release direction is steady with hand tracking (steady release, the slingshot locks during a pull, stronger aim assist)
 - [ ] Pepper shake and swatter swings are detected well
 - [ ] Microphone works inside the immersive session on Quest browser, and the scream threshold works
 - [ ] Wrist pause button does not open by accident
