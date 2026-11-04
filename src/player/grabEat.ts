@@ -1,18 +1,19 @@
 // What the bare hands do: pinch a goblin to pick it up and hold it near the
 // mouth to eat it (no letting go, no head tilt, so the palm never has to face
 // the headset and open the Quest menu). Fist or pinch grabs the ring handle.
-// A pinch on the slingshot pouch pulls it (the slingshot does the rest).
+// The slingshot: fist or pinch grabs its handle, a pinch on the bowl takes a
+// pebble, a pinch on the pouch pulls it (the slingshot does the rest).
 // Only one thing in range of each hand shows Ready.
 import { Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { EAT, HANDLES, HANDS } from '../config/game.js';
+import { EAT, HANDLES, HANDS, SLINGSHOT } from '../config/game.js';
 import type { Particles } from '../fx/particles.js';
-import type { Slingshot } from '../tools/slingshot.js';
+import type { SlingPart, Slingshot } from '../tools/slingshot.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import type { BoardHandles } from './handles.js';
 import type { HandState, HandTracker } from './hands.js';
 
-type Target = { kind: 'goblin'; goblin: Goblin } | { kind: 'pouch' } | { kind: 'ring' } | null;
+type Target = { kind: 'goblin'; goblin: Goblin } | { kind: 'sling'; part: SlingPart } | { kind: 'ring' } | null;
 
 interface HandSlot {
   held: Goblin | null;
@@ -20,8 +21,8 @@ interface HandSlot {
   inEatZone: boolean;
   /** Time the held goblin has been near the mouth (seconds). */
   eatTimer: number;
-  /** Time the open hand has been in the ring's grab zone (seconds). */
-  ringOpenTime: number;
+  /** Time the open hand has been in the grab zone of the ring or the slingshot handle (seconds). */
+  openTime: number;
 }
 
 const EAT_COLORS = [0x6a8f3a, 0x8fb04a, 0xffffff, 0xf2c14e];
@@ -44,7 +45,7 @@ export class GrabEat {
     private audio: GameAudio,
     private particles: Particles,
   ) {
-    for (const hand of hands.hands) this.slots.set(hand, { held: null, target: null, inEatZone: false, eatTimer: 0, ringOpenTime: 0 });
+    for (const hand of hands.hands) this.slots.set(hand, { held: null, target: null, inEatZone: false, eatTimer: 0, openTime: 0 });
   }
 
   update(dt: number, headPosition: Vector3, headForward: Vector3): void {
@@ -52,6 +53,8 @@ export class GrabEat {
     const nowReady = new Set<Goblin>();
     let ringReady = false;
     let pouchReady = false;
+    let bowlReady = false;
+    let handleReady = false;
 
     for (const hand of this.hands.hands) {
       const slot = this.slots.get(hand)!;
@@ -81,21 +84,26 @@ export class GrabEat {
       }
 
       // The ring handle and the slingshot let go by themselves (see their update).
-      if (this.handles.isHeldBy(hand) || this.slingshot.isHeldBy(hand)) continue;
+      if (this.handles.isHeldBy(hand) || this.slingshot.isBusy(hand)) continue;
 
       const target = this.findTarget(hand);
-      if (!sameTarget(target, slot.target) && (target?.kind === 'goblin' || target?.kind === 'pouch')) {
-        this.audio.play('readyTick', undefined, 1, 0.05);
+      const grabbed = isGrabTarget(target);
+      if (!sameTarget(target, slot.target)) {
+        slot.openTime = 0;
+        if (target && !grabbed) this.audio.play('readyTick', undefined, 1, 0.05);
       }
       slot.target = target;
 
-      // The ring only grabs after the hand was open in its zone for a moment,
-      // so a hand that curls up while resting or drifting by never grabs it.
-      const wasRingReady = slot.ringOpenTime >= HANDLES.readyTime;
-      if (target?.kind !== 'ring') slot.ringOpenTime = 0;
-      else if (!hand.pinch.on && !hand.fist.on) slot.ringOpenTime += dt;
-      const ringArmed = slot.ringOpenTime >= HANDLES.readyTime;
-      if (ringArmed && !wasRingReady) this.audio.play('readyTick', undefined, 1, 0.05);
+      // The ring and the slingshot handle only grab after the hand was open in
+      // their zone for a moment, so a hand that curls up while resting or
+      // drifting by never grabs them.
+      const readyTime = target?.kind === 'ring' ? HANDLES.readyTime : SLINGSHOT.readyTime;
+      const wasArmed = slot.openTime >= readyTime;
+      if (!grabbed) slot.openTime = 0;
+      else if (!hand.pinch.on && !hand.fist.on) slot.openTime += dt;
+      const armed = grabbed && slot.openTime >= readyTime;
+      if (armed && !wasArmed) this.audio.play('readyTick', undefined, 1, 0.05);
+      const closing = hand.fist.started || hand.pinch.started;
 
       if (target?.kind === 'goblin') {
         if (hand.pinch.started) {
@@ -106,18 +114,28 @@ export class GrabEat {
           continue;
         }
         nowReady.add(target.goblin);
-      } else if (target?.kind === 'pouch') {
-        if (hand.pinch.started && this.slingshot.grab(hand)) {
+      } else if (target?.kind === 'sling' && target.part === 'handle') {
+        if (!armed) continue;
+        if (closing) {
+          this.slingshot.grabHandle(hand, !hand.fist.started);
+          slot.target = null;
+          slot.openTime = 0;
+          continue;
+        }
+        handleReady = true;
+      } else if (target?.kind === 'sling') {
+        if (hand.pinch.started && this.slingshot.pinch(target.part === 'pouch' ? 'pouch' : 'bowl', hand)) {
           slot.target = null;
           continue;
         }
-        pouchReady = true;
-      } else if (target?.kind === 'ring' && ringArmed) {
-        if ((hand.fist.started || hand.pinch.started) && !this.handles.busy) {
+        if (target.part === 'pouch') pouchReady = true;
+        else bowlReady = true;
+      } else if (target?.kind === 'ring' && armed) {
+        if (closing && !this.handles.busy) {
           this.handles.grab(hand, !hand.fist.started);
           this.audio.play('grab', hand.palm);
           slot.target = null;
-          slot.ringOpenTime = 0;
+          slot.openTime = 0;
           continue;
         }
         ringReady = true;
@@ -130,7 +148,7 @@ export class GrabEat {
     for (const goblin of nowReady) this.goblins.setTouch(goblin, 'ready');
     this.readyGoblins = nowReady;
     this.handles.setReady(ringReady);
-    this.slingshot.setReady(pouchReady);
+    this.slingshot.setReady(pouchReady, bowlReady, handleReady);
 
     if (this.pendingGulp > 0) {
       this.pendingGulp -= dt;
@@ -140,8 +158,9 @@ export class GrabEat {
 
   private findTarget(hand: HandState): Target {
     if (!hand.tracked) return null;
-    // The pouch sits inside the ring, away from the goblins, so it goes first.
-    if (this.slingshot.reach(hand) !== null) return { kind: 'pouch' };
+    // The slingshot sits inside the ring, away from the goblins, so it goes first.
+    const sling = this.slingshot.reach(hand);
+    if (sling) return { kind: 'sling', part: sling.part };
     const goblin = this.goblins.nearestGrabbable(hand.pinchPoint, HANDS.pinchRadius);
     // A goblin in pinch range always wins, so reaching for one never grabs the ring.
     if (goblin) return { kind: 'goblin', goblin };
@@ -194,5 +213,11 @@ export class GrabEat {
 function sameTarget(a: Target, b: Target): boolean {
   if (!a || !b) return a === b;
   if (a.kind === 'goblin' && b.kind === 'goblin') return a.goblin === b.goblin;
+  if (a.kind === 'sling' && b.kind === 'sling') return a.part === b.part;
   return a.kind === b.kind;
+}
+
+/** Big things grabbed after the hand was open near them: the ring and the slingshot handle. */
+function isGrabTarget(target: Target): boolean {
+  return target?.kind === 'ring' || (target?.kind === 'sling' && target.part === 'handle');
 }

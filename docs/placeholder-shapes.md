@@ -28,7 +28,7 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 
 | Thing | Shape | Size |
 |---|---|---|
-| Slingshot | Y shaped wooden frame (3 cylinders) on the platform, 2 bands (thin cylinders stretched from the fork tips to the pouch) and a leather pouch (small flattened box) that is pinched. The frame turns to face the shot while pulled. Built in step 2. | Frame 15 cm tall |
+| Slingshot | Y shaped wooden frame (3 cylinders) on the platform, 2 bands (thin cylinders stretched from the fork tips to the pouch) and a leather pouch (small flattened box) that is pinched. Rests on its platform and is picked up by the handle. Built in step 2. | Frame 15 cm tall, pouch 3.6 cm |
 | Fly swatter | Long thin handle (cylinder) and a flat square mesh head (thin box, a grid texture made in code is optional). | 35 cm long |
 | Pepper shaker | Cylinder body with a dome top and a few dark dots for holes. Red or black. | 12 cm tall |
 | Megaphone | Cone (open wide end) with a short cylinder handle. | 20 cm long |

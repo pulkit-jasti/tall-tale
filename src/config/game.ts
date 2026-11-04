@@ -251,9 +251,15 @@ export const TOOL_SPOTS = {
   postColor: 0x3b2b1f,
 };
 
-/** The slingshot: pinch the pouch, pull back, let go (docs/giant-tools.md). */
+/**
+ * The slingshot (docs/giant-tools.md). Grab its handle with either hand (fist
+ * or pinch, like the ring handle), pinch a pebble from the bowl and bring it
+ * to the pouch, where it clicks in. Then pinch the pouch with the free hand,
+ * pull back and let go. It also shoots while it sits on its platform, so it
+ * works with one hand.
+ */
 export const SLINGSHOT = {
-  /** Y frame height on the platform (cm). */
+  /** Y frame height (cm). */
   frameHeight: 15,
   handleHeight: 7,
   /** Angle of each fork arm from vertical (degrees). */
@@ -261,10 +267,22 @@ export const SLINGSHOT = {
   woodColor: 0x8a5a34,
   bandColor: 0x6e2f22,
   pouchColor: 0x5a3a24,
-  /** The pouch rests this far behind the fork, toward the player (cm). */
+  /** The pouch rests this far behind the fork (cm). */
   pouchRest: 2.5,
   /** Pinch zone around the pouch (meters). Generous, like the goblins. */
   grabRadius: 0.06,
+  /** Grab zone around the handle (meters). */
+  handleGrabRadius: 0.06,
+  /** The hand must be open near the handle this long before closing it grabs (seconds). Same as the ring. */
+  readyTime: 0.15,
+  /** The handle lets go only after the hand is open this long (seconds). Same as the ring. */
+  releaseHold: 0.25,
+  /** Smoothing of the held slingshot, so wrist tracking jitter does not shake it (seconds). */
+  holdSmoothing: 0.03,
+  /** Let go: it glides back to its platform in this long (seconds). */
+  returnTime: 0.35,
+  /** A held pebble clicks into the empty pouch within this distance (meters). */
+  attachRadius: 0.05,
   /** Pulls shorter than this do not shoot, the pebble stays (cm). */
   minPull: 4,
   /** Longest pull (cm). The pouch stops here. */
@@ -274,18 +292,16 @@ export const SLINGSHOT = {
   maxSpeed: 560,
   /** Gravity for pebbles (cm per second squared). Lower than real, so arcs read well. */
   gravity: 700,
-  /** A shot must point at least this much away from the player (dot of the flat directions). */
-  minOutward: 0.2,
-  /** Time after a shot before the next pebble sits in the pouch (seconds). Limits spamming. */
-  reloadTime: 0.45,
+  /** No shot when it points within this angle of the player's own head (degrees). */
+  headConeDeg: 45,
   /** Pouch spring back speed after a shot (per second). */
   springBack: 18,
   /** A stretch creak plays every this many cm of pull. */
   creakEvery: 4,
-  /** Pebbles in flight at once (pool size). */
-  maxPebbles: 6,
-  /** Pebble size (cm). */
-  pebbleSize: 1.5,
+  /** Pebbles in flight or falling at once (pool size). */
+  maxPebbles: 8,
+  /** Pebble size (cm). Bigger than real pebbles, so they are easy to see and pinch. */
+  pebbleSize: 2.5,
   /** Longest flight before a pebble is dropped (seconds). */
   maxFlight: 4,
   /** Below this height (cm, board) a pebble that fell into the hole is gone. */
@@ -314,7 +330,7 @@ export const AIM_ASSIST = {
   /** Assist share per enemy type. Weak on runners: the slingshot is meant to be weak against them. */
   typeShare: { grunt: 1, runner: 0.3, climber: 1 } as Record<GoblinType, number>,
   /** 5. Hit area around the pebble's center, bigger than it looks (cm). */
-  hitRadius: 2.2,
+  hitRadius: 3.5,
 };
 
 /** The pebble bowl beside the slingshot. Soldiers keep topping it up. */
@@ -329,6 +345,8 @@ export const PEBBLE_BOWL = {
   color: 0x9a6a44,
   /** Pebbles it holds, and at the start. */
   capacity: 10,
+  /** Pinch zone around the bowl center to take a pebble (meters). */
+  grabRadius: 0.07,
   /** One pebble is added this often while not full (seconds). */
   refillEvery: 2.5,
   /** Pile size (cm wide, when full) and its smallest share before it is empty. */

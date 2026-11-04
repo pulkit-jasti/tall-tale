@@ -100,7 +100,13 @@ use tools -> enemies stunned / disarmed -> troops capture them
 - **Use:** pull back and release. Projectile path, so a short trajectory preview is fine here (see aim assist below).
 - **Cost:** no food. Uses pebbles from a bowl beside the player.
 - **Limit:** soldiers keep topping up the bowl from a stone pile. The refill rate and the pull-back time limit spamming. The player always has one direct action, even with no food.
-- **Built (step 2):** the slingshot stands fixed on its platform (right front). The player pinches the pouch, pulls back and lets go. A short pull (under 4 cm) or a pull toward the player does not shoot. After each shot the next pebble drops into the pouch from the bowl by itself after a short reload, so the player never has to pick up a pebble. The pile in the bowl shrinks as pebbles are used and refills over time. An empty bowl shows the pouch as Locked (wobble and buzz). One pebble hit knocks out any goblin. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
+- **How it works (step 2, changed after the first slingshot headset test):**
+  1. Grab the slingshot's handle with either hand (fist or pinch, like the ring handle, with the same short open-hand wait first). It follows that hand, so the player aims by turning the hand and the body, which is faster than fine moves with one hand.
+  2. Pinch a pebble from the bowl and bring it to the pouch. Close enough, it clicks into the pouch and stays there however the slingshot moves. Let go. A pebble let go over the bowl goes back in. Let go anywhere else, it just falls (no damage).
+  3. Pinch the pouch with the free hand, pull back and let go to shoot. A short pull (under 4 cm) or a shot toward the player's face does not shoot.
+  - Letting go of the handle glides the slingshot back to its platform. A loaded pebble stays in. It also shoots while it rests on the platform, so it works with one hand.
+  - No auto reload. An empty pouch or an empty bowl shows Locked (wobble and buzz). The pile in the bowl shrinks as pebbles are taken and refills over time.
+  - Pebbles are 2.5 cm with a 3.5 cm hit area. One hit knocks out any goblin. If aiming is still too hard, the next step is a bigger goblin hit box. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
 
 #### Slingshot aim assist
 

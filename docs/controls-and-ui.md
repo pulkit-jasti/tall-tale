@@ -42,12 +42,12 @@ Every grabbable or pokeable thing (goblins, tools, handles, buttons, the wrist b
 
 | Action | How | Used for |
 |---|---|---|
-| **Pinch** | Thumb and index finger together | Small things: picking up goblins, pulling back the slingshot pouch, pebbles, other small actions |
-| **Grab** | Close the whole hand into a fist | Big things: fly swatter, pepper shaker, megaphone, bell, the ring handle |
+| **Pinch** | Thumb and index finger together | Small things: picking up goblins, pulling back the slingshot pouch, taking pebbles from the bowl, other small actions |
+| **Grab** | Close the whole hand into a fist | Big things: the slingshot handle, fly swatter, pepper shaker, megaphone, bell, the ring handle |
 
 - Buttons (Play, pause panel, wrist button) are poked with the index finger, not pinched or grabbed.
 - Each object accepts only its own action, so a pinch never picks up the swatter and a fist never picks up a goblin.
-- Exception: the ring handle accepts a pinch too. In the first headset test a fist with the back of the hand toward the headset tracked poorly, because the fingers are hidden.
+- Exception: the ring handle and the slingshot handle accept a pinch too. In the first headset test a fist with the back of the hand toward the headset tracked poorly, because the fingers are hidden.
 - A fist counts when 3 of 4 fingers are curled, so one badly tracked finger does not break it.
 
 ---

@@ -1,35 +1,60 @@
-// The slingshot (docs/giant-tools.md): a Y frame fixed on its platform beside
-// the player. Pinch the pouch, pull back, let go. The pebble flies in a
-// simple arc (no physics engine) and knocks out the first goblin it touches.
-// The next pebble comes from the bowl by itself after a short reload, and
-// soldiers keep topping up the bowl.
+// The slingshot (docs/giant-tools.md). It rests on its platform beside the
+// player. How it is used:
+//   1. Grab the handle with either hand (fist or pinch, like the ring handle).
+//      It follows that hand, so the player aims by turning hand and body.
+//   2. Pinch a pebble from the bowl and bring it to the pouch. Close enough,
+//      it clicks in and stays there, whatever the slingshot does. Let go.
+//   3. Pinch the pouch with the free hand, pull back, let go to shoot.
+// Letting go of the handle glides the slingshot back to its platform (a
+// loaded pebble stays in). It also shoots while it rests on the platform,
+// so it works with one hand.
+//
+// The pebble flies in a simple arc (no physics engine) and knocks out the
+// first goblin it touches. Soldiers keep topping up the bowl.
 //
 // Aim assist, in order of importance:
-//   1. Steady release: the shot uses the average pull of the last ~100 ms
+//   1. Steady release: the shot uses the average aim of the last ~100 ms
 //      before the fingers opened, not the release frame.
 //   2. Trajectory dots over the first half of the arc while pulling.
 //   3. Target glow on the goblin about to be hit.
 //   4. Gentle bend toward a goblin within a small cone after release.
-//   5. A hit area a bit bigger than the pebble.
+//   5. A hit area bigger than the pebble.
 //
-// The frame, pouch and bowl live in fixedRig (cm, never turns). Pebbles and
-// dots live in boardSpin (cm), where the goblins are, so hits are simple.
-import { Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, Object3D, IcosahedronGeometry, Quaternion, Vector3, type MeshStandardMaterial } from 'three';
+// The frame, pouch, bowl and pebbles in the hand live in fixedRig (cm, never
+// turns). Flying pebbles and dots live in boardSpin (cm), where the goblins
+// are, so hits are simple.
+import {
+  Group,
+  IcosahedronGeometry,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  Quaternion,
+  Vector3,
+  type MeshStandardMaterial,
+} from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { AIM_ASSIST, BOARD, PEBBLE_BOWL, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
-import { angleDelta, degToRad, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
+import { degToRad, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import { cloneStatic, InstancedPool, loadTemplate, type ModelTemplate } from '../world/models.js';
 import { flatMaterial, pebbleBowl, post, slingshotBand, slingshotFrame, slingshotPouch } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
+/** The three things on the slingshot a hand can reach for. */
+export type SlingPart = 'pouch' | 'bowl' | 'handle';
+
 interface Pebble {
   alive: boolean;
   age: number;
+  /** A dropped pebble only falls. It never hits goblins. */
+  harmless: boolean;
   readonly position: Vector3;
   readonly velocity: Vector3;
   /** Goblin the assist bends toward, if any. */
@@ -45,6 +70,20 @@ interface TraceResult {
   readonly point: Vector3;
 }
 
+interface FrameHolder {
+  hand: HandState;
+  /** Held with a pinch (follow the pinch point) or a fist (follow the palm). */
+  viaPinch: boolean;
+  openTime: number;
+  /** Frame pose relative to the hand, from the moment of the grab. */
+  readonly offset: Matrix4;
+}
+
+interface HandPebble {
+  hand: HandState;
+  mesh: Object3D;
+}
+
 const SAMPLES = 64;
 const UP = new Vector3(0, 1, 0);
 const HIT_COLORS = [0x6a8f3a, 0x8fb04a, 0xffffff, 0xf2c14e];
@@ -52,52 +91,76 @@ const DUST_COLORS = [0xd9c08a, 0xc9b07a, 0xb59a68];
 
 const temp = new Vector3();
 const temp2 = new Vector3();
+const temp3 = new Vector3();
 const segment = new Vector3();
 const toCenter = new Vector3();
 const traceP = new Vector3();
 const traceV = new Vector3();
 const traceNext = new Vector3();
 const matrix = new Matrix4();
+const handMatrix = new Matrix4();
 const quaternion = new Quaternion();
+const targetPosition = new Vector3();
+const targetQuaternion = new Quaternion();
+const targetScale = new Vector3();
+const unitScale = new Vector3(1, 1, 1);
 
 export class Slingshot {
+  /** Platform and bowl (never move). */
   readonly root = new Group();
-  private yawGroup = new Group();
+  /** The slingshot itself: Y frame, bands and pouch. Origin at the handle bottom. */
+  private frame = new Group();
   private pouch!: Mesh;
   private bands: Mesh[] = [];
   private tips: [Vector3, Vector3] = [new Vector3(), new Vector3()];
-  private touchMaterials: MeshStandardMaterial[] = [];
-  private touch: TouchState = 'idle';
+  private pouchMaterials: MeshStandardMaterial[] = [];
+  private woodMaterials: MeshStandardMaterial[] = [];
+  private bowlMaterials: MeshStandardMaterial[] = [];
+  private pouchTouch: TouchState = 'idle';
+  private handleTouch: TouchState = 'idle';
+  private bowlTouch: TouchState = 'idle';
   private pouchPebble: Object3D | null = null;
   private pile: Object3D | null = null;
+  private stoneTemplate!: ModelTemplate;
   private pebbles: Pebble[] = [];
   private pool!: InstancedPool;
   private pebbleHeight = SLINGSHOT.pebbleSize;
   private dots!: InstancedMesh;
   private hiddenMatrix = new Matrix4().makeScale(0, 0, 0);
 
-  /** Fork center and pouch rest point (fixedRig, cm). */
-  private forkCenter = new Vector3();
-  private pouchRest = new Vector3();
-  /** Flat direction from the player to the slingshot (fixedRig). */
-  private outward = new Vector3();
-  private yaw = 0;
-  private restYaw = 0;
+  /** Frame local points (cm). */
+  private forkLocal = new Vector3();
+  private pouchRestLocal = new Vector3();
+  /** Rest pose on the platform (fixedRig, cm). */
+  private restPosition = new Vector3();
+  private restQuaternion = new Quaternion();
+  /** Bowl center at the rim (fixedRig, cm). */
+  private bowlCenter = new Vector3();
 
-  private holder: HandState | null = null;
-  private loaded = true;
-  private reloadTimer = 0;
-  /** Pebbles in the bowl (not counting the one in the pouch). */
+  private frameHolder: FrameHolder | null = null;
+  /** Gliding back to the platform: time left (seconds), and the pose it started from. */
+  private returnLeft = 0;
+  private returnFromPosition = new Vector3();
+  private returnFromQuaternion = new Quaternion();
+
+  private pouchHolder: HandState | null = null;
+  private handPebbles: HandPebble[] = [];
+  private loaded = false;
+  /** Pebbles in the bowl. */
   private bowlCount: number = PEBBLE_BOWL.capacity;
   private refillTimer = 0;
   private time = 0;
   private lastCreak = 0;
+  /** The player's head (fixedRig, cm), so no shot points at the face. */
+  private head = new Vector3();
 
-  /** Pull samples for the steady release (fixedRig, cm). */
+  /** Aim samples for the steady release: fork and pull (fixedRig, cm). */
   private sampleTime = new Float32Array(SAMPLES);
-  private sampleXYZ = new Float32Array(SAMPLES * 3);
+  private sampleData = new Float32Array(SAMPLES * 6);
   private sampleCount = 0;
   private sampleNext = 0;
+  private fork = new Vector3();
+  private pull = new Vector3();
 
   /** Board-space launch point and velocity of the current aim. */
   private aimOrigin = new Vector3();
@@ -122,57 +185,61 @@ export class Slingshot {
       loadTemplate('rocks/survival/resource-stone.glb', { width: SLINGSHOT.pebbleSize }),
       loadTemplate('rocks/survival/resource-stone-large.glb', { width: PEBBLE_BOWL.pileWidth }),
     ]);
-    this.buildSlingshot(platform);
+    this.stoneTemplate = stone;
+    this.buildPlatform(platform);
+    this.buildFrame();
     this.buildBowl(pile);
     this.buildPebbles(stone);
-    this.stage.fixedRig.add(this.root);
+    this.stage.fixedRig.add(this.root, this.frame);
   }
 
-  private buildSlingshot(platform: ModelTemplate): void {
+  private buildPlatform(platform: ModelTemplate): void {
     const { angleDeg, radius } = TOOL_SPOTS.slingshot;
     const top = TOOL_SPOTS.platformTop;
     const a = degToRad(angleDeg);
     const x = polarX(radius, a);
     const z = polarZ(radius, a);
-
     const stand = cloneStatic(platform);
     stand.position.set(x, top - platform.size.y, z);
     const stem = post();
-    stem.position.y += top - platform.size.y;
-    stem.position.x = x;
-    stem.position.z = z;
+    stem.position.set(x, stem.position.y + top - platform.size.y, z);
     this.root.add(stand, stem);
+    // Rest pose: on the platform, the shot direction (frame -z) pointing out.
+    this.restPosition.set(x, top, z);
+    this.restQuaternion.setFromAxisAngle(UP, Math.atan2(-Math.sin(a), Math.cos(a)));
+  }
 
+  private buildFrame(): void {
     const wood = flatMaterial(SLINGSHOT.woodColor);
+    this.woodMaterials = [wood];
     const { frame, tips } = slingshotFrame(wood);
-    this.yawGroup.add(frame);
-    this.yawGroup.position.set(x, top, z);
-    this.root.add(this.yawGroup);
     this.tips = tips;
-
     const bandMaterial = flatMaterial(SLINGSHOT.bandColor);
     const pouchMaterial = flatMaterial(SLINGSHOT.pouchColor);
-    this.touchMaterials = [bandMaterial, pouchMaterial];
+    this.pouchMaterials = [bandMaterial, pouchMaterial];
     this.bands = [slingshotBand(bandMaterial), slingshotBand(bandMaterial)];
     this.pouch = slingshotPouch(pouchMaterial);
-    this.root.add(this.bands[0], this.bands[1], this.pouch);
-
-    this.outward.set(Math.sin(a), 0, -Math.cos(a));
-    this.restYaw = this.yaw = Math.atan2(-this.outward.x, -this.outward.z);
-    this.forkCenter.set(x, top + SLINGSHOT.frameHeight - 1, z);
-    this.pouchRest.copy(this.forkCenter).addScaledVector(this.outward, -SLINGSHOT.pouchRest);
-    this.pouch.position.copy(this.pouchRest);
-    this.applyYaw();
+    this.frame.add(frame, this.bands[0], this.bands[1], this.pouch);
+    this.forkLocal.set(0, SLINGSHOT.frameHeight - 1, 0);
+    // Behind the fork is +z (toward the player at rest).
+    this.pouchRestLocal.set(0, SLINGSHOT.frameHeight - 1, SLINGSHOT.pouchRest);
+    this.pouch.position.copy(this.pouchRestLocal);
+    this.frame.position.copy(this.restPosition);
+    this.frame.quaternion.copy(this.restQuaternion);
+    this.updateBands();
   }
 
   private buildBowl(pile: ModelTemplate): void {
     const { angleDeg, radius, rimY, postLength, depth } = PEBBLE_BOWL;
     const a = degToRad(angleDeg);
     const bowl = new Group();
-    bowl.position.set(polarX(radius, a), rimY, polarZ(radius, a));
+    this.bowlCenter.set(polarX(radius, a), rimY, polarZ(radius, a));
+    bowl.position.copy(this.bowlCenter);
     const stem = post(postLength);
     stem.position.y -= depth;
-    bowl.add(pebbleBowl(), stem);
+    const bowlMesh = pebbleBowl();
+    this.bowlMaterials = [bowlMesh.material as MeshStandardMaterial];
+    bowl.add(bowlMesh, stem);
     this.pile = cloneStatic(pile);
     this.pile.position.y = -depth * 0.85;
     bowl.add(this.pile);
@@ -185,11 +252,20 @@ export class Slingshot {
     this.pool = new InstancedPool(stone, SLINGSHOT.maxPebbles);
     this.stage.boardSpin.add(this.pool.group);
     for (let i = 0; i < SLINGSHOT.maxPebbles; i++) {
-      this.pebbles.push({ alive: false, age: 0, position: new Vector3(), velocity: new Vector3(), target: null, share: 1 });
+      this.pebbles.push({
+        alive: false,
+        age: 0,
+        harmless: false,
+        position: new Vector3(),
+        velocity: new Vector3(),
+        target: null,
+        share: 1,
+      });
     }
-    // The pebble waiting in the pouch.
+    // The pebble in the pouch, shown once one is loaded.
     this.pouchPebble = cloneStatic(stone);
-    this.pouchPebble.position.y = -stone.size.y / 2 + 0.4;
+    this.pouchPebble.position.y = -stone.size.y / 2 + 0.5;
+    this.pouchPebble.visible = false;
     this.pouch.add(this.pouchPebble);
 
     this.dots = new InstancedMesh(
@@ -205,100 +281,154 @@ export class Slingshot {
 
   // ---- Hands (called from GrabEat, which picks one target per hand) ----
 
-  /** Distance (meters) from a hand's pinch point to the pouch, or null if out of range or held by the other hand. */
-  reach(hand: HandState): number | null {
-    if (!this.root.visible) return null;
-    if (this.holder && this.holder !== hand) return null;
-    this.pouchWorld(temp);
-    const d = hand.pinchPoint.distanceTo(temp);
-    return d < SLINGSHOT.grabRadius ? d : null;
+  /** The nearest slingshot part this hand can reach, with its distance (meters), or null. */
+  reach(hand: HandState): { part: SlingPart; distance: number } | null {
+    if (!this.root.visible || this.isBusy(hand)) return null;
+    let part: SlingPart | null = null;
+    let best = Infinity;
+    // Pouch: pinch, unless the hand holds the slingshot or the other hand already pulls it.
+    if (!this.pouchHolder) {
+      const d = hand.pinchPoint.distanceTo(this.pouchWorld(temp));
+      if (d < SLINGSHOT.grabRadius && d < best) {
+        best = d;
+        part = 'pouch';
+      }
+    }
+    // Bowl: pinch to take a pebble.
+    {
+      const d = hand.pinchPoint.distanceTo(this.stage.fixedRig.localToWorld(temp.copy(this.bowlCenter)));
+      if (d < PEBBLE_BOWL.grabRadius && d < best) {
+        best = d;
+        part = 'bowl';
+      }
+    }
+    // Handle: grab, unless the other hand holds it.
+    if (!this.frameHolder) {
+      const d = Math.min(this.handleDistance(hand.palm), this.handleDistance(hand.pinchPoint));
+      if (d < SLINGSHOT.handleGrabRadius && d < best) {
+        best = d;
+        part = 'handle';
+      }
+    }
+    return part ? { part, distance: best } : null;
   }
 
-  isHeldBy(hand: HandState): boolean {
-    return this.holder === hand;
+  /** True while this hand holds the slingshot, pulls the pouch or carries a pebble. */
+  isBusy(hand: HandState): boolean {
+    return (
+      this.frameHolder?.hand === hand || this.pouchHolder === hand || this.handPebbles.some((p) => p.hand === hand)
+    );
   }
 
-  get busy(): boolean {
-    return this.holder !== null;
-  }
-
-  /** Pinch on the pouch. Returns false (with a buzz) when no pebble is loaded. */
-  grab(hand: HandState): boolean {
-    if (!this.loaded) {
+  /**
+   * A pinch on the pouch (pull) or the bowl (take a pebble). Returns false,
+   * with a buzz, when there is no pebble to pull or take.
+   */
+  pinch(part: 'pouch' | 'bowl', hand: HandState): boolean {
+    if (part === 'pouch') {
+      if (!this.loaded) {
+        this.audio.play('locked', undefined, 1, 0.4);
+        return false;
+      }
+      this.pouchHolder = hand;
+      this.sampleCount = 0;
+      this.lastCreak = 0;
+      this.audio.play('grab', this.pouchWorld(temp));
+      return true;
+    }
+    if (this.bowlCount <= 0) {
       this.audio.play('locked', undefined, 1, 0.4);
       return false;
     }
-    this.holder = hand;
-    this.sampleCount = 0;
-    this.lastCreak = 0;
-    this.audio.play('grab', this.pouchWorld(temp));
+    this.bowlCount--;
+    this.updatePile();
+    const mesh = cloneStatic(this.stoneTemplate);
+    this.stage.fixedRig.add(mesh);
+    this.handPebbles.push({ hand, mesh });
+    this.placeHandPebble(hand, mesh);
+    this.audio.play('grab', hand.pinchPoint);
     return true;
   }
 
-  /** Lets go without shooting (board placed again, tracking lost). */
-  release(): void {
-    this.holder = null;
-    this.endAim();
+  /** Grabs the handle. From now on the slingshot follows this hand. */
+  grabHandle(hand: HandState, viaPinch: boolean): void {
+    this.frame.updateMatrixWorld(true);
+    this.handWorldMatrix(hand, viaPinch, handMatrix);
+    const offset = new Matrix4().copy(handMatrix).invert().multiply(this.frame.matrixWorld);
+    this.frameHolder = { hand, viaPinch, openTime: 0, offset };
+    this.returnLeft = 0;
+    this.audio.play('grab', hand.palm);
   }
 
-  /** Ready look for the pouch, or Locked when there is no pebble. Held is managed here. */
-  setReady(ready: boolean): void {
-    this.setTouch(this.holder ? 'held' : ready ? (this.loaded ? 'ready' : 'locked') : 'idle');
+  /** Lets go of everything without shooting (board placed again). */
+  release(): void {
+    this.cancelPull();
+    if (this.frameHolder) this.letGoOfHandle();
+    for (const p of this.handPebbles) this.dropHandPebble(p);
+    this.handPebbles.length = 0;
+  }
+
+  /** Ready looks for the parts this frame (Locked when there is no pebble). Held is managed here. */
+  setReady(pouch: boolean, bowl: boolean, handle: boolean): void {
+    this.pouchTouch = this.setTouch(
+      this.pouchMaterials,
+      this.pouchTouch,
+      this.pouchHolder ? 'held' : pouch ? (this.loaded ? 'ready' : 'locked') : 'idle',
+    );
+    this.bowlTouch = this.setTouch(
+      this.bowlMaterials,
+      this.bowlTouch,
+      bowl ? (this.bowlCount > 0 ? 'ready' : 'locked') : 'idle',
+    );
+    this.handleTouch = this.setTouch(this.woodMaterials, this.handleTouch, this.frameHolder ? 'held' : handle ? 'ready' : 'idle');
   }
 
   /** Shows or hides the slingshot (the tutorial director brings it in later). */
   setVisible(visible: boolean): void {
-    this.root.visible = visible;
     if (!visible) this.release();
+    this.root.visible = visible;
+    this.frame.visible = visible;
   }
 
   // ---- Every frame ----
 
-  update(dt: number): void {
+  update(dt: number, headWorld: Vector3): void {
     this.time += dt;
+    this.head.copy(headWorld);
+    this.stage.fixedRig.worldToLocal(this.head);
     this.updateBowl(dt);
+    this.updateFrame(dt);
+    this.updateHandPebbles();
 
-    const hand = this.holder;
+    const hand = this.pouchHolder;
     if (hand) {
       if (!hand.tracked) {
-        this.release();
+        this.cancelPull();
       } else if (hand.pinch.ended || !hand.pinch.on) {
         this.shoot();
       } else {
-        this.follow(hand);
+        this.followPull(hand);
       }
     } else {
       // Spring back to rest.
-      const k = 1 - Math.exp(-SLINGSHOT.springBack * dt);
-      this.pouch.position.lerp(this.pouchRest, k);
-      this.yaw += angleDelta(this.yaw, this.restYaw) * k;
-      this.applyYaw();
+      this.pouch.position.lerp(this.pouchRestLocal, 1 - Math.exp(-SLINGSHOT.springBack * dt));
     }
     // Locked: a small wobble, no text.
-    this.pouch.rotation.z = this.touch === 'locked' ? Math.sin(this.time * 30) * 0.2 : 0;
+    this.pouch.rotation.z = this.pouchTouch === 'locked' ? Math.sin(this.time * 30) * 0.2 : 0;
     this.updateBands();
     this.updatePebbles(dt);
   }
 
   private updateBowl(dt: number): void {
-    if (this.bowlCount < PEBBLE_BOWL.capacity) {
-      this.refillTimer += dt;
-      if (this.refillTimer >= PEBBLE_BOWL.refillEvery) {
-        this.refillTimer = 0;
-        this.bowlCount++;
-        this.updatePile();
-      }
-    } else {
+    if (this.bowlCount >= PEBBLE_BOWL.capacity) {
       this.refillTimer = 0;
+      return;
     }
-    if (!this.loaded) {
-      this.reloadTimer -= dt;
-      if (this.reloadTimer <= 0 && this.bowlCount > 0) {
-        this.bowlCount--;
-        this.updatePile();
-        this.loaded = true;
-        if (this.pouchPebble) this.pouchPebble.visible = true;
-      }
+    this.refillTimer += dt;
+    if (this.refillTimer >= PEBBLE_BOWL.refillEvery) {
+      this.refillTimer = 0;
+      this.bowlCount++;
+      this.updatePile();
     }
   }
 
@@ -309,15 +439,98 @@ export class Slingshot {
     this.pile.scale.setScalar(PEBBLE_BOWL.pileMinScale + (1 - PEBBLE_BOWL.pileMinScale) * share);
   }
 
-  /** The pouch follows the pinch, up to the longest pull, and the frame turns to face the shot. */
-  private follow(hand: HandState): void {
-    temp.copy(hand.pinchPoint);
-    this.stage.fixedRig.worldToLocal(temp);
-    temp.sub(this.forkCenter);
+  /** Held: follow the hand. Let go: glide back to the platform. */
+  private updateFrame(dt: number): void {
+    const holder = this.frameHolder;
+    if (holder) {
+      // Let go only when the hand is clearly open for a moment (same as the ring).
+      const closed = holder.hand.pinch.on || holder.hand.fist.on;
+      holder.openTime = closed ? 0 : holder.openTime + dt;
+      if (!holder.hand.tracked || holder.openTime >= SLINGSHOT.releaseHold) {
+        this.letGoOfHandle();
+      } else {
+        this.handWorldMatrix(holder.hand, holder.viaPinch, handMatrix);
+        matrix.copy(this.stage.fixedRig.matrixWorld).invert().multiply(handMatrix).multiply(holder.offset);
+        matrix.decompose(targetPosition, targetQuaternion, targetScale);
+        const k = 1 - Math.exp(-dt / SLINGSHOT.holdSmoothing);
+        this.frame.position.lerp(targetPosition, k);
+        this.frame.quaternion.slerp(targetQuaternion, k);
+      }
+    } else if (this.returnLeft > 0) {
+      this.returnLeft = Math.max(0, this.returnLeft - dt);
+      const t = 1 - this.returnLeft / SLINGSHOT.returnTime;
+      const s = t * t * (3 - 2 * t);
+      this.frame.position.lerpVectors(this.returnFromPosition, this.restPosition, s);
+      this.frame.quaternion.slerpQuaternions(this.returnFromQuaternion, this.restQuaternion, s);
+    }
+    this.frame.updateMatrixWorld(true);
+  }
+
+  private letGoOfHandle(): void {
+    this.frameHolder = null;
+    // A pull in progress cannot go on without someone holding the slingshot.
+    this.cancelPull();
+    this.returnFromPosition.copy(this.frame.position);
+    this.returnFromQuaternion.copy(this.frame.quaternion);
+    this.returnLeft = SLINGSHOT.returnTime;
+  }
+
+  /** Pebbles carried in a pinch: follow the fingers, click into the empty pouch when close. */
+  private updateHandPebbles(): void {
+    for (let i = this.handPebbles.length - 1; i >= 0; i--) {
+      const p = this.handPebbles[i];
+      const hand = p.hand;
+      if (!hand.tracked || hand.pinch.ended || !hand.pinch.on) {
+        this.dropHandPebble(p);
+        this.handPebbles.splice(i, 1);
+        continue;
+      }
+      this.placeHandPebble(hand, p.mesh);
+      if (!this.loaded && this.frame.visible && hand.pinchPoint.distanceTo(this.pouchWorld(temp)) < SLINGSHOT.attachRadius) {
+        this.loaded = true;
+        if (this.pouchPebble) this.pouchPebble.visible = true;
+        this.stage.fixedRig.remove(p.mesh);
+        this.handPebbles.splice(i, 1);
+        this.audio.play('pebbleLoad', temp);
+      }
+    }
+  }
+
+  private placeHandPebble(hand: HandState, mesh: Object3D): void {
+    this.stage.fixedRig.worldToLocal(mesh.position.copy(hand.pinchPoint));
+    mesh.position.y -= this.pebbleHeight / 2;
+  }
+
+  /** Let go of a carried pebble: back into the bowl if over it, otherwise it falls. */
+  private dropHandPebble(p: HandPebble): void {
+    this.stage.fixedRig.remove(p.mesh);
+    const at = p.mesh.position;
+    const dx = at.x - this.bowlCenter.x;
+    const dz = at.z - this.bowlCenter.z;
+    const overBowl = Math.hypot(dx, dz) < PEBBLE_BOWL.width / 2 + 1 && at.y > this.bowlCenter.y - PEBBLE_BOWL.depth;
+    if (overBowl) {
+      this.bowlCount = Math.min(PEBBLE_BOWL.capacity, this.bowlCount + 1);
+      this.updatePile();
+      this.audio.play('drop', this.stage.fixedRig.localToWorld(temp.copy(at)), 0.6);
+      return;
+    }
+    this.toBoard(temp.copy(at));
+    temp.y += this.pebbleHeight / 2;
+    this.launch(temp, temp2.set(0, 0, 0), null, true);
+  }
+
+  /** The pouch follows the pinch, up to the longest pull. */
+  private followPull(hand: HandState): void {
+    this.frame.worldToLocal(temp.copy(hand.pinchPoint));
+    temp.sub(this.forkLocal);
     const length = temp.length();
     if (length > SLINGSHOT.maxPull) temp.multiplyScalar(SLINGSHOT.maxPull / length);
-    this.pouch.position.copy(this.forkCenter).add(temp);
-    this.addSample(temp);
+    this.pouch.position.copy(this.forkLocal).add(temp);
+
+    // Aim in fixedRig space: the fork and the pull (pouch minus fork).
+    this.toRig(this.fork.copy(this.forkLocal));
+    this.toRig(this.pull.copy(this.pouch.position)).sub(this.fork);
+    this.addSample(this.fork, this.pull);
 
     const pull = Math.min(length, SLINGSHOT.maxPull);
     if (pull - this.lastCreak >= SLINGSHOT.creakEvery) {
@@ -327,13 +540,8 @@ export class Slingshot {
       this.lastCreak = pull;
     }
 
-    // temp is the pull (pouch minus fork). The shot goes the other way.
-    this.aim(temp);
+    this.aim(this.fork, this.pull);
     if (this.aimValid) {
-      const dx = -temp.x;
-      const dz = -temp.z;
-      if (dx * dx + dz * dz > 1e-4) this.yaw = Math.atan2(-dx, -dz);
-      this.applyYaw();
       this.showDots();
       this.setAimTarget(this.pickTarget());
     } else {
@@ -341,52 +549,56 @@ export class Slingshot {
     }
   }
 
-  /** Works out the launch from a pull vector (fixedRig, cm). Sets aimValid. */
-  private aim(pull: Vector3): void {
+  /** Works out the launch from a fork point and a pull vector (fixedRig, cm). Sets aimValid. */
+  private aim(fork: Vector3, pull: Vector3): void {
     const length = pull.length();
     this.aimValid = false;
     if (length < SLINGSHOT.minPull) return;
-    // Direction of the shot, flat part, must point away from the player.
-    const flat = Math.hypot(pull.x, pull.z);
-    const outwardDot = flat > 1e-6 ? (-pull.x * this.outward.x - pull.z * this.outward.z) / flat : 0;
-    if (outwardDot < SLINGSHOT.minOutward) return;
+    // The shot goes opposite the pull. Never at the player's own face.
+    temp3.copy(this.head).sub(fork).normalize();
+    const towardHead = -(pull.x * temp3.x + pull.y * temp3.y + pull.z * temp3.z) / length;
+    if (towardHead > Math.cos(degToRad(SLINGSHOT.headConeDeg))) return;
     const t = Math.min(1, (length - SLINGSHOT.minPull) / (SLINGSHOT.maxPull - SLINGSHOT.minPull));
     const speed = SLINGSHOT.minSpeed + (SLINGSHOT.maxSpeed - SLINGSHOT.minSpeed) * t;
     // Into board space: launch point and direction (both frames are in cm).
-    this.toBoard(this.aimOrigin.copy(this.forkCenter));
-    this.toBoard(temp2.copy(this.forkCenter).addScaledVector(pull, -1 / length));
+    this.toBoard(this.aimOrigin.copy(fork));
+    this.toBoard(temp2.copy(fork).addScaledVector(pull, -1 / length));
     this.aimVelocity.copy(temp2).sub(this.aimOrigin).normalize().multiplyScalar(speed);
     this.aimValid = true;
     this.traceFlight(this.aimOrigin, this.aimVelocity, this.trace);
   }
 
   private shoot(): void {
-    this.holder = null;
-    // 1. Steady release: average pull before the fingers opened.
-    if (this.steadyPull(temp)) this.aim(temp);
+    this.pouchHolder = null;
+    // 1. Steady release: average aim before the fingers opened.
+    if (this.steadyAim(this.fork, this.pull)) this.aim(this.fork, this.pull);
     if (!this.aimValid || !this.loaded) {
       this.endAim();
       return;
     }
-    const target = this.pickTarget();
-    this.launch(this.aimOrigin, this.aimVelocity, target);
+    this.loaded = false;
+    if (this.pouchPebble) this.pouchPebble.visible = false;
+    this.launch(this.aimOrigin, this.aimVelocity, this.pickTarget(), false);
+    this.audio.play('slingRelease', this.pouchWorld(temp));
     this.endAim();
   }
 
-  private launch(origin: Vector3, velocity: Vector3, target: Goblin | null): void {
+  private cancelPull(): void {
+    this.pouchHolder = null;
+    this.endAim();
+  }
+
+  private launch(origin: Vector3, velocity: Vector3, target: Goblin | null, harmless: boolean): void {
     const pebble = this.pebbles.find((p) => !p.alive);
     if (!pebble) return;
     mark('pebble shot');
     pebble.alive = true;
     pebble.age = 0;
+    pebble.harmless = harmless;
     pebble.position.copy(origin);
     pebble.velocity.copy(velocity);
     pebble.target = target;
     pebble.share = target ? AIM_ASSIST.typeShare[target.type] : 0;
-    this.loaded = false;
-    this.reloadTimer = SLINGSHOT.reloadTime;
-    if (this.pouchPebble) this.pouchPebble.visible = false;
-    this.audio.play('slingRelease', this.pouchWorld(temp));
   }
 
   private endAim(): void {
@@ -494,7 +706,6 @@ export class Slingshot {
         const angle = Math.atan2(v.x * dz - v.z * dx, v.x * dx + v.z * dz);
         if (Math.abs(angle) < cone) {
           const turn = Math.sign(angle) * Math.min(Math.abs(angle), turnMax * pebble.share);
-          // Turning the flat velocity by `turn` (same sense as the angle above).
           const c = Math.cos(turn);
           const s = Math.sin(turn);
           const vx = v.x * c - v.z * s;
@@ -505,7 +716,7 @@ export class Slingshot {
       }
       temp.set(p.x + v.x * dt, p.y + v.y * dt - 0.5 * g * dt * dt, p.z + v.z * dt);
       v.y -= g * dt;
-      const hit = this.hitAlong(p, temp);
+      const hit = pebble.harmless ? null : this.hitAlong(p, temp);
       if (hit) {
         p.copy(temp);
         this.knockOut(hit);
@@ -588,23 +799,29 @@ export class Slingshot {
     this.audio.play('pebbleHit', temp2, 0.35, 0.1);
   }
 
-  // ---- Pull samples for the steady release ----
+  // ---- Aim samples for the steady release ----
 
-  private addSample(pull: Vector3): void {
+  private addSample(fork: Vector3, pull: Vector3): void {
     const i = this.sampleNext;
+    const d = this.sampleData;
     this.sampleTime[i] = this.time;
-    this.sampleXYZ[i * 3] = pull.x;
-    this.sampleXYZ[i * 3 + 1] = pull.y;
-    this.sampleXYZ[i * 3 + 2] = pull.z;
+    d[i * 6] = fork.x;
+    d[i * 6 + 1] = fork.y;
+    d[i * 6 + 2] = fork.z;
+    d[i * 6 + 3] = pull.x;
+    d[i * 6 + 4] = pull.y;
+    d[i * 6 + 5] = pull.z;
     this.sampleNext = (i + 1) % SAMPLES;
     this.sampleCount = Math.min(SAMPLES, this.sampleCount + 1);
   }
 
-  /** Average pull over the steady window before now. False if there are no samples. */
-  private steadyPull(out: Vector3): boolean {
+  /** Average fork and pull over the steady window before now. False if there are no samples. */
+  private steadyAim(fork: Vector3, pull: Vector3): boolean {
     const to = this.time - AIM_ASSIST.steadySkip;
     const from = to - AIM_ASSIST.steadyWindow;
-    out.set(0, 0, 0);
+    const d = this.sampleData;
+    fork.set(0, 0, 0);
+    pull.set(0, 0, 0);
     let n = 0;
     let newest = -1;
     for (let k = 0; k < this.sampleCount; k++) {
@@ -613,51 +830,68 @@ export class Slingshot {
       const t = this.sampleTime[i];
       if (t < from) break;
       if (t > to) continue;
-      out.x += this.sampleXYZ[i * 3];
-      out.y += this.sampleXYZ[i * 3 + 1];
-      out.z += this.sampleXYZ[i * 3 + 2];
+      fork.x += d[i * 6];
+      fork.y += d[i * 6 + 1];
+      fork.z += d[i * 6 + 2];
+      pull.x += d[i * 6 + 3];
+      pull.y += d[i * 6 + 4];
+      pull.z += d[i * 6 + 5];
       n++;
     }
     if (n > 0) {
-      out.multiplyScalar(1 / n);
+      fork.multiplyScalar(1 / n);
+      pull.multiplyScalar(1 / n);
       return true;
     }
     // A very quick pull (nothing in the window yet): use the newest sample.
     if (newest < 0) return false;
-    out.set(this.sampleXYZ[newest * 3], this.sampleXYZ[newest * 3 + 1], this.sampleXYZ[newest * 3 + 2]);
+    fork.set(d[newest * 6], d[newest * 6 + 1], d[newest * 6 + 2]);
+    pull.set(d[newest * 6 + 3], d[newest * 6 + 4], d[newest * 6 + 5]);
     return true;
   }
 
   // ---- Looks ----
 
-  private applyYaw(): void {
-    this.yawGroup.rotation.y = this.yaw;
-    this.pouch.rotation.y = this.yaw;
-  }
-
-  /** Stretches each band from its fork tip to the pouch. */
+  /** Stretches each band from its fork tip to the pouch (frame space). */
   private updateBands(): void {
     for (let i = 0; i < 2; i++) {
       const band = this.bands[i];
-      temp.copy(this.tips[i]).applyAxisAngle(UP, this.yaw).add(this.yawGroup.position);
-      temp2.copy(this.pouch.position).sub(temp);
+      const tip = this.tips[i];
+      temp2.copy(this.pouch.position).sub(tip);
       const length = Math.max(0.01, temp2.length());
-      band.position.copy(temp).addScaledVector(temp2, 0.5);
+      band.position.copy(tip).addScaledVector(temp2, 0.5);
       band.quaternion.setFromUnitVectors(UP, temp2.multiplyScalar(1 / length));
       band.scale.set(1, length, 1);
     }
   }
 
-  private setTouch(state: TouchState): void {
-    if (this.touch === state) return;
-    this.touch = state;
-    applyTouchState(this.touchMaterials, state);
+  private setTouch(materials: MeshStandardMaterial[], current: TouchState, next: TouchState): TouchState {
+    if (current !== next) applyTouchState(materials, next);
+    return next;
   }
 
   // ---- Helpers ----
 
   private pouchWorld(out: Vector3): Vector3 {
-    return this.stage.fixedRig.localToWorld(out.copy(this.pouch.position));
+    return this.frame.localToWorld(out.copy(this.pouch.position));
+  }
+
+  /** Distance (meters) from a world point to the handle (the bottom part of the frame). */
+  private handleDistance(world: Vector3): number {
+    this.frame.worldToLocal(temp2.copy(world));
+    const y = Math.min(SLINGSHOT.handleHeight, Math.max(0, temp2.y));
+    return Math.hypot(temp2.x, temp2.y - y, temp2.z) * 0.01;
+  }
+
+  /** The hand's pose as a world matrix: pinch point or palm, and the wrist turn. */
+  private handWorldMatrix(hand: HandState, viaPinch: boolean, out: Matrix4): Matrix4 {
+    return out.compose(viaPinch ? hand.pinchPoint : hand.palm, hand.quaternion, unitScale);
+  }
+
+  /** Frame point (cm) to fixedRig point (cm). */
+  private toRig(v: Vector3): Vector3 {
+    this.frame.localToWorld(v);
+    return this.stage.fixedRig.worldToLocal(v);
   }
 
   /** fixedRig point (cm) to boardSpin point (cm). */
@@ -666,23 +900,25 @@ export class Slingshot {
     return this.stage.boardSpin.worldToLocal(v);
   }
 
-  /** Pebbles ready to shoot: the bowl plus the one in the pouch. */
-  get pebblesLeft(): number {
-    return this.bowlCount + (this.loaded ? 1 : 0);
-  }
-
   // ---- Debug ----
 
-  /** Debug: shoots at the goblin closest to the front, without hands. */
+  /** Debug: shoots a pebble from the bowl at the goblin closest to the front, without hands. */
   debugShoot(): void {
-    if (!this.loaded || this.holder) {
+    if (this.pouchHolder) return;
+    if (this.loaded) {
+      this.loaded = false;
+      if (this.pouchPebble) this.pouchPebble.visible = false;
+    } else if (this.bowlCount > 0) {
+      this.bowlCount--;
+      this.updatePile();
+    } else {
       this.audio.play('locked', undefined, 1, 0.4);
       return;
     }
-    this.toBoard(this.aimOrigin.copy(this.forkCenter));
+    this.toBoard(this.aimOrigin.copy(this.toRig(temp3.copy(this.forkLocal))));
     // The front of the player in board space, to rank goblins by angle from it.
-    this.toBoard(temp.set(0, this.forkCenter.y, -100));
-    this.toBoard(temp2.set(0, this.forkCenter.y, 0));
+    this.toBoard(temp.set(0, this.restPosition.y, -100));
+    this.toBoard(temp2.set(0, this.restPosition.y, 0));
     const fx = temp.x - temp2.x;
     const fz = temp.z - temp2.z;
     let best: Goblin | null = null;
@@ -707,14 +943,20 @@ export class Slingshot {
     temp.sub(this.aimOrigin);
     const flight = 0.35 + Math.hypot(temp.x, temp.z) / 450;
     this.aimVelocity.set(temp.x / flight, (temp.y + 0.5 * g * flight * flight) / flight, temp.z / flight);
-    this.launch(this.aimOrigin, this.aimVelocity, best);
+    this.launch(this.aimOrigin, this.aimVelocity, best, false);
+    this.audio.play('slingRelease', this.pouchWorld(temp));
+  }
+
+  /** Debug: puts a pebble in the pouch without hands. */
+  debugLoad(): void {
+    this.loaded = true;
+    if (this.pouchPebble) this.pouchPebble.visible = true;
+    this.audio.play('pebbleLoad', this.pouchWorld(temp));
   }
 
   /** Debug: empty or fill the bowl. */
   debugBowl(full: boolean): void {
     this.bowlCount = full ? PEBBLE_BOWL.capacity : 0;
-    if (!full) this.loaded = false;
-    if (this.pouchPebble) this.pouchPebble.visible = this.loaded;
     this.refillTimer = 0;
     this.updatePile();
   }

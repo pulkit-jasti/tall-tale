@@ -199,7 +199,7 @@ export class GameSystem extends createSystem({}) {
     this.spawner.update(dt);
     this.goblins.update(dt);
     this.grabEat.update(dt, headPosition, headForward);
-    this.slingshot.update(dt);
+    this.slingshot.update(dt, headPosition);
     this.particles.update(dt);
   }
 
@@ -268,6 +268,9 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'slingShot':
         this.slingshot.debugShoot();
+        break;
+      case 'slingLoad':
+        this.slingshot.debugLoad();
         break;
       case 'bowlEmpty':
         this.slingshot.debugBowl(false);

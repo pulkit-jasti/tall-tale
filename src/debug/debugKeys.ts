@@ -14,6 +14,7 @@ export type DebugCommand =
   | 'eatFront'
   | 'place'
   | 'slingShot'
+  | 'slingLoad'
   | 'bowlEmpty'
   | 'bowlFill'
   | 'fps'
@@ -44,8 +45,9 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'clear', code: 'KeyK', label: 'Remove all goblins', does: 'Remove all goblins' },
   { id: 'eatFront', code: 'KeyB', label: 'Eat front goblin', does: 'Eat the goblin nearest the front of the wall' },
   { id: 'place', code: 'KeyP', label: 'Place board again', does: 'Place the board again in front of you' },
-  { id: 'slingShot', code: 'KeyL', label: 'Slingshot shot', does: 'Slingshot: shoot a pebble at the goblin nearest the front' },
-  { id: 'bowlEmpty', code: 'KeyU', label: 'Empty bowl', does: 'Empty the pebble bowl (slingshot shows Locked until it refills)' },
+  { id: 'slingShot', code: 'KeyL', label: 'Slingshot shot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },
+  { id: 'slingLoad', code: 'KeyO', label: 'Load slingshot', does: 'Put a pebble in the slingshot pouch' },
+  { id: 'bowlEmpty', code: 'KeyU', label: 'Empty bowl', does: 'Empty the pebble bowl (the bowl shows Locked until it refills)' },
   { id: 'bowlFill', code: 'KeyI', label: 'Fill bowl', does: 'Fill the pebble bowl' },
   { id: 'fps', code: 'KeyF', label: 'FPS on/off', does: 'FPS counter on or off (add ?fps to the URL on the hosted build)' },
   { id: 'stress', code: 'KeyM', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },

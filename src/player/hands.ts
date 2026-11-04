@@ -15,6 +15,8 @@ export class HandState {
   readonly pinchPoint = new Vector3();
   /** Center of the palm (world, meters). */
   readonly palm = new Vector3();
+  /** Wrist orientation (world). Used to carry tools like the slingshot. */
+  readonly quaternion = new Quaternion();
   readonly pinch = new PoseSwitch(HANDS.poseHold, 0.04);
   readonly fist = new PoseSwitch(HANDS.fistHold, 0.06);
   lostTime = 0;
@@ -33,6 +35,9 @@ const gripMatrix = new Matrix4();
 const gripPosition = new Vector3();
 const gripQuaternion = new Quaternion();
 const unitScale = new Vector3(1, 1, 1);
+const playerQuaternion = new Quaternion();
+const playerPosition = new Vector3();
+const playerScale = new Vector3();
 
 function readJoint(frame: XRFrame, hand: XRHand, name: XRHandJoint, space: XRReferenceSpace, out: Vector3): boolean {
   const joint = hand.get(name);
@@ -56,6 +61,7 @@ export class HandTracker {
    */
   update(frame: XRFrame | null, space: XRReferenceSpace | null, playerMatrix: Matrix4, dt: number): void {
     this.seen.clear();
+    playerMatrix.decompose(playerPosition, playerQuaternion, playerScale);
     if (frame && space) {
       for (const source of frame.session.inputSources) {
         const side = source.handedness;
@@ -94,7 +100,10 @@ export class HandTracker {
     state: HandState,
     dt: number,
   ): boolean {
+    const wristJoint = hand.get('wrist');
+    const wristPose = wristJoint ? frame.getJointPose?.(wristJoint, space) : undefined;
     if (
+      !wristPose ||
       !readJoint(frame, hand, 'thumb-tip', space, thumb) ||
       !readJoint(frame, hand, 'index-finger-tip', space, index) ||
       !readJoint(frame, hand, 'wrist', space, wrist) ||
@@ -118,6 +127,8 @@ export class HandTracker {
     state.usingHand = true;
     state.pinchPoint.copy(thumb).add(index).multiplyScalar(0.5).applyMatrix4(playerMatrix);
     state.palm.copy(palmLocal).applyMatrix4(playerMatrix);
+    const o = wristPose.transform.orientation;
+    state.quaternion.set(o.x, o.y, o.z, o.w).premultiply(playerQuaternion);
     state.pinch.update(pinchDistance < HANDS.pinchStart, pinchDistance > HANDS.pinchEnd, dt);
     state.fist.update(curled >= HANDS.fistFingers, open >= HANDS.fistFingers, dt);
     return true;
@@ -140,6 +151,7 @@ export class HandTracker {
     // Pinch point a little in front of the grip.
     gripMatrix.compose(gripPosition.set(p.x, p.y, p.z), gripQuaternion.set(o.x, o.y, o.z, o.w), unitScale);
     state.pinchPoint.set(0, -0.01, -0.05).applyMatrix4(gripMatrix).applyMatrix4(playerMatrix);
+    state.quaternion.copy(gripQuaternion).premultiply(playerQuaternion);
     const buttons = source.gamepad!.buttons;
     const trigger = (buttons[0]?.value ?? 0) > 0.6;
     const squeeze = (buttons[1]?.value ?? 0) > 0.6;

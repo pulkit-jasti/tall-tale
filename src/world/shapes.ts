@@ -202,7 +202,7 @@ export function slingshotBand(material: MeshStandardMaterial): Mesh {
 
 /** The leather pouch that is pinched: a small flattened box. */
 export function slingshotPouch(material: MeshStandardMaterial): Mesh {
-  return new Mesh(new BoxGeometry(2.6, 1.3, 1.4), material);
+  return new Mesh(new BoxGeometry(3.6, 1.5, 2.2), material);
 }
 
 /** Shallow open bowl (lathe) with its rim at y = 0 (cm). */

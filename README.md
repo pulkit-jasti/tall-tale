@@ -11,7 +11,7 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 ## Status
 
 - Stage: MVP build step 1 (Toy test) done and tested on the headset. Scale and pinching goblins work. Fixes from the test: eating no longer needs letting go or a head tilt (it opened the Quest menu), one ring handle replaces the two handles, and the board starts higher.
-- Build step 2 (Slingshot with aim assist and the pebble bowl) is built. Waiting for a headset check.
+- Build step 2 (Slingshot with aim assist and the pebble bowl) is built. After the first slingshot headset test it became handheld: grab it by the handle, click a pebble from the bowl into the pouch, pull with the other hand. Bigger pebbles and hit area. Waiting for a headset check.
 - Next step: build step 3 (waves and flags) and the rest of the MVP build. Scope, the tutorial director and waves, and the build order are in [docs/mvp.md](docs/mvp.md). The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
@@ -297,6 +297,7 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 23. **Two one-job handles (rotate knob and height bar):** replaced after the first headset test by one ring handle in front of the player. Each grab locks to spin or height, both 1:1. The knob's track was too short for 360 degrees and the fist grab was shaky, so the ring accepts a pinch too.
 24. **Eat by letting go with the head tilted up:** replaced after the first headset test by holding the goblin near the mouth for a moment. The old pose turned the palm toward the headset, and the pinch opened the Quest menu.
 25. **Goblins drop straight down when let go:** after the first headset test they keep the hand's speed and fly in a simple arc. Still no throwing as an attack (see 17): a toss does no damage.
+26. **Slingshot fixed on its platform, with the pebble loading itself:** replaced after the first slingshot headset test. The player now picks up the slingshot by its handle with one hand and aims by turning the body, pinches a pebble from the bowl and clicks it into the pouch, then pulls with the other hand. Aiming one-handed on a fixed frame was too fiddly, and the auto reload did not feel good. Pebbles and their hit area also got bigger.
 
 ---
 

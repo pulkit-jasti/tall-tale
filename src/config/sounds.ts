@@ -33,6 +33,7 @@ export const SOUNDS = {
     volume: 0.9,
     positional: true,
   },
+  pebbleLoad: { files: ['interface/click_001.ogg', 'interface/click_002.ogg'], volume: 0.8, positional: true },
   locked: { files: ['interface/error_004.ogg', 'interface/error_006.ogg'], volume: 0.5, positional: false },
   // Missing in the packs (placeholder chime until build step 7).
   gulp: { files: [CHIME], volume: 0.4, positional: false },
