@@ -58,7 +58,7 @@ The board is a full circle all the time. There are no 120 or 180 degree modes. A
 
 ### Rotating and adjusting by hand
 
-One **ring handle** on the inner rim, right in front of the player, below where the hands do most of the work. It is a curved wooden rail on a few short poles, about 120 degrees wide (from the left knee to the right knee), a little lower than the wall top. It works with one hand, which also helps players who can only use one hand.
+One **ring handle** on the inner rim, right in front of the player, below where the hands do most of the work. It is a wooden rail in a full circle around the player on short poles, a little lower than the wall top. Small bands are spread evenly around it, so it is easy to see it turn. (Being tested as a full circle. It started as a 120 degree arc in front, and `halfSpanDeg` in config switches back.) It works with one hand, which also helps players who can only use one hand.
 
 - **Grab it anywhere** with a fist or a pinch, from on top of it.
 - **No accidental grabs** (second headset test: resting hands on the lap and goblins in the courtyard both set it off):
@@ -67,14 +67,14 @@ One **ring handle** on the inner rim, right in front of the player, below where 
   - A goblin in pinch range always wins over the ring.
   - Goblins inside the castle stay near the wall (courtyard band 34 to 38 cm), away from the ring.
 - **The first 4 cm of hand movement lock one direction** for that grab. Smaller drifts do nothing:
-  - **Sideways:** the board spins with the hand 1:1 (around the vertical axis only, no tilting). The ring turns with it. On release the ring glides back to its rest angle and the board stays where it is. For a big turn, pull, let go, grab again and pull again (about 4 to 6 pulls for a full turn).
+  - **Sideways:** the board spins with the hand 1:1 (around the vertical axis only, no tilting). The ring turns with it. On release both stay where they are (no spring back, which felt uncomfortable in the headset test). For a big turn, pull, let go, grab again and pull again (about 4 to 6 pulls for a full turn).
   - **Up or down:** the board rises or lowers with the hand 1:1, within a wide range (about 25 cm down and 35 cm up). On release the board stays at the new height.
 - It never spins and changes height in the same grab, so a swinging arm does not make the board bob.
 - **Letting go:** the ring lets go only when the hand is clearly open for about a quarter second, so tracking flickers do not drop it.
-- Arrows: a curved double arrow lies on top of the ring at the front, and a small up and down arrow stands near each end. They turn with the ring.
+- Arrows: a curved double arrow lies on top of the ring at the front, and a small up and down arrow stands on it 50 degrees left and right of front. The arrows never turn: they always stay in front of the player. The bands and poles turn with the ring.
 - The ring follows the standard Ready and Held states (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)). The arrows light up together with it.
 - Oversized grab zone, so it is easy to grab without looking closely.
-- It is an arc, not a full circle, so the sides stay clear for the tool platforms and reaching for climbers.
+- Full circle or arc: a full circle can be grabbed anywhere, even at the sides. An arc keeps the sides clear for the tool platforms. Decide after headset tests.
 - Turning is a choice: the player can turn their head, or spin the board. Spinning takes a hand off the battle, so "spin to the new threat now, or finish this group first?" is a real decision.
 - Enemy sounds sit on the board, so they turn with it automatically.
 
@@ -136,7 +136,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 ### What hand tracking games do
 
-- **Palm pinch is taken by the system.** On Quest, a pinch with the palm facing the player is reserved for the system on both hands (the left one opens the Quest menu). Apps cannot use it or turn it off.
+- **Palm pinch is taken by the system.** On Quest, a pinch with the palm facing the player is reserved for the system on both hands. The right one opens the Quest menu. Meta's WebXR docs say the left one (the three bars icon) acts like the left controller's menu button, which leaves the WebXR session, but in our headset test it did nothing. Apps cannot use either one or turn them off, so the game never relies on them.
 - So the common pattern is a **wrist button**: a small button on the inside of one wrist that shows when the player turns that palm toward their face. The other hand's index finger pokes it. A poke with the other hand is deliberate, so it is rarely pressed by accident.
 
 ### Our pause
@@ -144,7 +144,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 - **Wrist button on the left wrist** (right wrist once handedness exists). It fades in only when the left palm faces the player's face for about 0.3 seconds, and fades out when the hand turns away.
 - **Poke it with the right index finger** to pause. The button presses in, with a click sound.
 - **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Reset table", "Restart battle".
-- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume".
+- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". Build step 1 already has a simple version: the game freezes and all sound stops while the session or the page is not fully visible, and resumes by itself. The FPS panel shows "paused" while it is.
 - Settings come later (not in the MVP).
 
 ---

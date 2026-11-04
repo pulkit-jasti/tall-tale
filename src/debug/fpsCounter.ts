@@ -16,6 +16,8 @@ export class FpsCounter {
   private canvas = document.createElement('canvas');
   private context: CanvasRenderingContext2D;
   private texture: CanvasTexture;
+  /** Shown next to the worst frame ("paused" while the Quest menu is open), to check the auto-pause. */
+  status = '';
   private frames = 0;
   private elapsed = 0;
   private worst = 0;
@@ -68,7 +70,7 @@ export class FpsCounter {
     c.fillText(fps === null ? '-- fps' : `${Math.round(fps)} fps`, 16, height * 0.36);
     c.fillStyle = '#ddd6c8';
     c.font = '26px sans-serif';
-    c.fillText(`worst ${worstMs.toFixed(0)} ms`, 18, height * 0.78);
+    c.fillText(`worst ${worstMs.toFixed(0)} ms  ${this.status}`, 18, height * 0.78);
     this.texture.needsUpdate = true;
   }
 }

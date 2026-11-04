@@ -64,19 +64,25 @@ export const STAGE = {
 export const HANDLES = {
   /** Distance of the ring from the center (cm). */
   radius: 27,
-  /** Half of the ring arc, centered on the front (degrees). */
-  halfSpanDeg: 60,
+  /** Half of the ring arc, centered on the front (degrees). 180 = a full circle. */
+  halfSpanDeg: 180,
   /** Ring height above the board (cm). A little lower than the wall top. */
   ringY: 5,
   /** Ring tube thickness (cm). */
   ringRadius: 1.4,
   poleRadius: 0.6,
-  /** Where the poles stand under the ring (degrees). */
-  poleAnglesDeg: [-60, -20, 20, 60],
+  /** Poles under the ring, spread evenly from the front. */
+  poleCount: 8,
+  /** Small bands around the ring (arrow color), spread evenly, so its turning is easy to see. */
+  bandCount: 12,
+  /** Small up and down arrows stand on the ring this far left and right of front (degrees). */
+  sideArrowDeg: 50,
+  /** Arrow size (1 = the first build's size). */
+  arrowSize: 0.6,
+  /** Half length of the curved arrow at the front (degrees). */
+  frontArrowHalfDeg: 8,
   /** The hand moves this far before one direction (spin or height) locks for the grab (cm). */
   axisLock: 4,
-  /** How fast the ring glides back to its rest angle after release (1/s). */
-  returnRate: 6,
   /** How far the board can move down and up from where it was placed (cm). */
   heightMin: -25,
   heightMax: 35,

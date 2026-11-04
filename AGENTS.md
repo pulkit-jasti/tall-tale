@@ -50,7 +50,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - Avoid relying on custom hand poses or gestures. If one is needed, add a short delay before it triggers so it does not flicker.
 - No haptics exist, so every action needs clear visual and sound feedback. Every grabbable or pokeable thing uses the same Idle, Ready, Held and Locked states, done with emissive color only. See "Interaction feedback" in docs/controls-and-ui.md.
 - Make handles and tools oversized with generous grab zones.
-- The ring handle is one curved rail in front of the player. The first few cm of each grab lock one direction: sideways spins the board, up or down changes its height, both 1:1 with the hand. It never does both in one grab.
+- The ring handle is one rail around the player (a full circle for now, see docs/controls-and-ui.md). The first few cm of each grab lock one direction: sideways spins the board, up or down changes its height, both 1:1 with the hand. It never does both in one grab.
 - The player's bare hands only grab and eat. No smashing or slapping. Letting go mid-swing tosses the goblin with simple projectile math (no physics engine), and it lands dazed. A toss is not an attack: it does no damage.
 - Two hand actions: **pinch** (thumb and index) for small things like goblins and the slingshot pouch, and **grab** (fist) for big things like the swatter, pepper shaker, megaphone and bell. The ring handle accepts both, because a fist with the back of the hand toward the headset tracks poorly. See "Pinch and grab" in docs/controls-and-ui.md.
 - Goblins are tiny (about 3.5 cm). The pinch zone is about 5 to 6 cm and snaps to the nearest goblin. See docs/controls-and-ui.md.

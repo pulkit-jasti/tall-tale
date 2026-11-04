@@ -16,7 +16,7 @@ Back to [GDD index](GDD.md). Related: [Enemies](enemies.md), [Map](map.md).
 
 ## 2. The two flags
 
-Two tall flagpoles on the inner rim, one on each side, just outside the ends of the ring handle, slightly in front of the player.
+Two tall flagpoles on the inner rim, one on each side, just outside the ring handle, slightly in front of the player.
 
 - **They stay with the player, like the tool platforms.** They do not spin with the board, so they are always in front of the player and never have to be searched for (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 - No health bars or numbers. Each flag works like a progress bar built into the world.

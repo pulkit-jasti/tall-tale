@@ -1,16 +1,16 @@
-// The ring handle: one curved rail in front of the player that moves the
-// board (docs/controls-and-ui.md, section 2). Grab it anywhere with a fist or
-// a pinch. The first few cm of hand movement lock one direction for the grab:
-//   Sideways: the board spins with the hand 1:1. On release the ring glides
-//   back to its rest angle and the board stays. Let go and grab again for more.
+// The ring handle: one rail around the player that moves the board
+// (docs/controls-and-ui.md, section 2). Grab it anywhere with a fist or a
+// pinch. The first few cm of hand movement lock one direction for the grab:
+//   Sideways: the board and the ring spin with the hand 1:1 and stay where
+//   they are on release. Let go and grab again for more.
 //   Up or down: the board rises or lowers with the hand 1:1.
 // The ring lives in boardLift, so it rises with the board, and turns on its
-// own group so it follows the hand while spinning.
+// own group so it follows the hand. The arrows never turn.
 import { Group, MeshStandardMaterial, Vector3 } from 'three';
 import { HANDLES } from '../config/game.js';
 import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import type { Stage } from '../world/stage.js';
-import { curvedDoubleArrow, flatMaterial, ringArc, ringPoles, verticalDoubleArrow } from '../world/shapes.js';
+import { curvedDoubleArrow, flatMaterial, ringArc, ringBands, ringPoles, verticalDoubleArrow } from '../world/shapes.js';
 import { applyTouchState, type TouchState } from './feedback.js';
 import type { HandState } from './hands.js';
 
@@ -39,21 +39,23 @@ export class BoardHandles {
   private materials: MeshStandardMaterial[];
   private state: TouchState = 'idle';
   private holder: Holder | null = null;
-  /** Ring turn away from its rest angle (radians, same sense as the board spin). */
+  /** Ring turn from where it was built (radians, same sense as the board spin). */
   private turn = 0;
 
   constructor(private stage: Stage) {
     const ringMaterial = flatMaterial(HANDLES.woodColor);
     const arrowMaterial = flatMaterial(HANDLES.arrowColor);
     this.materials = [ringMaterial, arrowMaterial];
-    const { radius, halfSpanDeg, ringY, ringRadius } = HANDLES;
+    const { radius, ringY, ringRadius, sideArrowDeg, frontArrowHalfDeg } = HANDLES;
     const arrowY = ringY + ringRadius + 0.2;
-    this.ring.add(ringArc(ringMaterial), ringPoles());
-    this.ring.add(curvedDoubleArrow(arrowMaterial, radius, 0, 12, arrowY));
+    this.ring.add(ringArc(ringMaterial), ringPoles(), ringBands(arrowMaterial));
+    // The arrows never turn: they always sit in front of the player.
+    const arrows = new Group();
+    arrows.add(curvedDoubleArrow(arrowMaterial, radius, 0, frontArrowHalfDeg, arrowY));
     for (const side of [-1, 1]) {
-      this.ring.add(verticalDoubleArrow(arrowMaterial, radius, side * (halfSpanDeg - 10), arrowY));
+      arrows.add(verticalDoubleArrow(arrowMaterial, radius, side * sideArrowDeg, arrowY));
     }
-    stage.boardLift.add(this.ring);
+    stage.boardLift.add(this.ring, arrows);
   }
 
   /** Distance (meters) from a hand to the ring, or null if out of the grab zone or held by the other hand. */
@@ -108,10 +110,6 @@ export class BoardHandles {
         this.follow(holder);
       }
     }
-    if (!this.holder && this.turn !== 0) {
-      this.turn *= Math.exp(-HANDLES.returnRate * dt);
-      if (Math.abs(this.turn) < 1e-4) this.turn = 0;
-    }
     this.ring.rotation.y = this.turn;
   }
 
@@ -137,7 +135,8 @@ export class BoardHandles {
     if (holder.axis === 'spin') {
       // A bigger spin moves the board to the left, so a hand moving right lowers it.
       this.stage.spin = holder.startSpin - moved;
-      this.turn = holder.startTurn - moved;
+      // Wrapped to one circle, so it never grows without end.
+      this.turn = angleDelta(0, holder.startTurn - moved);
     } else {
       this.stage.height = holder.startHeight + (temp.y - holder.startY);
     }

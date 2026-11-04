@@ -35,6 +35,7 @@ export class GameSystem extends createSystem({}) {
   private fps!: FpsCounter;
   private placeTimer = -1;
   private wasImmersive = false;
+  private paused = false;
 
   init(): void {
     void this.setup().catch((error) => console.error('[game] setup failed', error));
@@ -97,8 +98,20 @@ export class GameSystem extends createSystem({}) {
     if (immersive && !this.wasImmersive) this.placeTimer = STAGE.placeDelay;
     this.wasImmersive = immersive;
     // Simple auto-pause while the Quest menu is open (full pause is build step 6).
-    const state = this.visibilityState.value;
-    if (state === VisibilityState.Hidden || state === VisibilityState.VisibleBlurred) return;
+    // Read the XR session directly too, and the page itself, in case one of
+    // them reports the menu and the other does not. Sound stops as well.
+    const state = this.world.session?.visibilityState ?? this.visibilityState.value;
+    const paused =
+      state === VisibilityState.Hidden ||
+      state === VisibilityState.VisibleBlurred ||
+      document.visibilityState === 'hidden';
+    if (paused !== this.paused) {
+      this.paused = paused;
+      this.audio.setPaused(paused);
+      console.info(`[game] ${paused ? 'paused' : 'resumed'} (${state})`);
+      this.fps.status = paused ? 'paused' : '';
+    }
+    if (paused) return;
 
     const dt = Math.min(delta, 0.05);
     if (this.placeTimer > 0) {

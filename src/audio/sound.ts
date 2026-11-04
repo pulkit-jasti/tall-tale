@@ -62,6 +62,13 @@ export class GameAudio {
     if (context.state === 'suspended') void context.resume();
   }
 
+  /** Silences all sound while the game is paused (Quest menu open), and brings it back. */
+  setPaused(paused: boolean): void {
+    const context = this.listener.context;
+    if (paused && context.state === 'running') void context.suspend();
+    else if (!paused && context.state === 'suspended') void context.resume();
+  }
+
   /**
    * Plays a sound. `at` is a world position for positional sounds.
    * `minGap` skips the sound if it played less than that many seconds ago.

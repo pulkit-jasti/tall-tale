@@ -35,8 +35,8 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Bell | Bell shape (lathe or cone with a rounded top) with a small handle on top. Brass color. | 10 cm tall |
 | Pebble bowl | Shallow open cylinder (lathe), wood or clay color. | 15 cm wide |
 | Food pips | Small spheres in a row on each tool platform. Lit = can afford, dim = cannot. | 1.5 cm each |
-| Ring handle | Curved rail (tube along a 120 degree arc) with round ends (spheres), on 4 short poles (cylinders). | 27 cm from center, 2.8 cm thick, 5 cm high |
-| Arrows for the ring handle | Flat arrow shapes (extruded 2D shape), bright color: a curved double arrow lying on the ring at the front, and a small up and down arrow standing near each end. | 8 to 12 cm |
+| Ring handle | Full circle rail (closed tube) around the player on 8 short poles (cylinders), with 12 small bands (thin tori, arrow color) spread evenly around it so its turning is easy to see. Testing a full circle; `halfSpanDeg` in config makes it an arc again (with round ends). | 27 cm from center, 2.8 cm thick, 5 cm high |
+| Arrows for the ring handle | Flat arrow shapes (extruded 2D shape), bright color: a curved double arrow lying on the ring at the front, and a small up and down arrow standing on it 50 degrees left and right of front. They never turn with the ring. Kept small (`arrowSize` in config). | About 5 to 8 cm |
 | Play button (in VR) | Big round button (short cylinder) on a small post. | 10 cm wide |
 | Wrist pause button | Small round button (short cylinder) on the inside of the left wrist. | 3 cm wide |
 | Pause, win and lose panels | Rounded flat panel with big poke buttons. Use IWSDK UI (check iwsdk-reference) for the text. | About 40 cm wide |
