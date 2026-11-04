@@ -291,12 +291,12 @@ export const CASTLE_HEALTH = {
   maxHealth: 100,
   /**
    * Damage per wall hit from a grunt or runner (one hit every GOBLIN_RULES.wallHitInterval).
-   * Set high for quick testing (two grunts at the wall take the castle down in about a minute).
-   * Balanced with troops in build step 5.
+   * Balanced with troops in build step 5 (was 1.5 for quick testing): ten
+   * goblins at the wall take about a third of the castle in 30 seconds.
    */
-  wallHitDamage: 1.5,
+  wallHitDamage: 0.35,
   /** Damage per second from each intruder in the courtyard. Faster than outside attacks. */
-  intruderDamagePerSec: 3,
+  intruderDamagePerSec: 2,
   /** Share of the missing health repaired in each breather. */
   repairShare: 0.35,
   /**
@@ -506,8 +506,13 @@ export const FEEDBACK = {
  */
 export const TOOL_SPOTS = {
   slingshot: { angleDeg: 30, radius: 33.5 },
-  /** Megaphone and bell (build step 5). */
+  /** The shared platform of the megaphone and the bell (it is wider, see stunPlatformWidth). */
   rightSide: { angleDeg: 82, radius: 33.5 },
+  /** The bell rests on the front half of that platform, the megaphone on the back half. */
+  bell: { angleDeg: 77, radius: 33.5 },
+  megaphone: { angleDeg: 88, radius: 33.5 },
+  /** Width of the megaphone and bell platform (cm), so both fit side by side. */
+  stunPlatformWidth: 11,
   /** Pepper shaker. */
   leftFront: { angleDeg: -30, radius: 33.5 },
   /** Fly swatter. */
@@ -739,9 +744,13 @@ export const TOOLS = {
    */
   freeInTutorial: true,
   /** Food each one costs on its first use (docs/giant-tools.md). */
-  cost: { swatter: 4, pepper: 3, megaphone: 6 },
-  /** How long one paid use lasts (seconds). */
-  duration: { swatter: 10, pepper: 8, megaphone: 0 },
+  cost: { swatter: 4, pepper: 3, megaphone: 6, bell: 6 },
+  /**
+   * How long one paid use lasts (seconds). The megaphone and the bell are one
+   * use each: this is the short window to keep screaming or ringing for a
+   * longer stun, then the tool goes back to its platform.
+   */
+  duration: { swatter: 10, pepper: 8, megaphone: 2.5, bell: 2.5 },
   /** The hand must be open near the tool this long before closing it grabs (seconds). Same as the ring. */
   readyTime: 0.15,
   /** A held tool lets go only after the hand is open this long (seconds). */
@@ -803,7 +812,11 @@ export const HOLD = {
     swatter: { at: 3.5, face: 'back', tiltDeg: 45 },
     pepper: { at: 4.5, face: 'palm' },
     slingshot: { at: 3.5, face: 'back' },
-  } as Record<'swatter' | 'pepper' | 'slingshot', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
+    // A pistol grip: the cone points the way the knuckles point, so it is in front of the mouth when the fist is.
+    megaphone: { at: 3, face: 'back', tiltDeg: 15 },
+    // The handle on top of the bell, thumb up, the bell hanging below the fist.
+    bell: { at: 2, face: 'palm' },
+  } as Record<'swatter' | 'pepper' | 'slingshot' | 'megaphone' | 'bell', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
 };
 
 /**
@@ -905,9 +918,219 @@ export const PEPPER = {
   seasonedTint: [0.85, 0.68, 0.55] as [number, number, number],
 };
 
+/**
+ * The megaphone (docs/giant-tools.md): hold it and scream. The mic loudness
+ * (Web Audio, src/audio/mic.ts) passing `screamLevel` for `screamHold` is a
+ * scream. It stuns every goblin, and a longer scream stuns longer.
+ */
+export const MEGAPHONE = {
+  /** Cone (open wide end) along the tool's -z on top of a short grip (cm). */
+  gripLength: 6,
+  gripRadius: 0.9,
+  coneLength: 13,
+  coneMouth: 1.1,
+  coneEnd: 3.6,
+  /** The cone starts this far behind the grip (toward the face, cm). */
+  coneBack: 3,
+  bodyColor: 0xe8e2d0,
+  bandColor: 0xd23c28,
+  gripColor: 0x3b2b1f,
+  gripFrom: 0,
+  gripTo: 6,
+  grabRadius: 0.06,
+  /** Mic loudness (RMS of the samples, 0 to 1) that counts as a scream, and how long it must last (seconds). */
+  screamLevel: 0.12,
+  screamHold: 0.12,
+  /** The loudness is smoothed this much (seconds). */
+  levelSmoothing: 0.05,
+  /** Sound waves out of the cone while screaming: this often (seconds). */
+  waveEvery: 0.12,
+  waveColors: [0xffffff, 0xfff1b8, 0xcfe8ff],
+};
+
+/** The bell (docs/giant-tools.md): the hands-only twin of the megaphone. Shake it to stun every goblin. */
+export const BELL = {
+  /** Wooden handle on top along +y from the fist (cm), the brass bell hanging below it. */
+  handleLength: 4,
+  handleRadius: 0.75,
+  bellHeight: 6,
+  bellMouth: 3.2,
+  brassColor: 0xd9a63a,
+  handleColor: 0x6b4a2e,
+  clapperColor: 0x5a4330,
+  gripFrom: 0,
+  gripTo: 4,
+  grabRadius: 0.06,
+  /** Shake detection, like the pepper: a quick move that turns back on the last one is a ring (cm per second, seconds). */
+  speedSmoothing: 0.04,
+  ringSpeed: 30,
+  ringWindow: 0.7,
+  /** Harder shaking means a longer stun: the shake speed from ringSpeed up to this gives the full extra stun. */
+  hardSpeed: 140,
+  /** Ring sound at most this often (seconds). */
+  soundGap: 0.16,
+};
+
+/** The stun of the megaphone and the bell: every goblin on the board stops, dizzy. */
+export const STUN = {
+  /** The first scream or ring stuns this long (seconds)... */
+  baseSeconds: 3.5,
+  /** ...a harder ring adds up to this much at once... */
+  hardExtra: 2,
+  /** ...and keeping on screaming or ringing adds this per second... */
+  extraPerSecond: 1.5,
+  /** ...up to this long in total (seconds). */
+  maxSeconds: 8,
+  /** The shock ring across the board: how far it goes (cm) and how long it takes (seconds). */
+  ringRadius: 260,
+  ringTime: 0.9,
+  ringColor: 0xfff1b8,
+  /** Dizzy stars over each stunned goblin (2 each, spinning). */
+  starColor: 0xffd84a,
+  starSize: 0.55,
+  starOrbit: 1.2,
+  starSpeed: 6,
+};
+
+/**
+ * Triggers on the roads (docs/map.md section 5): powder keg, boulder and
+ * leaning tree. Shot with the slingshot (each registers as a SlingTarget).
+ * Each happens once and resets at the start of each wave. Explosions set off
+ * the triggers near them (chain reactions). Sizes in cm, times in seconds.
+ */
+export const TRIGGERS = {
+  /** Aim assist share (like AIM_ASSIST.typeShare for goblins). Big still things, so the full bend. */
+  assist: 1,
+  /** A trigger the slingshot aims at wobbles a little (degrees, speed). */
+  aimWobbleDeg: 5,
+  aimWobbleSpeed: 16,
+  keg: {
+    height: 2.6,
+    /** Sideways from the road center (cm), so goblins walk past it. */
+    side: 4.5,
+    hitRadius: 2.2,
+    /** Goblins this close are knocked out. */
+    blastRadius: 13,
+    /** Other triggers this close are set off by the blast. */
+    chainRadius: 30,
+    /** Red bands, so it reads as explosive. */
+    tint: [1.25, 0.6, 0.5] as [number, number, number],
+    debris: 6,
+    fireColors: [0xffd84a, 0xff8a2a, 0xd23c28, 0x5a5048, 0xffffff],
+  },
+  boulder: {
+    size: 4,
+    /** The hill under it, and how far it sits from the road center (cm). */
+    hillWidth: 9,
+    side: 8,
+    hitRadius: 2.8,
+    /** Rolling speed down the road toward the castle (cm per second). */
+    speed: 42,
+    /** Goblins this close to the rolling boulder are squashed. */
+    crushRadius: 4,
+    /** It stops this far from the end of its road (cm), then crumbles. */
+    stopShort: 4,
+    debris: 4,
+    dustColors: [0xc9b79a, 0xa8957a, 0x8a8a8a],
+  },
+  tree: {
+    height: 12,
+    /** Its trunk stands this far from the road center (cm), leaning over the road. */
+    side: 5,
+    leanDeg: 12,
+    hitRadius: 3.5,
+    /** It falls across the road (90 degrees) in this long. */
+    fallTime: 0.55,
+    /** Goblins this close to the fallen trunk's line are squashed (cm). */
+    crushWidth: 3,
+    /** The road stays closed this long, then the tree poofs away and the road opens. */
+    blockSeconds: 12,
+    debris: 4,
+    leafColors: [0x6a8f3a, 0x8fb04a, 0x5a7a30],
+  },
+  /** Flying planks and wood from blasts: a small pool, they fly, bounce once and shrink away. */
+  debris: { pool: 14, size: 1.4, life: 1.1, speed: 70, hop: 90 },
+};
+
+/**
+ * Troops (docs/core-loop.md section 2): squads of soldiers come out of the
+ * castle while a wave is fought, walk the roads outward toward an attacking
+ * camp, and fight the goblins they meet with simple timed hits. On their own
+ * they lose slowly, so the player is always needed. They go back home when
+ * they reach the camp or when the wave ends. Sizes in cm, times in seconds.
+ */
+export const TROOPS = {
+  /** Most soldiers on the board at once (they share the unit budget with the goblins). */
+  max: 12,
+  /** Soldiers per squad (from, to). */
+  squadMin: 3,
+  squadMax: 4,
+  /** A new squad comes out this often while a wave runs, the first one this long after the wave starts. */
+  squadEvery: 10,
+  firstSquadAt: 4,
+  /** Gap between soldiers of one squad leaving (seconds). */
+  leaveGap: 0.7,
+  height: 2.5,
+  speed: 5.5,
+  speedJitter: 0.1,
+  laneJitter: 1.6,
+  /** Share of archers among the soldiers (same rules, another look). */
+  archerShare: 0.3,
+  /** A goblin this close is fought (cm). Runners rush past and are never fought. */
+  engageRange: 4,
+  /** Soldiers take this many hits, grunts take 1. */
+  hitsToDown: 2,
+  /** A soldier strikes this often, and a strike lands this often (share). */
+  strikeEvery: 1.4,
+  strikeChance: 0.5,
+  /** A goblin fighting a soldier strikes back this often, landing this share. */
+  goblinStrikeEvery: 1.1,
+  goblinStrikeChance: 0.6,
+  /** Sword clash sound at most this often (seconds). */
+  clashGap: 0.3,
+  poofColors: [0xffffff, 0xc9d4e8, 0x8aa0c8],
+  /** Units farther than this from the center (cm) update their animation every other frame. */
+  farAnimFrom: 150,
+};
+
+/**
+ * The sky (decor only, no gameplay): the IWSDK gradient dome from the scene
+ * file, plus a sun and a few slow low-poly clouds drifting with the wind.
+ * Everything here is in meters, around the player, and never turns with the
+ * board. One draw call for all the clouds, two for the sun.
+ */
+export const SKY = {
+  enabled: true,
+  /** Sun direction: compass angle from the player's first view (degrees, 0 = front, positive = right) and height above the horizon. */
+  sunAngleDeg: -55,
+  sunElevationDeg: 32,
+  sunDistance: 150,
+  /** Sun disc and its soft glow (meters wide). */
+  sunSize: 9,
+  glowSize: 30,
+  sunColor: 0xfff4c8,
+  glowColor: 0xfff0b0,
+  /** Clouds: how many, puffs per cloud, and where they float (meters from the player, and heights). */
+  cloudCount: 11,
+  puffsPerCloud: 5,
+  cloudMinDistance: 55,
+  cloudMaxDistance: 125,
+  cloudMinHeight: 26,
+  cloudMaxHeight: 48,
+  /** Cloud size (meters across one cloud, from, to). */
+  cloudMinSize: 9,
+  cloudMaxSize: 18,
+  /** Wind: direction (degrees, 0 = front) and speed (meters per second). Slow, so it reads as calm. */
+  windDeg: 70,
+  windSpeed: 0.9,
+  cloudColor: 0xffffff,
+  /** The cloud underside: a soft blue grey, so the flat low-poly faces read. */
+  cloudShade: 0x8ea4bc,
+};
+
 export const PARTICLES = {
-  /** Raised from 96 for the falling pepper. */
-  poolSize: 128,
+  /** Raised from 96 for the falling pepper, and from 128 for the keg blasts. */
+  poolSize: 160,
   /** Particle size (meters). */
   size: 0.006,
   life: 0.55,

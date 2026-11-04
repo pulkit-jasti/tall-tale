@@ -31,6 +31,11 @@ export type DebugCommand =
   | 'showTools'
   | 'swat'
   | 'pepper'
+  | 'megaphone'
+  | 'bell'
+  | 'troops'
+  | 'triggersReset'
+  | 'triggersFire'
   | 'fps'
   | 'stress'
   | 'resetRun'
@@ -42,12 +47,13 @@ export type DebugCommand =
   | 'boardDown';
 
 /** Sections of the laptop debug page, in page order. */
-export type DebugGroup = 'game' | 'castle' | 'goblins' | 'slingshot' | 'food' | 'board' | 'performance';
+export type DebugGroup = 'game' | 'castle' | 'goblins' | 'army' | 'slingshot' | 'food' | 'board' | 'performance';
 
 export const DEBUG_GROUPS: { id: DebugGroup; title: string; icon: string }[] = [
   { id: 'game', title: 'Game and tutorial', icon: '🎮' },
   { id: 'castle', title: 'Castle', icon: '🏰' },
   { id: 'goblins', title: 'Goblins', icon: '👺' },
+  { id: 'army', title: 'Troops and triggers', icon: '⚔️' },
   { id: 'slingshot', title: 'Slingshot', icon: '🪨' },
   { id: 'food', title: 'Food and food tools', icon: '🍗' },
   { id: 'board', title: 'Board', icon: '🧭' },
@@ -103,9 +109,14 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'bowlFill', group: 'slingshot', icon: '🫙', code: 'KeyI', label: 'Fill bowl', does: 'Fill the pebble bowl' },
   { id: 'addFood', group: 'food', icon: '➕', code: 'KeyY', label: 'Add food', does: 'Add 3 food to the jar (it stops at 10)' },
   { id: 'emptyFood', group: 'food', icon: '➖', code: 'Digit0', label: 'Empty food', does: 'Empty the food jar (the swatter and pepper show Locked)' },
-  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show food tools', does: 'The fly swatter and pepper shaker pop onto their platforms now (normally in waves 3 and 4)' },
+  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show food tools', does: 'The fly swatter, pepper shaker, megaphone and bell pop onto their platforms now (normally in waves 3 and 4)' },
   { id: 'swat', group: 'food', icon: '🪰', code: 'Digit2', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (the first swat costs 4 food, then 10 s of swatting)' },
   { id: 'pepper', group: 'food', icon: '🌶️', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (the first shake costs 3 food, then 8 s). Peppered goblins give 2 food' },
+  { id: 'megaphone', group: 'food', icon: '📣', code: 'Digit4', label: 'Megaphone scream', does: 'Megaphone: a scream without a mic, every goblin is stunned (costs 6 food, works even when it is tied down)' },
+  { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands, every goblin is stunned (costs 6 food)' },
+  { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send squad', does: 'A squad of soldiers marches out now toward a camp (normally every 10 s while a wave runs)' },
+  { id: 'triggersReset', group: 'army', icon: '🛢️', code: 'Digit7', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
+  { id: 'triggersFire', group: 'army', icon: '💣', code: 'Digit8', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },
   { id: 'spinLeft', group: 'board', icon: '↩️', label: 'Spin left', does: 'Turn the board left one step' },
   { id: 'spinRight', group: 'board', icon: '↪️', label: 'Spin right', does: 'Turn the board right one step' },
   { id: 'boardUp', group: 'board', icon: '⬆️', label: 'Board up', does: 'Raise the board one step' },

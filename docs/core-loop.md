@@ -31,6 +31,14 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
 - **At the wall:** grunts and runners that get past them stop at the wall and hit it. Only climbers climb.
 - **Balance target:** on their own, troops lose slowly. The player is always needed, but never overwhelmed.
 
+### How it works (step 5, `src/units/troops.ts`)
+
+- A squad comes out every 10 s while a wave is fought (the first after 4 s), cap 12 soldiers. Squads take turns going to each attacking camp. About a third are archers, with the same rules.
+- The gate is hidden: each squad leaves through the wall entry at the castle end of its camp's shortest road, and walks that route backward out to the camp.
+- A goblin within 4 cm is fought: both stop. A soldier strikes every 1.4 s and lands half of them, a goblin strikes back every 1.1 s and lands 60%. Runners rush past and are never fought. Soldiers can fight goblins at the wall, never climbers on it or intruders.
+- At the camp, or when the wave ends, soldiers walk home and go back into the castle.
+- Numbers in `TROOPS`. Debug key 6 sends a squad.
+
 ### On hold (not in the MVP)
 
 - Picking up troops and placing them by hand.

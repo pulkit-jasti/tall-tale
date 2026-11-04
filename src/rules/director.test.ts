@@ -164,6 +164,21 @@ describe('tutorial director', () => {
     expect(api.shown).toEqual(['slingshot', 'swatter', 'pepper']);
   });
 
+  it('teaches the megaphone and bell with the pepper: grab in the breather, stun in wave 4', () => {
+    const api = idleApi();
+    api.waveCleared = () => true;
+    const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper', 'megaphone']);
+    const ids = steps.map((s) => s.id);
+    expect(ids.indexOf('learn-megaphone-grab')).toBe(ids.indexOf('learn-pepper-grab') + 1);
+    expect(ids.indexOf('learn-megaphone-grab')).toBeLessThan(ids.indexOf('wave-4-start'));
+    expect(ids.indexOf('learn-megaphone')).toBeGreaterThan(ids.indexOf('learn-pepper'));
+    expect(ids.indexOf('learn-megaphone')).toBeLessThan(ids.indexOf('wave-4-clear'));
+    const director = new Director<TutorialApi>(steps, api);
+    runPokingNext(director, 60 * 40);
+    expect(director.finished).toBe(true);
+    expect(api.shown).toEqual(['slingshot', 'swatter', 'pepper', 'megaphone']);
+  });
+
   it('a wave has no timer: it waits until it is cleared (ignoring it loses the castle)', () => {
     const api = idleApi();
     const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);

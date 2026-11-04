@@ -2,7 +2,7 @@
 // and poke target must be a comfortable reach from the seat. Distances are
 // measured from the eyes, which sit BOARD.eyeToBoard above the board when it
 // is placed. No Three.js here.
-import { BOARD, CASTLE, END_PANEL, HANDLES, HINT_SIGN, PEBBLE_BOWL, PEPPER, REACH, SLINGSHOT, SWATTER, TOOL_SPOTS } from '../config/game.js';
+import { BELL, BOARD, CASTLE, END_PANEL, HANDLES, HINT_SIGN, MEGAPHONE, PEBBLE_BOWL, PEPPER, REACH, SLINGSHOT, SWATTER, TOOL_SPOTS } from '../config/game.js';
 
 export type ReachZone = 'tooClose' | 'close' | 'sweet' | 'far' | 'tooFar';
 
@@ -29,6 +29,8 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pebble bowl', radius: PEBBLE_BOWL.radius, y: PEBBLE_BOWL.rimY },
     { name: 'swatter grip', radius: TOOL_SPOTS.leftSide.radius, y: top + (SWATTER.gripFrom + SWATTER.gripTo) / 2 },
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
+    { name: 'bell handle', radius: TOOL_SPOTS.bell.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
+    { name: 'megaphone grip', radius: TOOL_SPOTS.megaphone.radius, y: top + (MEGAPHONE.gripFrom + MEGAPHONE.gripTo) / 2 },
     { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY },
     { name: 'end panel button', radius: END_PANEL.radius, y: endButtonY },
     { name: 'climber on the rampart', radius: CASTLE.rampartRadius, y: CASTLE.wallHeight + 2, rare: true },

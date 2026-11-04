@@ -128,6 +128,32 @@ export class RoadGraph {
     return this.stepFrom(options[options.length - 1].road, node);
   }
 
+  /**
+   * The shortest route from a point to the castle along open roads, as the
+   * roads to walk in order (troops walk it backward, from the wall out to a
+   * camp). Empty if the point is cut off or is a wall entry.
+   */
+  routeToWall(node: number): Step[] {
+    const route: Step[] = [];
+    let here = node;
+    for (let guard = 0; guard < this.nodes.length && !this.isWall(here); guard++) {
+      let best: number | null = null;
+      let bestDistance = this.nodes[here].toCastle;
+      for (const road of this.nodes[here].roads) {
+        if (!this.roads[road].open) continue;
+        const d = this.roads[road].length + this.nodes[this.other(road, here)].toCastle;
+        if (d <= bestDistance + 1e-6) {
+          bestDistance = d;
+          best = road;
+        }
+      }
+      if (best === null) return [];
+      route.push(this.stepFrom(best, here));
+      here = this.other(best, here);
+    }
+    return this.isWall(here) ? route : [];
+  }
+
   private stepFrom(road: number, node: number): Step {
     return { road, dir: this.roads[road].from === node ? 1 : -1 };
   }

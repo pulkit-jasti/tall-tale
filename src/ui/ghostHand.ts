@@ -265,6 +265,7 @@ const TOOL_HANDLES: Partial<Record<GhostAnchor, HoldName>> = {
   slingHandle: 'slingshot',
   swatterHandle: 'swatter',
   pepperHandle: 'pepper',
+  bellHandle: 'bell',
 };
 
 export class GhostHand {

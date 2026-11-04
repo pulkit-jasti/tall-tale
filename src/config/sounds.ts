@@ -47,6 +47,20 @@ export const SOUNDS = {
     positional: true,
   },
   pepperShake: { files: ['rpg/handleCoins.ogg', 'rpg/handleCoins2.ogg'], volume: 0.6, positional: true },
+  bell: { files: ['impact/impactBell_heavy_000.ogg', 'impact/impactBell_heavy_001.ogg'], volume: 0.8, positional: true },
+  stunned: { files: ['interface/glass_001.ogg', 'interface/glass_002.ogg'], volume: 0.7, positional: false },
+  swordClash: {
+    files: ['impact/impactMetal_light_000.ogg', 'impact/impactMetal_light_001.ogg', 'impact/impactMetal_medium_000.ogg'],
+    volume: 0.35,
+    positional: true,
+  },
+  debris: {
+    files: ['impact/impactPlank_medium_000.ogg', 'impact/impactWood_heavy_000.ogg', 'impact/impactWood_heavy_001.ogg'],
+    volume: 0.8,
+    positional: true,
+  },
+  treeCreak: { files: ['rpg/creak1.ogg', 'rpg/creak2.ogg', 'rpg/creak3.ogg'], volume: 0.8, positional: true },
+  treeCrash: { files: ['impact/impactWood_heavy_000.ogg', 'impact/impactWood_heavy_001.ogg'], volume: 1, positional: true },
   round1: { files: ['voice/round_1.ogg'], volume: 0.7, positional: false },
   round2: { files: ['voice/round_2.ogg'], volume: 0.7, positional: false },
   round3: { files: ['voice/round_3.ogg'], volume: 0.7, positional: false },
@@ -60,6 +74,8 @@ export const SOUNDS = {
   campRumble: { files: [CHIME], volume: 0.5, positional: true },
   cheer: { files: [CHIME], volume: 0.5, positional: false },
   sneeze: { files: [CHIME], volume: 0.25, positional: true },
+  kegBoom: { files: [CHIME], volume: 0.7, positional: true },
+  boulderRoll: { files: [CHIME], volume: 0.5, positional: true },
 } satisfies Record<string, SoundDef>;
 
 export type SoundName = keyof typeof SOUNDS;

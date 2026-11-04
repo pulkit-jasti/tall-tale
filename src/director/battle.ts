@@ -1,8 +1,8 @@
 // Runs one battle: the tutorial director, the win and lose rules, the flags,
 // the hint sign with its markers, and the end panel. It is the TutorialApi:
-// each director call goes to a game system (wave spawner, goblins,
-// slingshot, food tools, food jar), and it counts what the player does for the lessons. Nothing
-// tutorial-only lives in those systems.
+// each director call goes to a game system (wave spawner, goblins, troops,
+// triggers, slingshot, food tools, food jar), and it counts what the player
+// does for the lessons. Nothing tutorial-only lives in those systems.
 import { Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import {
@@ -28,6 +28,9 @@ import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
 import type { FoodToolName, HandTool } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
+import type { StunWave } from '../tools/stunWave.js';
+import type { Troops } from '../units/troops.js';
+import type { Triggers } from '../world/triggers.js';
 import type { EndPanel } from '../ui/endPanel.js';
 import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemos.js';
 import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
@@ -53,7 +56,8 @@ import {
 
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
-const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper'];
+const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'megaphone'];
+const noTools = (): Record<FoodToolName, number> => ({ swatter: 0, pepper: 0, megaphone: 0, bell: 0 });
 const ICONS: Record<HintIcon, UiImageName> = {
   pinch: 'target',
   grab: 'target',
@@ -75,8 +79,14 @@ export interface BattleParts {
   goblins: Goblins;
   spawner: WaveSpawner;
   slingshot: Slingshot;
-  /** The food tools by name (the megaphone and bell come in build step 5). */
+  /** The food tools by name (the megaphone and the bell share a platform and a lesson). */
   tools: Record<FoodToolName, HandTool>;
+  /** The army: squads walk out while a wave is fought. */
+  troops: Troops;
+  /** Keg, boulder and tree on the roads, reset at each wave. */
+  triggers: Triggers;
+  /** The stun of the megaphone and the bell. */
+  stun: StunWave;
   food: FoodJar;
   flags: Flags;
   panel: EndPanel;
@@ -118,8 +128,8 @@ export class Battle implements TutorialApi {
   private eatenCount = 0;
   private pickedCount = 0;
   private slingHits = 0;
-  private toolUseCount: Record<FoodToolName, number> = { swatter: 0, pepper: 0 };
-  private toolGrabCount: Record<FoodToolName, number> = { swatter: 0, pepper: 0 };
+  private toolUseCount = noTools();
+  private toolGrabCount = noTools();
   private sling: Record<SlingEvent, number> = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
   private spun = 0;
   private moved = 0;
@@ -190,9 +200,16 @@ export class Battle implements TutorialApi {
       // The only battle is the tutorial for now.
       tool.free = TOOLS.freeInTutorial;
     }
-    this.toolUseCount = { swatter: 0, pepper: 0 };
-    this.toolGrabCount = { swatter: 0, pepper: 0 };
+    this.toolUseCount = noTools();
+    this.toolGrabCount = noTools();
     this.parts.food.reset();
+    this.parts.stun.reset();
+  }
+
+  /** The army and the triggers off the board (before a battle, or when it stops). */
+  private clearBoard(): void {
+    this.parts.troops.clear();
+    this.parts.triggers.hideAll();
   }
 
   /** The step the tutorial is on, for the debug page. */
@@ -211,6 +228,7 @@ export class Battle implements TutorialApi {
     const from = Math.max(0, Math.min(fromWave, TUTORIAL_WAVES.length - 1));
     spawner.stop();
     goblins.killAll();
+    this.clearBoard();
     panel.hide();
     // Every tool waits for its wave (docs/giant-tools.md section 6).
     slingshot.setVisible(false);
@@ -234,7 +252,9 @@ export class Battle implements TutorialApi {
     for (const wave of TUTORIAL_WAVES.slice(0, from)) {
       const tool = wave.newTool;
       if (tool === 'slingshot') slingshot.setVisible(true);
-      else if (tool) this.foodTool(tool)?.setVisible(true);
+      else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
+      // The megaphone and the bell come with the pepper.
+      if (tool === 'pepper') for (const t of this.foodTools('megaphone')) t.setVisible(true);
     }
     if (from > 0) food.add(from * DEBUG.startFoodPerWave);
     this.reach.stop();
@@ -261,6 +281,7 @@ export class Battle implements TutorialApi {
   welcome(): void {
     this.stop();
     this.parts.goblins.killAll();
+    this.clearBoard();
     this.parts.slingshot.setVisible(false);
     this.resetTools();
     this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
@@ -274,6 +295,7 @@ export class Battle implements TutorialApi {
     this.director = null;
     this.reach.stop();
     this.parts.spawner.stop();
+    this.clearBoard();
     this.parts.panel.hide();
     this.parts.sign.show(null);
     this.parts.markers.hide();
@@ -298,7 +320,8 @@ export class Battle implements TutorialApi {
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     if (this.running && this.state.phase === 'playing') {
-      const intruders = goblins.countMode('intruder');
+      // Stunned intruders smash nothing.
+      const intruders = goblins.countMode('intruder', true);
       damageCastle(this.state, intruders * CASTLE_HEALTH.intruderDamagePerSec * dt);
       // A goblin the player can reach, or holds, or has in the slingshot is never a
       // stalemate: they can still deal with it, so the wave must wait for them.
@@ -443,6 +466,8 @@ export class Battle implements TutorialApi {
         return this.parts.tools.swatter.handleWorld(out);
       case 'pepperHandle':
         return this.parts.tools.pepper.handleWorld(out);
+      case 'bellHandle':
+        return this.parts.tools.bell.handleWorld(out);
       case 'slingHandle':
         return slingshot.partWorld('handle', out);
       case 'bowl':
@@ -490,6 +515,7 @@ export class Battle implements TutorialApi {
   /** Win or lose: the battle stops, leftovers run off, and the panel comes up. */
   private end(): void {
     this.parts.spawner.stop();
+    this.parts.troops.recall();
     this.poofAll();
     this.parts.slingshot.release();
     for (const tool of Object.values(this.parts.tools)) tool.release();
@@ -516,7 +542,11 @@ export class Battle implements TutorialApi {
     this.wave = index;
     this.inWave = true;
     this.sinceDamage = 0;
-    this.parts.spawner.start(TUTORIAL_WAVES[index]);
+    const plan = TUTORIAL_WAVES[index];
+    this.parts.spawner.start(plan);
+    // The army marches out toward the attacking camps, and the triggers of this wave stand ready.
+    this.parts.troops.deploy(plan.camps);
+    this.parts.triggers.setWave(index + 1);
     const last = index === TUTORIAL_WAVES.length - 1;
     this.parts.audio.play(last ? 'finalRound' : WAVE_VOICES[index] ?? 'finalRound');
     console.info(`[battle] wave ${index + 1} started`);
@@ -529,11 +559,13 @@ export class Battle implements TutorialApi {
   endWave(): void {
     this.inWave = false;
     this.parts.spawner.stop();
+    this.parts.troops.recall();
     this.poofAll();
   }
 
   clearWave(): void {
     this.inWave = false;
+    this.parts.troops.recall();
     clearWave(this.state, CASTLE_HEALTH);
     if (this.state.phase === 'playing') this.parts.audio.play('cheer');
   }
@@ -565,12 +597,13 @@ export class Battle implements TutorialApi {
       return;
     }
     if (tool !== 'slingshot') {
-      const t = this.foodTool(tool);
-      if (!t) return;
-      // The lessons count what the player does with it from now on.
-      this.toolUseCount[t.name] = 0;
-      this.toolGrabCount[t.name] = 0;
-      t.appear();
+      // The megaphone and the bell come together.
+      for (const t of this.foodTools(tool)) {
+        // The lessons count what the player does with it from now on.
+        this.toolUseCount[t.name] = 0;
+        this.toolGrabCount[t.name] = 0;
+        t.appear();
+      }
       return;
     }
     const { slingshot, stage, particles, audio } = this.parts;
@@ -588,8 +621,7 @@ export class Battle implements TutorialApi {
 
   hintTool(tool: ToolName): void {
     if (tool === 'slingshot') this.parts.slingshot.beckon = true;
-    const t = this.foodTool(tool);
-    if (t) t.beckon = true;
+    for (const t of this.foodTools(tool)) t.beckon = true;
   }
 
   helpWithTool(tool: ToolName): void {
@@ -598,17 +630,16 @@ export class Battle implements TutorialApi {
       this.parts.slingshot.beckon = true;
       return;
     }
-    const t = this.foodTool(tool);
-    if (!t) return;
-    t.beckon = true;
+    const tools = this.foodTools(tool);
+    if (tools.length === 0) return;
+    for (const t of tools) t.beckon = true;
     // The easier way: enough food for one use, or a goblin in reach to use it on.
-    if (!t.usable) this.parts.food.add(t.cost - this.parts.food.food);
+    if (!this.canAfford(tool)) this.parts.food.add(tools[0].cost - this.parts.food.food);
     else this.lessonClimber(true);
   }
 
   holdToolTimer(tool: ToolName, on: boolean): void {
-    const t = this.foodTool(tool);
-    if (t) t.timerHeld = on;
+    for (const t of this.foodTools(tool)) t.timerHeld = on;
   }
 
   startReachCheck(): void {
@@ -638,22 +669,30 @@ export class Battle implements TutorialApi {
 
   toolUses(tool: ToolName): number {
     if (tool === 'slingshot') return this.slingHits;
-    return tool === 'swatter' || tool === 'pepper' ? this.toolUseCount[tool] : 0;
+    let count = 0;
+    for (const t of this.foodTools(tool)) count += this.toolUseCount[t.name];
+    return count;
   }
 
   toolGrabbed(tool: ToolName): number {
     if (tool === 'slingshot') return this.sling.grabbed;
-    return tool === 'swatter' || tool === 'pepper' ? this.toolGrabCount[tool] : 0;
+    let count = 0;
+    for (const t of this.foodTools(tool)) count += this.toolGrabCount[t.name];
+    return count;
   }
 
+  /** True if the tool (for the megaphone: it or the bell) can be used now. */
   canAfford(tool: ToolName): boolean {
     if (tool === 'slingshot') return true;
-    return this.foodTool(tool)?.usable ?? false;
+    return this.foodTools(tool).some((t) => t.usable);
   }
 
-  /** The food tool by its tutorial name, if it is built. */
-  private foodTool(tool: ToolName): HandTool | null {
-    return tool === 'swatter' || tool === 'pepper' ? this.parts.tools[tool] : null;
+  /** The food tools of a tutorial tool name: the megaphone lessons are about the megaphone and the bell. */
+  private foodTools(tool: ToolName): HandTool[] {
+    const { tools } = this.parts;
+    if (tool === 'swatter' || tool === 'pepper') return [tools[tool]];
+    if (tool === 'megaphone') return [tools.megaphone, tools.bell];
+    return [];
   }
 
   boardSpun(): number {

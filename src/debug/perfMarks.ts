@@ -13,7 +13,10 @@ export type PerfMark =
   | 'debug send'
   | 'particles'
   | 'board placed'
-  | 'pebble shot';
+  | 'pebble shot'
+  | 'troop built'
+  | 'troop spawn'
+  | 'trigger';
 
 const marks = new Set<PerfMark>();
 

@@ -112,6 +112,8 @@ Shot with the slingshot. Each one happens once and resets between waves. A trigg
 | Leaning tree | Cylinder and cone | Falls across the road, squashes enemies under it, blocks the road for a few seconds. Enemies take another route. | One 90 degree rotation |
 | Bridge | Planks over a stream or gap | Collapses. Enemies on it fall. The road closes until goblin builders rebuild it (about 15 to 20 s). Your troops cannot cross either. | Planks drop with the debris system |
 
+**How it works (step 5, `src/world/triggers.ts`):** each blueprint trigger sits on the road nearest its spot: the keg just beside the road, the boulder on a rock hill 8 cm off it, the tree 5 cm off it, leaning over it. Each stands from its tutorial wave on and resets at the start of every wave. They register with the slingshot as `SlingTarget`s, so the aim assist and the target glow work for them, and they wobble while aimed at. Only a slingshot shot or a goblin shot sets them off (thrown pebbles never do). The tree closes its road for 12 s (`RoadGraph.setOpen`), then poofs away. Numbers in `TRIGGERS`. Debug keys 7 (reset all) and 8 (set off all).
+
 ### Chain reactions
 
 - One rule: **explosions set off nearby triggers.**

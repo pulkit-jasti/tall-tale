@@ -25,44 +25,43 @@ export interface WavePlan {
 }
 
 /**
- * Small test waves for now, so a whole run is quick to play. The real
- * starting numbers from docs/mvp.md "Tutorial waves" (6 grunts and 3 climbers
- * in wave 1, up to 18 grunts, 16 runners and 4 climbers in wave 5) come back
- * when the waves are balanced, with troops in build step 5.
+ * The tutorial waves from docs/mvp.md "Tutorial waves", balanced with the
+ * troops in build step 5 (step 3 and 4 used small test waves). Enemies come
+ * out in small groups over `spawnTime`, so the board stays in the unit budget.
  */
 export const TUTORIAL_WAVES: WavePlan[] = [
   {
-    intro: 'Goblins are coming! Grab and eat them before they break your wall.',
+    intro: 'Goblins are coming! Your soldiers march out to fight them. Help them: grab and eat goblins before they break your wall.',
     camps: ['campNorth'],
-    counts: { grunt: 2, runner: 0, climber: 1 },
-    spawnTime: 12,
+    counts: { grunt: 6, runner: 0, climber: 3 },
+    spawnTime: 40,
   },
   {
     intro: 'Two camps now. Shoot goblins far away before they reach the wall.',
     camps: ['campNorth', 'campEast'],
-    counts: { grunt: 3, runner: 0, climber: 1 },
-    spawnTime: 15,
+    counts: { grunt: 10, runner: 0, climber: 2 },
+    spawnTime: 50,
     newTool: 'slingshot',
   },
   {
     intro: 'Runners! They are small and fast and rush straight to the wall.',
     camps: ['campNorth', 'campWest'],
-    counts: { grunt: 2, runner: 3, climber: 1 },
-    spawnTime: 15,
+    counts: { grunt: 8, runner: 12, climber: 3 },
+    spawnTime: 55,
     newTool: 'swatter',
   },
   {
     intro: 'Three camps attack. Spin the board to keep watch all around you.',
     camps: ['campEast', 'campSouth', 'campWest'],
-    counts: { grunt: 3, runner: 2, climber: 1 },
-    spawnTime: 18,
+    counts: { grunt: 14, runner: 8, climber: 4 },
+    spawnTime: 60,
     newTool: 'pepper',
   },
   {
-    intro: 'The final wave. Everything at once!',
+    intro: 'The final wave. Everything at once! Shoot the barrels, boulders and trees on the roads.',
     camps: ['campNorth', 'campEast', 'campSouth'],
-    counts: { grunt: 4, runner: 3, climber: 1 },
-    spawnTime: 20,
+    counts: { grunt: 18, runner: 16, climber: 4 },
+    spawnTime: 70,
   },
 ];
 
@@ -99,7 +98,8 @@ export type MarkerTarget =
   | 'bowl'
   | 'pouch'
   | 'swatterHandle'
-  | 'pepperHandle';
+  | 'pepperHandle'
+  | 'bellHandle';
 
 export type HintIcon = 'pinch' | 'grab' | 'spin' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
 
@@ -357,7 +357,10 @@ const seconds = (tool: FoodTool): number => TOOLS.duration[tool];
 const free = TOOLS.freeInTutorial;
 
 /** Each food tool: where its handle is, the ghost hand demo for grabbing it, and its use lesson. */
-const FOOD_TOOL_LESSONS: Record<FoodTool, { marker?: MarkerTarget; grabDemo?: GhostDemoName; use: string; locked: string }> = {
+const FOOD_TOOL_LESSONS: Record<
+  FoodTool,
+  { marker?: MarkerTarget; grabDemo?: GhostDemoName; useDemo?: GhostDemoName; use: string; locked: string }
+> = {
   swatter: {
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
@@ -375,8 +378,11 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, { marker?: MarkerTarget; grabDemo?: Gh
     locked: `Not enough food for the pepper (${cost('pepper')}). Eat a goblin to fill your jar.`,
   },
   megaphone: {
-    use: 'Scream into the megaphone, or shake the bell, to stun every goblin.',
-    locked: `Not enough food for the megaphone (${cost('megaphone')}). Eat a goblin to fill your jar.`,
+    marker: 'bellHandle',
+    grabDemo: 'bellGrab',
+    useDemo: 'bellRing',
+    use: 'Goblins everywhere! Shake the bell hard, or hold the megaphone and shout into it, to stun every goblin at once.',
+    locked: `Not enough food for the bell (${cost('megaphone')}). Eat a goblin to fill your jar.`,
   },
 };
 
@@ -415,27 +421,23 @@ function foodLessons(): TutorialStep[] {
  * grabs it. Grabbing is free, so it is never locked. The text points at its
  * price tag, so the player links food and tools (free while learning).
  */
-function toolGrabLesson(tool: FoodTool, afterFood: boolean, alsoShow?: ToolName): TutorialStep {
+function toolGrabLesson(tool: FoodTool, afterFood: boolean, intro?: string): TutorialStep {
   const { marker, grabDemo } = FOOD_TOOL_LESSONS[tool];
-  const intro = afterFood ? 'Tools cost food, but they are free while you learn.' : 'Wave cleared!';
+  intro ??= afterFood ? 'Tools cost food, but they are free while you learn.' : 'Wave cleared!';
   const price = free ? 'its price tag says Free for now' : `its price tag says ${cost(tool)} food`;
+  const text =
+    tool === 'megaphone'
+      ? `${intro} Here are ${TOOL_NAMES[tool]} (${price.replace('its', 'their')}). Grab the bell with your fist.`
+      : `${intro} Here is ${TOOL_NAMES[tool]}: ${price}. Grab it with your fist.`;
   return lessonStep(
     `learn-${tool}-grab`,
-    lesson(
-      `${intro} Here is ${TOOL_NAMES[tool]}: ${price}. Grab it with your fist.`,
-      'grab',
-      marker,
-      { demo: grabDemo },
-    ),
+    lesson(text, 'grab', marker, { demo: grabDemo }),
     (api, since) => api.toolGrabbed(tool) > since,
     // Counts from when the tool appeared, like the slingshot lessons.
     fromToolShown,
     {
-      start: (api) => {
-        api.showTool(tool);
-        // The megaphone shares its platform with the bell and comes with the pepper (wave 4).
-        if (alsoShow) api.showTool(alsoShow);
-      },
+      // The megaphone and the bell share a platform and come together.
+      start: (api) => api.showTool(tool),
       fallbacks: [(api) => api.hintTool(tool)],
       timeout: 45,
     },
@@ -454,7 +456,7 @@ function toolLesson(tool: FoodTool): TutorialStep {
   const text = FOOD_TOOL_LESSONS[tool];
   return lessonStep(
     `learn-${tool}`,
-    lesson(text.use, 'target', undefined, { tool, whenLocked: text.locked }),
+    lesson(text.use, 'target', text.useDemo ? text.marker : undefined, { tool, whenLocked: text.locked, demo: text.useDemo }),
     (api, since) => api.toolUses(tool) > since || api.waveCleared(),
     fromToolShown,
     {
@@ -507,8 +509,9 @@ export function buildTutorialSteps(
       const afterFood = !foodTaught;
       if (afterFood) steps.push(...foodLessons());
       foodTaught = true;
-      const alsoShow = wave.newTool === 'pepper' && has('megaphone') ? 'megaphone' : undefined;
-      steps.push(toolGrabLesson(wave.newTool, afterFood, alsoShow));
+      steps.push(toolGrabLesson(wave.newTool, afterFood));
+      // The megaphone and the bell come with the pepper (wave 4), taught right after it.
+      if (wave.newTool === 'pepper' && has('megaphone')) steps.push(toolGrabLesson('megaphone', false, 'One more!'));
     }
     // The two flags are explained before the first wave, while nothing attacks yet.
     if (i === 0) {

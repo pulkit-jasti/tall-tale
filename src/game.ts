@@ -1,10 +1,12 @@
 // The game loop. Builds the world once from the map blueprint, then runs the
 // small systems in a fixed order every frame: hands, handles, battle (director,
-// waves, flags, end panel), goblins, grab and eat, slingshot, food tools, food jar, effects.
+// waves, flags, end panel), goblins, troops, triggers, grab and eat,
+// slingshot, food tools, food jar, effects, sky.
 import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
+import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { DEBUG, FPS, HANDLES, STAGE, XR } from './config/game.js';
+import { DEBUG, FPS, HANDLES, SKY, STAGE, XR } from './config/game.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -30,11 +32,17 @@ import { HandTracker } from './player/hands.js';
 import { degToRad } from './rules/boardMath.js';
 import { createRandom, type Random } from './rules/random.js';
 import { checkReach } from './rules/reach.js';
+import { Bell } from './tools/bell.js';
 import { FlySwatter } from './tools/flySwatter.js';
 import type { HandTool } from './tools/handTool.js';
+import { Megaphone } from './tools/megaphone.js';
 import { PepperShaker } from './tools/pepperShaker.js';
 import { Slingshot } from './tools/slingshot.js';
+import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
+import { Troops } from './units/troops.js';
+import { Sky } from './world/sky.js';
+import { Triggers } from './world/triggers.js';
 import { buildBoard } from './world/boardBuilder.js';
 import { FoodJar } from './world/foodJar.js';
 import { Stage } from './world/stage.js';
@@ -65,7 +73,13 @@ export class GameSystem extends createSystem({}) {
   private food!: FoodJar;
   private swatter!: FlySwatter;
   private pepper!: PepperShaker;
+  private megaphone!: Megaphone;
+  private bell!: Bell;
+  private stun!: StunWave;
   private tools: HandTool[] = [];
+  private troops!: Troops;
+  private triggers!: Triggers;
+  private sky: Sky | null = null;
   private particles!: Particles;
   private threat!: ThreatCues;
   private spawner!: ToySpawner;
@@ -92,6 +106,8 @@ export class GameSystem extends createSystem({}) {
     sun.position.set(-3, 6, 2);
     root.add(sun);
     this.scene.fog = new Fog(0xc9dce6, 3.5, 9);
+    // Decor only: a sun and slow clouds in front of the scene's gradient dome.
+    if (SKY.enabled) this.sky = new Sky(root, createRandom(seed + 700));
 
     this.stage = new Stage(root);
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
@@ -112,9 +128,23 @@ export class GameSystem extends createSystem({}) {
     const toolParts = { stage: this.stage, goblins: this.goblins, food: this.food, audio: this.audio, particles: this.particles };
     this.swatter = new FlySwatter(toolParts);
     this.pepper = new PepperShaker(toolParts);
-    this.tools = [this.swatter, this.pepper];
-    await Promise.all([this.goblins.load(), this.slingshot.load(), this.food.load(), ...this.tools.map((t) => t.load())]);
-    this.fps.countUnits = () => this.goblins.aliveCount;
+    this.stun = new StunWave(this.stage, this.goblins, this.audio, this.particles);
+    this.megaphone = new Megaphone(toolParts, this.stun);
+    this.bell = new Bell(toolParts, this.stun);
+    this.tools = [this.swatter, this.pepper, this.megaphone, this.bell];
+    this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
+    this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
+    await Promise.all([
+      this.goblins.load(),
+      this.slingshot.load(),
+      this.food.load(),
+      this.troops.load(),
+      this.triggers.load(blueprint.triggers),
+      ...this.tools.map((t) => t.load()),
+    ]);
+    // Every trigger can be shot: the aim assist bends toward it and it glows while aimed at.
+    for (const target of this.triggers.targets) this.slingshot.addTarget(target);
+    this.fps.countUnits = () => this.goblins.aliveCount + this.troops.aliveCount;
     this.fps.onReport = (stats) => {
       sendRunStats(stats);
       if (stats.final) {
@@ -140,7 +170,10 @@ export class GameSystem extends createSystem({}) {
         createRandom(seed + 500),
       ),
       slingshot: this.slingshot,
-      tools: { swatter: this.swatter, pepper: this.pepper },
+      tools: { swatter: this.swatter, pepper: this.pepper, megaphone: this.megaphone, bell: this.bell },
+      troops: this.troops,
+      triggers: this.triggers,
+      stun: this.stun,
       food: this.food,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
       panel: new EndPanel(this.stage.boardLift, this.audio),
@@ -168,6 +201,7 @@ export class GameSystem extends createSystem({}) {
         this.spawner.auto = false;
         this.spawner.clear();
         this.goblins.killAll();
+        this.troops.clear();
       },
       spawn: (count) => {
         this.goblins.cap = Math.min(DEBUG.stressMax, Math.max(this.goblins.cap, this.goblins.aliveCount + count));
@@ -263,7 +297,7 @@ export class GameSystem extends createSystem({}) {
         paused,
         liveFps: this.fps.live,
         targetFps: this.fps.target,
-        units: this.goblins.aliveCount,
+        units: this.goblins.aliveCount + this.troops.aliveCount,
         testing: this.stressTest.active,
         step: this.battle.stepId,
         playFrom: this.battle.playFromWave + 1,
@@ -293,12 +327,18 @@ export class GameSystem extends createSystem({}) {
     this.spawner.update(dt);
     this.battle.update(dt, this.hands.hands, headPosition, headForward);
     this.goblins.update(dt);
+    this.troops.update(dt);
+    this.triggers.update(dt);
+    // No mic (denied on the start page): the megaphone is tied down, the bell still works.
+    this.megaphone.tiedDown = !mic.on;
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
+    this.stun.update(dt);
     this.food.update(dt);
     this.threat.update(dt);
     this.particles.update(dt);
+    this.sky?.update(dt);
   }
 
   /**
@@ -397,6 +437,7 @@ export class GameSystem extends createSystem({}) {
       case 'clear':
         this.spawner.clear();
         this.goblins.killAll();
+        this.troops.clear();
         this.fps.resetRun();
         break;
       case 'resetRun':
@@ -450,6 +491,21 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'pepper':
         this.pepper.debugShake();
+        break;
+      case 'megaphone':
+        this.megaphone.debugScream();
+        break;
+      case 'bell':
+        this.bell.debugRing();
+        break;
+      case 'troops':
+        this.troops.sendSquad();
+        break;
+      case 'triggersReset':
+        this.triggers.setWave(TUTORIAL_WAVES.length);
+        break;
+      case 'triggersFire':
+        this.triggers.fireAll();
         break;
       case 'fps':
         this.fps.toggle();

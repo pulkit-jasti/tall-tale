@@ -40,6 +40,8 @@ const burstAt = new Vector3();
 export class GrabEat {
   private slots = new Map<HandState, HandSlot>();
   private readyGoblins = new Set<Goblin>();
+  /** This frame's ready goblins. Swapped with readyGoblins each frame, so no new Set per frame. */
+  private nextReady = new Set<Goblin>();
   private pendingGulp = -1;
   /** What each food tool shows this frame (reused, no allocation per frame). */
   private toolReady = new Map<HandTool, 'ready' | 'locked'>();
@@ -69,7 +71,8 @@ export class GrabEat {
 
   update(dt: number, headPosition: Vector3, headForward: Vector3): void {
     this.time += dt;
-    const nowReady = new Set<Goblin>();
+    const nowReady = this.nextReady;
+    nowReady.clear();
     let ringReady = false;
     let pouchReady = false;
     let bowlReady = false;
@@ -191,6 +194,7 @@ export class GrabEat {
       if (!nowReady.has(goblin) && goblin.mode !== 'held') this.goblins.setTouch(goblin, 'idle');
     }
     for (const goblin of nowReady) this.goblins.setTouch(goblin, 'ready');
+    this.nextReady = this.readyGoblins;
     this.readyGoblins = nowReady;
     this.handles.setReady(ringReady);
     this.slingshot.setReady(pouchReady, bowlReady, handleReady);

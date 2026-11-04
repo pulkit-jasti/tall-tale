@@ -7,16 +7,20 @@ import {
   AnimationMixer,
   Color,
   Group,
+  IcosahedronGeometry,
+  InstancedMesh,
   LoopOnce,
   LoopRepeat,
+  Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Vector3,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { CASTLE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, type GoblinStats, type GoblinType } from '../config/game.js';
+import { CASTLE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GoblinStats, type GoblinType } from '../config/game.js';
 import { angleOf, boardHeight, clearOfTowers, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
@@ -34,7 +38,8 @@ export type GoblinMode =
   | 'intruder'
   | 'held'
   | 'falling'
-  | 'dazed';
+  | 'dazed'
+  | 'fighting';
 
 const GRABBABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
   'walking',
@@ -44,6 +49,19 @@ const GRABBABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
   'rampart',
   'intruder',
   'dazed',
+  'fighting',
+]);
+
+/** Modes a stun freezes (a flying goblin keeps flying, and is still stunned when it lands). */
+const STUNNABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
+  'walking',
+  'toWall',
+  'atWall',
+  'climbing',
+  'rampart',
+  'intruder',
+  'dazed',
+  'fighting',
 ]);
 
 /** Modes where a goblin is near or in the player's hands (never part of a stalemate). */
@@ -85,6 +103,14 @@ export class Goblin {
   touch: TouchState = 'idle';
   readonly target = new Vector3();
   hasTarget = false;
+  /** Stunned by the megaphone or the bell: frozen and dizzy for this long (seconds). */
+  stunned = 0;
+  /** Fighting a soldier (src/units/troops.ts): the soldier, the mode to go back to after, and the strike timer. */
+  foe: object | null = null;
+  resumeMode: GoblinMode = 'walking';
+  strikeTimer = 0;
+  /** Animation time not played yet (far goblins update their animation every other frame). */
+  animDt = 0;
 
   constructor(
     template: ModelTemplate,
@@ -157,6 +183,10 @@ function findMaterial(object: Object3D): MeshStandardMaterial | null {
 
 const temp = new Vector3();
 const temp2 = new Vector3();
+const starMatrix = new Matrix4();
+const hiddenMatrix = new Matrix4().makeScale(0, 0, 0);
+/** Goblins that show dizzy stars at once (2 stars each). */
+const STAR_SLOTS = 40;
 
 export class Goblins {
   readonly list: Goblin[] = [];
@@ -167,6 +197,9 @@ export class Goblins {
   private template!: ModelTemplate;
   private baseColor = new Color(1, 1, 1);
   private camps: number[];
+  private stars!: InstancedMesh;
+  private time = 0;
+  private frame = 0;
 
   /** Called on each wall hit from a grunt or runner (castle damage). */
   onWallHit: (goblin: Goblin) => void = () => {};
@@ -178,6 +211,15 @@ export class Goblins {
     private audio: GameAudio,
   ) {
     this.camps = network.graph.camps;
+    this.stars = new InstancedMesh(
+      new IcosahedronGeometry(STUN.starSize / 2, 0),
+      new MeshBasicMaterial({ color: STUN.starColor }),
+      STAR_SLOTS * 2,
+    );
+    this.stars.frustumCulled = false;
+    for (let i = 0; i < STAR_SLOTS * 2; i++) this.stars.setMatrixAt(i, hiddenMatrix);
+    this.stars.visible = false;
+    board.add(this.stars);
   }
 
   async load(): Promise<void> {
@@ -201,11 +243,66 @@ export class Goblins {
     return false;
   }
 
-  /** Goblins in one mode right now (for example intruders, for castle damage). */
-  countMode(mode: GoblinMode): number {
+  /** Goblins in one mode right now (for example intruders, for castle damage). `awake`: stunned ones are left out. */
+  countMode(mode: GoblinMode, awake = false): number {
     let count = 0;
-    for (const g of this.list) if (g.mode === mode) count++;
+    for (const g of this.list) if (g.mode === mode && !(awake && g.stunned > 0)) count++;
     return count;
+  }
+
+  /**
+   * The megaphone or the bell: every goblin on the board is stunned for at
+   * least `seconds` (a longer stun already running is kept). Returns how many.
+   */
+  stunAll(seconds: number): number {
+    let count = 0;
+    for (const g of this.list) {
+      if (!this.isHittable(g)) continue;
+      if (g.stunned <= 0 && STUNNABLE.has(g.mode)) g.play('emote-no', true, 1.2);
+      g.stunned = Math.max(g.stunned, seconds);
+      count++;
+    }
+    return count;
+  }
+
+  /** A soldier engages this goblin: it stops and fights back (src/units/troops.ts). */
+  startFight(g: Goblin, foe: object): void {
+    if (g.mode !== 'fighting') {
+      g.resumeMode = g.mode;
+      g.mode = 'fighting';
+      g.strikeTimer = this.rng.range(0.2, 0.8);
+      if (g.stunned <= 0) g.play('idle');
+    }
+    g.foe = foe;
+  }
+
+  /** The fight is over (the soldier is down or gone): the goblin carries on. */
+  endFight(g: Goblin): void {
+    g.foe = null;
+    if (g.mode !== 'fighting') return;
+    g.mode = g.resumeMode;
+    if (g.stunned <= 0) this.playModeClip(g);
+  }
+
+  /** A goblin strikes at a soldier: the attack animation (alternating arms). */
+  strike(g: Goblin): void {
+    g.attackRight = !g.attackRight;
+    g.play(g.attackRight ? 'attack-melee-right' : 'attack-melee-left', false);
+  }
+
+  /** The animation for what the goblin is doing now (after a stun or a fight). */
+  private playModeClip(g: Goblin): void {
+    switch (g.mode) {
+      case 'walking':
+      case 'toWall':
+        g.play(g.stats.moveClip, true, g.stats.moveClipSpeed);
+        break;
+      case 'climbing':
+        g.play('interact-right', true, 1.4);
+        break;
+      default:
+        g.play('idle');
+    }
   }
 
   private obtain(type: GoblinType): Goblin | null {
@@ -224,6 +321,9 @@ export class Goblins {
     goblin.root.visible = true;
     goblin.root.rotation.set(0, 0, 0);
     goblin.hasTarget = false;
+    goblin.stunned = 0;
+    goblin.foe = null;
+    goblin.animDt = 0;
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
     this.setTouch(goblin, 'idle');
     return goblin;
@@ -352,6 +452,8 @@ export class Goblins {
 
   grab(goblin: Goblin): void {
     goblin.mode = 'held';
+    goblin.stunned = 0;
+    goblin.foe = null;
     goblin.vx = goblin.vy = goblin.vz = 0;
     goblin.hasLastHeld = false;
     goblin.play('fall', true, 1.6);
@@ -452,15 +554,54 @@ export class Goblins {
   }
 
   update(dt: number): void {
-    for (const g of this.list) {
+    this.time += dt;
+    this.frame++;
+    let star = 0;
+    const far2 = TROOPS.farAnimFrom * TROOPS.farAnimFrom;
+    for (let i = 0; i < this.list.length; i++) {
+      const g = this.list[i];
       if (g.mode === 'dead') continue;
       this.step(g, dt);
-      g.mixer.update(dt);
+      // Far goblins play their animation every other frame (half the cost, hard to see that far).
+      g.animDt += dt;
+      const p = g.root.position;
+      if (p.x * p.x + p.z * p.z < far2 || (this.frame + i) % 2 === 0) {
+        g.mixer.update(g.animDt);
+        g.animDt = 0;
+      }
+      if (g.stunned > 0 && (g.mode as GoblinMode) !== 'dead' && star < STAR_SLOTS) this.placeStars(g, star++);
+    }
+    for (let i = star; i < STAR_SLOTS; i++) {
+      this.stars.setMatrixAt(i * 2, hiddenMatrix);
+      this.stars.setMatrixAt(i * 2 + 1, hiddenMatrix);
+    }
+    this.stars.visible = star > 0;
+    if (star > 0 || this.starsShown) this.stars.instanceMatrix.needsUpdate = true;
+    this.starsShown = star > 0;
+  }
+
+  private starsShown = false;
+
+  /** Two dizzy stars circling over a stunned goblin's head. */
+  private placeStars(g: Goblin, slot: number): void {
+    const p = g.root.position;
+    const top = p.y + g.stats.height * 1.15;
+    for (let k = 0; k < 2; k++) {
+      const a = this.time * STUN.starSpeed + k * Math.PI + slot;
+      starMatrix.makeRotationY(a).setPosition(p.x + Math.cos(a) * STUN.starOrbit, top, p.z + Math.sin(a) * STUN.starOrbit);
+      this.stars.setMatrixAt(slot * 2 + k, starMatrix);
     }
   }
 
   private step(g: Goblin, dt: number): void {
     const p = g.root.position;
+    if (g.stunned > 0) {
+      g.stunned -= dt;
+      if (STUNNABLE.has(g.mode)) {
+        if (g.stunned <= 0) this.playModeClip(g);
+        return;
+      }
+    }
     switch (g.mode) {
       case 'walking': {
         const road = g.road!;

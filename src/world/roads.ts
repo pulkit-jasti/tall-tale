@@ -86,6 +86,23 @@ export class Road {
     return new Mesh(geometry, material);
   }
 
+  /** Distance along the road (cm) of the road point nearest a board point (found in 1 cm steps, for setup only). */
+  nearestAlong(x: number, z: number): number {
+    const p = new Vector3();
+    let best = Infinity;
+    let at = 0;
+    const steps = Math.ceil(this.length);
+    for (let i = 0; i <= steps; i++) {
+      this.curve.getPointAt(i / steps, p);
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < best) {
+        best = d;
+        at = (i / steps) * this.length;
+      }
+    }
+    return at;
+  }
+
   /** Shortest distance from a board point to this road's center line (cm, flat). */
   distanceTo(x: number, z: number): number {
     let best = Infinity;

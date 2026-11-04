@@ -38,9 +38,13 @@ export interface Blueprint {
   seed: number;
   nodes: BlueprintNode[];
   roads: BlueprintRoad[];
-  /** The hidden troop gate (troops come in build step 5). */
+  /**
+   * The hidden troop gate. Kept for later gate mechanics: in the MVP each
+   * squad leaves through the wall entry at the castle end of its camp's
+   * shortest road (src/units/troops.ts), so troops reach every camp.
+   */
   gate: { at: Polar };
-  /** Trigger spots (built in build step 5). */
+  /** Trigger spots (src/world/triggers.ts). Each one sits on the road nearest its spot. */
   triggers: BlueprintTrigger[];
 }
 

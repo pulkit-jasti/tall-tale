@@ -179,7 +179,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 ## 4. Menus
 
-- **2D start page:** one "Enter VR" button (the browser needs one tap to enter VR). Before entering VR it asks for mic permission (needed for the megaphone). Later it can offer an optional "Install app" button.
+- **2D start page:** one "Enter VR" button (the browser needs one tap to enter VR). Before entering VR it asks for mic permission (needed for the megaphone). Built in step 5: on the first visit the button says "Allow microphone", its tap shows the browser prompt, then it says "Enter VR" (opening VR needs a fresh tap). A line under it says whether the mic is on or the bell is the way. If the mic was allowed before, it opens with no prompt and one tap enters VR. Later it can offer an optional "Install app" button.
 - **In VR:** the menu is the board in peacetime, with a giant menu board and trophy shelf. See [modes-and-progression.md](modes-and-progression.md#2-the-menu-is-the-board-in-peacetime). MVP: a single Play button.
 - **End of battle (MVP):** a simple win or lose panel. See [castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp).
 

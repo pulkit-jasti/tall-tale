@@ -23,6 +23,8 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Flag poles | Thin cylinders with a ball on top. The cloth is a flat plane (red for health, blue for waves) that slides up and down and sways. The wave pole has one small flat notch per wave. |
 | Food jar fill level | A heap of small low-poly food balls (instanced) on the pot's mouth, one ball per food, in layers of 6, 3 and 1. They pop in and out. (A disc inside does not show: the pot's neck is too narrow.) |
 | Particles: poof, stars, smoke, sparks, splat | Small instanced quads or low-poly spheres, pooled. |
+| Sun | Two unlit discs far away (150 m) facing the player: a warm disc and a soft additive glow behind it (radial gradient canvas). Decor only. |
+| Clouds | 11 clouds of 5 flattened low-poly puffs each (icosahedrons), all in one instanced mesh, lit and flat shaded, fog off. They drift slowly with the wind and shrink away at the edge of their wrap area. Decor only. |
 
 ## Waiting for a real model
 
@@ -31,8 +33,11 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Slingshot | Y shaped wooden frame (3 cylinders) on the platform, 2 bands (thin cylinders stretched from the fork tips to the pouch) and an open leather pouch that is pinched: a thin upright strip between the two bands, square to the ground and facing the shot, bent back into a U behind the stone (6 flat segments). The strip is lower than the stone, so a loaded stone shows above and below it. The bands tie onto its two ends. Rests on its platform and is picked up by the handle. Built in step 2. | Frame 15 cm tall, pouch 3.6 cm |
 | Fly swatter | Long thin handle (cylinder, yellow) and a flat square head (thin red box with a darker rim and neck). Rests on its platform leaning back 18 degrees along the rim (head behind the left shoulder). Built in step 4. | 35 cm long, head 10 x 9 cm |
 | Pepper shaker | Red cylinder body with a light dome cap and 4 dark dots for holes. Built in step 4. | 11 cm tall |
-| Megaphone | Cone (open wide end) with a short cylinder handle. | 20 cm long |
-| Bell | Bell shape (lathe or cone with a rounded top) with a small handle on top. Brass color. | 10 cm tall |
+| Megaphone | Cone (open wide end, cream with a red band) lying on a short dark pistol grip, the mouthpiece toward the face. Rests standing on its grip, the cone pointing out. Built in step 5. | Cone 13 cm, grip 6 cm |
+| Bell | Brass bell (lathe, flared mouth, a clapper inside) hanging below a short wooden handle with a knob. Rests on its mouth, handle up. Built in step 5. | 10 cm tall |
+| Megaphone and bell platform | One wider platform (11 cm, same model) on the right side for both, with one price tag toward the back. | 11 cm wide |
+| Stun shock ring | A thin flat ring (unlit, transparent) running out across the board from the castle when the megaphone or bell stuns. | Up to 2.6 m |
+| Dizzy stars | Two small yellow low-poly balls circling over each stunned goblin's head, all in one instanced mesh. | 0.55 cm |
 | Pebble bowl | Shallow open bowl (lathe), clay color, on a short post. Built in step 2 at 11 cm (`PEBBLE_BOWL.width`), so it fits between the slingshot platform and the ring handle. | 11 cm wide |
 | Tool platform posts | Dark wooden cylinder under each tool platform and under the pebble bowl. | 1 cm thick, 12 to 14 cm long |
 | Slingshot trajectory dots | Small white low-poly spheres, one instanced mesh, along the whole arc to the impact while pulling. | 0.9 cm |

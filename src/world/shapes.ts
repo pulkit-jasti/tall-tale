@@ -18,7 +18,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { FOOD_JAR, HANDLES, PEBBLE_BOWL, PEPPER, PRICE_TAG, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { BELL, FOOD_JAR, HANDLES, MEGAPHONE, PEBBLE_BOWL, PEPPER, PRICE_TAG, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -318,4 +318,67 @@ export function toolRope(radius: number): Mesh {
 /** One food ball for the jar's heap (shared geometry for an instanced heap). */
 export function foodBallGeometry(): IcosahedronGeometry {
   return new IcosahedronGeometry(FOOD_JAR.ballSize / 2, 0);
+}
+
+/**
+ * Megaphone: a short pistol grip along +y from y = 0 (the end the hand
+ * holds) and an open cone on top of it, lying along -z: the small mouthpiece
+ * toward +z (the face), the wide open end toward -z (the way the knuckles
+ * point when it is held). Returns the group, its materials and the middle of
+ * the wide end (cm).
+ */
+export function megaphone(): { group: Group; materials: MeshStandardMaterial[]; mouth: Vector3 } {
+  const { gripLength, gripRadius, coneLength, coneMouth, coneEnd, coneBack } = MEGAPHONE;
+  const bodyMaterial = flatMaterial(MEGAPHONE.bodyColor);
+  bodyMaterial.side = DoubleSide;
+  const bandMaterial = flatMaterial(MEGAPHONE.bandColor);
+  const gripMaterial = flatMaterial(MEGAPHONE.gripColor);
+  const group = new Group();
+  const grip = new Mesh(new CylinderGeometry(gripRadius, gripRadius * 1.1, gripLength, 8), gripMaterial);
+  grip.position.y = gripLength / 2;
+  // The cone's axis is its y: turned to lie along z, its top (the wide end) toward -z.
+  const coneY = gripLength + coneMouth * 0.6;
+  const coneZ = coneBack - coneLength / 2;
+  const cone = new Mesh(new CylinderGeometry(coneEnd, coneMouth, coneLength, 12, 1, true), bodyMaterial);
+  cone.rotation.x = -Math.PI / 2;
+  cone.position.set(0, coneY, coneZ);
+  const band = new Mesh(new TorusGeometry(coneEnd, 0.35, 5, 14), bandMaterial);
+  band.position.set(0, coneY, coneBack - coneLength);
+  const mouthpiece = new Mesh(new CylinderGeometry(coneMouth * 0.9, coneMouth * 0.9, 1.6, 8), bandMaterial);
+  mouthpiece.rotation.x = Math.PI / 2;
+  mouthpiece.position.set(0, coneY, coneBack + 0.6);
+  group.add(grip, cone, band, mouthpiece);
+  return { group, materials: [bodyMaterial, bandMaterial, gripMaterial], mouth: new Vector3(0, coneY, coneBack - coneLength) };
+}
+
+/**
+ * Hand bell: a wooden handle along +y from y = 0 (the end the hand holds,
+ * with a knob on top) and a brass bell hanging below it, its open mouth at
+ * y = -bellHeight. Returns the group, its materials and the bell's middle (cm).
+ */
+export function handBell(): { group: Group; materials: MeshStandardMaterial[]; middle: Vector3 } {
+  const { handleLength, handleRadius, bellHeight: h, bellMouth: m } = BELL;
+  const brass = flatMaterial(BELL.brassColor);
+  brass.side = DoubleSide;
+  const wood = flatMaterial(BELL.handleColor);
+  const clapperMaterial = flatMaterial(BELL.clapperColor);
+  const group = new Group();
+  const handle = new Mesh(new CylinderGeometry(handleRadius, handleRadius * 1.15, handleLength, 8), wood);
+  handle.position.y = handleLength / 2;
+  const knob = new Mesh(new SphereGeometry(handleRadius * 1.5, 8, 6), wood);
+  knob.position.y = handleLength + handleRadius * 0.8;
+  // The bell: a lathe from its round top down to a flared mouth.
+  const profile = [
+    new Vector2(0.01, 0.3),
+    new Vector2(m * 0.35, 0.1),
+    new Vector2(m * 0.5, -h * 0.2),
+    new Vector2(m * 0.58, -h * 0.5),
+    new Vector2(m * 0.72, -h * 0.78),
+    new Vector2(m, -h),
+  ];
+  const bell = new Mesh(new LatheGeometry(profile, 12), brass);
+  const clapper = new Mesh(new SphereGeometry(0.6, 6, 5), clapperMaterial);
+  clapper.position.y = -h + 0.9;
+  group.add(handle, knob, bell, clapper);
+  return { group, materials: [brass, wood], middle: new Vector3(0, -h / 2, 0) };
 }

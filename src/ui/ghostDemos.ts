@@ -29,7 +29,8 @@ export type GhostAnchor =
   | 'pebbles'
   | 'pouch'
   | 'swatterHandle'
-  | 'pepperHandle';
+  | 'pepperHandle'
+  | 'bellHandle';
 
 export type Dir = [number, number, number];
 
@@ -73,6 +74,13 @@ const SWATTER_GRIP = {
   rod: [-Math.sin(lean), Math.cos(lean), 0] as Dir,
   palm: [Math.cos(lean), Math.sin(lean), 0] as Dir,
 };
+/**
+ * Right hand around the upright bell handle on the right side platform,
+ * reaching out to the right like a handshake: thumb up along the handle,
+ * palm toward the player's front (left in this frame, where forward points
+ * right) and a little forward.
+ */
+const BELL_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.2] as Dir };
 /** Pinch from above: fingers down and forward, palm down and toward the player. */
 const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Dir };
 /** Left hand pinching the pouch from behind, like a bow string: fingers along the shot, palm facing in (right). */
@@ -181,6 +189,32 @@ export const GHOST_DEMOS = {
       key(0.8, 'pepperHandle', [0, 0, 0], 'open', LEFT_HANDLE_GRIP),
       key(1.1, 'pepperHandle', [0, 0, 0], 'fist', LEFT_HANDLE_GRIP),
       key(2.0, 'pepperHandle', [0, 6, -4], 'fist', LEFT_HANDLE_GRIP),
+    ],
+  },
+  /** Right hand from the player's side, a little high (clear of the bell below), closes the fist around the handle, lifts it. */
+  bellGrab: {
+    hand: 'right',
+    keys: [
+      key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
+      key(0.8, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
+      key(1.1, 'bellHandle', [0, 0, 0], 'fist', BELL_GRIP),
+      key(2.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
+    ],
+  },
+  /** Grab the bell, lift it, shake it hard side to side a few times (each turn back is one ring). */
+  bellRing: {
+    hand: 'right',
+    keys: [
+      key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
+      key(0.6, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
+      key(0.9, 'bellHandle', [0, 0, 0], 'fist', BELL_GRIP),
+      key(1.5, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
+      key(1.7, 'bellHandle', [-3, 6, -4], 'fist', BELL_GRIP),
+      key(1.9, 'bellHandle', [3, 6, -4], 'fist', BELL_GRIP),
+      key(2.1, 'bellHandle', [-3, 6, -4], 'fist', BELL_GRIP),
+      key(2.3, 'bellHandle', [3, 6, -4], 'fist', BELL_GRIP),
+      key(2.5, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
+      key(3.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
     ],
   },
   /** The other hand comes down into the bowl and pinches a pebble off the top of the pile. */

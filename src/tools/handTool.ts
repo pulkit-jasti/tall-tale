@@ -1,5 +1,6 @@
 // What every food tool shares (docs/giant-tools.md sections 4 and 7): the fly
-// swatter and the pepper shaker now, the megaphone and bell in build step 5.
+// swatter, the pepper shaker, the megaphone and the bell (the last two share
+// one platform and one price tag).
 //
 //   - It rests on its platform, with its cost on a price tag at the front edge.
 //   - Grab it with a fist (TOOLS.acceptPinch also allows a pinch). It snaps
@@ -7,6 +8,7 @@
 //     the food and starts the timer. Accidental grabs never waste food.
 //   - Not enough food: dimmed and tied down with a little rope. A hand near it
 //     shows Locked, and closing the hand buzzes and wobbles it instead of grabbing.
+//     The megaphone is tied down the same way when there is no mic (`tiedDown`).
 //   - Let go before or after a use: it glides back to its platform.
 //   - Dropped mid-use: it hangs for a moment, then floats up to the hand area
 //     above its platform. Its timer keeps running.
@@ -34,7 +36,7 @@ import { cloneStatic, loadTemplate } from '../world/models.js';
 import { post, toolRope } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
-export type FoodToolName = 'swatter' | 'pepper';
+export type FoodToolName = 'swatter' | 'pepper' | 'megaphone' | 'bell';
 
 /** What a hand near the tool shows. Held is managed by the tool. */
 export type ToolReady = 'idle' | 'ready' | 'locked';
@@ -61,6 +63,17 @@ export interface ToolGrip {
   to: number;
   /** ...and around it (meters). */
   radius: number;
+}
+
+/** Where the platform and price tag go, when not simply under the tool. */
+export interface ToolOptions {
+  /** The platform (and price tag) spot. null: no platform, the tool rests on another tool's one. */
+  platform?: ToolSpot | null;
+  platformWidth?: number;
+  /** The price tag goes toward the back of the platform instead of the front. */
+  tagToBack?: boolean;
+  /** The tool's origin rests this far above the platform top (cm), for a tool that hangs below its handle. */
+  restLift?: number;
 }
 
 interface Holder {
@@ -107,7 +120,7 @@ export abstract class HandTool {
   private ready: ToolReady = 'idle';
   private wobble = 0;
   private dimmed = false;
-  private priceTag!: PriceTag;
+  private priceTag: PriceTag | null = null;
   private rope!: Mesh;
   private timerHold = false;
   protected time = 0;
@@ -134,6 +147,7 @@ export abstract class HandTool {
     private restLeanDeg: number,
     /** Size of the rope ring around the tool's base (cm). */
     private ropeRadius: number,
+    private options: ToolOptions = {},
   ) {
     this.stage = parts.stage;
     this.goblins = parts.goblins;
@@ -166,9 +180,15 @@ export abstract class HandTool {
     return this.free ? 0 : this.cost;
   }
 
+  /**
+   * Tied down whatever the food (the megaphone without a mic): dimmed, the
+   * rope on, and a grab buzzes. The bell beside it still works.
+   */
+  tiedDown = false;
+
   /** True when the tool can be used right now: free, paid for already, or affordable. */
   get usable(): boolean {
-    return toolUsable(this.food.state, this.use, this.price);
+    return !this.tiedDown && toolUsable(this.food.state, this.use, this.price);
   }
 
   get active(): boolean {
@@ -192,23 +212,30 @@ export abstract class HandTool {
   }
 
   async load(): Promise<void> {
-    const platform = await loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width: TOOL_SPOTS.platformWidth });
     const top = TOOL_SPOTS.platformTop;
     const a = degToRad(this.spot.angleDeg);
     const x = polarX(this.spot.radius, a);
     const z = polarZ(this.spot.radius, a);
-    const stand = cloneStatic(platform);
-    stand.position.set(x, top - platform.size.y, z);
-    // The post reaches down to the board.
-    const stem = post(top - platform.size.y);
-    stem.position.set(x, stem.position.y + top - platform.size.y, z);
-    this.root.add(stand, stem);
-    this.buildPriceTag(a);
+    const spot = this.options.platform === undefined ? this.spot : this.options.platform;
+    if (spot) {
+      const width = this.options.platformWidth ?? TOOL_SPOTS.platformWidth;
+      const platform = await loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width });
+      const pa = degToRad(spot.angleDeg);
+      const px = polarX(spot.radius, pa);
+      const pz = polarZ(spot.radius, pa);
+      const stand = cloneStatic(platform);
+      stand.position.set(px, top - platform.size.y, pz);
+      // The post reaches down to the board.
+      const stem = post(top - platform.size.y);
+      stem.position.set(px, stem.position.y + top - platform.size.y, pz);
+      this.root.add(stand, stem);
+      this.buildPriceTag(spot, pa, this.options.tagToBack ? -1 : 1);
+    }
     this.build();
     this.baseColors = this.materials.map((m) => m.color.clone());
     // Rest pose: on the platform, its face toward the player, leaning back
     // along the rim (away from the front), so its top is out of view.
-    this.restPosition.set(x, top, z);
+    this.restPosition.set(x, top + (this.options.restLift ?? 0), z);
     const outward = temp.set(Math.sin(a), 0, -Math.cos(a));
     const side = a < 0 ? -1 : 1;
     const back = temp2.set(side * Math.cos(a), 0, side * Math.sin(a));
@@ -221,6 +248,7 @@ export abstract class HandTool {
     this.hoverPosition.y += TOOLS.looseLift;
     this.rope = toolRope(this.ropeRadius);
     this.rope.rotation.x = Math.PI / 2;
+    // Around the tool's base, on the platform (a tool that hangs below its handle still stands on its base).
     this.rope.position.set(x, top + 1.5, z);
     this.root.add(this.rope);
     this.placeAtRest();
@@ -232,18 +260,19 @@ export abstract class HandTool {
    * little toward the front, so the hand on the tool never covers it. It
    * stands tilted back toward the eyes, above the ring's line of sight.
    */
-  private buildPriceTag(a: number): void {
+  private buildPriceTag(spot: ToolSpot, a: number, frontSign: number): void {
     const { inset, side, tiltDeg, height } = PRICE_TAG;
-    this.priceTag = new PriceTag(this.cost);
+    const priceTag = new PriceTag(this.cost);
+    this.priceTag = priceTag;
     const holder = new Group();
     // Platform frame: x along the rim (toward the front is -x on the right side, +x on the left), z toward the player.
     holder.rotation.y = -a;
-    holder.position.set(polarX(this.spot.radius, a), TOOL_SPOTS.platformTop, polarZ(this.spot.radius, a));
-    const toFront = a < 0 ? 1 : -1;
+    holder.position.set(polarX(spot.radius, a), TOOL_SPOTS.platformTop, polarZ(spot.radius, a));
+    const toFront = (a < 0 ? 1 : -1) * frontSign;
     const tilt = degToRad(tiltDeg);
-    this.priceTag.group.rotation.x = -tilt;
-    this.priceTag.group.position.set(toFront * side, (height / 2) * Math.cos(tilt), inset);
-    holder.add(this.priceTag.group);
+    priceTag.group.rotation.x = -tilt;
+    priceTag.group.position.set(toFront * side, (height / 2) * Math.cos(tilt), inset);
+    holder.add(priceTag.group);
     this.root.add(holder);
   }
 
@@ -492,7 +521,7 @@ export abstract class HandTool {
       this.touch = state;
       applyTouchState(this.materials, state);
     }
-    this.priceTag.set(this.free ? 'free' : this.use.active ? 'paid' : usable ? 'ok' : 'short');
+    this.priceTag?.set(this.free ? 'free' : this.use.active ? 'paid' : usable ? 'ok' : 'short');
   }
 
   // ---- Helpers ----
