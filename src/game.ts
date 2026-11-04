@@ -112,8 +112,8 @@ export class GameSystem extends createSystem({}) {
 
     this.stage = new Stage(root);
     // Decor only: hills around the board, a sun and slow clouds in front of the scene's gradient dome.
-    new Hills(this.stage.boardLift, root, createRandom(seed + 710));
-    if (SKY.enabled) this.sky = new Sky(root, createRandom(seed + 700));
+    new Hills(this.stage.boardLift, createRandom(seed + 710));
+    if (SKY.enabled) this.sky = new Sky(root, this.stage.boardLift, createRandom(seed + 700));
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
     this.particles = new Particles(root, createRandom(seed + 101));
     this.handles = new BoardHandles(this.stage);
@@ -512,6 +512,10 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'troops':
         this.troops.sendSquad();
+        break;
+      case 'troopsToggle':
+        this.troops.enabled = !this.troops.enabled;
+        console.info(`[debug] troops ${this.troops.enabled ? 'on' : 'off'}`);
         break;
       case 'triggersReset':
         this.triggers.setWave(TUTORIAL_WAVES.length);

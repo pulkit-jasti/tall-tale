@@ -115,6 +115,17 @@ export class Troops {
   private waiting: Waiting[] = [];
   private frame = 0;
 
+  /** Debug: false keeps every soldier inside the castle (testing without help). Turning it off sends them all home. */
+  private on = true;
+
+  get enabled(): boolean {
+    return this.on;
+  }
+  set enabled(on: boolean) {
+    this.on = on;
+    if (!on) this.clear();
+  }
+
   /** Called with each goblin a soldier knocks out. */
   onKill: (goblin: Goblin) => void = () => {};
 
@@ -145,7 +156,7 @@ export class Troops {
     const graph = this.network.graph;
     this.camps = campIds.map((id) => graph.nodeIndex(id)).filter((c) => graph.routeToWall(c).length > 0);
     this.nextCamp = 0;
-    this.deployed = this.camps.length > 0;
+    this.deployed = this.on && this.camps.length > 0;
     this.squadTimer = TROOPS.firstSquadAt;
   }
 
@@ -169,6 +180,7 @@ export class Troops {
 
   /** Debug: a squad leaves now, toward a camp of the wave (or any camp). */
   sendSquad(): void {
+    if (!this.on) this.on = true;
     const camps = this.camps.length > 0 ? this.camps : this.network.graph.camps;
     this.queueSquad(camps[this.rng.int(camps.length)]);
   }

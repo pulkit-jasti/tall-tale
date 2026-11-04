@@ -34,6 +34,7 @@ export type DebugCommand =
   | 'megaphone'
   | 'bell'
   | 'troops'
+  | 'troopsToggle'
   | 'triggersReset'
   | 'triggersFire'
   | 'fps'
@@ -115,6 +116,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'megaphone', group: 'food', icon: '📣', code: 'Digit4', label: 'Megaphone scream', does: 'Megaphone: a scream without a mic, every goblin is stunned (costs 6 food, puts the megaphone out in place of the bell)' },
   { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands, every goblin is stunned (costs 6 food, puts the bell out in place of the megaphone)' },
   { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send squad', does: 'A squad of soldiers marches out now toward a camp (normally every 10 s while a wave runs)' },
+  { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, no squads come out and the ones out go home (Send squad turns them back on)' },
   { id: 'triggersReset', group: 'army', icon: '🛢️', code: 'Digit7', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
   { id: 'triggersFire', group: 'army', icon: '💣', code: 'Digit8', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },
   { id: 'spinLeft', group: 'board', icon: '↩️', label: 'Spin left', does: 'Turn the board left one step' },

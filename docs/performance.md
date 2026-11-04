@@ -111,6 +111,6 @@ In order of expected gain:
 3. **Cheaper far goblins:** update the animation of distant goblins less often.
 4. **Then re-run the stress test** and record the result in section 3.
 
-**Done in build step 5:** item 3 (goblins and soldiers over 150 cm from the center update their animation every other frame, `TROOPS.farAnimFrom`) and part of item 1 (grab and eat reuses its ready set instead of a new Set every frame). New load from step 5: up to 12 skinned soldiers (`TROOPS.max`), 3 triggers, a debris pool of 14 small models (drawn only while flying), dizzy stars and the sky (one instanced mesh for all clouds, two discs for the sun). The stress test has not been run since step 2: run it now, then a full wave 5 with the FPS panel, and log both here.
+**Done in build step 5:** item 3 (goblins and soldiers over 150 cm from the center update their animation every other frame, `TROOPS.farAnimFrom`) and part of item 1 (grab and eat reuses its ready set instead of a new Set every frame). New load from step 5: up to 12 skinned soldiers (`TROOPS.max`, 4 for testing now), 3 triggers, a debris pool of 14 small models (drawn only while flying), dizzy stars, the sky (one instanced mesh for all 450 cloud puffs, about 36k triangles, and 3 draw calls for the sun) and the hills (5 draw calls). The stress test has not been run since step 2: run it now, then a full wave 5 with the FPS panel, and log both here.
 
 If troops plus enemies still do not fit, use the code-made instanced goblins from [placeholder-shapes.md](placeholder-shapes.md).

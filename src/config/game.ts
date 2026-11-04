@@ -1080,12 +1080,13 @@ export const TRIGGERS = {
  */
 export const TROOPS = {
   /** Most soldiers on the board at once (they share the unit budget with the goblins). */
-  max: 12,
+  /** Lowered for testing (was 12, squads of 3 to 4 every 10 s): the soldiers won too much. */
+  max: 4,
   /** Soldiers per squad (from, to). */
-  squadMin: 3,
-  squadMax: 4,
+  squadMin: 2,
+  squadMax: 2,
   /** A new squad comes out this often while a wave runs, the first one this long after the wave starts. */
-  squadEvery: 10,
+  squadEvery: 16,
   firstSquadAt: 4,
   /** Gap between soldiers of one squad leaving (seconds). */
   leaveGap: 0.7,
@@ -1114,10 +1115,10 @@ export const TROOPS = {
 
 /**
  * The sky (decor only, no gameplay): the IWSDK gradient dome from the scene
- * file, plus a cartoon sun and many low-poly white clouds drifting with the
- * wind. The clouds float low, a few meters above the player's head, so the
- * giant feels close to them. Meters, around the player, never turns with the
- * board. One draw call for all the clouds, five small ones for the sun.
+ * file, a low-poly 3D cartoon sun far away (meters, world), and many small
+ * clouds made to the board's scale (cm, in boardLift like the hills): little
+ * cotton puffs floating around the giant's head, so the player feels huge.
+ * Never turns with the board. One draw call for all the clouds.
  */
 export const SKY = {
   enabled: true,
@@ -1125,30 +1126,36 @@ export const SKY = {
   sunAngleDeg: -55,
   sunElevationDeg: 24,
   sunDistance: 150,
-  /** Sun face (meters wide), and its glow as a share of that. */
-  sunSize: 12,
-  glowShare: 3.4,
-  /** Cartoon look: a yellow face, an orange rim, a pale shine spot, pointy rays (count, turning degrees per second). */
-  sunColor: 0xffd23f,
-  rimColor: 0xff9f1c,
-  shineColor: 0xfff3b0,
-  rayColor: 0xffc23a,
+  /** Sun ball radius (meters), and its soft glow as a share of that. */
+  sunRadius: 5,
+  glowShare: 4,
+  /** Cartoon colors: the ball's dark edge, middle and lit top, the rays, the glow. */
+  sunEdgeColor: 0xff7a00,
+  sunColor: 0xffc21a,
+  sunLitColor: 0xfff1a0,
+  rayColor: 0xffb000,
   glowColor: 0xffb84a,
-  sunRays: 14,
-  raySpin: 3,
-  /** Clouds: how many, puffs per cloud, and where they float (meters from the player, and heights above the floor). */
-  cloudCount: 26,
-  puffsPerCloud: 6,
-  cloudMinDistance: 14,
-  cloudMaxDistance: 70,
-  cloudMinHeight: 3,
-  cloudMaxHeight: 10,
-  /** Cloud size (meters across one cloud, from, to). */
-  cloudMinSize: 3.5,
-  cloudMaxSize: 9,
-  /** Wind: direction (degrees, 0 = front) and speed (meters per second). Slow, so it reads as calm. */
+  /** Pointy 3D rays around the ball: how many, and how fast they turn (degrees per second). */
+  sunRays: 12,
+  raySpin: 4,
+  /** Clouds (board cm): how many, puffs each, and where (from the board center). */
+  cloudCount: 90,
+  puffsPerCloud: 5,
+  cloudMinDistance: 330,
+  cloudMaxDistance: 2600,
+  /** Height above the board (cm): near clouds float low, about the giant's chin, far ones higher. */
+  cloudNearHeight: 30,
+  cloudFarHeight: 160,
+  cloudHeightJitter: 25,
+  /** Cloud size (cm across one cloud): small near, bigger far. */
+  cloudNearSize: 16,
+  cloudFarSize: 55,
+  /** No clouds over the battlefield: inside this radius they shrink away (cm, from, to). */
+  clearFrom: 300,
+  clearTo: 430,
+  /** Wind: direction (degrees, 0 = front) and speed (board cm per second). Slow, so it reads as calm. */
   windDeg: 70,
-  windSpeed: 0.35,
+  windSpeed: 5,
   /** Top of each puff, and its underside: a light sky blue, so the faces read without looking stormy. */
   cloudColor: 0xffffff,
   cloudShade: 0xd6e6f5,
@@ -1156,35 +1163,41 @@ export const SKY = {
   sortEvery: 0.5,
 };
 
+/** One ring of hills around the board (board cm). */
+export interface HillLayer {
+  count: number;
+  /** Distance from the board center (cm, from, to). */
+  from: number;
+  to: number;
+  width: [number, number];
+  height: [number, number];
+  /** Their colors (one picked per hill, slightly varied). */
+  colors: number[];
+  /** Pointy mountains instead of round hills. */
+  peaked: boolean;
+}
+
 /**
- * Low-poly hills around the board, so the horizon is not empty (decor only).
- * Foreground: small green hills on a grass ring just past the board's edge,
- * in boardLift (cm, they rise and size with the board, never turn).
- * Background: big hazy hills far away, in world space (meters, never move).
+ * Low-poly hills and mountains around the board, so the horizon is not empty
+ * (decor only). All in boardLift (cm): made to the board's scale, they rise
+ * and size with the board, and never turn. Light green rolling hills close
+ * by, darker green farther out, and brown mountains as the last ring. Tall
+ * enough to frame the board, low enough that the giant looks over them.
+ * No fog on them, so the colors stay as picked. One draw call per ring.
  */
 export const HILLS = {
-  /** The grass ring under the foreground hills (cm from the center, and how much it rises to its outer edge). */
-  ringFrom: 590,
-  ringTo: 1700,
-  ringRise: 60,
-  ringColor: 0x86b552,
-  /** Foreground hills (cm): how many, where, how wide and how high. */
-  nearCount: 34,
-  nearFrom: 680,
-  nearTo: 1500,
-  nearWidth: [90, 260] as [number, number],
-  nearHeight: [25, 110] as [number, number],
-  nearColors: [0x7fb24f, 0x8fbf5a, 0x6fa246, 0x9cc46b],
-  /** Background hills (meters): how many, where, how wide and how high. Hazy blue greens, lighter farther away. */
-  farCount: 26,
-  farFrom: 28,
-  farTo: 85,
-  farWidth: [14, 36] as [number, number],
-  farHeight: [4, 13] as [number, number],
-  farNearColor: 0x7fa77a,
-  farFarColor: 0xa9c4c4,
-  /** Base height of the background hills above the floor (meters). */
-  farBase: 0.3,
+  /** The grass ground under them, from the board's edge out (cm), rising a little, lighter near and darker far. */
+  groundFrom: 590,
+  groundTo: 2900,
+  groundRise: 70,
+  groundNearColor: 0x8fbf5a,
+  groundFarColor: 0x5f8f3e,
+  layers: [
+    { count: 40, from: 640, to: 900, width: [50, 120], height: [12, 30], colors: [0xb5dc7a, 0xa8d46c, 0xbfe387], peaked: false },
+    { count: 40, from: 950, to: 1350, width: [100, 210], height: [30, 65], colors: [0x86bb52, 0x7cb24a, 0x8fc25a], peaked: false },
+    { count: 42, from: 1400, to: 1850, width: [170, 320], height: [55, 110], colors: [0x5a8f3a, 0x4f8534, 0x629a40], peaked: true },
+    { count: 46, from: 1950, to: 2600, width: [220, 420], height: [100, 200], colors: [0x8a623e, 0x7a5636, 0x96704a], peaked: true },
+  ] as HillLayer[],
 };
 
 export const PARTICLES = {

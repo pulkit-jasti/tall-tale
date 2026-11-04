@@ -33,7 +33,7 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
 
 ### How it works (step 5, `src/units/troops.ts`)
 
-- A squad comes out every 10 s while a wave is fought (the first after 4 s), cap 12 soldiers. Squads take turns going to each attacking camp. About a third are archers, with the same rules.
+- A squad comes out every 16 s while a wave is fought (the first after 4 s), 2 soldiers each, cap 4 (lowered for testing from squads of 3 to 4 every 10 s, cap 12). Debug key 9 turns them off. Squads take turns going to each attacking camp. About a third are archers, with the same rules.
 - The gate is hidden: each squad leaves through the wall entry at the castle end of its camp's shortest road, and walks that route backward out to the camp.
 - A goblin within 4 cm is fought: both stop. A soldier strikes every 1.4 s and lands half of them, a goblin strikes back every 1.1 s and lands 60%. Runners rush past and are never fought. Soldiers can fight goblins at the wall, never climbers on it or intruders.
 - At the camp, or when the wave ends, soldiers walk home and go back into the castle.
