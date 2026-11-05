@@ -66,6 +66,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 - **Question:** "Can you look up?"
 - **Behavior:** float over the wall at about head height. Drop bombs on machines and carts, or drop goblins into the courtyard.
 - **Toughness:** pop the balloon and the riders fall.
+- **In the MVP (build step 7):** only the goblin drop into the courtyard (no bombs, since there are no machines or carts yet). First seen in wave 4. Details in [mvp.md](mvp.md#build-order).
 - **Best answer:** slingshot.
 - **Also works:** grab or swat when close, ballista, megaphone.
 - **Weak:** pepper.

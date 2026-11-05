@@ -40,7 +40,7 @@ Back to [GDD index](GDD.md).
 - Tool platforms beside the player, just outside the ring handle, each food tool with a price tag (a food ball and the cost).
 
 **Enemies and army**
-- **Grunts, runners and climbers only** ([enemies.md](enemies.md)). Climbers are the main food source.
+- **Grunts, runners and climbers**, plus **balloon riders** from build step 7 ([enemies.md](enemies.md)). Climbers are the main food source.
 - Enemy routes on the road graph ([map.md](map.md#4-how-enemies-choose-routes)).
 - Troops with basic behavior: spawn, walk out, fight.
 
@@ -98,9 +98,9 @@ Starting numbers, kept next to the director's steps and tuned in playtests. Clim
 | Wave | New thing | Camps | Grunts | Runners | Climbers | Food check |
 |---|---|---|---|---|---|---|
 | 1 | Hands and eating. One climber is scripted to pop up right in front of the player in the first minute. | 1 | 6 | 0 | 3 | 4 + 3 = 7 |
-| 2 | Slingshot. A powder keg sits on the busiest road. | 2 | 10 | 0 | 2 | 7 + 2 = 9 |
+| 2 | Slingshot, then the trigger lesson right after it (shoot a powder keg as goblins pass; boulders and trees explained). From here on all three trigger kinds stand on the roads (build step 6). | 2 | 10 | 0 | 2 | 7 + 2 = 9 |
 | 3 | Fly swatter vs runners | 2 | 8 | 12 | 3 | 9 - 4 + 3 = 8 |
-| 4 | Pepper shaker. Boulder and leaning tree on the roads. | 3 | 14 | 8 | 4 | Up to 10 |
+| 4 | Pepper shaker. The first balloon riders (build step 7). | 3 | 14 | 8 | 4 | Up to 10 |
 | 5 | Everything together | 3 | 18 | 16 | 4 | Whatever is left |
 
 - Enemies come out in small groups through each wave, not all at once, so the board stays within the unit budget.
@@ -217,10 +217,49 @@ Each step should be playable on its own.
      - **Dense decor** (`DECOR`): about 260 trees (mostly groves), 140 rocks, 240 bushes, 260 flowers in patches, 90 mushrooms, stumps and logs, from the Nature Kit. All merged into one mesh per material (`StaticBatch` in `src/world/models.ts`), about a dozen draw calls. The kit's mint greens are tinted to match the grass. Grass colors (`GRASS`): lighter tops, darker dips, worn road edges, camp dirt. The tiny grass tufts, flowers, grain and noise patches are gone (too small to see, or blotchy).
      - **One shared panel** `src/ui/panel.ts`: the parchment board, its canvas, placement, tilt and pop. The hint sign and the end panel both use it and only draw their own content.
      - **No soldiers during lessons:** while a lesson is on the sign, no squads come out (`Troops.held`). The first squad comes 4 s after the lesson is done.
-     - **Not done yet:** the stress test with troops (4 soldiers for now, up to 12 later, plus up to 40 goblins, against the measured 50 unit budget), gear on troops and goblins (swords, spears), a lesson for the triggers (only the wave 5 banner mentions them).
-6. **Pause:** wrist button, pause panel, auto-pause, Reset table.
-   - Done when: the battle freezes and resumes, and Reset table places the board again.
-7. **Juice**, then the **missing sounds** last (the ones still using `chime.mp3`).
+     - **Moved to later steps:** the trigger lesson and more, easier to see triggers (step 6); gear and variants for troops and goblins, the stress test with troops and the troop balance (step 7).
+6. **Pause, triggers, and the giant's seat and body.** Three separate parts, built together in one step.
+   - **Part A, pause:** wrist button, pause panel, auto-pause, Reset table.
+     - Done when: the battle freezes and resumes, and Reset table places the board again.
+   - **Part B, triggers: more of them, easy to notice, and their own lesson.** In the step 5 playtest the barrels, boulders and trees went completely unnoticed, and there is no lesson for them.
+   - **More of them:** about 2 to 3 per road between the camps and the castle instead of 3 in total, all three kinds spread around the circle, so one is almost always near a group of goblins. Spots in the blueprint (`triggers` in `tutorial.json`), still one seeded layout.
+   - **Easy to see:**
+     - Bigger than now (keg about 3 cm, boulder 5 cm, tree 14 cm), with brighter colors than the scenery around them.
+     - Never hidden by a hill: placed on the player's side of a hill or on flat ground (the terrain flattens a small spot under each, like the camps), never in a dip behind a bump.
+     - The decor keeps clear of them (no trees or houses right beside a keg).
+     - A soft pulsing glow (emissive only) and a small floating icon above each one while goblins are near it, so the player sees "this can be used now".
+     - A short "now!" cue when a group walks right past one: a stronger glow pulse and a sound from its direction.
+   - **The lesson, in wave 2, right after the slingshot lesson** (everything here is set off by the slingshot, so it is taught as soon as the player can shoot):
+     - The wave holds its spawns. A small group of goblins walks toward a powder keg on the road in front of the player.
+     - The hint sign: "See the barrel? Shoot it when goblins walk past!" The marker bounces over the keg, and a ghost hand shows aiming at it and letting go.
+     - Done when the keg is set off (best with goblins near it). If stuck, the group is sent past the keg again and the marker pulses.
+     - Then a short info box (Next): "Boulders roll down the road and trees fall across it. Shoot them too!", with the marker on the nearest boulder and tree. From then on all three kinds stand on the roads.
+     - The wave 5 banner keeps its reminder.
+   - Triggers done when: they are easy to spot from the seat, the wave 2 lesson runs from start to finish, and the director tests cover the new steps.
+   - **Part C, the giant's seat and body.**
+   - **Fill the hole:** today looking down shows blue emptiness and brown walls. Close it with ground at board level, flush with the courtyard (stone or packed earth to match the castle).
+   - **The giant from the waist up**, coming out of that ground: a chunky, low-poly belt, tunic, belly and shoulders (no legs; no arms, since the tracked hands float, which is normal in VR). The hole (25 cm) is about exactly a seated giant's torso, so it fits.
+   - **Follows the player gently:** it sits under the head and turns slowly toward where the player faces (not 1:1, so leaning never looks wrong).
+   - **Never in the way:** below and a bit behind the normal view; it shows when looking down, but never blocks the courtyard, the tools or the reach band.
+   - **Stylized**, matching the low-poly look: a realistic body that does not match the real one feels wrong.
+   - Seat and body done when: looking down shows the giant's body on solid ground from the seat, from more than one head angle, and nothing interactive is covered.
+7. **Army and enemy variety.**
+   - **Troop variants, built in code (no model editing):**
+     - Bodies from the Kenney character packs we already have (mini-arena, mini-dungeon, mini-forest), which share the same animations.
+     - Recolored materials per variant (the kingdom's blue and gold).
+     - Gear on the hand bone, so it moves with the animation: swords, spears and shields from the mini-arena and mini-dungeon props.
+     - Small proportion changes per variant.
+     - About three readable kinds: swordsmen, spearmen and archers.
+   - **Goblin gear:** the same way (weapons on the hand bone, helmets on the head bone).
+   - **Balloon riders** ([enemies.md](enemies.md#balloon-riders)), the first flying enemy:
+     - Goblins hanging under a balloon, floating over the wall at about head height in straight lines (no roads).
+     - They drop goblins into the courtyard (they become intruders, food in reach).
+     - The slingshot pops the balloon and the riders fall; grabbing or swatting works when close; the megaphone and bell stun them.
+     - First seen in wave 4 with a short banner ("Look up! Pop the balloons with your slingshot.").
+     - A threat cue when one is over the wall (threat cues rule).
+   - **Then the stress test with troops** (log it in [performance.md](performance.md)), and the **troop balance** (now at most 4 soldiers in squads of 2 for testing; the plan was up to 12).
+   - Done when: three troop kinds and the goblins carry gear, balloon riders work in wave 4, and the stress test result is logged.
+8. **Juice**, then the **missing sounds** last (the ones still using `chime.mp3`).
    - Done when: every sound name in the sound config points to a real file.
 
 If time runs short, cut from the end of this list.
@@ -248,7 +287,9 @@ To make these testable, game rules live in plain TypeScript functions with no Th
 | Feature | Where it is described |
 |---|---|
 | Castle machines (including the arrow machine) | [castle-machines.md](castle-machines.md) |
-| Other enemy types: shield, balloon riders, Boom goblin, tinker | [enemies.md](enemies.md) |
+| Other enemy types: shield, Boom goblin, tinker (balloon riders moved into build step 7) | [enemies.md](enemies.md) |
+| Day and night cycle (far future) | [Far future ideas](#far-future-ideas) below |
+| Stylized giant hands (far future, experimental) | [Far future ideas](#far-future-ideas) below |
 | Other map features: bridge, forest, mud, hill | [map.md](map.md) |
 | Daily Battle, Endless, Custom Game, menu board, trophy shelf, achievements, growing kingdom | [modes-and-progression.md](modes-and-progression.md) |
 | Level generator and the config-based wave director | [map.md](map.md#8-levels-and-the-level-generator) |
@@ -267,3 +308,19 @@ To make these testable, game rules live in plain TypeScript functions with no Th
 | River and boats | not designed yet |
 | Voice commands | README |
 | Gate mechanics | later |
+
+### Far future ideas
+
+Only after the MVP and its polish are done. Details agreed so far:
+
+**Day and night cycle**
+- **Time moves with the waves, not a clock:** wave 1 in the morning, the middle waves at noon and in the afternoon, wave 4 at sunset, the final wave at night. It shifts smoothly during the breathers, so the final battle at night is the dramatic high point.
+- **What changes:** the sun moves, sets and turns orange; the sky dome and fog colors shift; the sky fill dims to a moonlit blue; the clouds turn orange, then grey-blue; stars fade in (one cheap mesh of points) and a moon with a soft glow rises.
+- **Night lights:** torches on the castle wall and in the villages, glowing village windows, maybe fireflies. All faked with bright emissive flames and soft glow sprites, at most one or two real lights (many real lights hurt the Quest frame rate).
+- **Readability first:** the night stays a bright moonlit blue, never dark, so goblins are always easy to spot. This is the hardest part to get right.
+- Effort: medium to high. The sky dome, fog and sun setup from step 5 already do most of the groundwork.
+
+**Stylized giant hands (experimental)**
+- The see-through hands work well today, and a solid hand would cover the goblins at the most important moment (the pinch). So this is a test, not a plan.
+- The idea: a stylized giant hand (skin tone, chunky fingers), still partly see-through (about 60%) with a brighter edge, fading even more while it is near a goblin or pinching.
+- Behind a debug toggle, to compare with the current hands in the headset. Keep it only if it looks better without hiding anything.
