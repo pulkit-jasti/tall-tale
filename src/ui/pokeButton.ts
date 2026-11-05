@@ -42,9 +42,6 @@ export class PokeButton {
   private press = 0;
   /** No new press until this runs out (seconds): after a click, or a lock. */
   private cooldown = 0;
-  /** Blinks while idle, to catch the eye (see setBlink). */
-  private blink: { color: number; intensity: number; speed: number } | null = null;
-  private blinkTime = 0;
 
   constructor(
     private audio: GameAudio,
@@ -90,16 +87,6 @@ export class PokeButton {
     this.faceMaterial.needsUpdate = true;
   }
 
-  /**
-   * Blinks the cap (an emissive pulse) while it waits to be poked, or stops.
-   * The Ready and Held looks win while a finger is near.
-   */
-  setBlink(blink: { color: number; intensity: number; speed: number } | null): void {
-    this.blink = blink;
-    this.blinkTime = 0;
-    if (!blink) applyTouchState([this.material], this.touch);
-  }
-
   reset(): void {
     this.armed = false;
     this.fired = false;
@@ -137,9 +124,7 @@ export class PokeButton {
       this.group.worldToLocal(local.copy(hand.indexTip));
       // Generous zone around the round face, and not from far behind it.
       if (Math.hypot(local.x, local.y) > this.radius * zoneScale || local.z < -this.depth) continue;
-      // A wider zone once Ready, so a fingertip shaking at the edge never flickers it on and off.
-      const reach = this.touch === 'idle' ? readyDistance : readyDistance * POKE.readyOut;
-      if (local.z > face + reach) continue;
+      if (local.z > face + readyDistance) continue;
       inZone = true;
       if (local.z > face) {
         near = true;
@@ -154,7 +139,7 @@ export class PokeButton {
     if (push >= 0 && this.armed && !this.fired) {
       // The cap follows the fingertip in, down to the bottom.
       const target = Math.min(travel, push);
-      this.press += (target - this.press) * Math.min(1, dt * POKE.capFollow);
+      this.press += (target - this.press) * Math.min(1, dt * 40);
       if (this.cooldown <= 0 && this.press >= travel * fireShare) {
         this.fired = true;
         this.armed = false;
@@ -171,13 +156,6 @@ export class PokeButton {
     }
     this.cap.position.z = travel - this.press;
     this.setTouch(push >= 0 && (this.armed || this.fired) ? 'held' : near && !this.fired ? 'ready' : 'idle');
-    if (this.blink && this.touch === 'idle') {
-      this.blinkTime += dt;
-      // A smooth on and off pulse, fully dark between blinks.
-      const pulse = Math.max(0, Math.sin(this.blinkTime * Math.PI * 2 * this.blink.speed));
-      this.material.emissive.setHex(this.blink.color);
-      this.material.emissiveIntensity = this.blink.intensity * pulse;
-    }
     return fired;
   }
 
