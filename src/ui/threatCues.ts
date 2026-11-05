@@ -49,8 +49,8 @@ export class ThreatCues {
     }
   }
 
-  /** A goblin hit the wall: flash the wall top where it stands, and a dust puff. */
-  wallHit(goblin: Goblin): void {
+  /** A goblin hit the wall: flash the wall top where it stands, and a dust puff. `dust` false: the flash only (a climber running on it). */
+  wallHit(goblin: Goblin, dust = true): void {
     if (!THREAT.enabled) return;
     const p = goblin.root.position;
     const a = angleOf(p.x, p.z);
@@ -62,12 +62,13 @@ export class ThreatCues {
     flash.mesh.visible = true;
     flash.time = THREAT.flashTime;
     flash.material.opacity = THREAT.flashOpacity;
+    if (!dust) return;
     temp.set(polarX(CASTLE.wallOut, a), CASTLE.wallHeight, polarZ(CASTLE.wallOut, a));
     this.particles.burst(this.stage.boardSpin.localToWorld(temp), THREAT.dustColors, THREAT.dustCount, THREAT.dustSpeed);
   }
 
   /**
-   * The red arrow: at a goblin hitting the wall (or climbing it) that has
+   * The red arrow: at a goblin hitting the wall, climbing it or on the rampart that has
    * been at the edge of the view or out of it for POINTER.threatAfter.
    */
   updateArrow(dt: number, goblins: Goblins, head: Vector3, forward: Vector3): void {
@@ -75,7 +76,8 @@ export class ThreatCues {
     let best: Goblin | null = null;
     let bestTime = POINTER.threatAfter;
     for (const g of goblins.list) {
-      if (g.mode !== 'atWall' && g.mode !== 'climbing') {
+      // At the wall, climbing it, or on top of it running about.
+      if (g.mode !== 'atWall' && g.mode !== 'climbing' && g.mode !== 'rampart') {
         if (this.unseen.has(g)) this.unseen.delete(g);
         continue;
       }

@@ -12,8 +12,8 @@
 //
 // Easy to notice (build step 6): each one tells its story with a prop, in
 // the same red as the keg's bands (nothing else on the board is that red):
-// the keg itself, a boulder wedged with a chock and a pry bar with a red rag
-// flag on top, and a tree with a red handled axe stuck in its trunk. They
+// the keg itself, a boulder wedged with a chock and a red rag flag on a pole
+// beside it, and the only autumn tree on the board (orange leaves). They
 // stand on flat ground with a clear view from the seat. While goblins are near one it glows softly (emissive only), and
 // a group walking right past one gives a short "now!" cue (a stronger pulse
 // and a sound). No floating UI: only things that belong in the world.
@@ -21,7 +21,6 @@
 // One rule for chain reactions: explosions set off the triggers near them.
 // All motion is simple math, no physics engine. Board units (cm), in boardSpin.
 import {
-  BoxGeometry,
   BufferGeometry,
   Color,
   CylinderGeometry,
@@ -213,33 +212,6 @@ function mapPixels(map: MeshStandardMaterial['map']): ImageData | null {
   }
 }
 
-/** The trunk's middle and radius at a height (model space, cm), measured from the model's own points. */
-function trunkAt(model: Object3D, from: number, to: number): { x: number; z: number; r: number } {
-  model.updateMatrixWorld(true);
-  const points: Vector3[] = [];
-  model.traverse((o) => {
-    const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    const position = mesh.geometry.getAttribute('position');
-    for (let i = 0; i < position.count; i++) {
-      const v = new Vector3().fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld);
-      if (v.y >= from && v.y <= to) points.push(v);
-    }
-  });
-  if (points.length === 0) return { x: 0, z: 0, r: 0.8 };
-  // The middle of the points, then their typical distance (not the farthest: a root or branch would push it out).
-  let x = 0;
-  let z = 0;
-  for (const v of points) {
-    x += v.x;
-    z += v.z;
-  }
-  x /= points.length;
-  z /= points.length;
-  const d = points.map((v) => Math.hypot(v.x - x, v.z - z)).sort((a, b) => a - b);
-  const r = d[Math.floor(d.length * 0.6)];
-  return { x, z, r: Math.min(Math.max(r, 0.3), 2) };
-}
 
 /** Modes where a goblin is on its feet on the field (it counts as near a trigger). */
 const ON_FIELD: ReadonlySet<Goblin['mode']> = new Set<Goblin['mode']>(['walking', 'toWall', 'dazed', 'fighting']);
@@ -672,8 +644,6 @@ class Tree extends Trigger {
     this.materials = ownMaterials(model);
     // Only the leaves turn autumn orange (whole leaf triangles, never the trunk), so this tree stands out from every other.
     this.materials.push(...autumnLeaves(model, template.size.y));
-    // An axe stuck in the trunk, on the side that faces the castle: someone was chopping it, and it is ready to fall.
-    this.materials.push(...this.buildAxe(model, template));
     this.root.add(model);
     const { side } = TRIGGERS.tree;
     this.road.pointAt(along, 0, temp);
@@ -682,29 +652,6 @@ class Tree extends Trigger {
     // Turning around this axis moves the top from straight up toward the road (away from `side`).
     this.axis.crossVectors(this.side, UP).normalize();
     this.fallDeg = this.restingFall(Math.min(template.size.x, template.size.z) / 2);
-  }
-
-  /** The axe in the trunk: a steel head bitten into the wood, its red handle sticking out toward the castle. */
-  private buildAxe(model: Object3D, template: ModelTemplate): MeshStandardMaterial[] {
-    const h = template.size.y;
-    const { axeAt, axeHandle, axeHead } = TRIGGERS.tree;
-    const trunk = trunkAt(model, h * (axeAt - 0.05), h * (axeAt + 0.05));
-    const steel = paintMaterial(TRIGGERS.steelColor);
-    const red = paintMaterial(TRIGGERS.paint);
-    const axe = new Group();
-    // Built along +x (out of the trunk), then turned to face the castle (the board's middle).
-    // The head: its blade bitten a little into the bark, most of it out in view.
-    const head = new Mesh(new BoxGeometry(axeHead * 0.9, axeHead, axeHead * 0.25), steel);
-    head.position.x = trunk.r + axeHead * 0.15;
-    const handle = new Mesh(new CylinderGeometry(0.2, 0.24, axeHandle, 6), red);
-    const droop = degToRad(12);
-    handle.rotation.z = Math.PI / 2 + droop;
-    handle.position.set(trunk.r + axeHead * 0.55 + (axeHandle / 2) * Math.cos(droop), -(axeHandle / 2) * Math.sin(droop), 0);
-    axe.add(head, handle);
-    axe.position.set(trunk.x, h * axeAt, trunk.z);
-    axe.rotation.y = Math.atan2(this.base.z, -this.base.x);
-    model.add(axe);
-    return [steel, red];
   }
 
   /**

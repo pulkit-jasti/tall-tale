@@ -398,6 +398,8 @@ describe('tutorial director', () => {
     while (director.current?.id !== 'learn-sling-shoot') director.skip();
     expect(api.baited).toEqual(['moving']);
     expect(director.spawnRate).toBe(0);
+    // The ghost aim dots show the way to it.
+    expect((director.current as TutorialStep).hint?.aimDots).toBe(true);
     // A miss is not enough: it waits for a hit.
     api.slingCount = () => 5;
     run(director, 30);

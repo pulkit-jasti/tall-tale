@@ -179,6 +179,8 @@ export class Battle implements TutorialApi {
       damageCastle(this.state, CASTLE_HEALTH.wallHitDamage);
       this.sinceDamage = 0;
     };
+    // A climber running on the rampart: the wall under it flashes red like a hit (no damage).
+    parts.goblins.onRampartStep = (goblin) => parts.threat.wallHit(goblin, false);
     parts.slingshot.onHit = () => this.slingHits++;
     parts.slingshot.onEvent = (event) => this.sling[event]++;
     for (const tool of Object.values(parts.tools)) {

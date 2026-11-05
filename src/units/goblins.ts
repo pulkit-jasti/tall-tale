@@ -136,8 +136,10 @@ export class Goblin {
   /** Peppered: time to its next sneeze, and the sneeze's head jerk left (seconds). */
   sneezeIn = 0;
   sneezing = 0;
-  /** Running about on the rampart: pause left before the next dash (seconds). */
+  /** Running about on the rampart: pause left before the next dash (seconds), the board angle it runs to, and the wall mark timer. */
   dashPause = 0;
+  dashTo = 0;
+  markTimer = 0;
 
   constructor(
     template: ModelTemplate,
@@ -236,6 +238,8 @@ export class Goblins {
 
   /** Called on each wall hit from a grunt or runner (castle damage). */
   onWallHit: (goblin: Goblin) => void = () => {};
+  /** Called now and then while a climber runs about on the rampart (a wall flash, no damage). */
+  onRampartStep: (goblin: Goblin) => void = () => {};
 
   constructor(
     private board: Object3D,
@@ -922,14 +926,20 @@ export class Goblins {
    */
   private runOnRampart(g: Goblin, dt: number): void {
     const p = g.root.position;
+    const at = angleOf(p.x, p.z);
+    // Whatever stretch of wall it stands or runs on flashes red, like a wall hit (no damage).
+    g.markTimer -= dt;
+    if (g.markTimer <= 0) {
+      g.markTimer = GOBLIN_RULES.rampartMarkEvery;
+      this.onRampartStep(g);
+    }
     if (g.dashPause > 0) {
       g.dashPause -= dt;
       if (g.dashPause <= 0) {
-        // The next dash: somewhere else in this gap between two towers.
-        const [lo, hi] = towerGap(angleOf(p.x, p.z));
-        const a = angleOf(p.x, p.z) + degToRad(this.rng.range(-GOBLIN_RULES.rampartDashDeg, GOBLIN_RULES.rampartDashDeg));
-        const to = Math.min(hi, Math.max(lo, a));
-        g.target.set(polarX(CASTLE.rampartRadius, to), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, to));
+        // The next dash: somewhere else along the wall top, between the same two towers.
+        const [lo, hi] = towerGap(at);
+        const a = at + degToRad(this.rng.range(-GOBLIN_RULES.rampartDashDeg, GOBLIN_RULES.rampartDashDeg));
+        g.dashTo = Math.min(hi, Math.max(lo, a));
         g.hasTarget = true;
         g.play('sprint', true, 1.4);
       }
@@ -939,13 +949,24 @@ export class Goblins {
       g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
       return;
     }
-    if (this.moveToward(g, g.target, g.speed * GOBLIN_RULES.rampartRunShare, dt)) {
+    // Along the wall's own curve, never across it: always right on the rampart.
+    const step = ((g.speed * GOBLIN_RULES.rampartRunShare) / CASTLE.rampartRadius) * dt;
+    // The short way round (angles wrap at the back of the board).
+    let d = g.dashTo - at;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    const arrived = Math.abs(d) <= step;
+    const next = arrived ? at + d : at + Math.sign(d) * step;
+    p.set(polarX(CASTLE.rampartRadius, next), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, next));
+    // Facing along the wall, the way it runs.
+    const s = Math.sign(d) || 1;
+    g.face(Math.cos(next) * s, Math.sin(next) * s);
+    if (arrived) {
       g.hasTarget = false;
       g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
       g.play('idle');
       g.faceCenter();
     }
-    p.y = CASTLE.wallHeight;
   }
 
   /** Lets lesson goblins on the rampart and patrolling ones go on as usual. */

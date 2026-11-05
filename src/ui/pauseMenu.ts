@@ -69,6 +69,8 @@ class WristButton {
   private palmFilter = new OneEuro(3, filterOptions(PAUSE.wrist.filter));
   private normalFilter = new OneEuro(3, filterOptions(PAUSE.wrist.normalFilter));
   private turning = false;
+  /** Catching up with the palm after it moved away. */
+  private gliding = false;
 
   constructor(parent: Object3D, audio: GameAudio) {
     this.button = new PokeButton(audio, { radius: PAUSE.wrist.radius, icon: 'pause' });
@@ -153,12 +155,22 @@ class WristButton {
     if (!this.hasSpot) {
       this.spot.copy(target);
       this.hasSpot = true;
+      this.gliding = false;
       this.faceEyes(head, true);
     } else {
-      // Held completely still while the other finger is about to poke it, unless the palm really went away.
+      // It stands still in the world, right where the palm was when it came
+      // out, and only moves to catch up once the palm has clearly moved away
+      // (W.reanchor). A thing standing still cannot shake, whatever the
+      // tracking does. While the other finger is about to poke it, it waits
+      // even longer (W.lockBreak).
       const poking = right.tracked && right.indexTip.distanceTo(this.spot) < W.lockNear;
-      if (!poking || this.spot.distanceTo(target) > W.lockBreak) this.spot.copy(target);
-      if (!poking) this.faceEyes(head, false);
+      const gap = this.spot.distanceTo(target);
+      if (gap > (poking ? W.lockBreak : W.reanchor)) this.gliding = true;
+      if (this.gliding) {
+        this.spot.lerp(target, 1 - Math.exp(-dt / W.glide));
+        this.faceEyes(head, false);
+        if (this.spot.distanceTo(target) < W.settle) this.gliding = false;
+      }
     }
     this.holder.visible = true;
     this.holder.position.copy(this.spot);

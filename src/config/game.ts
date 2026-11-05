@@ -534,6 +534,8 @@ export const GOBLIN_RULES = {
   rampartDashDeg: 18,
   rampartRunShare: 1.8,
   rampartStop: [0.15, 0.6] as [number, number],
+  /** The stretch of wall under a climber on the rampart flashes red this often (seconds), like a wall hit, without damage. */
+  rampartMarkEvery: 0.35,
   /** Most goblins on the board at once (unit budget, docs/mvp.md). */
   maxGoblins: 40,
   /** Random speed change per goblin (0.1 = plus or minus 10%). */
@@ -737,7 +739,17 @@ export const PAUSE = {
      */
     filter: { still: 0.8, follow: 8, derivative: 1 },
     normalFilter: { still: 0.6, follow: 1.5, derivative: 1 },
-    /** It only turns to face the eyes again past this angle (degrees). */
+    /**
+     * It stands still where the palm was when it came out, and only glides
+     * after the palm (over `glide` seconds, stopping within `settle`) once
+     * the palm moved `reanchor` away (meters). Standing still, it cannot
+     * shake (headset tests after step 6: following the palm, even filtered,
+     * still looked like it vibrated).
+     */
+    reanchor: 0.045,
+    glide: 0.08,
+    settle: 0.004,
+    /** It only turns to face the eyes again past this angle (degrees), and only while it glides. */
     turnDeg: 10,
     /**
      * While the right index fingertip is within `lockNear` of it (meters),
@@ -898,9 +910,11 @@ export const MARKERS = {
  * The 3D pointer arrows (src/ui/pointerArrow.ts): in front of the face, a
  * little low, pointing at something only while it is at the very edge of the
  * headset's view or out of it (the Quest 3S sees about 96 by 90 degrees, so
- * about 45 degrees from the middle is the edge). They blink softly. `lesson`:
- * gold, at the lesson's target. `threat`: red, at a goblin hitting the wall
- * out of view, a little lower so both fit (meters, degrees, seconds).
+ * about 45 degrees from the middle is the edge). Each blinks (glow between
+ * blinkMin and blinkMax, blinkSpeed times a second). `lesson`:
+ * gold, softly, at the lesson's target. `threat`: red, fast, at a goblin
+ * hitting the wall, climbing it or running on it out of view, a little
+ * lower so both fit (meters, degrees, seconds).
  */
 export const POINTER = {
   length: 0.055,
@@ -910,13 +924,10 @@ export const POINTER = {
   showDeg: 38,
   hideDeg: 32,
   popTime: 0.2,
-  /** The soft blink: glow between these, this many times a second. */
-  blinkMin: 0.25,
-  blinkMax: 0.8,
-  blinkSpeed: 0.8,
   renderOrder: 36,
-  lesson: { color: 0xf2c14e, glow: 0xb07a10, below: 0.09 },
-  threat: { color: 0xe0342a, glow: 0x9a1408, below: 0.16 },
+  lesson: { color: 0xf2c14e, glow: 0xb07a10, below: 0.09, blinkMin: 0.25, blinkMax: 0.8, blinkSpeed: 0.8 },
+  /** The red one blinks fast and strong, to catch the eye. */
+  threat: { color: 0xe0342a, glow: 0xff2a10, below: 0.16, blinkMin: 0, blinkMax: 1.6, blinkSpeed: 3.5 },
   /** The red arrow: only for a goblin hitting the wall that has been out of view this long (seconds), so a glance away does not show it. */
   threatAfter: 1.5,
 };
@@ -1516,11 +1527,10 @@ export const TRIGGERS = {
   /**
    * How each trigger shows what it is, with props in the world (no floating
    * UI), in this red (the keg's bands): a pry bar with a red rag flag under
-   * the boulder, a red handled axe stuck in the tree. Plus the wood and steel of the props.
+   * the boulder (the tree has autumn leaves). Plus the wood of the props.
    */
   paint: 0xe0342a,
   woodColor: 0x8a5a34,
-  steelColor: 0xb4bcc6,
   /**
    * "This can be used now": while goblins are near a trigger it glows softly
    * (emissive only, pulsing). When a group walks right past it, a short
@@ -1605,10 +1615,6 @@ export const TRIGGERS = {
     side: 5.5,
     leanDeg: 12,
     hitRadius: 4,
-    /** The axe in its trunk: this share of the way up, handle length and head size (cm). */
-    axeAt: 0.25,
-    axeHandle: 7,
-    axeHead: 2.4,
     /** Its leaves (only the leaf triangles) are this autumn orange, so it stands out from every other tree. */
     leafColor: 0xe8742a,
     /** It falls across the road in this long, until its crown rests on the ground (at most 90 degrees). */

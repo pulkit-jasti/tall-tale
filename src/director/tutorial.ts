@@ -416,6 +416,8 @@ function shootLesson(): TutorialStep {
     'learn-sling-shoot',
     lesson('Goblins on the road! Pinch the pouch, pull it back and let go. Just aim near one: your shot bends toward it.', 'target', 'baitGoblin', {
       demo: 'shoot',
+      // Ghost aim dots from the pouch to the moving goblin, like in the trigger lessons.
+      aimDots: true,
       doneText: 'Got it! The slingshot helps you aim, even at moving goblins.',
     }),
     (api, since) => api.toolUses('slingshot') > since,

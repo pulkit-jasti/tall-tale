@@ -19,6 +19,10 @@ export interface ArrowLook {
   glow: number;
   /** How far below the eye line it floats (meters). */
   below: number;
+  /** The blink: glow from blinkMin to blinkMax, blinkSpeed times a second. */
+  blinkMin: number;
+  blinkMax: number;
+  blinkSpeed: number;
 }
 
 export class PointerArrow {
@@ -37,7 +41,7 @@ export class PointerArrow {
     this.material = new MeshStandardMaterial({
       color: look.color,
       emissive: look.glow,
-      emissiveIntensity: POINTER.blinkMin,
+      emissiveIntensity: look.blinkMin,
       roughness: 0.6,
       flatShading: true,
       depthTest: false,
@@ -69,7 +73,8 @@ export class PointerArrow {
 
   /** Every frame with the target (world), or null for none. */
   update(dt: number, head: Vector3, forward: Vector3, target: Vector3 | null): void {
-    const { distance, smoothing, showDeg, hideDeg, popTime, blinkMin, blinkMax, blinkSpeed } = POINTER;
+    const { distance, smoothing, showDeg, hideDeg, popTime } = POINTER;
+    const { blinkMin, blinkMax, blinkSpeed } = this.look;
     this.time += dt;
     let want = false;
     if (target) {
@@ -98,7 +103,7 @@ export class PointerArrow {
     turn.setFromUnitVectors(UP, toTarget);
     this.root.quaternion.slerp(turn, 1 - Math.exp(-dt / (smoothing * 0.5)));
     this.root.scale.setScalar(Math.max(0.001, popIn(this.shown)));
-    // A soft, slow blink: the glow breathes up and down.
+    // The blink: the glow breathes up and down (softly for the lesson, fast for a threat).
     const breath = 0.5 - 0.5 * Math.cos(this.time * Math.PI * 2 * blinkSpeed);
     this.material.emissiveIntensity = blinkMin + (blinkMax - blinkMin) * breath;
     this.root.visible = true;
