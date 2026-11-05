@@ -117,6 +117,8 @@ export class Troops {
 
   /** Debug: false keeps every soldier inside the castle (testing without help). Turning it off sends them all home. */
   private on = true;
+  /** True while a lesson is taught: no new squads. The first one comes TROOPS.firstSquadAt after it ends. */
+  held = false;
 
   get enabled(): boolean {
     return this.on;
@@ -192,7 +194,8 @@ export class Troops {
 
   update(dt: number): void {
     this.frame++;
-    if (this.deployed) {
+    if (this.deployed && this.held) this.squadTimer = Math.max(this.squadTimer, TROOPS.firstSquadAt);
+    else if (this.deployed) {
       this.squadTimer -= dt;
       if (this.squadTimer <= 0) {
         this.squadTimer = TROOPS.squadEvery;

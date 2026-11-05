@@ -19,9 +19,55 @@ export const BOARD = {
    * kingdom is what makes the player feel like a giant.
    */
   eyeToBoard: 0.46,
-  /** Grass colors, picked per vertex for a slightly varied look. */
-  grassColors: [0x8fbf5a, 0x9cc46b, 0x86b552, 0xa3c972],
   skirtColor: 0x6b5a45,
+};
+
+/**
+ * The grass on the board (src/world/grass.ts): soft light and dark meadow
+ * patches, a little darker next to the wall, worn and yellower along the
+ * roads and dirty around the camps, with a faint fine grain up close. On it,
+ * thousands of tiny low-poly grass tufts and some flowers (one instanced mesh
+ * each), much smaller than the 3.5 cm goblins, so they never hide them.
+ */
+export const GRASS = {
+  /** Meadow patches: dark and light grass, and how big the patches are (cm, a large and a small size). */
+  darkColor: 0x7aad48,
+  lightColor: 0xa6cf6c,
+  patchSizes: [190, 55] as [number, number],
+  /** Worn grass along the roads: its color, and how far out from the road's edge it fades (cm). */
+  wornColor: 0xb6b46a,
+  wornWidth: 6,
+  /** Dirt around the camps: its color, and how far past the camp's size it fades (cm). */
+  dirtColor: 0xa89a62,
+  dirtWidth: 16,
+  /** The grass right outside the wall is darker, like a soft shadow (share, and how far out it fades, cm). */
+  wallShade: 0.16,
+  wallShadeTo: 78,
+  /** Fine grain up close: how strong (share), its size (cm), and where it fades out (cm from the center). */
+  grain: 0.1,
+  grainSize: 1.6,
+  grainFadeFrom: 120,
+  grainFadeTo: 380,
+  /**
+   * Grass tufts (3 thin blades each), from near to far: how many in each
+   * ring (cm from the center) and how tall (cm). A little bigger far away,
+   * so they still read. They grow in clumps (the meadow patches) and keep
+   * off the roads and camps.
+   */
+  tuftRings: [
+    { from: 56, to: 200, count: 2600, height: [0.6, 1.1] },
+    { from: 200, to: 380, count: 1800, height: [0.8, 1.4] },
+    { from: 380, to: 590, count: 1400, height: [1, 1.7] },
+  ] as { from: number; to: number; count: number; height: [number, number] }[],
+  /** Tufts keep this far from a road's edge (cm). */
+  roadClear: 1.2,
+  /** Tip of a blade is this much brighter than its base. */
+  tipShade: 1.3,
+  baseShade: 0.72,
+  /** Small flowers on top of some tufts: how many, their size (cm across) and colors. */
+  flowerCount: 420,
+  flowerSize: 0.55,
+  flowerColors: [0xfff6e0, 0xffd84a, 0xff9ab8, 0xb59bff],
 };
 
 /**
@@ -365,9 +411,9 @@ export const FLAGS = {
 
 /** Win and lose panels, and the poke buttons on them (docs/castle-rules.md section 4). */
 export const END_PANEL = {
-  /** Panel spot, fixed in front of the player (fixedRig, cm): over the front wall, within reach. */
-  radius: 36,
-  y: 20,
+  /** Panel spot, its middle, fixed in front of the player (cm): over the front wall, the button within reach. Moved back and up from 36 and 20. */
+  radius: 41,
+  y: 24,
   /** Tilted back a little, toward the eyes (degrees). */
   tiltDeg: 20,
   width: 32,
@@ -409,18 +455,21 @@ export const POKE = {
 
 /**
  * The tutorial's hint sign: in front, past the goblins at the castle wall,
- * so it is behind them, never in front of them. High enough to read without
- * looking down, and big enough for its distance. It is out of reach, so its
- * Next button stands apart, in front between the tool platforms, in the
- * reach band (boardLift, cm; the eyes are about 46 cm above the board).
+ * so it is behind them, never in front of them. Its bottom edge is at eye
+ * height, so it only covers sky and hills, never the board (the board's far
+ * edge is just below eye level). Big enough for its distance. It is out of
+ * reach, so its Next button stands apart, in front between the tool
+ * platforms, in the reach band (boardLift, cm; the eyes are about 46 cm
+ * above the board).
  */
 export const HINT_SIGN = {
   radius: 62,
-  /** Bottom edge above the board. */
-  y: 12,
+  /** Bottom edge above the board (was 12, which covered the front of the board; 48 felt too high). It only covers the far edge of the board. */
+  y: 43,
   width: 36,
   height: 14.8,
-  tiltDeg: 15,
+  /** Tilt back (degrees). Negative tips its top toward the player, so it faces the eyes looking a little up. */
+  tiltDeg: -5,
   /** A new instruction pops in over this long (seconds). */
   popTime: 0.25,
   /** A finished lesson shows its ticked box this long before the next one (seconds). */
@@ -1114,18 +1163,51 @@ export const TROOPS = {
 };
 
 /**
- * The sky (decor only, no gameplay): the IWSDK gradient dome from the scene
- * file, a low-poly 3D cartoon sun far away (meters, world), and many small
- * clouds made to the board's scale (cm, in boardLift like the hills): little
- * cotton puffs floating around the giant's head, so the player feels huge.
- * Never turns with the board. One draw call for all the clouds.
+ * The sky (decor only, no gameplay): our own gradient dome with a warm
+ * sunrise glow, a low-poly 3D cartoon sun far away (meters, world), and
+ * many small clouds made to the board's scale (cm, in boardLift like the
+ * hills): little cotton puffs around and above the giant's head, so the
+ * player feels huge. None of it turns with the board (comfort rule). One
+ * draw call for all the clouds.
  */
 export const SKY = {
   enabled: true,
-  /** Sun direction: compass angle from the player's first view (degrees, 0 = front, positive = right) and height above the horizon. */
-  sunAngleDeg: -55,
-  sunElevationDeg: 24,
+  /**
+   * Sun direction: compass angle from the player's first view (degrees,
+   * 0 = front, positive = right) and height above the horizon (low, a
+   * morning sun). A little right of front, so the sunrise glow is in view
+   * and clear of the hint sign.
+   */
+  sunAngleDeg: 35,
+  sunElevationDeg: 13,
   sunDistance: 150,
+  /** The sunlight comes from the sun's side, but higher, so the board's tops stay bright (degrees above the horizon). */
+  lightElevationDeg: 45,
+  /** The sky dome (meters, inside the camera's 200 m far plane) and its colors: top, horizon (the fog color too), below the horizon. */
+  domeRadius: 175,
+  domeTopColor: 0x5fa6e6,
+  domeHorizonColor: 0xc9dce6,
+  domeBottomColor: 0xb4c8cf,
+  /**
+   * The sunrise glow on the dome: a wide orange haze and a tight yellow one
+   * around the sun, strongest low on the horizon. Spread is how wide each one
+   * is (higher = tighter), strength how strong (0 to 1).
+   */
+  glowOrange: 0xff9a3c,
+  glowYellow: 0xffe08a,
+  glowOrangeSpread: 3,
+  glowOrangeStrength: 0.85,
+  glowYellowSpread: 18,
+  glowYellowStrength: 0.9,
+  /** How much the glow keeps above the horizon (0 = only on the horizon, 1 = the same all the way up). */
+  glowHighShare: 0.35,
+  /**
+   * Haze over the hills (meters, for the default board size: it grows with
+   * stage.boardScale): none until just past the board, thicker farther out,
+   * almost full at the last ground. Its color is the dome's horizon color.
+   */
+  fogNear: 6.6,
+  fogFar: 32,
   /** Sun ball radius (meters), and its soft glow as a share of that. */
   sunRadius: 5,
   glowShare: 4,
@@ -1153,6 +1235,16 @@ export const SKY = {
   /** No clouds over the battlefield: inside this radius they shrink away (cm, from, to). */
   clearFrom: 300,
   clearTo: 430,
+  /**
+   * High clouds over the battlefield and the giant's head: always well above
+   * the eyes (46 cm above the board), so they never block the view down
+   * onto the board. How many, where (cm from the center, they wrap inside
+   * this), height above the board (cm, from, to) and size (cm across).
+   */
+  highCloudCount: 22,
+  highCloudMaxDistance: 950,
+  highCloudHeight: [120, 260] as [number, number],
+  highCloudSize: [28, 60] as [number, number],
   /** Wind: direction (degrees, 0 = front) and speed (board cm per second). Slow, so it reads as calm. */
   windDeg: 70,
   windSpeed: 5,
@@ -1180,10 +1272,11 @@ export interface HillLayer {
 /**
  * Low-poly hills and mountains around the board, so the horizon is not empty
  * (decor only). All in boardLift (cm): made to the board's scale, they rise
- * and size with the board, and never turn. Light green rolling hills close
- * by, darker green farther out, and brown mountains as the last ring. Tall
- * enough to frame the board, low enough that the giant looks over them.
- * No fog on them, so the colors stay as picked. One draw call per ring.
+ * and size with the board, but never turn. Light green rolling hills close by, darker
+ * green farther out, and brown mountains as the last ring. Tall enough to
+ * frame the board, low enough that the giant looks over them. The fog
+ * (SKY.fogNear, fogFar) hazes them more the farther they are. One draw call
+ * per ring.
  */
 export const HILLS = {
   /** The grass ground under them, from the board's edge out (cm), rising a little, lighter near and darker far. */
@@ -1193,10 +1286,11 @@ export const HILLS = {
   groundNearColor: 0x8fbf5a,
   groundFarColor: 0x5f8f3e,
   layers: [
-    { count: 40, from: 640, to: 900, width: [50, 120], height: [12, 30], colors: [0xb5dc7a, 0xa8d46c, 0xbfe387], peaked: false },
-    { count: 40, from: 950, to: 1350, width: [100, 210], height: [30, 65], colors: [0x86bb52, 0x7cb24a, 0x8fc25a], peaked: false },
-    { count: 42, from: 1400, to: 1850, width: [170, 320], height: [55, 110], colors: [0x5a8f3a, 0x4f8534, 0x629a40], peaked: true },
-    { count: 46, from: 1950, to: 2600, width: [220, 420], height: [100, 200], colors: [0x8a623e, 0x7a5636, 0x96704a], peaked: true },
+    // About twice as many as before, a little wider, and the rings overlap, so there are no flat gaps between them.
+    { count: 85, from: 620, to: 960, width: [60, 140], height: [12, 30], colors: [0xb5dc7a, 0xa8d46c, 0xbfe387], peaked: false },
+    { count: 85, from: 900, to: 1420, width: [110, 230], height: [30, 65], colors: [0x86bb52, 0x7cb24a, 0x8fc25a], peaked: false },
+    { count: 85, from: 1350, to: 1920, width: [180, 340], height: [55, 110], colors: [0x5a8f3a, 0x4f8534, 0x629a40], peaked: true },
+    { count: 90, from: 1850, to: 2650, width: [240, 440], height: [100, 200], colors: [0x8a623e, 0x7a5636, 0x96704a], peaked: true },
   ] as HillLayer[],
 };
 

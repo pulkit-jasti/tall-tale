@@ -1,16 +1,17 @@
 // The tutorial's hint sign: a sign in front of the player, past the goblins
 // at the castle wall, with one short instruction at a time (learn by doing).
 // It always stays in the same spot: it rises with the board but never spins
-// and never follows the head. A canvas texture with Kenney UI images, redrawn
+// and never follows the head. A shared Panel with Kenney UI images, redrawn
 // only when its text changes. The sign is out of reach, so its Next button
 // stands apart, in front between the tool platforms (HINT_SIGN.nextAt).
-import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, type Object3D } from 'three';
+import { Group, type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { HandState } from '../player/hands.js';
 import { degToRad } from '../rules/boardMath.js';
 import { post } from '../world/shapes.js';
+import { centerAbove, Panel, PANEL_INK as INK } from './panel.js';
 import { PokeButton } from './pokeButton.js';
 import { drawBanner, drawIcon, drawNineSlice, wrapText, type UiImageName } from './uiImages.js';
 
@@ -30,46 +31,27 @@ export interface SignContent {
   next?: boolean;
 }
 
-const INK = '#4a3424';
 const SUB_INK = '#8a5a34';
-/** Layout width the drawing code is written for (pixels). */
-const LAYOUT_WIDTH = 768;
-/** The canvas is this many times sharper than the layout. */
-const CANVAS_SCALE = 1.5;
 
 export class HintSign {
-  private root = new Group();
-  private canvas = document.createElement('canvas');
-  private texture: CanvasTexture;
+  private panel: Panel;
   private drawn = '';
-  /** Little pop when the text changes (1 = settled). */
-  private pop = 1;
   private next: PokeButton;
   /** The Next button's stand, in reach in front of the player. */
   private nextStand = new Group();
-  /** The text panel. Only it pops. */
-  private panel: Mesh;
 
   constructor(parent: Object3D, audio: GameAudio) {
     const { width, height, radius, y, tiltDeg } = HINT_SIGN;
-    this.canvas.width = Math.round(LAYOUT_WIDTH * CANVAS_SCALE);
-    this.canvas.height = Math.round(((LAYOUT_WIDTH * height) / width) * CANVAS_SCALE);
-    this.texture = new CanvasTexture(this.canvas);
-    this.texture.colorSpace = SRGBColorSpace;
-    this.texture.anisotropy = 4;
-    const mesh = new Mesh(
-      new PlaneGeometry(width, height),
-      new MeshBasicMaterial({ map: this.texture, transparent: true, fog: false, toneMapped: false }),
-    );
-    // Straight in front of the player, its face (+z) toward them, tilted back like a lectern.
-    const face = new Group();
-    face.rotation.x = -degToRad(tiltDeg);
-    face.add(mesh);
-    this.panel = mesh;
-    this.root.add(face);
-    this.root.position.set(0, y + (height / 2) * Math.cos(degToRad(tiltDeg)), -radius);
-    this.root.visible = false;
-    parent.add(this.root);
+    this.panel = new Panel(parent, {
+      width,
+      height,
+      radius,
+      centerY: centerAbove(y, height, tiltDeg),
+      tiltDeg,
+      layoutWidth: 768,
+      canvasScale: 1.5,
+      anisotropy: 4,
+    });
     // "Next" button straight in front, in reach, its face tilted up toward the eyes.
     this.next = new PokeButton(audio, { radius: HINT_SIGN.nextRadius, icon: 'next' });
     this.next.group.rotation.x = -degToRad(HINT_SIGN.nextTiltDeg);
@@ -84,12 +66,12 @@ export class HintSign {
 
   show(content: SignContent | null): void {
     if (!content) {
-      this.root.visible = false;
+      this.panel.visible = false;
       this.nextStand.visible = false;
       this.drawn = '';
       return;
     }
-    this.root.visible = true;
+    this.panel.visible = true;
     if (!!content.next !== this.nextStand.visible) {
       this.nextStand.visible = !!content.next;
       this.next.reset();
@@ -99,7 +81,7 @@ export class HintSign {
     // A new instruction pops in. Ticking the box or a counter change does not.
     const sameText = this.drawn && JSON.parse(this.drawn).text === content.text;
     if (!sameText) {
-      this.pop = 0;
+      this.panel.popIn(HINT_SIGN.popTime);
       // A new step: a finger still on Next must not skip it too.
       this.next.lock(POKE.lockAfterChange);
     }
@@ -109,31 +91,20 @@ export class HintSign {
 
   /** True on the frame the "Next" button is poked (only while it shows). */
   pokedNext(hands: HandState[], dt: number): boolean {
-    return this.root.visible && this.nextStand.visible && this.next.update(hands, dt);
+    return this.panel.visible && this.nextStand.visible && this.next.update(hands, dt);
   }
 
   update(dt: number): void {
-    if (this.pop >= 1) return;
-    this.pop = Math.min(1, this.pop + dt / HINT_SIGN.popTime);
-    // Ease out with a small overshoot, then settle at full size.
-    const t = this.pop - 1;
-    const ease = 1 + 2.7 * t * t * t + 1.7 * t * t;
-    this.panel.scale.setScalar(0.8 + 0.2 * ease);
+    this.panel.update(dt);
   }
 
   private draw(content: SignContent): void {
     mark('hint sign');
-    const c = this.canvas.getContext('2d')!;
-    // Laid out at LAYOUT_WIDTH, drawn at CANVAS_SCALE times that, so text stays sharp further away.
-    c.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
-    const w = LAYOUT_WIDTH;
-    const h = this.canvas.height / CANVAS_SCALE;
-    c.clearRect(0, 0, w, h);
+    this.panel.paint((c, w, h) => this.drawContent(c, w, h, content));
+  }
+
+  private drawContent(c: CanvasRenderingContext2D, w: number, h: number, content: SignContent): void {
     const pad = 18;
-    if (!drawNineSlice(c, 'panel', 0, 0, w, h, 16, 40)) {
-      c.fillStyle = '#e8d7b0';
-      c.fillRect(0, 0, w, h);
-    }
     // Header: a hanging banner for waves, a plain line with a checkbox for lessons.
     const headerH = 70;
     c.textBaseline = 'middle';
@@ -180,7 +151,6 @@ export class HintSign {
       c.font = 'bold 30px sans-serif';
       c.fillText(content.sub, w / 2, h - pad - subH / 2 - 4);
     }
-    this.texture.needsUpdate = true;
   }
 }
 

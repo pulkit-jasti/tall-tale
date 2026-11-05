@@ -137,9 +137,10 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 
 ### Comfort rules
 
-- **Only the board rotates.** The sky, the horizon, the tool platforms, the food jar and the two flags never turn. The platforms, jar, flags and hint sign rise and fall with the board, so they always stand at the same spot on it and the ring never passes through them. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it.
+- **Only the board rotates.** The sky, the horizon, the hills, the tool platforms, the food jar and the two flags never turn. The platforms, jar, flags and hint sign rise and fall with the board, so they always stand at the same spot on it and the ring never passes through them. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it (a whole-world turn was tried on paper after the step 5 review and dropped for this reason).
 - **Movement follows the hands exactly (1:1)**, with no smoothing or lag. Moving the world is only comfortable when the player clearly causes it.
-- Later ideas: a small "momentum" flick spin for fun, and snap rotation (30 degree steps) as a comfort option.
+- **Comfort setting (later):** for players who get motion sick, the board turns in snap steps (30 degrees) instead of smoothly.
+- Later ideas: a small "momentum" flick spin for fun.
 
 ### Placement and fallbacks
 

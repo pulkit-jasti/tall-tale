@@ -164,15 +164,14 @@ describe('tutorial director', () => {
     expect(api.shown).toEqual(['slingshot', 'swatter', 'pepper']);
   });
 
-  it('brings one tool at a time: the megaphone gets its own breather and its own how-to box', () => {
+  it('brings one tool at a time: the megaphone gets its own breather, one step to grab and one to use', () => {
     const api = idleApi();
     api.waveCleared = () => true;
     const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper', 'megaphone']);
     const ids = steps.map((s) => s.id);
     expect(ids.indexOf('learn-megaphone-grab')).toBeGreaterThan(ids.indexOf('wave-4-cleared'));
-    expect(ids.indexOf('megaphone-how')).toBe(ids.indexOf('learn-megaphone-grab') + 1);
-    expect(steps[ids.indexOf('megaphone-how')].hint?.next).toBe(true);
-    expect(ids.indexOf('wave-5-start')).toBeGreaterThan(ids.indexOf('megaphone-how'));
+    expect(ids).not.toContain('megaphone-how');
+    expect(ids.indexOf('wave-5-start')).toBe(ids.indexOf('learn-megaphone-grab') + 1);
     expect(ids.indexOf('learn-megaphone')).toBeGreaterThan(ids.indexOf('wave-5-start'));
     // Every breather brings at most one tool.
     const grabs = ids.filter((id) => id.endsWith('-grab'));

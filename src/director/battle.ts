@@ -333,6 +333,9 @@ export class Battle implements TutorialApi {
       }
       this.reach.update(dt, hands, head);
       this.director?.update(dt);
+      // No soldiers come out while something is taught: the lesson needs goblins, and the soldiers would knock them out first.
+      const step = (this.director?.current ?? null) as TutorialStep | null;
+      this.parts.troops.held = step?.hint?.kind === 'lesson';
       spawner.rate = this.director?.spawnRate ?? 1;
       spawner.update(dt);
       if (this.state.phase !== 'playing') this.end();

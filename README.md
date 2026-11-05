@@ -125,7 +125,7 @@ All actions are simple grab, pull, shake, poke and release. No complex gestures.
 
 - The battlefield wraps around you.
 - **Always a full 360 degree board.** One ring handle in front of you spins the board and sets its height, so you never need to turn around. Works in any chair.
-- **Comfort:** only the board spins. The sky, horizon, your tools and the two flags stay still. Snap rotation is a later comfort option.
+- **Comfort:** only the board spins. The sky, horizon, hills, your tools and the two flags stay still. A later comfort setting turns the board in snap steps instead of smoothly.
 - **Threat cues:**
   1. Spatial audio from the real direction of the threat (main cue).
   2. Visual cues, on by default: the wall top flashes red with a dust puff where it is hit ([docs/controls-and-ui.md](docs/controls-and-ui.md#threat-cues)).

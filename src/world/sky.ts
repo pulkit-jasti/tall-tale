@@ -1,24 +1,30 @@
 // The sky (decor only, no gameplay, no interaction):
-//   - a low-poly 3D cartoon sun far away (meters, world): a faceted ball and
-//     pointy pyramid rays around it, turning slowly, with a soft glow,
+//   - a gradient dome (meters, world): blue on top, pale at the horizon,
+//     with a warm orange and yellow sunrise glow around the sun, strongest
+//     low on the horizon,
+//   - a low-poly 3D cartoon sun far away, low and a little right of front
+//     (meters, world): a faceted ball and pointy pyramid rays around it,
+//     turning slowly, with a soft glow,
 //   - many small clouds made to the board's scale (cm, in boardLift like the
-//     hills): little cotton puffs floating around the giant's head, never
-//     over the battlefield, so the player feels huge.
-// Both sit in front of the IWSDK gradient dome from the scene file and never
-// turn with the board (comfort rule).
+//     hills): little cotton puffs floating around the giant's head, low ones
+//     never over the battlefield, and high ones over the board and the
+//     giant, always well above the eyes, so the player feels huge.
+// None of it turns with the board (comfort rule).
 //
-// Built to cost almost nothing on a Quest 3S: the sun is three draw calls,
-// all the clouds are one InstancedMesh. Everything is unlit with its shading
-// baked into face colors (bright, cartoony, the same in any light), and fog
-// is off, so the colors stay as picked.
+// Built to cost almost nothing on a Quest 3S: the dome is one draw call, the
+// sun three, all the clouds one InstancedMesh. Everything is unlit with its
+// shading baked into face or point colors (bright, cartoony, the same in any
+// light), and fog is off, so the colors stay as picked.
 //
 // No flicker: far away the depth buffer cannot tell apart things a few cm or
 // meters apart, so overlapping pieces used to fight. None of these pieces
-// write depth: each draws in a fixed order (renderOrder), the sun first,
-// then the clouds, sorted far to near now and then. They still test depth,
-// so the hills and the board in front hide them.
+// write depth: each draws in a fixed order (renderOrder), the dome before
+// everything, the sun after the board, then the clouds, sorted far to near
+// now and then. They still test depth, so the hills and the board in front
+// hide them.
 import {
   AdditiveBlending,
+  BackSide,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
@@ -33,6 +39,7 @@ import {
   MeshBasicMaterial,
   Object3D,
   Quaternion,
+  SphereGeometry,
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -52,10 +59,14 @@ interface Puff {
 }
 
 interface Cloud {
-  /** Middle of the cloud, flat (boardLift cm). Its height follows the ground below. */
+  /** Middle of the cloud, flat (boardLift cm). A low cloud's height follows the ground below. */
   readonly at: Vector3;
-  /** Height above the ground (cm). */
+  /** Height above the ground (cm), or above the board for a high cloud. */
   lift: number;
+  /** A high cloud over the board and the giant (never fades over the battlefield). */
+  readonly high: boolean;
+  /** It wraps around inside a square this big (cm from the center). */
+  readonly half: number;
   readonly puffs: Puff[];
 }
 
@@ -74,8 +85,15 @@ const c = new Vector3();
 /** Where the giant's eyes are in boardLift (cm above the board), for the cloud sort. */
 const EYES = new Vector3(0, 46, 0);
 
-/** Draw order of the sky pieces: after the board and the hills (0), the sun before the clouds. */
-const ORDER = { glow: 10, rays: 11, ball: 12, clouds: 20 };
+/** Draw order of the sky pieces: the dome before everything, then after the board and the hills (0), the sun before the clouds. */
+const ORDER = { dome: -100, glow: 10, rays: 11, ball: 12, clouds: 20 };
+
+/** Direction from the player toward a compass angle (0 = front, positive = right) and height above the horizon (degrees). */
+export function skyDirection(angleDeg: number, elevationDeg: number, out: Vector3): Vector3 {
+  const az = angleDeg * DEG;
+  const el = elevationDeg * DEG;
+  return out.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el));
+}
 
 /** An unlit material for sky pieces: exact colors, no fog, never writes depth. */
 function skyMaterial(extra: Partial<MeshBasicMaterial> = {}): MeshBasicMaterial {
@@ -136,6 +154,36 @@ function puffGeometry(): BufferGeometry {
   });
 }
 
+/**
+ * The sky dome, colored point by point: blue on top, pale at the horizon, a
+ * little greyer below it, and the sunrise glow around the sun (a wide orange
+ * haze and a tight yellow one), strongest low on the horizon.
+ */
+function domeGeometry(): BufferGeometry {
+  const geometry = new SphereGeometry(SKY.domeRadius, 64, 32);
+  const position = geometry.getAttribute('position') as BufferAttribute;
+  const colors = new Float32Array(position.count * 3);
+  const top = new Color(SKY.domeTopColor);
+  const horizon = new Color(SKY.domeHorizonColor);
+  const below = new Color(SKY.domeBottomColor);
+  const orange = new Color(SKY.glowOrange);
+  const yellow = new Color(SKY.glowYellow);
+  const sun = skyDirection(SKY.sunAngleDeg, SKY.sunElevationDeg, b);
+  for (let i = 0; i < position.count; i++) {
+    const dir = a.fromBufferAttribute(position, i).normalize();
+    const y = dir.y;
+    if (y >= 0) color.copy(horizon).lerp(top, Math.pow(Math.min(1, y / 0.7), 0.7));
+    else color.copy(horizon).lerp(below, Math.min(1, -y / 0.15));
+    const toSun = Math.max(0, dir.dot(sun));
+    const low = SKY.glowHighShare + (1 - SKY.glowHighShare) * Math.pow(1 - Math.min(1, Math.abs(y) / 0.45), 2);
+    color.lerp(orange, Math.pow(toSun, SKY.glowOrangeSpread) * SKY.glowOrangeStrength * low);
+    color.lerp(yellow, Math.pow(toSun, SKY.glowYellowSpread) * SKY.glowYellowStrength);
+    colors.set([color.r, color.g, color.b], i * 3);
+  }
+  geometry.setAttribute('color', new BufferAttribute(colors, 3));
+  return geometry;
+}
+
 export class Sky {
   readonly group = new Group();
   private clouds: Cloud[] = [];
@@ -143,23 +191,27 @@ export class Sky {
   private puffs: InstancedMesh;
   private rays!: Mesh;
   private wind = new Vector3();
-  /** Clouds wrap around inside a square this big (board cm from the center). */
-  private half = SKY.cloudMaxDistance;
   private sortTimer = 0;
   private time = 0;
 
-  /** The sun goes in `world` (meters), the clouds in `board` (boardLift, cm). */
+  /** The dome and the sun go in `world` (meters), the clouds in `board` (boardLift, cm). Neither turns. */
   constructor(world: Object3D, board: Object3D, rng: Random) {
     this.group.name = 'sky';
     world.add(this.group);
+    const dome = new Mesh(domeGeometry(), skyMaterial({ vertexColors: true, side: BackSide }));
+    dome.renderOrder = ORDER.dome;
+    // It surrounds the camera, so it is always in view.
+    dome.frustumCulled = false;
+    this.group.add(dome);
     this.buildSun();
-    const total = SKY.cloudCount * SKY.puffsPerCloud;
+    const total = (SKY.cloudCount + SKY.highCloudCount) * SKY.puffsPerCloud;
     this.puffs = new InstancedMesh(puffGeometry(), skyMaterial({ vertexColors: true }), total);
     // Spread all around and always moving: skip culling instead of recomputing bounds.
     this.puffs.frustumCulled = false;
     this.puffs.renderOrder = ORDER.clouds;
     board.add(this.puffs);
-    for (let i = 0; i < SKY.cloudCount; i++) this.clouds.push(this.makeCloud(rng));
+    for (let i = 0; i < SKY.cloudCount; i++) this.clouds.push(this.lowCloud(rng));
+    for (let i = 0; i < SKY.highCloudCount; i++) this.clouds.push(this.highCloud(rng));
     const w = SKY.windDeg * DEG;
     this.wind.set(Math.sin(w), 0, -Math.cos(w)).multiplyScalar(SKY.windSpeed);
     this.place(true);
@@ -171,15 +223,12 @@ export class Sky {
    * rays around it that turn slowly, and a soft warm glow behind.
    */
   private buildSun(): void {
-    const az = SKY.sunAngleDeg * DEG;
-    const el = SKY.sunElevationDeg * DEG;
-    const d = SKY.sunDistance;
     const r = SKY.sunRadius;
     edge.setHex(SKY.sunEdgeColor);
     middle.setHex(SKY.sunColor);
     lit.setHex(SKY.sunLitColor);
     const sun = new Group();
-    sun.position.set(Math.sin(az) * Math.cos(el) * d, Math.sin(el) * d, -Math.cos(az) * Math.cos(el) * d);
+    skyDirection(SKY.sunAngleDeg, SKY.sunElevationDeg, sun.position).multiplyScalar(SKY.sunDistance);
     // Its +z faces the player.
     sun.lookAt(0, 1.2, 0);
     // Light from the upper left, toward the player.
@@ -217,14 +266,29 @@ export class Sky {
     this.group.add(sun);
   }
 
-  /** A cloud: a few round puffs side by side, the middle ones bigger and higher, turned to a random direction. Small near, bigger far. */
-  private makeCloud(rng: Random): Cloud {
+  /** A low cloud around the board, never over the battlefield. Small near, bigger far. */
+  private lowCloud(rng: Random): Cloud {
     const angle = rng.range(0, Math.PI * 2);
     const d = rng.range(SKY.cloudMinDistance, SKY.cloudMaxDistance);
     const share = (d - SKY.cloudMinDistance) / (SKY.cloudMaxDistance - SKY.cloudMinDistance);
     const at = new Vector3(Math.sin(angle) * d, 0, -Math.cos(angle) * d);
     const lift = SKY.cloudNearHeight + (SKY.cloudFarHeight - SKY.cloudNearHeight) * share + rng.range(-1, 1) * SKY.cloudHeightJitter;
     const size = (SKY.cloudNearSize + (SKY.cloudFarSize - SKY.cloudNearSize) * share) * rng.range(0.75, 1.25);
+    return this.makeCloud(rng, at, Math.max(12, lift), size, false, SKY.cloudMaxDistance);
+  }
+
+  /** A high cloud over the board and the giant, spread evenly over its square, always well above the eyes. */
+  private highCloud(rng: Random): Cloud {
+    const angle = rng.range(0, Math.PI * 2);
+    const d = Math.sqrt(rng.range(0, 1)) * SKY.highCloudMaxDistance;
+    const at = new Vector3(Math.sin(angle) * d, 0, -Math.cos(angle) * d);
+    const lift = rng.range(...SKY.highCloudHeight);
+    const size = rng.range(...SKY.highCloudSize);
+    return this.makeCloud(rng, at, lift, size, true, SKY.highCloudMaxDistance);
+  }
+
+  /** A cloud: a few round puffs side by side, the middle ones bigger and higher, turned to a random direction. */
+  private makeCloud(rng: Random, at: Vector3, lift: number, size: number, high: boolean, half: number): Cloud {
     const yaw = rng.range(0, Math.PI * 2);
     const puffs: Puff[] = [];
     const n = SKY.puffsPerCloud;
@@ -239,7 +303,7 @@ export class Sky {
       puffs.push(puff);
       this.allPuffs.push(puff);
     }
-    return { at, lift: Math.max(12, lift), puffs };
+    return { at, lift, high, half, puffs };
   }
 
   /** Every frame: the clouds drift with the wind and wrap around. The sun's rays turn slowly. */
@@ -247,11 +311,12 @@ export class Sky {
     this.time += dt;
     this.rays.rotation.z = this.time * SKY.raySpin * DEG;
     for (const cloud of this.clouds) {
+      const half = cloud.half;
       cloud.at.addScaledVector(this.wind, dt);
-      if (cloud.at.x > this.half) cloud.at.x -= this.half * 2;
-      else if (cloud.at.x < -this.half) cloud.at.x += this.half * 2;
-      if (cloud.at.z > this.half) cloud.at.z -= this.half * 2;
-      else if (cloud.at.z < -this.half) cloud.at.z += this.half * 2;
+      if (cloud.at.x > half) cloud.at.x -= half * 2;
+      else if (cloud.at.x < -half) cloud.at.x += half * 2;
+      if (cloud.at.z > half) cloud.at.z -= half * 2;
+      else if (cloud.at.z < -half) cloud.at.z += half * 2;
     }
     // The far-to-near order changes slowly, so it is sorted only now and then.
     this.sortTimer -= dt;
@@ -263,12 +328,13 @@ export class Sky {
   private place(sort: boolean): void {
     for (const cloud of this.clouds) {
       const r = Math.hypot(cloud.at.x, cloud.at.z);
-      // Shrinks away near the edge of the wrap square (never pops), and over the battlefield (never in the way).
-      const wrap = Math.max(Math.abs(cloud.at.x), Math.abs(cloud.at.z)) / this.half;
+      // Shrinks away near the edge of the wrap square (never pops), and a low one over the battlefield (never in the way).
+      const wrap = Math.max(Math.abs(cloud.at.x), Math.abs(cloud.at.z)) / cloud.half;
       const fadeEdge = Math.min(1, (1 - wrap) / 0.12);
-      const fadeMiddle = Math.min(1, Math.max(0, (r - SKY.clearFrom) / (SKY.clearTo - SKY.clearFrom)));
+      const fadeMiddle = cloud.high ? 1 : Math.min(1, Math.max(0, (r - SKY.clearFrom) / (SKY.clearTo - SKY.clearFrom)));
       const fade = Math.max(0.001, Math.min(fadeEdge, fadeMiddle));
-      const y = groundHeight(r) + cloud.lift;
+      // A high cloud keeps its height over the board, a low one follows the ground.
+      const y = cloud.high ? cloud.lift : groundHeight(r) + cloud.lift;
       for (const puff of cloud.puffs) {
         puff.at.set(cloud.at.x + puff.offset.x, y + puff.offset.y, cloud.at.z + puff.offset.z);
         puff.distance = puff.at.distanceToSquared(EYES);

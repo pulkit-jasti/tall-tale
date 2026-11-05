@@ -4,6 +4,8 @@
 // it, but never turn (comfort rule). Rings from near to far:
 //   light green rolling hills, darker green hills, dark green peaks, and
 //   brown mountains as the last ring.
+// The scene fog hazes them more the farther they are, so the last mountains
+// fade into the sky.
 // Each one is a closed, faceted shape (no holes, a bottom cap), built as one
 // indexed mesh so neighbouring faces share their points and nothing can
 // open up between them. Each ring is one InstancedMesh: five draw calls
@@ -141,7 +143,7 @@ function groundRing(): Mesh {
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  return new Mesh(geometry, new MeshLambertMaterial({ vertexColors: true, fog: false }));
+  return new Mesh(geometry, new MeshLambertMaterial({ vertexColors: true }));
 }
 
 export class Hills {
@@ -152,7 +154,7 @@ export class Hills {
 
   /** One ring of hills: spread evenly around with a random shift, so there are no big gaps. */
   private layer(layer: HillLayer, rng: Random): InstancedMesh {
-    const material = new MeshLambertMaterial({ vertexColors: true, flatShading: true, fog: false });
+    const material = new MeshLambertMaterial({ vertexColors: true, flatShading: true });
     const mesh = new InstancedMesh(hillGeometry(rng, layer.peaked), material, layer.count);
     const offset = rng.range(0, 1);
     for (let i = 0; i < layer.count; i++) {

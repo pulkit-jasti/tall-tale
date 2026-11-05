@@ -23,6 +23,7 @@ import { boardHeight, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { createRandom, type Random } from '../rules/random.js';
 import { cloneStatic, InstancedModel, loadTemplate } from './models.js';
 import { RoadNetwork, type Road } from './roads.js';
+import { addGrain, buildGrassTufts, Meadow } from './grass.js';
 import { flatMaterial } from './shapes.js';
 
 const yAxis = new Vector3(0, 1, 0);
@@ -35,16 +36,21 @@ function placeMatrix(x: number, y: number, z: number, yaw: number, scale = 1): M
   );
 }
 
-/** Grass disc with a hole, flat near the castle and rising toward the horizon. */
-function buildBoardMesh(rng: Random): Group {
+/**
+ * Grass disc with a hole, flat near the castle and rising toward the
+ * horizon. Smooth shaded, with the meadow's soft patches, worn road edges and
+ * camp dirt baked into its points (fine enough to show them), and a faint
+ * grain up close.
+ */
+function buildBoardMesh(meadow: Meadow): Group {
   const group = new Group();
   const radii: number[] = [];
   for (let r = BOARD.holeRadius; r < BOARD.outerRadius; ) {
     radii.push(r);
-    r += r < 120 ? 6 : r < 300 ? 15 : 30;
+    r += r < 120 ? 4 : r < 300 ? 8 : 12;
   }
   radii.push(BOARD.outerRadius);
-  const segments = 96;
+  const segments = 160;
   const positions: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
@@ -52,8 +58,10 @@ function buildBoardMesh(rng: Random): Group {
   for (const r of radii) {
     for (let j = 0; j < segments; j++) {
       const a = (j / segments) * Math.PI * 2;
-      positions.push(polarX(r, a), boardHeight(r), polarZ(r, a));
-      color.setHex(rng.pick(BOARD.grassColors));
+      const x = polarX(r, a);
+      const z = polarZ(r, a);
+      positions.push(x, boardHeight(r), z);
+      meadow.colorAt(x, z, r, color);
       colors.push(color.r, color.g, color.b);
     }
   }
@@ -71,11 +79,9 @@ function buildBoardMesh(rng: Random): Group {
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  const grass = new Mesh(
-    geometry,
-    new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true }),
-  );
-  group.add(grass);
+  const material = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+  addGrain(material);
+  group.add(new Mesh(geometry, material));
 
   // Table skirts: the inner edge of the hole and the far outer edge.
   const skirtMaterial = flatMaterial(BOARD.skirtColor);
@@ -251,11 +257,16 @@ export interface BuiltBoard {
 /** Builds everything in a map blueprint that turns with the board into `parent`. */
 export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promise<BuiltBoard> {
   const seed = blueprint.seed;
-  // Each part gets its own seeded stream, so loading order never changes the layout.
-  parent.add(buildBoardMesh(createRandom(seed)));
   const network = new RoadNetwork(new RoadGraph(blueprint));
-  for (const road of network.roads) parent.add(road.buildMesh());
   const campNodes = network.graph.nodes.filter((n) => n.kind === 'camp');
+  const campSpots = campNodes.map((c) => {
+    const a = degToRad(c.at[1]);
+    return { x: polarX(c.at[0], a), z: polarZ(c.at[0], a), size: c.size };
+  });
+  // Each part gets its own seeded stream, so loading order never changes the layout.
+  const meadow = new Meadow(network.roads, campSpots, createRandom(seed));
+  parent.add(buildBoardMesh(meadow), buildGrassTufts(meadow, createRandom(seed + 4)));
+  for (const road of network.roads) parent.add(road.buildMesh());
   const hills = new Map<string, Object3D>();
   // The courtyard stays empty until the main gameplay is done (houses and stalls come back with the polish).
   const [castle, camps, decor] = await Promise.all([

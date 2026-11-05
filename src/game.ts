@@ -42,7 +42,7 @@ import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
 import { Troops } from './units/troops.js';
 import { Hills } from './world/hills.js';
-import { Sky } from './world/sky.js';
+import { Sky, skyDirection } from './world/sky.js';
 import { Triggers } from './world/triggers.js';
 import { buildBoard } from './world/boardBuilder.js';
 import { FoodJar } from './world/foodJar.js';
@@ -81,6 +81,7 @@ export class GameSystem extends createSystem({}) {
   private troops!: Troops;
   private triggers!: Triggers;
   private sky: Sky | null = null;
+  private fog!: Fog;
   private particles!: Particles;
   private threat!: ThreatCues;
   private spawner!: ToySpawner;
@@ -103,15 +104,17 @@ export class GameSystem extends createSystem({}) {
     // The tutorial uses the blueprint's fixed seed, so every run plays the same.
     const seed = blueprint.seed;
 
-    const sun = new DirectionalLight(0xfff4e0, 1.6);
-    sun.position.set(-3, 6, 2);
-    root.add(sun);
-    // Light haze. It starts past the castle and is full far beyond the board,
-    // so the hills around the board fade softly into the sky.
-    this.scene.fog = new Fog(0xc9dce6, 5, 24);
-
     this.stage = new Stage(root);
-    // Decor only: hills around the board, a sun and slow clouds in front of the scene's gradient dome.
+    // The sunlight comes from the sun's side. Like the sky, it never turns.
+    const sun = new DirectionalLight(0xfff4e0, 1.6);
+    skyDirection(SKY.sunAngleDeg, SKY.lightElevationDeg, sun.position).multiplyScalar(7);
+    root.add(sun, sun.target);
+    // Haze in the dome's horizon color. It starts past the board and thickens
+    // far out, so the last mountains fade into the sky. Grows with the board (update).
+    this.fog = new Fog(SKY.domeHorizonColor, SKY.fogNear, SKY.fogFar);
+    this.scene.fog = this.fog;
+
+    // Decor only: hills around the board, the sky dome, a sun and slow clouds. None of them turn (comfort rule).
     new Hills(this.stage.boardLift, createRandom(seed + 710));
     if (SKY.enabled) this.sky = new Sky(root, this.stage.boardLift, createRandom(seed + 700));
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
@@ -344,6 +347,8 @@ export class GameSystem extends createSystem({}) {
     this.threat.update(dt);
     this.particles.update(dt);
     this.sky?.update(dt);
+    this.fog.near = SKY.fogNear * this.stage.boardScale;
+    this.fog.far = SKY.fogFar * this.stage.boardScale;
   }
 
   /**

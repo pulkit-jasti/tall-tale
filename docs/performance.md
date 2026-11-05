@@ -113,4 +113,6 @@ In order of expected gain:
 
 **Done in build step 5:** item 3 (goblins and soldiers over 150 cm from the center update their animation every other frame, `TROOPS.farAnimFrom`) and part of item 1 (grab and eat reuses its ready set instead of a new Set every frame). New load from step 5: up to 12 skinned soldiers (`TROOPS.max`, 4 for testing now), 3 triggers, a debris pool of 14 small models (drawn only while flying), dizzy stars, the sky (one instanced mesh for all 450 cloud puffs, about 36k triangles, and 3 draw calls for the sun) and the hills (5 draw calls). The stress test has not been run since step 2: run it now, then a full wave 5 with the FPS panel, and log both here.
 
+**New load after the step 5 reviews (not measured yet):** the sky dome (1 draw call), 22 high clouds (same mesh), about twice as many hills (still 4 draw calls), fog on the hills, a finer board mesh with a grain shader (a small noise per pixel near the player), about 5,800 grass tufts and 420 flowers (2 draw calls, about 35,000 triangles). If the stress test drops, lower `GRASS.tuftRings` counts first, then `GRASS.grain` to 0.
+
 If troops plus enemies still do not fit, use the code-made instanced goblins from [placeholder-shapes.md](placeholder-shapes.md).

@@ -401,11 +401,12 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     marker: 'stunTool',
     grabDemo: 'megaphoneGrab',
     useDemo: 'megaphoneShout',
-    use: 'The final wave! When goblins pile up, shout into the megaphone until the bar passes the red dot.',
+    // The loudness bar and its red dot are what make the scream work, so this one text explains them too.
+    use: 'The final wave! Hold the megaphone near your mouth and shout. Fill the bar on top up to the red dot to stun every goblin.',
     locked: `Not enough food for it (${cost('megaphone')}). Eat a goblin to fill your jar.`,
     noMic: {
       name: 'the bell',
-      use: 'The final wave! When goblins pile up, shake the bell hard to stun them all.',
+      use: 'The final wave! Shake the bell hard. Every goblin stops, dizzy, for a few seconds.',
       grabDemo: 'bellGrab',
       useDemo: 'bellRing',
     },
@@ -512,26 +513,6 @@ const TOOL_NAMES: Record<ToolName, string> = {
 };
 
 /**
- * Right after the megaphone is grabbed, in its own box (Next): how to use
- * it, in plain words. The loudness bar and its red dot are what make the
- * scream work, so they get explained before the goblins come.
- */
-function megaphoneInfo(): TutorialStep {
-  return infoStep(
-    'megaphone-how',
-    banner(
-      'Hold the megaphone near your mouth and shout! The bar on top shows how loud you are. Fill it up to the red dot to stun every goblin.',
-      'info',
-      'stunTool',
-      {
-        header: 'How to shout',
-        whenNoMic: 'Shake the bell hard to ring it. Every goblin stops, dizzy, for a few seconds. Ring it more for a longer stun.',
-      },
-    ),
-  );
-}
-
-/**
  * The full step list. `tools` lists the tools that are built: lessons for the
  * others are left out. Built fresh for each battle, since steps remember counts.
  *
@@ -562,7 +543,6 @@ export function buildTutorialSteps(
       if (afterFood) steps.push(...foodLessons());
       foodTaught = true;
       steps.push(toolGrabLesson(wave.newTool, afterFood));
-      if (wave.newTool === 'megaphone') steps.push(megaphoneInfo());
     }
     // The two flags are explained before the first wave, while nothing attacks yet.
     if (i === 0) {
