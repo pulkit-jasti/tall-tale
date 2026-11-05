@@ -147,6 +147,8 @@ function balloonGeometry(): BufferGeometry {
 
 export class Balloons {
   readonly list: Balloon[] = [];
+  /** The stress test: balloons hover where they are (they still bob). */
+  hold = false;
   private mesh: InstancedMesh;
   private time = 0;
   /** Called with each balloon popped (juice: a ring and stars), at its world position. */
@@ -259,6 +261,7 @@ export class Balloons {
 
   /** Everything gone at once (a new battle, the stress test). Riders are killed by the caller (killAll). */
   clear(): void {
+    this.hold = false;
     for (const b of this.list) {
       b.phase = 'off';
       b.riders = [];
@@ -289,7 +292,7 @@ export class Balloons {
       for (const g of b.riders) if (g.stunned > 0) stunned = true;
       switch (b.phase) {
         case 'approach':
-          if (!stunned) b.radiusOut -= BALLOONS.speed * dt;
+          if (!stunned && !this.hold) b.radiusOut -= BALLOONS.speed * dt;
           if (b.riders.length === 0) b.phase = 'leave';
           else if (b.radiusOut <= BALLOONS.dropRadius) {
             b.radiusOut = BALLOONS.dropRadius;

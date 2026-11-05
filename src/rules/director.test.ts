@@ -427,6 +427,23 @@ describe('tutorial director', () => {
     expect(api.baitReleased).toBeGreaterThan(0);
   });
 
+  it('shows the balloon banner once, in the first balloon wave after its tool lesson, and lets the balloons come', () => {
+    const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper', 'megaphone']);
+    const ids = steps.map((s) => s.id);
+    expect(ids.filter((id) => id === 'balloon-intro')).toHaveLength(1);
+    const first = TUTORIAL_WAVES.findIndex((w) => (w.balloons ?? 0) > 0);
+    expect(first).toBe(3);
+    expect(ids.indexOf('balloon-intro')).toBeGreaterThan(ids.indexOf('learn-pepper'));
+    expect(ids.indexOf('balloon-intro')).toBeLessThan(ids.indexOf('wave-4-clear'));
+    // An info step: it waits for Next, and its start sends the first balloon.
+    const api = idleApi();
+    api.waveCleared = () => true;
+    const director = new Director<TutorialApi>(steps, api);
+    runPokingNext(director, 60 * 40);
+    expect(director.finished).toBe(true);
+    expect(api.balloons).toBe(1);
+  });
+
   it('numbers the lessons', () => {
     const lessons = buildTutorialSteps(['slingshot']).filter((s) => s.hint?.kind === 'lesson');
     expect(lessons[0].hint?.header).toBe(`Step 1 of ${lessons.length}`);

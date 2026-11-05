@@ -122,6 +122,8 @@ export interface BattleParts {
   rng: Random;
   /** True while a hand holds this goblin. */
   isHeld: (goblin: Goblin) => boolean;
+  /** A wave was won (juice: confetti over the castle; `won`: the whole battle, with fireworks). */
+  celebrate: (won: boolean) => void;
 }
 
 export class Battle implements TutorialApi {
@@ -743,6 +745,9 @@ export class Battle implements TutorialApi {
     this.parts.troops.recall();
     clearWave(this.state, CASTLE_HEALTH);
     if (this.state.phase === 'playing') this.parts.audio.play('cheer');
+    // The soldiers on the field cheer, and confetti flutters down over the castle.
+    this.parts.troops.cheerAll();
+    this.parts.celebrate(this.state.phase === 'won');
   }
 
   lessonClimber(onRampart: boolean): void {

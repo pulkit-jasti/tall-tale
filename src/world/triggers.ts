@@ -757,6 +757,8 @@ export class Triggers {
   readonly group = new Group();
   /** Called whenever a trigger is set off (a shot, a blast, or debug), for the lessons. */
   onSetOffKind: (kind: TriggerKind) => void = () => {};
+  /** A keg blew up at this world point (juice: a big ring, a star and a hit stop). */
+  onBlast: (world: Vector3) => void = () => {};
   private list: Trigger[] = [];
   private debrisPool: Debris[] = [];
   private nextDebris = 0;
@@ -952,6 +954,7 @@ export class Triggers {
     this.particles.burst(world, TRIGGERS.keg.fireColors, 26, 0.5);
     this.audio.play('kegBoom', world);
     this.audio.play('debris', world, 0.8);
+    this.onBlast(world);
     this.crush(at, radius);
     if (chainRadius <= 0) return;
     for (const t of this.list) {

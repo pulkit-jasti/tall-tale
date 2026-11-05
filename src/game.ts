@@ -6,7 +6,7 @@ import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { BALLOONS, DEBUG, FPS, HANDLES, SKY, STAGE, TRIGGERS, XR } from './config/game.js';
+import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TRIGGERS, XR } from './config/game.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -60,6 +60,8 @@ import { Stage } from './world/stage.js';
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
 const headForward = new Vector3();
+const labelAt = new Vector3();
+const boardAt = new Vector3();
 /** Session storage key for the debug "Start at wave" choice. */
 const PLAY_FROM_KEY = 'tallTale.playFromWave';
 
@@ -199,6 +201,7 @@ export class GameSystem extends createSystem({}) {
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
     const waves = new WaveSpawner(this.stage.boardSpin, built.network, this.goblins, built.hills, this.audio, createRandom(seed + 500));
+    waves.particles = this.particles;
     // A wave's balloons float straight in from their camp's direction.
     const campAt = new Vector3();
     waves.onBalloon = (camp) => {
@@ -232,11 +235,24 @@ export class GameSystem extends createSystem({}) {
       threat: this.threat,
       rng: createRandom(seed + 600),
       isHeld: (goblin) => this.grabEat.isHolding(goblin),
+      celebrate: (won) => this.juice.celebrate(won, this.boardCenter(), this.stage.boardScale),
     });
     this.grabEat.onEat = (goblin) => {
-      this.food.eat(goblin.seasoned);
+      const added = this.food.eat(goblin.seasoned);
       this.battle.noteEaten();
+      // "+1" (or "+2" for a seasoned one) rises from the jar, "Full!" when it is full.
+      const label = added <= 0 ? 'full' : added >= 3 ? '+3' : added === 2 ? '+2' : '+1';
+      this.juice.label(label, this.food.topWorld(labelAt), this.stage.boardScale);
     };
+    // Juice hooks: a star and a ring on every knockout, a big hit for blasts and pops.
+    this.goblins.onKnockOut = (_goblin, world) => this.juice.knockout(world, this.stage.boardScale);
+    this.goblins.onArmor = (_goblin, world) => {
+      this.juice.ring(world, JUICE.knockoutRing * 0.7 * this.stage.boardScale, 0xd8dbe6);
+      this.juice.pow(world, JUICE.knockoutStar * 0.8 * this.stage.boardScale, 0xd8dbe6);
+    };
+    this.triggers.onBlast = (world) => this.juice.blast(world, this.stage.boardScale);
+    this.swatter.onSplat = (world) => this.juice.ring(world, JUICE.swatRing * this.stage.boardScale);
+    this.balloons.onPop = (_balloon, world) => this.juice.blast(world, 0.7 * this.stage.boardScale);
     this.grabEat.onGrab = () => this.battle.notePicked();
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
@@ -249,6 +265,16 @@ export class GameSystem extends createSystem({}) {
         this.spawner.clear();
         this.goblins.killAll();
         this.troops.clear();
+        this.balloons.clear();
+        this.juice.clear();
+      },
+      setup: () => {
+        // The army and flying enemies stand on the board for the whole test.
+        this.goblins.cap = Math.max(this.goblins.cap, GOBLIN_RULES.maxGoblins);
+        this.troops.standForTest(STRESS_TEST.troops);
+        this.balloons.hold = true;
+        for (let i = 0; i < STRESS_TEST.balloons; i++) this.balloons.spawn(this.stage.spin + degToRad(60 + i * 120), 90);
+        return this.troops.aliveCount + this.goblins.aliveCount;
       },
       spawn: (count) => {
         this.goblins.cap = Math.min(DEBUG.stressMax, Math.max(this.goblins.cap, this.goblins.aliveCount + count));
@@ -257,7 +283,7 @@ export class GameSystem extends createSystem({}) {
       },
       resetRun: (extraWarmup) => this.fps.resetRun(extraWarmup),
       stats: () => this.fps.currentRun(),
-      units: () => this.goblins.aliveCount,
+      units: () => this.goblins.aliveCount + this.troops.aliveCount,
       hidePanel: (hide) => this.fps.hideForTest(hide),
       report: sendStressTest,
     });
@@ -294,6 +320,11 @@ export class GameSystem extends createSystem({}) {
       .updateTargetFrameRate(XR.frameRate)
       .then(() => console.info(`[xr] frame rate set to ${XR.frameRate} Hz`))
       .catch((error) => console.warn('[xr] frame rate change failed', error));
+  }
+
+  /** The board's middle in the world (for the celebrations). */
+  private boardCenter(): Vector3 {
+    return this.stage.boardLift.getWorldPosition(boardAt);
   }
 
   private placeBoard(): void {
@@ -407,11 +438,13 @@ export class GameSystem extends createSystem({}) {
     this.handles.update(dt);
     this.spawner.update(dt);
     this.battle.update(dt, this.hands.hands, headPosition, headForward);
-    this.goblins.update(dt);
-    this.troops.update(dt);
-    this.balloons.update(dt);
-    this.gearDebris.update(dt);
-    this.triggers.update(dt);
+    // Hit stop (juice): on a big hit the units slow to a crawl for a moment. The board, view and hands never do.
+    const unitDt = dt * this.juice.timeScale;
+    this.goblins.update(unitDt);
+    this.troops.update(unitDt);
+    this.balloons.update(unitDt);
+    this.gearDebris.update(unitDt);
+    this.triggers.update(unitDt);
     // No mic: the bell is out instead. If the megaphone is ever out anyway (debug), it is tied down.
     this.megaphone.tiedDown = !mic.on;
     this.grabEat.update(dt, headPosition, headForward);
@@ -423,7 +456,7 @@ export class GameSystem extends createSystem({}) {
     // The red arrow only while a battle is fought.
     if (this.battle.canPause) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
     else this.threat.hideArrow();
-    this.particles.update(dt);
+    this.particles.update(unitDt);
     this.juice.update(dt, headPosition);
     this.sky?.update(dt);
     this.windmill.update(dt);
@@ -709,7 +742,7 @@ export class GameSystem extends createSystem({}) {
         this.spawner.sendGroup('grunt');
         break;
       case 'celebrate':
-        this.juice.celebrate(false);
+        this.juice.celebrate(false, this.boardCenter(), this.stage.boardScale);
         this.troops.cheerAll();
         break;
       case 'boardUp':

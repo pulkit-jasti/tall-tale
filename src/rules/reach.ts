@@ -2,7 +2,7 @@
 // and poke target must be a comfortable reach from the seat. Distances are
 // measured from the eyes, which sit BOARD.eyeToBoard above the board when it
 // is placed. No Three.js here.
-import { BELL, BOARD, CASTLE, END_PANEL, HANDLES, HINT_SIGN, MEGAPHONE, PAUSE, PEBBLE_BOWL, PEPPER, POKE, REACH, SLINGSHOT, SWATTER, TOOL_SPOTS } from '../config/game.js';
+import { BALLOONS, BELL, BOARD, CASTLE, END_PANEL, HANDLES, HINT_SIGN, MEGAPHONE, PAUSE, PEBBLE_BOWL, PEPPER, POKE, REACH, SLINGSHOT, SWATTER, TOOL_SPOTS } from '../config/game.js';
 
 export type ReachZone = 'tooClose' | 'close' | 'sweet' | 'far' | 'tooFar';
 
@@ -48,6 +48,9 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pause panel outer buttons', radius: Math.hypot(pauseOut, pauseSide), y: pauseY },
     { name: 'climber on the rampart', radius: CASTLE.rampartRadius, y: CASTLE.wallHeight + 2, rare: true },
     { name: 'intruder at the courtyard edge', radius: CASTLE.courtyardMax, y: 2, rare: true },
+    // A balloon rider while it is dropped into the courtyard (its middle, under the basket), and as it crosses the wall.
+    { name: 'balloon rider over the courtyard', radius: BALLOONS.dropRadius, y: BALLOONS.height - BALLOONS.radius * 1.15 - 5.1 - 3.9 * 0.5 },
+    { name: 'balloon rider over the wall', radius: CASTLE.wallOut, y: BALLOONS.height - BALLOONS.radius * 1.15 - 5.1 - 3.9 * 0.5, rare: true },
   ];
 }
 

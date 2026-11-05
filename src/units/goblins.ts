@@ -23,6 +23,7 @@ import { mark } from '../debug/perfMarks.js';
 import { CASTLE, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { createRandom } from '../rules/random.js';
+import { popIn } from '../fx/ease.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
 import { angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
 import type { Particles } from '../fx/particles.js';
@@ -157,6 +158,10 @@ export class Goblin {
   armed = false;
   /** A hit flash is showing for this long (seconds). */
   flashTime = 0;
+  /** Juice: time left of the landing squash, of the pop-in from its camp, and to its next dust puff (seconds). */
+  squash = 0;
+  popTime = 0;
+  dustTimer = 0;
   /** Changes each time this pooled goblin is spawned again, so an arrow in flight knows it is still the same one. */
   serial = 0;
 
@@ -240,6 +245,7 @@ function findMaterial(object: Object3D): MeshStandardMaterial | null {
 
 const temp = new Vector3();
 const temp2 = new Vector3();
+const temp3 = new Vector3();
 const starMatrix = new Matrix4();
 const hiddenMatrix = new Matrix4().makeScale(0, 0, 0);
 /** Goblins that show dizzy stars at once (2 stars each). */
@@ -275,8 +281,10 @@ export class Goblins {
 
   /** Called on each wall hit from a grunt or runner (castle damage). */
   onWallHit: (goblin: Goblin) => void = () => {};
-  /** A goblin knocked out by a fall (its balloon popped), with its world position (juice). */
-  onKnockedOut: (goblin: Goblin, world: Vector3) => void = () => {};
+  /** A goblin knocked out by a hit (tool, trigger, soldier, fall), with the world position of its middle (juice). */
+  onKnockOut: (goblin: Goblin, world: Vector3) => void = () => {};
+  /** A helmet took a hit and flew off, at this world point (juice). */
+  onArmor: (goblin: Goblin, world: Vector3) => void = () => {};
   /** Called now and then while a climber runs about on the rampart (a wall flash, no damage). */
   onRampartStep: (goblin: Goblin) => void = () => {};
 
@@ -437,6 +445,8 @@ export class Goblins {
     goblin.foe = null;
     goblin.animDt = 0;
     goblin.flashTime = 0;
+    goblin.squash = 0;
+    goblin.popTime = 0;
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
     goblin.nextRoad = -1;
     goblin.waitRoad = -1;
@@ -461,6 +471,9 @@ export class Goblins {
     goblin.mode = 'walking';
     goblin.offset = this.rng.range(-ROADS.laneJitter, ROADS.laneJitter);
     this.setRoad(goblin, step);
+    // It pops out of the camp with a little elastic bounce.
+    goblin.popTime = JUICE.spawnPopTime;
+    goblin.root.scale.setScalar(0.01);
     goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
     return goblin;
   }
@@ -627,6 +640,7 @@ export class Goblins {
     this.debris?.throw('goblinHelmet', temp2, dx, dz);
     this.particles?.burst(this.board.localToWorld(temp2), HELMET_SPARKS, 6, 0.2);
     this.audio.play('pebbleHit', temp2, 0.8, 0.05);
+    this.onArmor(goblin, temp2);
     this.flash(goblin);
     // A grounded goblin hops back, dazed. One in the air or on the wall just reels.
     if (goblin.mode === 'walking' || goblin.mode === 'toWall' || goblin.mode === 'atWall' || goblin.mode === 'fighting' || goblin.mode === 'dazed') {
@@ -661,7 +675,10 @@ export class Goblins {
 
   /** Out of the game at once. Goblins keep their poof of particles (made by the caller), no shrink. `scatter`: its gear flies off. */
   kill(goblin: Goblin, scatter = false): void {
-    if (scatter) this.scatterGear(goblin);
+    if (scatter && goblin.root.visible) {
+      this.scatterGear(goblin);
+      this.onKnockOut(goblin, this.centerWorld(goblin, temp3));
+    }
     if (this.aimed === goblin) this.setAimed(null);
     goblin.mode = 'dead';
     goblin.root.visible = false;
@@ -786,6 +803,7 @@ export class Goblins {
     goblin.landAs = 'dazed';
     goblin.play('fall', true, 1);
     this.audio.play('squeal', this.worldPosition(goblin, temp), 1, 0.1);
+    this.flash(goblin);
   }
 
   /**
@@ -797,6 +815,7 @@ export class Goblins {
   pepper(goblin: Goblin): boolean {
     if (!this.isHittable(goblin) || goblin.seasoned) return false;
     goblin.seasoned = true;
+    this.flash(goblin);
     // It sneezes now (below), and again and again after that (see sneeze()).
     goblin.sneezeIn = this.rng.range(PEPPER.sneezeEvery[0], PEPPER.sneezeEvery[1]);
     goblin.sneezing = PEPPER.sneezeJerkTime;
@@ -852,6 +871,7 @@ export class Goblins {
         g.flashTime -= dt;
         if (g.flashTime <= 0) this.applyLook(g);
       }
+      if (g.popTime > 0 || g.squash > 0 || g.type === 'runner') this.juice(g, dt);
       if (g.seasoned) {
         this.sneeze(g, dt);
         if (speck < SPECK_SLOTS) this.placeSpecks(g, speck++);
@@ -879,6 +899,30 @@ export class Goblins {
   }
 
   private specksShown = false;
+
+  /** Juice: the pop-in from the camp, the squash on landing, and dust behind runners. */
+  private juice(g: Goblin, dt: number): void {
+    if (g.popTime > 0) {
+      g.popTime = Math.max(0, g.popTime - dt);
+      g.root.scale.setScalar(Math.max(0.01, popIn(1 - g.popTime / JUICE.spawnPopTime)));
+    }
+    if (g.squash > 0) {
+      g.squash = Math.max(0, g.squash - dt);
+      const t = 1 - g.squash / JUICE.squashTime;
+      // Flat first, then a little stretch up, then back: a cartoon landing.
+      const a = JUICE.squashAmount * Math.sin(t * Math.PI * 2) * (1 - t);
+      const h = g.stats.height;
+      g.body.scale.set(h * (1 + a * 0.5), h * (1 - a), h * (1 + a * 0.5));
+    }
+    if (g.type === 'runner' && (g.mode === 'walking' || g.mode === 'toWall') && g.stunned <= 0 && this.particles) {
+      g.dustTimer -= dt;
+      const p = g.root.position;
+      if (g.dustTimer <= 0 && p.x * p.x + p.z * p.z < JUICE.runnerDustNear * JUICE.runnerDustNear) {
+        g.dustTimer = JUICE.runnerDustEvery * this.gearRng.range(0.7, 1.3);
+        this.particles.burst(this.board.localToWorld(temp.copy(p)), JUICE.dustColors, 1, 0.05);
+      }
+    }
+  }
 
   /**
    * Peppered goblins sneeze now and then, like an old cartoon: the head
@@ -1201,6 +1245,7 @@ export class Goblins {
   }
 
   private land(g: Goblin): void {
+    g.squash = JUICE.squashTime;
     if (g.landAs === 'ko') {
       // From a popped balloon: knocked out with a poof (and a little hop of dust).
       this.worldPosition(g, temp);
@@ -1208,7 +1253,6 @@ export class Goblins {
       this.particles?.burst(temp, KO_COLORS, 10);
       this.audio.play('poof', temp, 1, 0.05);
       this.kill(g, true);
-      this.onKnockedOut(g, temp);
       return;
     }
     if (g.landAs === 'intruder') {

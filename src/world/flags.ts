@@ -3,9 +3,12 @@
 // one notch per wave. Progress bars built into the world, no numbers.
 // They live in boardLift (cm): they rise with the board but never spin.
 import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, type Object3D } from 'three';
-import { FLAGS } from '../config/game.js';
+import { FLAGS, JUICE } from '../config/game.js';
+import { popIn } from '../fx/ease.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { flatMaterial } from './shapes.js';
+
+const FLASH = new Color(0xffffff);
 
 /** Flag pole: a thin cylinder with a ball on top, standing on y = 0 (cm). */
 function flagPole(): Group {
@@ -27,6 +30,9 @@ class Flag {
   private shown = 1;
   private target = 1;
   private time = 0;
+  /** Juice: a jolt when the castle is hit, a pop when a wave is won (seconds left). */
+  private jolt = 0;
+  private popTime = 0;
 
   constructor(parent: Object3D, angleDeg: number, color: number, side: 1 | -1) {
     const a = degToRad(angleDeg);
@@ -52,7 +58,12 @@ class Flag {
 
   /** Share from 0 (bottom) to 1 (top). `instant` skips the glide (a new battle). */
   set(share: number, instant = false): void {
-    this.target = Math.min(1, Math.max(0, share));
+    const next = Math.min(1, Math.max(0, share));
+    if (!instant) {
+      if (next < this.target - 1e-4) this.jolt = JUICE.flagJoltTime;
+      else if (next > this.target + 0.02) this.popTime = JUICE.flagPopTime;
+    }
+    this.target = next;
     if (instant) this.shown = this.target;
   }
 
@@ -83,6 +94,19 @@ class Flag {
     this.pivot.rotation.x = low ? 0.35 : 0;
     const material = this.cloth.material as ReturnType<typeof flatMaterial>;
     material.color.copy(this.color).multiplyScalar(low ? 0.55 : 1);
+    // Juice: hit, the cloth jerks and flashes bright. A wave won, it pops bigger and settles.
+    if (this.jolt > 0) {
+      this.jolt = Math.max(0, this.jolt - dt);
+      const t = this.jolt / JUICE.flagJoltTime;
+      this.pivot.rotation.z = Math.sin(t * Math.PI * 6) * degToRad(JUICE.flagJoltDeg) * t;
+      material.color.lerp(FLASH, t * 0.6);
+    } else this.pivot.rotation.z = 0;
+    if (this.popTime > 0) {
+      this.popTime = Math.max(0, this.popTime - dt);
+      const t = 1 - this.popTime / JUICE.flagPopTime;
+      this.pivot.scale.setScalar(t < 0.5 ? 1 + popIn(t * 2) * 0.35 : 1.35 - (t - 0.5) * 0.7);
+      material.color.lerp(FLASH, (1 - t) * 0.4);
+    } else this.pivot.scale.setScalar(1);
   }
 
   private place(): void {

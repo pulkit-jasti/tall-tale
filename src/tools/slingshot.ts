@@ -46,7 +46,7 @@ import {
   type MeshStandardMaterial,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { AIM_ASSIST, BOARD, GOBLIN_SHOT, HOLD, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
+import { AIM_ASSIST, BOARD, GOBLIN_SHOT, HOLD, JUICE, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
@@ -109,6 +109,8 @@ interface Pebble {
   rest: number;
   /** Its spin when it landed, so it lies still. */
   restTurn: number;
+  /** Time to the next trail puff (seconds). */
+  trail: number;
 }
 
 interface TraceResult {
@@ -373,6 +375,7 @@ export class Slingshot {
         share: 1,
         rest: -1,
         restTurn: 0,
+        trail: 0,
       });
     }
     // The pebble in the pouch, shown once one is loaded.
@@ -1055,6 +1058,14 @@ export class Slingshot {
           const vz = v.x * s + v.z * c;
           v.x = vx;
           v.z = vz;
+        }
+      }
+      // Juice: a shot leaves a faint trail of puffs.
+      if (pebble.kind === 'shot' || pebble.kind === 'goblin') {
+        pebble.trail -= dt;
+        if (pebble.trail <= 0) {
+          pebble.trail = JUICE.pebbleTrailEvery;
+          this.particles.burst(this.stage.boardSpin.localToWorld(temp2.copy(p)), JUICE.pebbleTrailColors, 1, 0.01);
         }
       }
       temp.set(p.x + v.x * dt, p.y + v.y * dt - 0.5 * g * dt * dt, p.z + v.z * dt);

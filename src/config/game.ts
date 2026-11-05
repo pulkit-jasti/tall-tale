@@ -2051,6 +2051,8 @@ export const JUICE = {
   ringColor: 0xfff1c8,
   ringOpacity: 0.85,
   knockoutRing: 0.05,
+  /** The swatter's slap on the ground. */
+  swatRing: 0.1,
   /** Pow stars: pool, time, sizes (meters) and colors. */
   starPool: 20,
   starTime: 0.42,
@@ -2089,7 +2091,7 @@ export const JUICE = {
   /** Shot pebbles leave a faint trail: a puff this often (seconds). */
   pebbleTrailEvery: 0.035,
   pebbleTrailColors: [0xffffff, 0xf3ead8] as number[],
-  /** The camps shake while they rumble before a group comes out (cm wobble of the hill's width). */
+  /** The camps shake while they rumble before a group comes out (tilt in radians, and speed). */
   campWobble: 0.12,
   campWobbleSpeed: 38,
   /** The health flag jolts when the castle is hit (degrees, seconds), and the wave flag pops when it climbs. */
@@ -2296,6 +2298,13 @@ export const STRESS_TEST = {
   maxMissedPct: 1,
   /** Stop here even if it still passes. */
   maxUnits: 120,
+  /**
+   * Standing for the whole test since build step 7: this many soldiers (all
+   * three kinds, walking on the spot) and balloons with riders (hovering),
+   * so the budget counts the army and the flying enemies too.
+   */
+  troops: 8,
+  balloons: 2,
 };
 
 /** Live frame rate panel for performance checks (debug). */

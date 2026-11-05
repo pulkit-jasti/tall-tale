@@ -5,7 +5,8 @@
 // which wave to start and how fast (half speed while it waits for the player).
 import { Object3D, Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { WAVES, type GoblinType } from '../config/game.js';
+import { JUICE, WAVES, type GoblinType } from '../config/game.js';
+import type { Particles } from '../fx/particles.js';
 import type { WavePlan } from '../director/tutorial.js';
 import type { Random } from '../rules/random.js';
 import type { RoadNetwork } from '../world/roads.js';
@@ -40,6 +41,10 @@ export class WaveSpawner {
   balloonsHeld = false;
   /** Sends one balloon from a camp (graph node). False when it cannot come yet (all balloons out, unit cap). */
   onBalloon: (camp: number) => boolean = () => true;
+  /** For the rumble dust (juice, set by the game). */
+  particles: Particles | null = null;
+  private wobbleTime = 0;
+  private dustTimer = 0;
   private groups: Group[] = [];
   private time = 0;
   private active = false;
@@ -101,6 +106,10 @@ export class WaveSpawner {
   /** Stops spawning. Camps stand up again. */
   stop(): void {
     this.active = false;
+    for (const hill of this.hills.values()) {
+      hill.rotation.x = 0;
+      hill.rotation.z = 0;
+    }
     this.groups.length = 0;
     this.camps.clear();
     this.time = 0;
@@ -119,6 +128,7 @@ export class WaveSpawner {
   update(dt: number): void {
     if (!this.active) return;
     this.time += dt * this.rate;
+    this.wobble(dt);
     for (const group of this.groups) {
       if (group.out >= group.count) continue;
       if (group.type === 'balloon') {
@@ -142,6 +152,37 @@ export class WaveSpawner {
       group.wait = WAVES.groupGap;
       this.camps.get(group.camp)!.out++;
       this.updateHills();
+    }
+  }
+
+  /**
+   * Juice: a camp shakes while it rumbles (before its group comes out), with
+   * puffs of dust, so the player sees where the next goblins come from.
+   */
+  private wobble(dt: number): void {
+    this.wobbleTime += dt;
+    this.dustTimer -= dt;
+    const dust = this.dustTimer <= 0;
+    if (dust) this.dustTimer = 0.18;
+    for (const [id, hill] of this.hills) {
+      const node = this.campIds.get(id)!;
+      let rumbling = false;
+      for (const g of this.groups) if (g.camp === node && g.rumbled && g.out === 0 && g.type !== 'balloon') rumbling = true;
+      if (!rumbling) {
+        hill.rotation.x = 0;
+        hill.rotation.z = 0;
+        continue;
+      }
+      const w = JUICE.campWobble;
+      hill.rotation.x = Math.sin(this.wobbleTime * JUICE.campWobbleSpeed) * w;
+      hill.rotation.z = Math.cos(this.wobbleTime * JUICE.campWobbleSpeed * 1.3) * w;
+      if (dust && this.particles) {
+        this.network.nodePosition(node, temp);
+        // Not the seeded random: the waves must stay the same with or without dust.
+        temp.x += Math.sin(this.wobbleTime * 13.7 + node) * 4;
+        temp.z += Math.cos(this.wobbleTime * 11.3 + node) * 4;
+        this.particles.burst(this.board.localToWorld(temp), JUICE.dustColors, 2, 0.12);
+      }
     }
   }
 

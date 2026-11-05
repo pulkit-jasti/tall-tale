@@ -28,6 +28,8 @@ export class FlySwatter extends HandTool {
   /** A ground swat counts again only after the head lifted off. */
   private armed = true;
   private hits: Goblin[] = [];
+  /** Every swat, at the head's world point (juice: a ring on the ground). */
+  onSplat: (world: Vector3) => void = () => {};
 
   constructor(parts: ToolParts) {
     super(
@@ -98,6 +100,7 @@ export class FlySwatter extends HandTool {
   private swat(at: Vector3): void {
     this.audio.play('swatSplat', at, 1, 0.08);
     this.particles.burst(at, SWATTER.splatColors, 6, 0.15);
+    this.onSplat(at);
     for (const g of this.hits) {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, SWATTER.splatColors, 10);
