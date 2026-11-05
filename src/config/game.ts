@@ -519,6 +519,16 @@ export const GOBLINS: Record<GoblinType, GoblinStats> = {
 };
 
 export const GOBLIN_RULES = {
+  /** A knocked out or eaten goblin shrinks away over this long (seconds), with a small elastic swell first. */
+  vanishTime: 0.32,
+  /**
+   * Climbers on the rampart run about, causing chaos: dashes of up to this
+   * far along the wall (degrees, between the two towers), at this share of
+   * their speed, with stops of this long between them (seconds, from, to).
+   */
+  rampartDashDeg: 18,
+  rampartRunShare: 1.8,
+  rampartStop: [0.15, 0.6] as [number, number],
   /** Most goblins on the board at once (unit budget, docs/mvp.md). */
   maxGoblins: 40,
   /** Random speed change per goblin (0.1 = plus or minus 10%). */
@@ -566,6 +576,23 @@ export const ROUTES = {
 };
 
 /** Castle health, damage and repair (docs/castle-rules.md). Health is the red flag's height. */
+/**
+ * Goblins the tutorial brings for a tool's use lesson (src/units/lessonBait.ts),
+ * so there is always something to use it on, waiting without hurting the
+ * castle: calm climbers on the rampart in front (swatter, pepper, stun tool),
+ * this many, this far apart (degrees), and grunts walking back and forth on
+ * the road in front for the slingshot (this many, about this far out, on a
+ * stretch this long either way, coming in from this far, cm).
+ */
+export const LESSON_BAIT = {
+  rampartCount: 3,
+  rampartSpreadDeg: 11,
+  patrolCount: 3,
+  patrolRadius: 115,
+  patrolHalf: 14,
+  approach: 25,
+};
+
 export const CASTLE_HEALTH = {
   maxHealth: 100,
   /**
@@ -586,7 +613,15 @@ export const CASTLE_HEALTH = {
    * while a goblin is at or on the wall, in the courtyard, or held: the
    * player can still deal with those.
    */
-  stalemateSeconds: 60,
+  stalemateSeconds: 90,
+  /**
+   * The stalemate clock also starts over whenever the goblin nearest the
+   * castle got at least this much closer (cm, checked every progressEvery
+   * seconds). Goblins still walking in, or fighting their way in, are never
+   * a stalemate (waves ended with goblins on the way after step 6).
+   */
+  progressCm: 1.5,
+  progressEvery: 2,
 };
 
 /** How a wave's enemies come out of their camps (the numbers per wave are in src/director/tutorial.ts). */
@@ -846,6 +881,25 @@ export const MARKERS = {
   pulseTime: 2.5,
 };
 
+/**
+ * The 3D pointer arrow (src/ui/pointerArrow.ts): in front of the face, a
+ * little low, pointing at the lesson's target while it is away from the
+ * middle of the view (meters, degrees, seconds).
+ */
+export const POINTER = {
+  length: 0.055,
+  distance: 0.4,
+  below: 0.09,
+  smoothing: 0.12,
+  /** Shows once the target is this far from the middle of the view, hides again once within hideDeg. */
+  showDeg: 22,
+  hideDeg: 14,
+  popTime: 0.2,
+  color: 0xf2c14e,
+  glow: 0xb07a10,
+  renderOrder: 36,
+};
+
 /** Debug spawning (keys and the stress test), apart from the director. */
 export const DEBUG_SPAWN = {
   /** Auto trickle on at start. Off: the tutorial director spawns the waves. */
@@ -970,8 +1024,11 @@ export const SLINGSHOT = {
   springBack: 18,
   /** A stretch creak plays every this many cm of pull. */
   creakEvery: 4,
-  /** Pebbles in flight or falling at once (pool size). */
-  maxPebbles: 8,
+  /** Pebbles in flight, falling or lying on the ground at once (pool size). Raised from 8, since landed pebbles now stay a while. */
+  maxPebbles: 16,
+  /** A landed pebble lies where it fell this long (seconds), then shrinks away over pebbleFade (the shared despawn look). */
+  pebbleRest: 2.5,
+  pebbleFade: 0.35,
   /** Pebble size (cm). Bigger than real pebbles, so they are easy to see and pinch. */
   pebbleSize: 2.5,
   /** Longest flight before a pebble is dropped (seconds). */
@@ -1101,11 +1158,16 @@ export const PRICE_TAG = {
   width: 4.6,
   height: 2.8,
   thickness: 0.35,
-  /** Toward the player from the platform center, and sideways toward the front (cm). */
-  inset: 2.6,
-  side: 2.2,
+  /**
+   * It stands on the middle of the platform's front edge (toward the
+   * player), its bottom this far above the platform's top, and this far past
+   * the edge (cm, negative is just inside it), on every platform the same,
+   * so they sit symmetrically. Above the top, so the ring never hides it.
+   */
+  lift: 0.2,
+  out: -0.6,
   /** Leaning back from upright, toward the eyes (degrees). */
-  tiltDeg: 40,
+  tiltDeg: 25,
   woodColor: 0x6b4a2e,
   okColor: '#fff4dc',
   shortColor: '#ff5a4e',
@@ -1293,6 +1355,20 @@ export const PEPPER = {
   stumbleHop: 45,
   /** A seasoned goblin's colors are multiplied by this (dusty brown). */
   seasonedTint: [0.85, 0.68, 0.55] as [number, number, number],
+  /**
+   * Peppered goblins keep sneezing, like an old cartoon: every so often
+   * (seconds, from, to) the head jerks forward for sneezeJerkTime with a puff
+   * of pepper, and red pepper flakes circle over the head (like the dizzy
+   * stars, one instanced mesh): this many, this big and this far out (cm), this fast.
+   */
+  sneezeEvery: [1.4, 3.2] as [number, number],
+  sneezeJerkTime: 0.35,
+  sneezeColors: [0xffffff, 0xf1e6d0, 0xd23c28],
+  flakeCount: 3,
+  flakeSize: 0.45,
+  flakeOrbit: 1.1,
+  flakeSpeed: 4,
+  flakeColor: 0xd8341f,
 };
 
 /**
@@ -1417,12 +1493,13 @@ export const TRIGGERS = {
     clear: 16,
   },
   /**
-   * The danger paint every trigger carries, so it reads like the keg: the
-   * keg's red bands, a red stripe round the boulder, a red and white band on
-   * the tree's trunk. Nothing else on the board is this red.
+   * How each trigger shows what it is, with props in the world (no floating
+   * UI), in this red (the keg's bands): a pry bar with a red rag flag under
+   * the boulder, a red handled axe stuck in the tree. Plus the wood and steel of the props.
    */
   paint: 0xe0342a,
-  paintWhite: 0xf4efe2,
+  woodColor: 0x8a5a34,
+  steelColor: 0xb4bcc6,
   /**
    * "This can be used now": while goblins are near a trigger it glows softly
    * (emissive only, pulsing). When a group walks right past it, a short
@@ -1466,8 +1543,12 @@ export const TRIGGERS = {
     hitRadius: 3.3,
     /** Goblins this close are knocked out. */
     blastRadius: 13,
-    /** Other triggers this close are set off by the blast. */
-    chainRadius: 30,
+    /**
+     * Other triggers this close are set off by the blast. 0 since the step 6
+     * test: each trigger does only its own thing, a keg never sets off a
+     * boulder or a tree.
+     */
+    chainRadius: 0,
     /** Bright red bands, so it reads as explosive and stands out from the scenery. */
     tint: [1.5, 0.55, 0.42] as [number, number, number],
     debris: 6,
@@ -1480,10 +1561,14 @@ export const TRIGGERS = {
     hillWidth: 11,
     side: 9,
     hitRadius: 3.4,
-    /** Pale stone with a green mossy top (the rocks around are orange), and the red stripe's thickness (cm). */
+    /** Pale stone with a green mossy top (the rocks around are orange). */
     stoneColor: 0xd9d3c6,
     mossColor: 0x6fae3a,
-    stripe: 0.32,
+    /** The pry bar under it: length (cm) and how steep it stands (degrees up), and the red rag flag on its top (cm). */
+    leverLength: 10,
+    leverDeg: 55,
+    flagWidth: 3.2,
+    flagHeight: 2.2,
     /** Rolling speed down the road toward the castle (cm per second). */
     speed: 42,
     /** Goblins this close to the rolling boulder are squashed. */
@@ -1500,12 +1585,10 @@ export const TRIGGERS = {
     side: 5.5,
     leanDeg: 12,
     hitRadius: 4,
-    /** The only autumn tree: its leaves turn this orange red (0 to 255, brightness kept). */
-    autumn: [235, 105, 40] as [number, number, number],
-    /** The forester's mark on the trunk: from this share of its height, a red band and a white one above (shares of the height). */
-    bandFrom: 0.1,
-    bandRed: 0.07,
-    bandWhite: 0.035,
+    /** The axe in its trunk: this share of the way up, handle length and head size (cm). */
+    axeAt: 0.22,
+    axeHandle: 5.5,
+    axeHead: 1.8,
     /** It falls across the road in this long, until its crown rests on the ground (at most 90 degrees). */
     fallTime: 0.55,
     /** For the resting angle: the crown starts this share up the trunk, and the trunk's radius (cm). */

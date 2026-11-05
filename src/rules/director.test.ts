@@ -88,6 +88,8 @@ function idleApi(): TutorialApi & {
   sentPast: number;
   lessonKinds: string[];
   released: number;
+  baited: string[];
+  baitReleased: number;
 } {
   return {
     cleared: 0,
@@ -98,6 +100,8 @@ function idleApi(): TutorialApi & {
     sentPast: 0,
     lessonKinds: [],
     released: 0,
+    baited: [],
+    baitReleased: 0,
     startWave(index) {
       this.started.push(index);
     },
@@ -139,6 +143,15 @@ function idleApi(): TutorialApi & {
     triggersSetOff: () => 0,
     endTriggerLesson() {
       this.released++;
+    },
+    baitMoving() {
+      this.baited.push('moving');
+    },
+    baitForTool() {
+      this.baited.push('wall');
+    },
+    releaseBait() {
+      this.baitReleased++;
     },
     pausedCount: () => 0,
   };
@@ -377,6 +390,34 @@ describe('tutorial director', () => {
     const idle = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), idleApi());
     run(idle, 50);
     expect(idle.current?.id).not.toBe('learn-pause');
+  });
+
+  it('the first shot is at moving goblins brought for it: the wave waits, done on a hit, and they go on after', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
+    while (director.current?.id !== 'learn-sling-shoot') director.skip();
+    expect(api.baited).toEqual(['moving']);
+    expect(director.spawnRate).toBe(0);
+    // A miss is not enough: it waits for a hit.
+    api.slingCount = () => 5;
+    run(director, 30);
+    expect(director.current?.id).toBe('learn-sling-shoot');
+    api.toolUses = (tool) => (tool === 'slingshot' ? 1 : 0);
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-keg');
+    expect(api.baitReleased).toBe(1);
+  });
+
+  it('a tool use lesson brings goblins to the wall to use it on, holds the wave, and lets them go after', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot', 'swatter']), api);
+    while (director.current?.id !== 'learn-swatter') director.skip();
+    expect(api.baited).toContain('wall');
+    expect(director.spawnRate).toBe(0);
+    api.toolUses = (tool) => (tool === 'swatter' ? 1 : 0);
+    director.update(0.1);
+    expect(director.current?.id).toBe('wave-3-clear');
+    expect(api.baitReleased).toBeGreaterThan(0);
   });
 
   it('numbers the lessons', () => {

@@ -10,34 +10,34 @@
 //   Tree:       falls across the road, squashes the goblins under it, and
 //               closes the road for a few seconds (goblins on it turn back).
 //
-// Easy to notice (build step 6): every trigger carries the same red "danger
-// paint", like the keg's red bands, and nothing else on the board is that
-// red: a red stripe painted round the boulder, a red and white forester's
-// band on the tree's trunk (and the tree itself is the only autumn tree, in
-// orange and red leaves). They stand on flat ground with a clear view from
-// the seat. While goblins are near one it glows softly (emissive only), and
+// Easy to notice (build step 6): each one tells its story with a prop, in
+// the same red as the keg's bands (nothing else on the board is that red):
+// the keg itself, a boulder wedged with a chock and a pry bar with a red rag
+// flag on top, and a tree with a red handled axe stuck in its trunk. They
+// stand on flat ground with a clear view from the seat. While goblins are near one it glows softly (emissive only), and
 // a group walking right past one gives a short "now!" cue (a stronger pulse
 // and a sound). No floating UI: only things that belong in the world.
 //
 // One rule for chain reactions: explosions set off the triggers near them.
 // All motion is simple math, no physics engine. Board units (cm), in boardSpin.
 import {
-  CanvasTexture,
+  BoxGeometry,
+  BufferGeometry,
   Color,
   CylinderGeometry,
+  Float32BufferAttribute,
   DoubleSide,
   Group,
   Mesh,
   MeshStandardMaterial,
   Object3D,
   Quaternion,
-  TorusGeometry,
   Vector3,
-  type Texture,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { GOBLIN_RULES, ROADS, TRIGGERS } from '../config/game.js';
+import { shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import { applyAimGlow, applyTouchState } from '../player/feedback.js';
 import type { BlueprintTrigger, TriggerKind } from '../rules/blueprint.js';
@@ -56,6 +56,17 @@ const UP = new Vector3(0, 1, 0);
 const temp = new Vector3();
 const temp2 = new Vector3();
 const world = new Vector3();
+const blastAt = new Vector3();
+const toRoadDir = new Vector3();
+const leverDir = new Vector3();
+
+/** A flat triangle rag flag (cm), its pole side on the local y axis, pointing along +x. */
+function flagGeometry(width: number, height: number): BufferGeometry {
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute([0, 0, 0, width, -height / 2, 0, 0, -height, 0], 3));
+  g.computeVertexNormals();
+  return g;
+}
 const quaternion = new Quaternion();
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 
@@ -125,48 +136,6 @@ export function triggerGround(placements: TriggerPlacement[]): { flats: CampSpot
 /** The red danger paint every trigger carries (and the white of the tree's band). */
 function paintMaterial(color: number): MeshStandardMaterial {
   return new MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, flatShading: true, side: DoubleSide });
-}
-
-const autumnCache = new Map<Texture, Texture>();
-
-/**
- * The same color map with every green turned to autumn orange and red, so
- * the trigger tree is the only autumn tree on the board. Made once per map.
- */
-function autumnTexture(source: Texture): Texture {
-  const cached = autumnCache.get(source);
-  if (cached) return cached;
-  const image = source.image as CanvasImageSource & { width: number; height: number };
-  const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const c = canvas.getContext('2d')!;
-  c.drawImage(image, 0, 0);
-  const pixels = c.getImageData(0, 0, canvas.width, canvas.height);
-  const d = pixels.data;
-  const [r1, g1, b1] = TRIGGERS.tree.autumn;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i];
-    const g = d[i + 1];
-    const b = d[i + 2];
-    // Leaves: green clearly above red and blue. Bark and everything else stay.
-    if (g <= r * 1.05 || g <= b) continue;
-    const light = (r + g + b) / (3 * 255);
-    d[i] = Math.min(255, r1 * (0.55 + light));
-    d[i + 1] = Math.min(255, g1 * (0.55 + light));
-    d[i + 2] = Math.min(255, b1 * (0.55 + light));
-  }
-  c.putImageData(pixels, 0, 0);
-  const texture = new CanvasTexture(canvas);
-  texture.flipY = source.flipY;
-  texture.colorSpace = source.colorSpace;
-  texture.magFilter = source.magFilter;
-  texture.minFilter = source.minFilter;
-  texture.wrapS = source.wrapS;
-  texture.wrapT = source.wrapT;
-  texture.channel = source.channel;
-  autumnCache.set(source, texture);
-  return texture;
 }
 
 /** The trunk's middle and radius at a height (model space, cm), measured from the model's own points. */
@@ -460,6 +429,7 @@ class Boulder extends Trigger {
   private readonly stopAt: number;
   private distance = 0;
   private spin = 0;
+  private flag: Mesh | null = null;
 
   constructor(owner: Triggers, wave: number, road: number, along: number, rock: ModelTemplate, hill: ModelTemplate) {
     super('boulder', wave, owner, road, along);
@@ -473,18 +443,12 @@ class Boulder extends Trigger {
     this.hill.visible = false;
     this.rock = cloneStatic(rock);
     this.materials = ownMaterials(this.rock);
-    // Pale stone with a green top, unlike the orange rocks around, and a red stripe painted round its middle.
+    // Pale stone with a green top, unlike the orange rocks around.
     for (const m of this.materials) m.color.setHex(m.name === 'grass' ? TRIGGERS.boulder.mossColor : TRIGGERS.boulder.stoneColor);
     // The rock's origin is its bottom: lift it so it turns around its middle.
     this.rock.position.y = -size / 2;
     const pivot = new Group();
     pivot.add(this.rock);
-    const paint = paintMaterial(TRIGGERS.paint);
-    const stripe = new Mesh(new TorusGeometry((Math.min(rock.size.x, rock.size.z) / 2) * 0.93, TRIGGERS.boulder.stripe, 6, 18), paint);
-    stripe.rotation.x = Math.PI / 2;
-    stripe.position.y = -size / 2 + rock.size.y * 0.5;
-    pivot.add(stripe);
-    this.materials.push(paint);
     this.root.add(pivot);
     this.rest.copy(temp).setY(temp.y + hill.size.y - 1 + size / 2);
     const r0 = Math.hypot(...this.xz(0));
@@ -493,6 +457,51 @@ class Boulder extends Trigger {
     this.stopAt = this.dir === 1 ? this.road.length - stopShort : stopShort;
     this.road.pointAt(along, 0, this.onRoad);
     this.onRoad.y += size / 2;
+    this.materials.push(...this.buildLever());
+  }
+
+  /**
+   * Someone has wedged it, ready to go: a wooden chock under it on the road
+   * side, and a long pry bar under its far side with a red rag flag tied to
+   * the top, like a builder's warning flag. They stay on the hill when the
+   * boulder rolls. Returns their materials (they glow with the boulder).
+   */
+  private buildLever(): MeshStandardMaterial[] {
+    const { size } = TRIGGERS.boulder;
+    const { leverLength, leverDeg, flagWidth, flagHeight } = TRIGGERS.boulder;
+    const wood = paintMaterial(TRIGGERS.woodColor);
+    const red = paintMaterial(TRIGGERS.paint);
+    const props = new Group();
+    // In the hill's own space (it only moves, never turns).
+    const local = (world: Vector3): Vector3 => world.sub(this.hill.position);
+    toRoadDir.subVectors(this.onRoad, this.rest).setY(0).normalize();
+    // The chock: a wooden wedge (a 3 sided prism) under the boulder, on the road side.
+    const chock = new Mesh(new CylinderGeometry(size * 0.22, size * 0.22, size * 0.5, 3), wood);
+    chock.rotation.set(0, Math.atan2(toRoadDir.x, toRoadDir.z), Math.PI / 2, 'YXZ');
+    chock.position.copy(local(temp.copy(this.rest).addScaledVector(toRoadDir, size * 0.42).setY(this.rest.y - size * 0.38)));
+    // The pry bar: from under its far side, out and up.
+    const a = degToRad(leverDeg);
+    leverDir.copy(toRoadDir).multiplyScalar(-Math.cos(a)).setY(Math.sin(a));
+    const start = temp.copy(this.rest).addScaledVector(toRoadDir, -size * 0.25).setY(this.rest.y - size * 0.3);
+    const bar = new Mesh(new CylinderGeometry(0.28, 0.32, leverLength, 6), wood);
+    bar.position.copy(start).addScaledVector(leverDir, leverLength / 2);
+    bar.quaternion.setFromUnitVectors(UP, leverDir);
+    const tip = temp2.copy(start).addScaledVector(leverDir, leverLength);
+    local(bar.position);
+    // The red rag flag at its top, hanging off to one side, square to the view from the castle.
+    const flag = new Mesh(flagGeometry(flagWidth, flagHeight), red);
+    flag.position.copy(local(tip));
+    flag.rotation.y = Math.atan2(toRoadDir.x, toRoadDir.z) + Math.PI / 2;
+    props.add(chock, bar, flag);
+    this.flag = flag;
+    this.hill.add(props);
+    return [wood, red];
+  }
+
+  /** The rag flag flutters a little. */
+  protected override stand(): void {
+    super.stand();
+    if (this.flag) this.flag.rotation.z = Math.sin(this.time * 4) * 0.12;
   }
 
   private xz(distance: number): [number, number] {
@@ -581,29 +590,8 @@ class Tree extends Trigger {
     super('tree', wave, owner, road, along);
     const model = cloneStatic(template);
     this.materials = ownMaterials(model);
-    // The only autumn tree on the board: its leaves orange and red.
-    for (const m of this.materials) {
-      try {
-        if (m.map) m.map = autumnTexture(m.map);
-      } catch {
-        // A map that cannot be read back (a compressed texture): tint the whole tree warm instead.
-        m.color.multiply(new Color(1.35, 0.8, 0.45));
-      }
-    }
-    // A forester's mark painted round the trunk: a red band with a white one above.
-    const h = template.size.y;
-    const { bandFrom, bandRed, bandWhite } = TRIGGERS.tree;
-    const trunk = trunkAt(model, h * bandFrom, h * (bandFrom + bandRed + bandWhite));
-    const red = paintMaterial(TRIGGERS.paint);
-    const white = paintMaterial(TRIGGERS.paintWhite);
-    const band = (height: number, y: number, material: MeshStandardMaterial): void => {
-      const ring = new Mesh(new CylinderGeometry(trunk.r * 1.12 + 0.05, trunk.r * 1.12 + 0.05, height, 10, 1, true), material);
-      ring.position.set(trunk.x, y + height / 2, trunk.z);
-      model.add(ring);
-    };
-    band(h * bandRed, h * bandFrom, red);
-    band(h * bandWhite, h * (bandFrom + bandRed), white);
-    this.materials.push(red, white);
+    // An axe stuck in the trunk, on the side that faces the castle: someone was chopping it, and it is ready to fall.
+    this.materials.push(...this.buildAxe(model, template));
     this.root.add(model);
     const { side } = TRIGGERS.tree;
     this.road.pointAt(along, 0, temp);
@@ -612,6 +600,28 @@ class Tree extends Trigger {
     // Turning around this axis moves the top from straight up toward the road (away from `side`).
     this.axis.crossVectors(this.side, UP).normalize();
     this.fallDeg = this.restingFall(Math.min(template.size.x, template.size.z) / 2);
+  }
+
+  /** The axe in the trunk: a steel head bitten into the wood, its red handle sticking out toward the castle. */
+  private buildAxe(model: Object3D, template: ModelTemplate): MeshStandardMaterial[] {
+    const h = template.size.y;
+    const { axeAt, axeHandle, axeHead } = TRIGGERS.tree;
+    const trunk = trunkAt(model, h * (axeAt - 0.05), h * (axeAt + 0.05));
+    const steel = paintMaterial(TRIGGERS.steelColor);
+    const red = paintMaterial(TRIGGERS.paint);
+    const axe = new Group();
+    // Built along +x (out of the trunk), then turned to face the castle (the board's middle).
+    const head = new Mesh(new BoxGeometry(axeHead * 0.9, axeHead, axeHead * 0.25), steel);
+    head.position.x = trunk.r - axeHead * 0.2;
+    const handle = new Mesh(new CylinderGeometry(0.2, 0.24, axeHandle, 6), red);
+    const droop = degToRad(12);
+    handle.rotation.z = Math.PI / 2 + droop;
+    handle.position.set(trunk.r + axeHead * 0.25 + (axeHandle / 2) * Math.cos(droop), -(axeHandle / 2) * Math.sin(droop), 0);
+    axe.add(head, handle);
+    axe.position.set(trunk.x, h * axeAt, trunk.z);
+    axe.rotation.y = Math.atan2(this.base.z, -this.base.x);
+    model.add(axe);
+    return [steel, red];
   }
 
   /**
@@ -691,10 +701,17 @@ class Tree extends Trigger {
     // The road is blocked for a while, then the tree poofs away and it opens.
     this.blockLeft -= dt;
     if (this.blockLeft > 0) return;
+    // Then it shrinks away (the shared despawn look), and the road opens.
+    const t = -this.blockLeft / GOBLIN_RULES.vanishTime;
+    if (t < 1) {
+      this.root.scale.setScalar(Math.max(0.001, shrinkAway(t)));
+      return;
+    }
     temp.copy(this.base).addScaledVector(this.side, -TRIGGERS.tree.side);
     this.owner.debris(temp, TRIGGERS.tree.debris);
     this.owner.poof(temp, 8);
     this.root.visible = false;
+    this.root.scale.setScalar(1);
     this.cleanUp();
     this.phase = 'done';
   }
@@ -897,12 +914,16 @@ export class Triggers {
   // ---- Shared effects (called by the triggers) ----
 
   /** A blast: goblins in `radius` are knocked out, triggers in `chainRadius` are set off. */
-  explode(at: Vector3, radius: number, chainRadius: number, from: Trigger): void {
+  explode(point: Vector3, radius: number, chainRadius: number, from: Trigger): void {
+    // Its own copy: the caller's vector is a shared scratch one, and reading
+    // other triggers' centers into it made every keg on the board blow up.
+    const at = blastAt.copy(point);
     this.board.localToWorld(world.copy(at));
     this.particles.burst(world, TRIGGERS.keg.fireColors, 26, 0.5);
     this.audio.play('kegBoom', world);
     this.audio.play('debris', world, 0.8);
     this.crush(at, radius);
+    if (chainRadius <= 0) return;
     for (const t of this.list) {
       if (t === from || !t.hittable()) continue;
       t.center(temp2);
@@ -987,9 +1008,9 @@ export class Triggers {
         d.velocity.z *= 0.5;
         d.bounced = true;
       }
-      // Shrinks away over the last third of its life.
-      const left = 1 - d.age / life;
-      d.object.scale.setScalar(Math.min(1, left * 3));
+      // Shrinks away over the last third of its life (the shared despawn look).
+      const fade = (d.age / life - 2 / 3) * 3;
+      d.object.scale.setScalar(fade <= 0 ? 1 : Math.max(0.001, shrinkAway(fade)));
     }
   }
 }

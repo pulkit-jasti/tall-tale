@@ -15,6 +15,8 @@ import { parseBlueprint } from './rules/blueprint.js';
 import { EndPanel } from './ui/endPanel.js';
 import { PauseMenu, type PauseAction } from './ui/pauseMenu.js';
 import { GhostAim } from './ui/ghostAim.js';
+import { PointerArrow } from './ui/pointerArrow.js';
+import { LessonBait } from './units/lessonBait.js';
 import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { Markers } from './ui/markers.js';
@@ -144,6 +146,7 @@ export class GameSystem extends createSystem({}) {
       ghost.load(root),
     ]);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
+    this.goblins.particles = this.particles;
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
     this.food = new FoodJar(this.stage, this.audio, this.particles);
     const toolParts = { stage: this.stage, goblins: this.goblins, food: this.food, audio: this.audio, particles: this.particles };
@@ -203,6 +206,8 @@ export class GameSystem extends createSystem({}) {
       markers: new Markers(root),
       ghost,
       ghostAim: new GhostAim(root),
+      pointer: new PointerArrow(root),
+      bait: new LessonBait(this.goblins, built.network),
       wristButton: (out) => this.pauseMenu.wristWorld(out),
       audio: this.audio,
       particles: this.particles,

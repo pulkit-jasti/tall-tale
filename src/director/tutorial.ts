@@ -100,6 +100,8 @@ export const TUTORIAL_TIMING = {
    */
   triggerStuckAfter: 25,
   triggerTimeout: 240,
+  /** The shoot lesson waits this long for a hit (the goblins keep walking back and forth), then moves on anyway. */
+  shootTimeout: 150,
   /** The pause lesson moves on after this long anyway (no hands in the browser). */
   pauseTimeout: 45,
 };
@@ -123,7 +125,9 @@ export type MarkerTarget =
   /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
   /** The pause button on the left palm, while it is out. */
-  | 'wristButton';
+  | 'wristButton'
+  /** A goblin brought for the current lesson (the moving targets, the goblins on the wall). */
+  | 'baitGoblin';
 
 export type HintIcon = 'pinch' | 'grab' | 'spin' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
 
@@ -213,6 +217,12 @@ export interface TutorialApi {
   sendPastTrigger(): void;
   /** The trigger lesson is over: the goblins still waiting walk on. */
   endTriggerLesson(): void;
+  /** The shoot lesson: a few goblins walk back and forth on the road in front, a moving target (topped up when called again). */
+  baitMoving(): void;
+  /** A tool's use lesson: a few goblins wait still on the wall in front, harmless, until it is used (topped up when called again). */
+  baitForTool(): void;
+  /** The lesson is over: its goblins go on as usual. */
+  releaseBait(): void;
   /** How many triggers of a kind were set off in this battle. */
   triggersSetOff(kind: TriggerKind): number;
   /** How often the player paused (and came back) in this battle. */
@@ -390,19 +400,32 @@ function slingshotLessons(): TutorialStep[] {
   ];
 }
 
+/**
+ * The first shot, at a moving target: a few goblins walk back and forth on
+ * the road in front (the wave holds its spawns meanwhile). Done when one is
+ * hit, so the player feels how much the aim assist helps: aim near a goblin
+ * and the shot bends to it. If stuck, a pebble goes into the pouch and
+ * missing goblins are replaced.
+ */
 function shootLesson(): TutorialStep {
+  const help = (api: TutorialApi): void => {
+    api.helpWithTool('slingshot');
+    api.baitMoving();
+  };
   return lessonStep(
     'learn-sling-shoot',
-    lesson('Goblins are coming! Pinch the pouch, pull it back and let go to shoot. The dots show where it lands.', 'target', 'pouch', {
+    lesson('Goblins on the road! Pinch the pouch, pull it back and let go. Just aim near one: your shot bends toward it.', 'target', 'baitGoblin', {
       demo: 'shoot',
+      doneText: 'Got it! The slingshot helps you aim, even at moving goblins.',
     }),
-    // Any shot finishes it, hit or miss: the player has learned how it works.
-    // A shot already made since the slingshot appeared counts too.
-    (api, since) => api.slingCount('shot') > since,
-    fromToolShown,
+    (api, since) => api.toolUses('slingshot') > since,
+    (api) => api.toolUses('slingshot'),
     {
-      fallbacks: [(api) => api.helpWithTool('slingshot'), (api) => api.helpWithTool('slingshot')],
-      slowSpawns: true,
+      start: (api) => api.baitMoving(),
+      end: (api) => api.releaseBait(),
+      fallbacks: [help, help],
+      timeout: TUTORIAL_TIMING.shootTimeout,
+      holdSpawns: true,
     },
   );
 }
@@ -475,16 +498,16 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
     use: free
-      ? 'Runners! Swat a goblin with it, anywhere. Slap it down so the swatter touches the goblin.'
-      : `Runners! Swat a goblin with it, anywhere. The first swat takes ${cost('swatter')} food from your jar, then swatting is free for ${seconds('swatter')} seconds.`,
+      ? 'Goblins on your wall! Swat one: slap the swatter down so it touches the goblin.'
+      : `Goblins on your wall! Swat one. The first swat takes ${cost('swatter')} food from your jar, then swatting is free for ${seconds('swatter')} seconds.`,
     locked: `Not enough food for the swatter (${cost('swatter')}). Eat a goblin to fill your jar.`,
   },
   pepper: {
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
     use: free
-      ? 'Shake pepper over goblins. Peppered goblins give double food when eaten.'
-      : `Shake pepper over goblins. Peppered goblins give double food when eaten. The first shake takes ${cost('pepper')} food.`,
+      ? 'Shake pepper over the goblins on your wall. Peppered goblins sneeze, and give double food when eaten.'
+      : `Shake pepper over the goblins on your wall. Peppered goblins sneeze, and give double food when eaten. The first shake takes ${cost('pepper')} food.`,
     locked: `Not enough food for the pepper (${cost('pepper')}). Eat a goblin to fill your jar.`,
   },
   megaphone: {
@@ -573,7 +596,8 @@ function toolLesson(tool: FoodTool): TutorialStep {
   const text = FOOD_TOOL_LESSONS[tool];
   return lessonStep(
     `learn-${tool}`,
-    lesson(text.use, 'target', text.useDemo ? text.marker : undefined, {
+    // The marker points at the waiting goblins, or for the stun tool at the tool itself (its demo is at the mouth).
+    lesson(text.use, 'target', text.useDemo ? text.marker : 'baitGoblin', {
       tool,
       whenLocked: text.locked,
       demo: text.useDemo,
@@ -585,12 +609,18 @@ function toolLesson(tool: FoodTool): TutorialStep {
     {
       start: (api) => {
         api.holdToolTimer(tool, true);
+        // A few goblins come just for this lesson and wait on the wall in front, harmless, until the tool is used.
+        api.baitForTool();
         if (!api.canAfford(tool)) api.lessonClimber(true);
       },
-      end: (api) => api.holdToolTimer(tool, false),
-      fallbacks: [(api) => api.hintTool(tool), (api) => api.helpWithTool(tool)],
+      end: (api) => {
+        api.holdToolTimer(tool, false);
+        api.releaseBait();
+      },
+      fallbacks: [(api) => api.hintTool(tool), (api) => api.baitForTool()],
       timeout: TUTORIAL_TIMING.toolUseTimeout,
-      slowSpawns: true,
+      // The wave waits while the player learns: only the lesson's goblins are out.
+      holdSpawns: true,
     },
   );
 }

@@ -53,6 +53,7 @@ import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { holdMatrix } from '../player/hold.js';
 import { degToRad, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
+import { shrinkAway } from '../fx/ease.js';
 import { Goblin, type Goblins } from '../units/goblins.js';
 import { cloneStatic, InstancedPool, loadTemplate, type ModelTemplate } from '../world/models.js';
 import { flatMaterial, pebbleBowl, post, slingshotBand, slingshotFrame, slingshotPouch } from '../world/shapes.js';
@@ -104,6 +105,10 @@ interface Pebble {
   target: Target | null;
   /** Assist share for that target. */
   share: number;
+  /** Landed: it lies there this long (seconds) before it shrinks away. -1 while it flies. */
+  rest: number;
+  /** Its spin when it landed, so it lies still. */
+  restTurn: number;
 }
 
 interface TraceResult {
@@ -154,6 +159,8 @@ const traceP = new Vector3();
 const traceV = new Vector3();
 const traceNext = new Vector3();
 const matrix = new Matrix4();
+const restAt = new Vector3();
+const restScale = new Vector3();
 const handMatrix = new Matrix4();
 const quaternion = new Quaternion();
 const targetPosition = new Vector3();
@@ -364,6 +371,8 @@ export class Slingshot {
         velocity: new Vector3(),
         target: null,
         share: 1,
+        rest: -1,
+        restTurn: 0,
       });
     }
     // The pebble in the pouch, shown once one is loaded.
@@ -843,7 +852,13 @@ export class Slingshot {
     kind: PebbleKind,
     goblin: Goblin | null = null,
   ): void {
-    const pebble = this.pebbles.find((p) => !p.alive);
+    // A free slot, or else the landed pebble closest to going away.
+    let pebble = this.pebbles.find((p) => !p.alive);
+    if (!pebble) {
+      let best: Pebble | undefined;
+      for (const p of this.pebbles) if (p.rest >= 0 && (!best || p.rest < best.rest)) best = p;
+      pebble = best;
+    }
     if (!pebble) {
       // No free slot: a goblin shot must not stay stuck in held mode.
       if (goblin) this.goblins.drop(goblin);
@@ -852,6 +867,7 @@ export class Slingshot {
     mark('pebble shot');
     pebble.alive = true;
     pebble.age = 0;
+    pebble.rest = -1;
     pebble.kind = kind;
     pebble.goblin = goblin;
     pebble.position.copy(origin);
@@ -1009,6 +1025,21 @@ export class Slingshot {
       pebble.age += dt;
       const p = pebble.position;
       const v = pebble.velocity;
+      // Landed: it lies there a moment, then shrinks away (the shared despawn look).
+      if (pebble.rest >= 0) {
+        pebble.rest -= dt;
+        const t = pebble.rest > 0 ? 0 : Math.min(1, -pebble.rest / SLINGSHOT.pebbleFade);
+        if (t >= 1) {
+          this.removePebble(i);
+          continue;
+        }
+        quaternion.setFromAxisAngle(UP, pebble.restTurn);
+        restScale.setScalar(Math.max(0.001, shrinkAway(t)));
+        restAt.set(p.x, p.y - (this.pebbleHeight / 2) * restScale.x, p.z);
+        matrix.compose(restAt, quaternion, restScale);
+        this.pool.set(i, matrix);
+        continue;
+      }
       // 4. Gentle bend toward the target while it stays in the cone.
       const target = pebble.target;
       if (target && this.isTargetHittable(target) && pebble.share > 0) {
@@ -1037,9 +1068,26 @@ export class Slingshot {
       }
       p.copy(temp);
       if (this.landed(p)) {
-        if (pebble.kind === 'goblin') this.splash(p, null, pebble.goblin!);
-        else this.dust(p);
-        this.removePebble(i);
+        if (pebble.kind === 'goblin') {
+          this.splash(p, null, pebble.goblin!);
+          this.removePebble(i);
+          continue;
+        }
+        this.dust(p);
+        // It stays where it fell for a couple of seconds.
+        const ground = landingHeight(p.x, p.z);
+        if (ground === null) {
+          // Off the board's edge: nothing to lie on.
+          this.removePebble(i);
+          continue;
+        }
+        p.y = ground + this.pebbleHeight / 2;
+        pebble.rest = SLINGSHOT.pebbleRest;
+        pebble.restTurn = pebble.age * 12;
+        pebble.target = null;
+        quaternion.setFromAxisAngle(UP, pebble.restTurn);
+        matrix.makeRotationFromQuaternion(quaternion).setPosition(p.x, p.y - this.pebbleHeight / 2, p.z);
+        this.pool.set(i, matrix);
         continue;
       }
       if (pebble.age > SLINGSHOT.maxFlight || p.y < SLINGSHOT.killBelow) {
@@ -1063,6 +1111,7 @@ export class Slingshot {
 
   private removePebble(index: number): void {
     this.pebbles[index].alive = false;
+    this.pebbles[index].rest = -1;
     this.pebbles[index].target = null;
     this.pebbles[index].goblin = null;
     this.pool.hide(index);

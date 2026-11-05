@@ -37,6 +37,8 @@ import type { Trigger, Triggers } from '../world/triggers.js';
 import type { EndPanel } from '../ui/endPanel.js';
 import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemos.js';
 import type { GhostAim } from '../ui/ghostAim.js';
+import type { PointerArrow } from '../ui/pointerArrow.js';
+import type { LessonBait } from '../units/lessonBait.js';
 import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
 import type { HintSign, SignContent } from '../ui/hintSign.js';
 import type { Markers } from '../ui/markers.js';
@@ -101,6 +103,10 @@ export interface BattleParts {
   ghost: GhostHand;
   /** Ghost aim dots from the pouch to the first trigger lesson's keg. */
   ghostAim: GhostAim;
+  /** The 3D arrow in front of the face that points at the lesson's target. */
+  pointer: PointerArrow;
+  /** Goblins brought just for a tool's use lesson. */
+  bait: LessonBait;
   /** The pause button on the left palm (world), while it is out, for the pause lesson's marker. */
   wristButton: (out: Vector3) => Vector3 | null;
   audio: GameAudio;
@@ -133,6 +139,9 @@ export class Battle implements TutorialApi {
   private endTimer = -1;
   /** Time since anything last hurt the castle (seconds), for the stalemate check. */
   private sinceDamage = 0;
+  /** The stalemate's progress check: time to the next look, and how close the nearest goblin was then (cm). */
+  private progressTimer = 0;
+  private lastClosest = Infinity;
 
   // What the player did in this battle, for the lessons.
   private eatenCount = 0;
@@ -332,6 +341,7 @@ export class Battle implements TutorialApi {
     this.parts.markers.hide();
     this.parts.ghost.hide();
     this.parts.ghostAim.hide();
+    this.parts.pointer.hide();
   }
 
   /** The game was paused and play goes on again (for the pause lesson). */
@@ -414,6 +424,14 @@ export class Battle implements TutorialApi {
       // A goblin the player can reach, or holds, or has in the slingshot is never a
       // stalemate: they can still deal with it, so the wave must wait for them.
       this.sinceDamage = intruders > 0 || goblins.anyInReach() ? 0 : this.sinceDamage + dt;
+      // Goblins still getting closer (walking in, fighting their way in) are no stalemate either.
+      this.progressTimer -= dt;
+      if (this.progressTimer <= 0) {
+        this.progressTimer = CASTLE_HEALTH.progressEvery;
+        const closest = goblins.closestRadius();
+        if (closest < this.lastClosest - CASTLE_HEALTH.progressCm) this.sinceDamage = 0;
+        this.lastClosest = closest;
+      }
       // Stalemate: every goblin is out, some are left far away, but none has hurt the castle for a long time.
       if (this.wave >= 0 && spawner.allOut && goblins.aliveCount > 0 && this.sinceDamage > CASTLE_HEALTH.stalemateSeconds) {
         console.info('[battle] stalemate: the leftover goblins run off');
@@ -448,6 +466,7 @@ export class Battle implements TutorialApi {
       markers.hide();
       ghost.hide();
       this.parts.ghostAim.hide();
+      this.parts.pointer.hide();
       return;
     }
     if (this.doneFlash > 0) {
@@ -456,6 +475,7 @@ export class Battle implements TutorialApi {
       markers.hide();
       ghost.hide();
       this.parts.ghostAim.hide();
+      this.parts.pointer.hide();
       return;
     }
     const step = (this.director?.current ?? null) as TutorialStep | null;
@@ -467,11 +487,14 @@ export class Battle implements TutorialApi {
       markers.hide();
       ghost.hide();
       this.parts.ghostAim.hide();
+      this.parts.pointer.hide();
       return;
     }
     const target = this.markerPosition(hint.marker, markerAt);
     this.updateGhost(dt, !mic.on && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
     markers.update(dt, target);
+    // The 3D arrow in front of the face points at it while it is off to the side.
+    this.parts.pointer.update(dt, head, this.forward, target);
     // The first trigger lesson: ghost aim dots from the pouch to the keg.
     this.parts.ghostAim.update(dt, hint.aimDots && target ? this.parts.slingshot.partWorld('pouch', pouchAt) : null, target);
     // No mic: the bell is out in place of the megaphone, with its own words and demo.
@@ -600,6 +623,13 @@ export class Battle implements TutorialApi {
       }
       case 'wristButton':
         return this.parts.wristButton(out);
+      case 'baitGoblin': {
+        const g = this.parts.bait.first();
+        if (!g || this.parts.isHeld(g)) return null;
+        goblins.centerWorld(g, out);
+        out.y += g.stats.height * 0.01 * this.parts.stage.boardScale;
+        return out;
+      }
       default:
         return null;
     }
@@ -873,6 +903,18 @@ export class Battle implements TutorialApi {
 
   endTriggerLesson(): void {
     this.parts.goblins.releaseWaiting();
+  }
+
+  baitMoving(): void {
+    this.parts.bait.patrol(this.parts.stage.spin);
+  }
+
+  baitForTool(): void {
+    this.parts.bait.onRampart(this.parts.stage.spin);
+  }
+
+  releaseBait(): void {
+    this.parts.bait.release();
   }
 
   triggersSetOff(kind: TriggerKind): number {
