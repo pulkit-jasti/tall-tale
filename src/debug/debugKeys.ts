@@ -135,7 +135,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     group: 'army',
     icon: '🛢️',
     label: 'Trigger lesson group',
-    does: 'Send a small group of grunts past the powder keg nearest the front (what the wave 2 trigger lesson does)',
+    does: 'A small group of grunts walks to the powder keg nearest the front and waits beside it until it is set off (what the wave 2 keg lesson does)',
   },
   { id: 'triggersReset', group: 'army', icon: '🛢️', code: 'Digit7', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
   { id: 'triggersFire', group: 'army', icon: '💣', code: 'Digit8', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },

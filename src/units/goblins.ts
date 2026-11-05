@@ -113,6 +113,16 @@ export class Goblin {
   animDt = 0;
   /** A road this goblin must take at the end of the one it walks (the trigger lesson group), or -1 to pick freely. */
   nextRoad = -1;
+  /**
+   * The trigger lessons: the goblin stops at this spot (graph road, cm along
+   * it) and waits there until it is released, so the player can take their
+   * time. -1 walks on as usual.
+   */
+  waitRoad = -1;
+  waitAt = 0;
+  waiting = false;
+  /** Lesson bait: the slingshot shoots past it (no aim bend, no hit), so shots reach the trigger behind it. */
+  bait = false;
 
   constructor(
     template: ModelTemplate,
@@ -328,6 +338,9 @@ export class Goblins {
     goblin.animDt = 0;
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
     goblin.nextRoad = -1;
+    goblin.waitRoad = -1;
+    goblin.waiting = false;
+    goblin.bait = false;
     this.setTouch(goblin, 'idle');
     return goblin;
   }
@@ -386,6 +399,19 @@ export class Goblins {
     goblin.nextRoad = next;
     goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
     return goblin;
+  }
+
+  /** Lets every waiting lesson goblin walk on (the trigger was set off, or the lesson ended). */
+  releaseWaiting(): void {
+    for (const g of this.list) {
+      if (g.waitRoad < 0 && !g.bait) continue;
+      g.waitRoad = -1;
+      g.bait = false;
+      if (g.waiting) {
+        g.waiting = false;
+        if (g.mode === 'walking') g.play(g.stats.moveClip, true, g.stats.moveClipSpeed);
+      }
+    }
   }
 
   /** Debug spawning: the camp by its place in the blueprint's camp list. */
@@ -659,6 +685,19 @@ export class Goblins {
       case 'walking': {
         const road = g.road!;
         const dir = g.step.dir;
+        // A lesson goblin stops at its spot and waits there until released.
+        if (g.waitRoad === g.step.road) {
+          const next = g.distance + g.speed * dt * dir;
+          if (dir === 1 ? next >= g.waitAt : next <= g.waitAt) {
+            g.distance = g.waitAt;
+            road.pointAt(g.distance, g.offset * dir, p);
+            if (!g.waiting) {
+              g.waiting = true;
+              g.play('idle');
+            }
+            break;
+          }
+        }
         g.distance += g.speed * dt * dir;
         // The lane offset flips with the direction, so a goblin keeps its side of the road.
         road.pointAt(g.distance, g.offset * dir, p);

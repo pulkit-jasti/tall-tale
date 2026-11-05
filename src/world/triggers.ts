@@ -10,14 +10,31 @@
 //   Tree:       falls across the road, squashes the goblins under it, and
 //               closes the road for a few seconds (goblins on it turn back).
 //
-// Easy to notice (build step 6): bigger and brighter than the scenery, on
-// flat ground with a clear view from the seat, and while goblins are near one
-// it glows softly and a small icon floats over it. A group walking right past
-// one gives a short "now!" cue (a stronger pulse and a sound).
+// Easy to notice (build step 6): every trigger carries the same red "danger
+// paint", like the keg's red bands, and nothing else on the board is that
+// red: a red stripe painted round the boulder, a red and white forester's
+// band on the tree's trunk (and the tree itself is the only autumn tree, in
+// orange and red leaves). They stand on flat ground with a clear view from
+// the seat. While goblins are near one it glows softly (emissive only), and
+// a group walking right past one gives a short "now!" cue (a stronger pulse
+// and a sound). No floating UI: only things that belong in the world.
 //
 // One rule for chain reactions: explosions set off the triggers near them.
 // All motion is simple math, no physics engine. Board units (cm), in boardSpin.
-import { CanvasTexture, Color, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three';
+import {
+  CanvasTexture,
+  Color,
+  CylinderGeometry,
+  DoubleSide,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  Quaternion,
+  TorusGeometry,
+  Vector3,
+  type Texture,
+} from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { GOBLIN_RULES, ROADS, TRIGGERS } from '../config/game.js';
@@ -28,7 +45,6 @@ import { boardHeight, degToRad, groundAt, landingHeight, polarX, polarZ } from '
 import type { Random } from '../rules/random.js';
 import type { SlingTarget } from '../tools/slingshot.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
-import { drawIcon } from '../ui/uiImages.js';
 import { cloneStatic, loadTemplate, type ModelTemplate } from './models.js';
 import type { Road, RoadNetwork } from './roads.js';
 import type { Spot } from './settlements.js';
@@ -106,22 +122,78 @@ export function triggerGround(placements: TriggerPlacement[]): { flats: CampSpot
   return { flats, clear: keep };
 }
 
-/** The floating "use me now" icon: a slingshot target on a round cream badge. */
-function iconMaterial(): SpriteMaterial {
+/** The red danger paint every trigger carries (and the white of the tree's band). */
+function paintMaterial(color: number): MeshStandardMaterial {
+  return new MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, flatShading: true, side: DoubleSide });
+}
+
+const autumnCache = new Map<Texture, Texture>();
+
+/**
+ * The same color map with every green turned to autumn orange and red, so
+ * the trigger tree is the only autumn tree on the board. Made once per map.
+ */
+function autumnTexture(source: Texture): Texture {
+  const cached = autumnCache.get(source);
+  if (cached) return cached;
+  const image = source.image as CanvasImageSource & { width: number; height: number };
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 128;
+  canvas.width = image.width;
+  canvas.height = image.height;
   const c = canvas.getContext('2d')!;
-  c.beginPath();
-  c.arc(64, 64, 56, 0, Math.PI * 2);
-  c.fillStyle = '#f7e2b0';
-  c.fill();
-  c.lineWidth = 9;
-  c.strokeStyle = '#6d4b27';
-  c.stroke();
-  drawIcon(c, 'target', 22, 22, 84, '#d23c28');
-  const map = new CanvasTexture(canvas);
-  map.colorSpace = SRGBColorSpace;
-  return new SpriteMaterial({ map, transparent: true, fog: false, depthWrite: false });
+  c.drawImage(image, 0, 0);
+  const pixels = c.getImageData(0, 0, canvas.width, canvas.height);
+  const d = pixels.data;
+  const [r1, g1, b1] = TRIGGERS.tree.autumn;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+    // Leaves: green clearly above red and blue. Bark and everything else stay.
+    if (g <= r * 1.05 || g <= b) continue;
+    const light = (r + g + b) / (3 * 255);
+    d[i] = Math.min(255, r1 * (0.55 + light));
+    d[i + 1] = Math.min(255, g1 * (0.55 + light));
+    d[i + 2] = Math.min(255, b1 * (0.55 + light));
+  }
+  c.putImageData(pixels, 0, 0);
+  const texture = new CanvasTexture(canvas);
+  texture.flipY = source.flipY;
+  texture.colorSpace = source.colorSpace;
+  texture.magFilter = source.magFilter;
+  texture.minFilter = source.minFilter;
+  texture.wrapS = source.wrapS;
+  texture.wrapT = source.wrapT;
+  texture.channel = source.channel;
+  autumnCache.set(source, texture);
+  return texture;
+}
+
+/** The trunk's middle and radius at a height (model space, cm), measured from the model's own points. */
+function trunkAt(model: Object3D, from: number, to: number): { x: number; z: number; r: number } {
+  model.updateMatrixWorld(true);
+  const points: Vector3[] = [];
+  model.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const position = mesh.geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i++) {
+      const v = new Vector3().fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld);
+      if (v.y >= from && v.y <= to) points.push(v);
+    }
+  });
+  if (points.length === 0) return { x: 0, z: 0, r: 0.8 };
+  let x = 0;
+  let z = 0;
+  for (const v of points) {
+    x += v.x;
+    z += v.z;
+  }
+  x /= points.length;
+  z /= points.length;
+  let r = 0;
+  for (const v of points) r = Math.max(r, Math.hypot(v.x - x, v.z - z));
+  return { x, z, r: Math.min(r, 2) };
 }
 
 /** Modes where a goblin is on its feet on the field (it counts as near a trigger). */
@@ -151,8 +223,7 @@ export abstract class Trigger implements SlingTarget {
   /** The strong "now!" pulse left (seconds), and the wait before the next one. */
   private nowLeft = 0;
   private nowWait = 0;
-  /** The floating "use me now" icon. */
-  private readonly icon: Sprite;
+
   abstract readonly radius: number;
   readonly assist = TRIGGERS.assist;
 
@@ -166,10 +237,6 @@ export abstract class Trigger implements SlingTarget {
     protected along: number,
   ) {
     this.root.visible = false;
-    this.icon = new Sprite(owner.iconMaterial);
-    this.icon.scale.setScalar(TRIGGERS.cue.iconSize);
-    this.icon.visible = false;
-    owner.group.add(this.icon);
   }
 
   protected get road(): Road {
@@ -193,12 +260,23 @@ export abstract class Trigger implements SlingTarget {
     return Math.hypot(temp2.x, temp2.z) < r0 ? 1 : -1;
   }
 
-  /** Board height of its top (cm), for the floating icon and markers. */
+  /** Board height of its top (cm), for markers. */
   abstract topY(): number;
 
   /** Used or not shown yet, so it can be put back (not while it is acting, like a rolling boulder). */
   get resettable(): boolean {
     return this.phase === 'done' || this.phase === 'hidden';
+  }
+
+  /**
+   * Where lesson goblin `i` waits for the shot (cm along its road, and its
+   * lane): right in what the trigger does, so the shot shows its effect.
+   */
+  abstract waitSpot(i: number): { along: number; lane: number };
+
+  /** A spot along its road, kept on the road. */
+  protected clampAlong(along: number): number {
+    return Math.min(this.road.length - 1, Math.max(1, along));
   }
 
   get standing(): boolean {
@@ -233,7 +311,6 @@ export abstract class Trigger implements SlingTarget {
     mark('trigger');
     this.setAimed(false);
     applyTouchState(this.materials, 'idle');
-    this.icon.visible = false;
     this.phase = 'acting';
     this.time = 0;
     this.act();
@@ -249,19 +326,16 @@ export abstract class Trigger implements SlingTarget {
     this.owner.sound('triggerNow', temp);
   }
 
-  /** Every frame while it stands: the soft glow and the floating icon while goblins are near. */
+  /** Every frame while it stands: the soft glow while goblins are near. */
   private updateCue(dt: number): void {
-    const { glowColor, glowMin, glowMax, glowSpeed, nowColor, nowIntensity, iconLift, iconBob } = TRIGGERS.cue;
+    const { glowColor, glowMin, glowMax, glowSpeed, nowColor, nowIntensity } = TRIGGERS.cue;
     this.nowLeft = Math.max(0, this.nowLeft - dt);
     this.nowWait = Math.max(0, this.nowWait - dt);
     const active = this.near > 0 || this.nowLeft > 0;
-    this.icon.visible = active;
     if (!active) {
       if (!this.aimed) applyTouchState(this.materials, 'idle');
       return;
     }
-    this.center(temp);
-    this.icon.position.set(temp.x, this.topY() + iconLift + Math.abs(Math.sin(this.time * 3)) * iconBob, temp.z);
     // The aim glow wins while the slingshot points at it.
     if (this.aimed) return;
     const pulse = 0.5 + 0.5 * Math.sin(this.time * glowSpeed);
@@ -298,7 +372,6 @@ export abstract class Trigger implements SlingTarget {
     this.cleanUp();
     this.phase = 'hidden';
     this.root.visible = false;
-    this.icon.visible = false;
     this.near = this.close = 0;
     this.nowLeft = this.nowWait = 0;
     this.setAimed(false);
@@ -352,6 +425,12 @@ class Keg extends Trigger {
     return this.spot.y + TRIGGERS.keg.height;
   }
 
+  /** Right beside the keg, in its blast. */
+  waitSpot(i: number): { along: number; lane: number } {
+    const lanes = [-1.6, 0, 1.6];
+    return { along: this.clampAlong(this.along + this.towardCastle * (i % 3 - 1) * 3.2), lane: lanes[i % 3] };
+  }
+
   protected place(): void {
     this.root.position.copy(this.spot);
     this.root.quaternion.identity();
@@ -393,11 +472,19 @@ class Boulder extends Trigger {
     owner.group.add(this.hill);
     this.hill.visible = false;
     this.rock = cloneStatic(rock);
-    this.materials = ownMaterials(this.rock, TRIGGERS.boulder.tint);
+    this.materials = ownMaterials(this.rock);
+    // Pale stone with a green top, unlike the orange rocks around, and a red stripe painted round its middle.
+    for (const m of this.materials) m.color.setHex(m.name === 'grass' ? TRIGGERS.boulder.mossColor : TRIGGERS.boulder.stoneColor);
     // The rock's origin is its bottom: lift it so it turns around its middle.
     this.rock.position.y = -size / 2;
     const pivot = new Group();
     pivot.add(this.rock);
+    const paint = paintMaterial(TRIGGERS.paint);
+    const stripe = new Mesh(new TorusGeometry((Math.min(rock.size.x, rock.size.z) / 2) * 0.93, TRIGGERS.boulder.stripe, 6, 18), paint);
+    stripe.rotation.x = Math.PI / 2;
+    stripe.position.y = -size / 2 + rock.size.y * 0.5;
+    pivot.add(stripe);
+    this.materials.push(paint);
     this.root.add(pivot);
     this.rest.copy(temp).setY(temp.y + hill.size.y - 1 + size / 2);
     const r0 = Math.hypot(...this.xz(0));
@@ -419,6 +506,13 @@ class Boulder extends Trigger {
 
   topY(): number {
     return this.rest.y + TRIGGERS.boulder.size / 2;
+  }
+
+  /** On the road below it, in the line it rolls down. */
+  waitSpot(i: number): { along: number; lane: number } {
+    const lanes = [0, -1, 1];
+    const at = this.clampAlong(this.along + this.dir * (9 + i * 4.5));
+    return { along: this.dir === 1 ? Math.min(at, this.stopAt - 2) : Math.max(at, this.stopAt + 2), lane: lanes[i % 3] };
   }
 
   override reset(wave: number): void {
@@ -486,7 +580,30 @@ class Tree extends Trigger {
   constructor(owner: Triggers, wave: number, road: number, along: number, template: ModelTemplate) {
     super('tree', wave, owner, road, along);
     const model = cloneStatic(template);
-    this.materials = ownMaterials(model, TRIGGERS.tree.tint);
+    this.materials = ownMaterials(model);
+    // The only autumn tree on the board: its leaves orange and red.
+    for (const m of this.materials) {
+      try {
+        if (m.map) m.map = autumnTexture(m.map);
+      } catch {
+        // A map that cannot be read back (a compressed texture): tint the whole tree warm instead.
+        m.color.multiply(new Color(1.35, 0.8, 0.45));
+      }
+    }
+    // A forester's mark painted round the trunk: a red band with a white one above.
+    const h = template.size.y;
+    const { bandFrom, bandRed, bandWhite } = TRIGGERS.tree;
+    const trunk = trunkAt(model, h * bandFrom, h * (bandFrom + bandRed + bandWhite));
+    const red = paintMaterial(TRIGGERS.paint);
+    const white = paintMaterial(TRIGGERS.paintWhite);
+    const band = (height: number, y: number, material: MeshStandardMaterial): void => {
+      const ring = new Mesh(new CylinderGeometry(trunk.r * 1.12 + 0.05, trunk.r * 1.12 + 0.05, height, 10, 1, true), material);
+      ring.position.set(trunk.x, y + height / 2, trunk.z);
+      model.add(ring);
+    };
+    band(h * bandRed, h * bandFrom, red);
+    band(h * bandWhite, h * (bandFrom + bandRed), white);
+    this.materials.push(red, white);
     this.root.add(model);
     const { side } = TRIGGERS.tree;
     this.road.pointAt(along, 0, temp);
@@ -534,6 +651,12 @@ class Tree extends Trigger {
     return this.base.y + TRIGGERS.tree.height * Math.cos(degToRad(TRIGGERS.tree.leanDeg));
   }
 
+  /** On the road just before it (coming from the camps), so the fallen trunk blocks their way. */
+  waitSpot(i: number): { along: number; lane: number } {
+    const lanes = [0, -1.4, 1.4];
+    return { along: this.clampAlong(this.along - this.towardCastle * (5 + i * 3.2)), lane: lanes[i % 3] };
+  }
+
   private lean(deg: number): void {
     this.root.position.copy(this.base);
     this.root.quaternion.setFromAxisAngle(this.axis, degToRad(deg));
@@ -550,7 +673,7 @@ class Tree extends Trigger {
   }
 
   protected during(dt: number): void {
-    const { fallTime, leanDeg, height, crushWidth, blockSeconds } = TRIGGERS.tree;
+    const { fallTime, leanDeg, blockSeconds } = TRIGGERS.tree;
     if (!this.fallen) {
       // Falls faster and faster, like a real tree.
       const t = Math.min(1, this.time / fallTime);
@@ -558,11 +681,7 @@ class Tree extends Trigger {
       if (t < 1) return;
       this.fallen = true;
       this.blockLeft = blockSeconds;
-      // Squashes the goblins under the trunk, across the road.
-      for (let i = 0; i <= 4; i++) {
-        temp.copy(this.base).addScaledVector(this.side, (-height * 0.9 * Math.sin(degToRad(this.fallDeg)) * i) / 4);
-        this.owner.crush(temp, crushWidth);
-      }
+      // It hurts no one: it only blocks the road, so the goblins on it turn back.
       temp.copy(this.base).addScaledVector(this.side, -TRIGGERS.tree.side);
       this.owner.sound('treeCrash', temp);
       this.owner.dust(temp, TRIGGERS.tree.leafColors);
@@ -589,8 +708,6 @@ class Tree extends Trigger {
 /** Every trigger on the map, the blasts between them, and the flying debris. */
 export class Triggers {
   readonly group = new Group();
-  /** Shared by every trigger's floating icon. Made in load(), after the UI images. */
-  iconMaterial!: SpriteMaterial;
   /** Called whenever a trigger is set off (a shot, a blast, or debug), for the lessons. */
   onSetOffKind: (kind: TriggerKind) => void = () => {};
   private list: Trigger[] = [];
@@ -611,7 +728,6 @@ export class Triggers {
 
   /** The triggers of the blueprint, each on the road nearest its spot. */
   async load(spots: BlueprintTrigger[]): Promise<void> {
-    this.iconMaterial = iconMaterial();
     const [keg, rock, tree, planks, wood, ...hills] = await Promise.all([
       loadTemplate('props/survival/barrel.glb', { height: TRIGGERS.keg.height }),
       loadTemplate('rocks/nature/rock_smallH.glb', { width: TRIGGERS.boulder.size }),
@@ -700,20 +816,35 @@ export class Triggers {
     return this.board.localToWorld(out);
   }
 
-  /** The trigger lesson: a small group of grunts walks along the road past a trigger, toward the castle. Returns how many came. */
-  sendPast(trigger: Trigger, count: number): number {
-    const { approach, spacing } = TRIGGERS.lesson;
+  /**
+   * The trigger lessons: grunts walk along the road to the trigger and wait
+   * right in what it does (beside the keg, below the boulder, before the
+   * tree) until it is set off, however long that takes. Tops the group up
+   * to `count` waiting goblins. Returns how many came.
+   */
+  baitGroup(trigger: Trigger, count: number): number {
+    const { approach } = TRIGGERS.lesson;
     const dir = trigger.towardCastle;
+    const road = trigger.roadNumber;
+    let waiting = 0;
+    for (const g of this.goblins.list) if (g.bait && g.mode !== 'dead') waiting++;
     let sent = 0;
-    for (let i = 0; i < count; i++) {
-      const offset = ((i % 3) - 1) * 1.2;
-      if (this.goblins.spawnBefore('grunt', trigger.roadNumber, dir, trigger.alongRoad, approach + i * spacing, offset)) sent++;
+    for (let i = waiting; i < count; i++) {
+      const spot = trigger.waitSpot(i);
+      const g = this.goblins.spawnBefore('grunt', road, dir, spot.along, approach + i * TRIGGERS.lesson.spacing, spot.lane);
+      if (!g) continue;
+      g.waitRoad = road;
+      g.waitAt = spot.along;
+      g.bait = true;
+      sent++;
     }
     return sent;
   }
 
   /** Called by a trigger when it is set off. */
   onSetOff(trigger: Trigger): void {
+    // The lesson goblins waiting by it are free to go (or be squashed, or turn back).
+    this.goblins.releaseWaiting();
     this.onSetOffKind(trigger.kind);
   }
 

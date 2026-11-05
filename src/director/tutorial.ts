@@ -92,9 +92,14 @@ export const TUTORIAL_TIMING = {
   heightGoal: 4,
   /** The lesson climber waits on the rampart this long instead of jumping in (seconds). */
   lessonClimberWait: 90,
-  /** The trigger lesson: the group walks past the keg again after this long, and it moves on after triggerTimeout. */
-  triggerStuckAfter: 18,
-  triggerTimeout: 60,
+  /**
+   * The trigger lessons: the goblins wait for the shot, so the player can
+   * take their time. After triggerStuckAfter the marker pulses (and missing
+   * goblins are replaced), and it only moves on by itself after the long
+   * triggerTimeout, so it never gets stuck.
+   */
+  triggerStuckAfter: 25,
+  triggerTimeout: 240,
   /** The pause lesson moves on after this long anyway (no hands in the browser). */
   pauseTimeout: 45,
 };
@@ -200,12 +205,14 @@ export interface TutorialApi {
   slingLoaded(): boolean;
   /**
    * A trigger lesson: brings that kind onto the roads (if it is not there
-   * yet), picks the one nearest the front and walks a small group of goblins
-   * past it.
+   * yet), picks the one nearest the front, and sends a small group of goblins
+   * to wait right in what it does until the player sets it off.
    */
   startTriggerLesson(kind: TriggerKind): void;
-  /** Walks the group past the lesson's trigger again (the fallback), with a pulse of the marker. */
+  /** Tops the waiting group up again if goblins went missing (the fallback), with a pulse of the marker. */
   sendPastTrigger(): void;
+  /** The trigger lesson is over: the goblins still waiting walk on. */
+  endTriggerLesson(): void;
   /** How many triggers of a kind were set off in this battle. */
   triggersSetOff(kind: TriggerKind): number;
   /** How often the player paused (and came back) in this battle. */
@@ -403,27 +410,39 @@ function shootLesson(): TutorialStep {
 /**
  * In wave 2, right after the shoot lesson: the triggers, which are all set
  * off with the slingshot. One lesson per kind, keg first, then the boulder,
- * then the tree. Each one brings its kind onto the roads, and the wave holds
- * its spawns while a small group of goblins walks past the one nearest the
- * front. Done when one of that kind is set off. If stuck, the group walks
- * past again and the marker pulses. Only the first (the keg) shows how to
- * aim, with the ghost hand and ghost aim dots: the others work the same way.
+ * then the tree. Each one brings its kind onto the roads, holds the wave's
+ * spawns, and sends a small group of goblins to the one nearest the front,
+ * where they wait right in what it does (beside the keg, below the boulder,
+ * before the tree) until the player sets it off. So the player can take
+ * their time and try as often as they need. Each text says what it does:
+ * the keg and the boulder knock goblins out, the tree only blocks the road.
+ * Ghost aim dots arc from the pouch to it in every one. Only the first (the
+ * keg) also shows the ghost hand: the others are shot the same way.
  */
 function triggerLessons(): TutorialStep[] {
   const again = (api: TutorialApi): void => api.sendPastTrigger();
   const kinds: { kind: TriggerKind; text: string; extra: Partial<Hint> }[] = [
-    { kind: 'keg', text: 'See the barrel? Shoot it when goblins walk past! Pull the pouch away from it: the dots show where it lands.', extra: { demo: 'aimKeg', aimDots: true } },
-    { kind: 'boulder', text: 'A boulder on a hill! Shoot it and it rolls down the road, squashing the goblins on it.', extra: {} },
-    { kind: 'tree', text: 'A leaning tree! Shoot it when goblins walk under it: it falls across the road and blocks it.', extra: {} },
+    {
+      kind: 'keg',
+      text: 'See the red barrel? Shoot it: it blows up and knocks out the goblins next to it. The dots show the way.',
+      extra: { demo: 'aimKeg' },
+    },
+    { kind: 'boulder', text: 'See the boulder with the red stripe? Shoot it: it rolls down the road and squashes the goblins below.', extra: {} },
+    {
+      kind: 'tree',
+      text: 'See the orange tree with the red band? Shoot it: it falls across the road and blocks it. Goblins must turn back.',
+      extra: {},
+    },
   ];
   return kinds.map(({ kind, text, extra }) =>
     lessonStep(
       `learn-${kind}`,
-      lesson(text, 'target', 'lessonTrigger', extra),
+      lesson(text, 'target', 'lessonTrigger', { aimDots: true, ...extra }),
       (api, since) => api.triggersSetOff(kind) > since,
       (api) => api.triggersSetOff(kind),
       {
         start: (api) => api.startTriggerLesson(kind),
+        end: (api) => api.endTriggerLesson(),
         fallbacks: [again, again],
         stuckAfter: TUTORIAL_TIMING.triggerStuckAfter,
         timeout: TUTORIAL_TIMING.triggerTimeout,

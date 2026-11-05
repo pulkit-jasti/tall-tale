@@ -1411,16 +1411,23 @@ export const TRIGGERS = {
    * and `clear` how far villages, towers and decor keep from it (cm).
    */
   ground: {
-    flat: { keg: 8, boulder: 14, tree: 10 } as Record<'keg' | 'boulder' | 'tree', number>,
+    flat: { keg: 9, boulder: 14, tree: 10 } as Record<'keg' | 'boulder' | 'tree', number>,
     sight: [0.86, 0.72],
     sightSize: 5,
     clear: 16,
   },
   /**
+   * The danger paint every trigger carries, so it reads like the keg: the
+   * keg's red bands, a red stripe round the boulder, a red and white band on
+   * the tree's trunk. Nothing else on the board is this red.
+   */
+  paint: 0xe0342a,
+  paintWhite: 0xf4efe2,
+  /**
    * "This can be used now": while goblins are near a trigger it glows softly
-   * (emissive only, pulsing) and a small icon floats over it. When a group
-   * walks right past it, a short "now!" cue: a stronger pulse and a sound
-   * from its direction (at most every `nowGap` seconds per trigger).
+   * (emissive only, pulsing). When a group walks right past it, a short
+   * "now!" cue: a stronger pulse and a sound from its direction (at most
+   * every `nowGap` seconds per trigger). No floating UI.
    */
   cue: {
     /** Goblins this close (flat, cm) count as near. */
@@ -1439,24 +1446,24 @@ export const TRIGGERS = {
     glowSpeed: 5,
     nowColor: 0xffe27a,
     nowIntensity: 1,
-    /** The floating icon: size and height over the trigger's top (cm), its bob. */
-    iconSize: 4.5,
-    iconLift: 3.5,
-    iconBob: 0.8,
   },
-  /** The trigger lesson (wave 2): a small group walks past the keg in front of the player. */
+  /**
+   * The trigger lessons (wave 2): a small group walks to the trigger in front
+   * of the player and waits right in what it does until the player sets it
+   * off, however many tries that takes.
+   */
   lesson: {
     group: 3,
-    /** They start this far before the keg (cm), a few cm apart. */
+    /** They start this far before their waiting spot (cm), a few cm apart. */
     approach: 40,
     spacing: 4,
   },
   keg: {
-    /** Raised from 2.6 in build step 6, so it reads from the seat. */
-    height: 3,
+    /** Raised from 2.6, then 3, in build step 6, so it reads from the seat. */
+    height: 4.2,
     /** Sideways from the road center (cm), so goblins walk past it. */
-    side: 4.5,
-    hitRadius: 2.6,
+    side: 5,
+    hitRadius: 3.3,
     /** Goblins this close are knocked out. */
     blastRadius: 13,
     /** Other triggers this close are set off by the blast. */
@@ -1473,8 +1480,10 @@ export const TRIGGERS = {
     hillWidth: 11,
     side: 9,
     hitRadius: 3.4,
-    /** A lighter, warmer stone than the rocks around (color multiply). */
-    tint: [1.35, 1.2, 0.95] as [number, number, number],
+    /** Pale stone with a green mossy top (the rocks around are orange), and the red stripe's thickness (cm). */
+    stoneColor: 0xd9d3c6,
+    mossColor: 0x6fae3a,
+    stripe: 0.32,
     /** Rolling speed down the road toward the castle (cm per second). */
     speed: 42,
     /** Goblins this close to the rolling boulder are squashed. */
@@ -1491,8 +1500,12 @@ export const TRIGGERS = {
     side: 5.5,
     leanDeg: 12,
     hitRadius: 4,
-    /** A brighter green than the forests around (color multiply, the trunk too). */
-    tint: [1.2, 1.35, 0.85] as [number, number, number],
+    /** The only autumn tree: its leaves turn this orange red (0 to 255, brightness kept). */
+    autumn: [235, 105, 40] as [number, number, number],
+    /** The forester's mark on the trunk: from this share of its height, a red band and a white one above (shares of the height). */
+    bandFrom: 0.1,
+    bandRed: 0.07,
+    bandWhite: 0.035,
     /** It falls across the road in this long, until its crown rests on the ground (at most 90 degrees). */
     fallTime: 0.55,
     /** For the resting angle: the crown starts this share up the trunk, and the trunk's radius (cm). */
@@ -1500,8 +1513,7 @@ export const TRIGGERS = {
     trunkRadius: 0.6,
     /** Share of the crown's radius that must stay above the ground (leaves may just touch it, never sink half in). */
     crownRest: 0.75,
-    /** Goblins this close to the fallen trunk's line are squashed (cm). */
-    crushWidth: 3.2,
+
     /** The road stays closed this long, then the tree poofs away and the road opens. */
     blockSeconds: 12,
     debris: 4,
@@ -1530,14 +1542,15 @@ export const TROOPS = {
   firstSquadAt: 4,
   /** Gap between soldiers of one squad leaving (seconds). */
   leaveGap: 0.7,
-  height: 2.5,
+  /** The same size as the goblins (grunts 3.9 cm), raised from 2.5 after the step 6 test. */
+  height: 3.9,
   speed: 5.5,
   speedJitter: 0.1,
   laneJitter: 1.6,
   /** Share of archers among the soldiers (same rules, another look). */
   archerShare: 0.3,
-  /** A goblin this close is fought (cm). Runners rush past and are never fought. */
-  engageRange: 4,
+  /** A goblin this close is fought (cm). Runners rush past and are never fought. Raised from 4 with the bigger soldiers. */
+  engageRange: 5,
   /** Soldiers take this many hits, grunts take 1. */
   hitsToDown: 2,
   /** A soldier strikes this often, and a strike lands this often (share). */

@@ -624,9 +624,9 @@ export class GameSystem extends createSystem({}) {
         this.triggers.setWave(TUTORIAL_WAVES.length);
         break;
       case 'triggerLesson': {
-        // What the trigger lesson does: a small group walks past the keg nearest the front.
+        // What the keg lesson does: a small group waits by the keg nearest the front until it is set off.
         const keg = this.triggers.readyNearest('keg', this.stage.spin);
-        if (keg) this.triggers.sendPast(keg, TRIGGERS.lesson.group);
+        if (keg) this.triggers.baitGroup(keg, TRIGGERS.lesson.group);
         break;
       }
       case 'triggersFire':

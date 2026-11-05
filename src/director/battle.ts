@@ -860,14 +860,19 @@ export class Battle implements TutorialApi {
     triggers.revealKind(kind);
     // The one nearest the front of the board right now (the player may have spun it).
     this.lessonTrigger = triggers.readyNearest(kind, stage.spin);
-    if (this.lessonTrigger) triggers.sendPast(this.lessonTrigger, TRIGGERS.lesson.group);
+    if (this.lessonTrigger) triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);
   }
 
   sendPastTrigger(): void {
     const kind = this.lessonTrigger?.kind ?? 'keg';
     if (!this.lessonTrigger?.standing) this.lessonTrigger = this.parts.triggers.readyNearest(kind, this.parts.stage.spin);
-    if (this.lessonTrigger) this.parts.triggers.sendPast(this.lessonTrigger, TRIGGERS.lesson.group);
+    // Only the goblins that are gone (picked up, or knocked out another way) are replaced.
+    if (this.lessonTrigger) this.parts.triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);
     this.parts.markers.pulse();
+  }
+
+  endTriggerLesson(): void {
+    this.parts.goblins.releaseWaiting();
   }
 
   triggersSetOff(kind: TriggerKind): number {

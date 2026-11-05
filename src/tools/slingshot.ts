@@ -918,7 +918,8 @@ export class Slingshot {
   }
 
   private isTargetHittable(t: Target): boolean {
-    return t instanceof Goblin ? this.goblins.isHittable(t) : t.hittable();
+    // Lesson bait waits by a trigger: shots go past it, to the trigger.
+    return t instanceof Goblin ? this.goblins.isHittable(t) && !t.bait : t.hittable();
   }
 
   /** Middle of a target (board space, cm). */
@@ -1093,7 +1094,7 @@ export class Slingshot {
     let best: Target | null = null;
     let bestT = Infinity;
     for (const g of this.goblins.list) {
-      if (!this.goblins.isHittable(g)) continue;
+      if (!this.goblins.isHittable(g) || g.bait) continue;
       const t = this.touchAt(this.targetCenter(g, center), a, AIM_ASSIST.hitRadius + g.stats.height * 0.35, lengthSq);
       if (t < bestT) {
         bestT = t;

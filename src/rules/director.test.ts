@@ -87,6 +87,7 @@ function idleApi(): TutorialApi & {
   held: Record<string, boolean>;
   sentPast: number;
   lessonKinds: string[];
+  released: number;
 } {
   return {
     cleared: 0,
@@ -96,6 +97,7 @@ function idleApi(): TutorialApi & {
     held: {},
     sentPast: 0,
     lessonKinds: [],
+    released: 0,
     startWave(index) {
       this.started.push(index);
     },
@@ -135,6 +137,9 @@ function idleApi(): TutorialApi & {
       this.sentPast++;
     },
     triggersSetOff: () => 0,
+    endTriggerLesson() {
+      this.released++;
+    },
     pausedCount: () => 0,
   };
 }
@@ -322,15 +327,17 @@ describe('tutorial director', () => {
     const shoot = ids.indexOf('learn-sling-shoot');
     expect(ids.slice(shoot + 1, shoot + 4)).toEqual(['learn-keg', 'learn-boulder', 'learn-tree']);
     expect(ids.indexOf('learn-tree')).toBeLessThan(ids.indexOf('wave-2-clear'));
-    // Only the first one shows how to aim (ghost hand and ghost aim dots).
+    // Ghost aim dots in all three, the ghost hand only in the first.
     const hints = ['learn-keg', 'learn-boulder', 'learn-tree'].map((id) => steps.find((s) => s.id === id)!.hint!);
-    expect(hints.map((h) => !!h.demo && !!h.aimDots)).toEqual([true, false, false]);
+    expect(hints.map((h) => !!h.aimDots)).toEqual([true, true, true]);
+    expect(hints.map((h) => !!h.demo)).toEqual([true, false, false]);
     const director = new Director<TutorialApi>(steps, api);
     while (director.current?.id !== 'learn-keg') director.skip();
     expect(api.lessonKinds).toEqual(['keg']);
     expect(director.spawnRate).toBe(0);
-    // Stuck: the group walks past again (at most twice).
-    run(director, 40);
+    // The goblins wait as long as it takes: still on the keg lesson long after the old 60 s, with the group topped up at most twice.
+    run(director, 120);
+    expect(director.current?.id).toBe('learn-keg');
     expect(api.sentPast).toBe(3);
     // The player shoots the keg: the boulder lesson starts, then the tree lesson.
     const setOff: Record<string, number> = { keg: 1, boulder: 0, tree: 0 };
@@ -344,13 +351,15 @@ describe('tutorial director', () => {
     director.update(0.1);
     expect(director.current?.id).toBe('wave-2-clear');
     expect(api.lessonKinds).toEqual(['keg', 'boulder', 'tree']);
+    // Each lesson lets its waiting goblins go when it ends.
+    expect(api.released).toBe(3);
   });
 
-  it('a trigger lesson moves on after its timeout when nothing is hit', () => {
+  it('a trigger lesson still never gets stuck: it moves on after its long timeout when nothing is hit', () => {
     const api = idleApi();
     const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
     while (director.current?.id !== 'learn-keg') director.skip();
-    run(director, 61);
+    run(director, 241);
     expect(director.current?.id).toBe('learn-boulder');
   });
 
