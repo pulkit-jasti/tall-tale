@@ -6,13 +6,17 @@ import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { DEBUG, FPS, HANDLES, SKY, STAGE, XR } from './config/game.js';
+import { DEBUG, FPS, HANDLES, SKY, STAGE, TRIGGERS, XR } from './config/game.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
 import tutorialMap from './maps/tutorial.json';
 import { parseBlueprint } from './rules/blueprint.js';
 import { EndPanel } from './ui/endPanel.js';
+import { PauseMenu, type PauseAction } from './ui/pauseMenu.js';
+import { GhostAim } from './ui/ghostAim.js';
+import { PointerArrow } from './ui/pointerArrow.js';
+import { LessonBait } from './units/lessonBait.js';
 import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { Markers } from './ui/markers.js';
@@ -46,6 +50,8 @@ import { Sky, skyDirection } from './world/sky.js';
 import { Triggers } from './world/triggers.js';
 import { buildBoard } from './world/boardBuilder.js';
 import { FoodJar } from './world/foodJar.js';
+import { buildSeatFloor, GiantBody } from './world/giant.js';
+import { Windmill } from './world/settlements.js';
 import { Stage } from './world/stage.js';
 
 const headPosition = new Vector3();
@@ -91,7 +97,16 @@ export class GameSystem extends createSystem({}) {
   private stressTest!: StressTest;
   private placeTimer = -1;
   private wasImmersive = false;
+  /** The Quest menu is open, the headset is off or the page is hidden. */
+  private hidden = false;
+  /** Paused from the wrist button (or auto-paused in VR): stays paused until Resume. */
+  private menuPaused = false;
+  /** "Measure reach" from the pause panel is running (the battle stays frozen). */
+  private measuring = false;
   private paused = false;
+  private pauseMenu!: PauseMenu;
+  private giant!: GiantBody;
+  private windmill!: Windmill;
   private heartbeatTimer = 0;
 
   init(): void {
@@ -120,6 +135,9 @@ export class GameSystem extends createSystem({}) {
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
     this.particles = new Particles(root, createRandom(seed + 101));
     this.handles = new BoardHandles(this.stage);
+    // The giant's seat: the hole is filled at board level, and the giant's body comes out of it.
+    buildSeatFloor(this.stage.boardLift, createRandom(seed + 720));
+    this.giant = new GiantBody(root);
     this.fps = new FpsCounter(this.stage.boardLift);
 
     const ghost = new GhostHand();
@@ -129,7 +147,9 @@ export class GameSystem extends createSystem({}) {
       loadUiImages(),
       ghost.load(root),
     ]);
+    this.windmill = new Windmill(built.sails);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
+    this.goblins.particles = this.particles;
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
     this.food = new FoodJar(this.stage, this.audio, this.particles);
     const toolParts = { stage: this.stage, goblins: this.goblins, food: this.food, audio: this.audio, particles: this.particles };
@@ -161,7 +181,8 @@ export class GameSystem extends createSystem({}) {
         );
       }
     };
-    this.threat = new ThreatCues(this.stage, this.particles);
+    this.threat = new ThreatCues(this.stage, this.particles, root);
+    this.pauseMenu = new PauseMenu(root, this.audio);
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
@@ -187,6 +208,10 @@ export class GameSystem extends createSystem({}) {
       sign: new HintSign(this.stage.boardLift, this.audio),
       markers: new Markers(root),
       ghost,
+      ghostAim: new GhostAim(root),
+      pointer: new PointerArrow(root),
+      bait: new LessonBait(this.goblins, built.network),
+      wristButton: (out) => this.pauseMenu.wristWorld(out),
       audio: this.audio,
       particles: this.particles,
       threat: this.threat,
@@ -261,6 +286,7 @@ export class GameSystem extends createSystem({}) {
     this.readHead();
     this.grabEat?.releaseAll();
     this.stage.place(headPosition, headQuaternion);
+    this.giant?.snap();
   }
 
   update(delta: number): void {
@@ -277,18 +303,28 @@ export class GameSystem extends createSystem({}) {
       this.goblins.killAll();
     }
     this.wasImmersive = immersive;
-    // Simple auto-pause while the Quest menu is open (full pause is build step 6).
-    // Read the XR session directly too, and the page itself, in case one of
-    // them reports the menu and the other does not. Sound stops as well.
+    // Auto-pause while the Quest menu is open or the headset is off. Read the
+    // XR session directly too, and the page itself, in case one of them
+    // reports the menu and the other does not. In VR during a battle it stays
+    // paused until the player pokes Resume (the pause panel). Otherwise it
+    // goes on by itself when the page is visible again.
     const state = this.world.session?.visibilityState ?? this.visibilityState.value;
-    const paused =
+    const hidden =
       state === VisibilityState.Hidden ||
       state === VisibilityState.VisibleBlurred ||
       document.visibilityState === 'hidden';
+    if (hidden !== this.hidden) {
+      this.hidden = hidden;
+      console.info(`[game] ${hidden ? 'hidden' : 'visible'} (${state})`);
+      // Sound (and the mic, which shares the audio context) stops only while hidden, and always comes back with the view.
+      this.audio.setPaused(hidden);
+      if (!hidden) mic.ensureLive();
+      if (hidden && immersive && this.battle.canPause) this.pause();
+    }
+    if (!this.battle.canPause && this.menuPaused) this.resume();
+    const paused = hidden || this.menuPaused;
     if (paused !== this.paused) {
       this.paused = paused;
-      this.audio.setPaused(paused);
-      console.info(`[game] ${paused ? 'paused' : 'resumed'} (${state})`);
       this.fps.status = paused ? 'paused' : '';
       // Menu frames and the hitch after it would pollute the measured run.
       this.fps.resetRun();
@@ -311,9 +347,35 @@ export class GameSystem extends createSystem({}) {
         mic: mic.describe(),
       });
     }
-    if (paused) return;
+    if (hidden) return;
 
+    // The hands, the head and the debug keys run while paused too: the pause panel needs them.
     const dt = Math.min(delta, 0.05);
+    this.player.updateWorldMatrix(true, false);
+    this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
+    this.readHead();
+    this.debugKeys(dt);
+    // The giant's body stays under the head, also while paused.
+    this.giant.update(dt, headPosition, headForward, this.stage.boardLift.position.y);
+    if (this.measuring) {
+      // The reach check on the frozen battle. The board grows or shrinks to the player when it is done.
+      this.stage.update(dt);
+      if (this.battle.updateMeasure(dt, this.hands.hands, headPosition, headForward)) {
+        this.measuring = false;
+        this.resume();
+      }
+      return;
+    }
+    if (this.menuPaused) {
+      // Shown here, not when pausing: auto-pause happens while the head pose is unknown (Quest menu).
+      if (!this.pauseMenu.isOpen) this.pauseMenu.show(headPosition, headForward, this.stage.boardScale);
+      const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
+      if (action) this.pauseAction(action);
+      return;
+    }
+    if (this.pauseMenu.updateWrist(dt, this.hands, headPosition, immersive && this.battle.canPause)) this.pause();
+    if (this.menuPaused) return;
+
     if (this.placeTimer > 0) {
       this.placeTimer -= dt;
       if (this.placeTimer <= 0) this.placeBoard();
@@ -325,10 +387,6 @@ export class GameSystem extends createSystem({}) {
       this.battle.welcome();
     }
 
-    this.player.updateWorldMatrix(true, false);
-    this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
-    this.readHead();
-    this.debugKeys(dt);
     this.stressTest.update(dt);
     this.stage.update(dt);
     this.handles.update(dt);
@@ -345,10 +403,64 @@ export class GameSystem extends createSystem({}) {
     this.stun.update(dt);
     this.food.update(dt);
     this.threat.update(dt);
+    // The red arrow only while a battle is fought.
+    if (this.battle.canPause) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
+    else this.threat.hideArrow();
     this.particles.update(dt);
     this.sky?.update(dt);
+    this.windmill.update(dt);
     this.fog.near = SKY.fogNear * this.stage.boardScale;
     this.fog.far = SKY.fogFar * this.stage.boardScale;
+  }
+
+  /**
+   * Pauses the battle (wrist button, auto-pause or debug): everything
+   * freezes, whatever the hands held is let go, and the pause panel comes
+   * up on the next visible frame.
+   */
+  private pause(): void {
+    if (this.menuPaused || !this.battle.canPause) return;
+    this.menuPaused = true;
+    this.grabEat.releaseAll();
+    this.battle.hideHints();
+    this.threat.hideArrow();
+    this.pauseMenu.hideWrist();
+    this.audio.play('pauseOpen');
+    console.info('[game] paused (pause panel)');
+  }
+
+  private resume(): void {
+    if (!this.menuPaused) return;
+    this.menuPaused = false;
+    this.measuring = false;
+    this.pauseMenu.hide();
+    this.battle.notePaused();
+    this.audio.play('pauseClose');
+    console.info('[game] resumed');
+  }
+
+  private pauseAction(action: PauseAction): void {
+    switch (action) {
+      case 'resume':
+        this.resume();
+        break;
+      case 'resetTable':
+        // Auto placement again, at the starting height, and play goes on.
+        this.stage.height = 0;
+        this.placeBoard();
+        this.resume();
+        break;
+      case 'measureReach':
+        // The reach check right now, on the frozen battle (no restart). Play goes on when it is done.
+        this.pauseMenu.hide();
+        this.measuring = true;
+        this.battle.startMeasure();
+        break;
+      case 'restart':
+        this.resume();
+        this.battle.start();
+        break;
+    }
   }
 
   /**
@@ -525,8 +637,28 @@ export class GameSystem extends createSystem({}) {
       case 'triggersReset':
         this.triggers.setWave(TUTORIAL_WAVES.length);
         break;
+      case 'triggerLesson': {
+        // What the keg lesson does: a small group waits by the keg nearest the front until it is set off.
+        const keg = this.triggers.readyNearest('keg', this.stage.spin);
+        if (keg) this.triggers.baitGroup(keg, TRIGGERS.lesson.group);
+        break;
+      }
       case 'triggersFire':
         this.triggers.fireAll();
+        break;
+      case 'pause':
+        if (this.menuPaused) this.resume();
+        else this.pause();
+        break;
+      case 'pauseAction': {
+        const actions: PauseAction[] = ['resume', 'resetTable', 'measureReach', 'restart'];
+        const action = actions[Math.round(arg ?? 1) - 1];
+        if (this.menuPaused && action) this.pauseAction(action);
+        break;
+      }
+      case 'giantToggle':
+        this.giant.enabled = !this.giant.enabled;
+        console.info(`[debug] giant body ${this.giant.enabled ? 'on' : 'off'}`);
         break;
       case 'fps':
         this.fps.toggle();

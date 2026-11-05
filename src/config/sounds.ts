@@ -36,6 +36,8 @@ export const SOUNDS = {
   pebbleLoad: { files: ['interface/click_001.ogg', 'interface/click_002.ogg'], volume: 0.8, positional: true },
   locked: { files: ['interface/error_004.ogg', 'interface/error_006.ogg'], volume: 0.5, positional: false },
   buttonClick: { files: ['interface/click_001.ogg', 'interface/click_002.ogg', 'interface/select_001.ogg'], volume: 0.8, positional: false },
+  pauseOpen: { files: ['interface/open_001.ogg'], volume: 0.7, positional: false },
+  pauseClose: { files: ['interface/close_001.ogg'], volume: 0.7, positional: false },
   lessonDone: { files: ['interface/confirmation_002.ogg'], volume: 0.7, positional: false },
   toolPoof: { files: ['interface/maximize_008.ogg'], volume: 0.7, positional: true },
   toolReturn: { files: ['interface/minimize_008.ogg'], volume: 0.7, positional: true },
@@ -76,6 +78,8 @@ export const SOUNDS = {
   sneeze: { files: [CHIME], volume: 0.25, positional: true },
   kegBoom: { files: [CHIME], volume: 0.7, positional: true },
   boulderRoll: { files: [CHIME], volume: 0.5, positional: true },
+  /** A group of goblins walks right past a trigger: "now!" (from its direction). */
+  triggerNow: { files: [CHIME], volume: 0.55, positional: true },
 } satisfies Record<string, SoundDef>;
 
 export type SoundName = keyof typeof SOUNDS;

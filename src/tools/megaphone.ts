@@ -77,6 +77,8 @@ export class Megaphone extends HandTool {
   }
 
   protected heldUpdate(dt: number): void {
+    // The mic must be live (the audio may have been paused, or the browser stopped the mic in the background).
+    mic.ensureLive();
     // The loudness, smoothed a little so one click is not a scream.
     const raw = mic.read();
     this.level += (raw - this.level) * (1 - Math.exp(-dt / MEGAPHONE.levelSmoothing));

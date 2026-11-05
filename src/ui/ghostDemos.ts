@@ -31,7 +31,9 @@ export type GhostAnchor =
   | 'swatterHandle'
   | 'pepperHandle'
   | 'megaphoneHandle'
-  | 'bellHandle';
+  | 'bellHandle'
+  /** In front of the face, a little left and low: where the left palm turns toward the eyes to show the pause button. */
+  | 'palmShow';
 
 export type Dir = [number, number, number];
 
@@ -51,8 +53,12 @@ export interface GhostKey {
 
 export interface GhostDemo {
   hand: 'left' | 'right';
-  /** 'view' (default): forward is from the head to each anchor. 'shot': forward is the slingshot's shot direction. */
-  frame?: 'view' | 'shot';
+  /**
+   * 'view' (default): forward is from the head to each anchor. 'shot':
+   * forward is the slingshot's shot direction. 'aim': forward is from the
+   * slingshot's pouch toward the lesson's target (the keg).
+   */
+  frame?: 'view' | 'shot' | 'aim';
   keys: GhostKey[];
 }
 
@@ -101,6 +107,14 @@ const MOUTH_GRIP = { fingers: [0, 0.25, -1] as Dir, palm: [-1, 0, 0] as Dir };
  * faces the headset (Quest menu).
  */
 const REACH_GRIP = { fingers: [0, 0, 1] as Dir, palm: [-1, 0, 0] as Dir };
+/** Left hand coming up from the lap, flat, palm down, fingers forward. */
+const PALM_DOWN = { fingers: [0, 0.2, 1] as Dir, palm: [0, -1, 0.2] as Dir };
+/**
+ * Left hand open in front of the face, fingers up, palm toward the eyes: the
+ * pose that shows the pause button. An open hand only, never a pinch (a
+ * palm-facing pinch is the Quest menu gesture).
+ */
+const PALM_SHOW = { fingers: [0.15, 1, 0] as Dir, palm: [0.1, 0, -1] as Dir };
 
 type Grip = { rod?: Dir; fingers?: Dir; palm: Dir };
 const key = (t: number, at: GhostAnchor, offset: Dir, pose: GhostPose, grip: Grip, arcDeg?: number): GhostKey => ({
@@ -278,6 +292,32 @@ export const GHOST_DEMOS = {
       key(1.0, 'pouch', [0, 0, 0], 'pinch', PULL_GRIP),
       key(2.0, 'pouch', [0, 0, -14], 'pinch', PULL_GRIP),
       key(2.2, 'pouch', [0, 0, -14], 'open', PULL_GRIP),
+    ],
+  },
+  /**
+   * The keg lesson: the same pull as `shoot`, but straight back away from
+   * the keg (frame 'aim'), so the shot goes at it. Ghost aim dots show the arc.
+   */
+  aimKeg: {
+    hand: 'left',
+    frame: 'aim',
+    keys: [
+      key(0, 'pouch', [-3, 3, -7], 'open', PULL_GRIP),
+      key(0.7, 'pouch', [0, 0, 0], 'open', PULL_GRIP),
+      key(1.0, 'pouch', [0, 0, 0], 'pinch', PULL_GRIP),
+      key(2.0, 'pouch', [0, 0, -14], 'pinch', PULL_GRIP),
+      key(2.4, 'pouch', [0, 0, -14], 'pinch', PULL_GRIP),
+      key(2.6, 'pouch', [0, 0, -14], 'open', PULL_GRIP),
+    ],
+  },
+  /** The pause lesson: the left hand comes up from the lap, turns its palm toward the eyes and holds there. */
+  pauseShow: {
+    hand: 'left',
+    keys: [
+      key(0, 'palmShow', [-2, -16, -6], 'open', PALM_DOWN),
+      key(0.9, 'palmShow', [0, -4, -2], 'open', PALM_SHOW),
+      key(1.3, 'palmShow', [0, 0, 0], 'open', PALM_SHOW),
+      key(2.6, 'palmShow', [0, 0, 0], 'open', PALM_SHOW),
     ],
   },
 } satisfies Record<string, GhostDemo>;

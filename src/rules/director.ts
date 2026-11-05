@@ -24,6 +24,8 @@ export interface DirectorStep<C> {
   end?(ctx: C): void;
   /** While this step waits for the player, enemies come at half the spawn rate. */
   slowSpawns?: boolean;
+  /** While this step waits for the player, no new enemies come out at all (the wave holds its spawns). */
+  holdSpawns?: boolean;
 }
 
 export type StepEnd = 'done' | 'timeout';
@@ -57,8 +59,9 @@ export class Director<C> {
     return this.used;
   }
 
-  /** Spawn rate share for the current step (0.5 while it waits for the player). */
+  /** Spawn rate share for the current step (0.5 while it waits for the player, 0 while it holds the wave). */
   get spawnRate(): number {
+    if (this.current?.holdSpawns) return 0;
     return this.current?.slowSpawns ? 0.5 : 1;
   }
 

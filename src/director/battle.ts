@@ -17,6 +17,7 @@ import {
   HINT_SIGN,
   TOOL_SPOTS,
   TOOLS,
+  TRIGGERS,
   WAVES,
 } from '../config/game.js';
 import { WAVE_VOICES } from '../config/sounds.js';
@@ -31,9 +32,13 @@ import type { FoodToolName, HandTool } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
-import type { Triggers } from '../world/triggers.js';
+import type { TriggerKind } from '../rules/blueprint.js';
+import type { Trigger, Triggers } from '../world/triggers.js';
 import type { EndPanel } from '../ui/endPanel.js';
 import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemos.js';
+import type { GhostAim } from '../ui/ghostAim.js';
+import type { PointerArrow } from '../ui/pointerArrow.js';
+import type { LessonBait } from '../units/lessonBait.js';
 import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
 import type { HintSign, SignContent } from '../ui/hintSign.js';
 import type { Markers } from '../ui/markers.js';
@@ -59,6 +64,7 @@ const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
 const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'megaphone'];
 const noTools = (): Record<FoodToolName, number> => ({ swatter: 0, pepper: 0, megaphone: 0, bell: 0 });
+const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0 });
 const ICONS: Record<HintIcon, UiImageName> = {
   pinch: 'target',
   grab: 'target',
@@ -72,8 +78,9 @@ const ICONS: Record<HintIcon, UiImageName> = {
 };
 const temp = new Vector3();
 const markerAt = new Vector3();
+const pouchAt = new Vector3();
 const lastAnchor = new Vector3();
-const view: ViewFrame = { head: new Vector3(), up: new Vector3(0, 1, 0), shot: new Vector3() };
+const view: ViewFrame = { head: new Vector3(), up: new Vector3(0, 1, 0), shot: new Vector3(), aim: new Vector3() };
 
 export interface BattleParts {
   stage: Stage;
@@ -94,6 +101,14 @@ export interface BattleParts {
   sign: HintSign;
   markers: Markers;
   ghost: GhostHand;
+  /** Ghost aim dots from the pouch to the first trigger lesson's keg. */
+  ghostAim: GhostAim;
+  /** The gold 3D arrow in front of the face that points at the lesson's target. */
+  pointer: PointerArrow;
+  /** Goblins brought just for a tool's use lesson. */
+  bait: LessonBait;
+  /** The pause button on the left palm (world), while it is out, for the pause lesson's marker. */
+  wristButton: (out: Vector3) => Vector3 | null;
   audio: GameAudio;
   particles: Particles;
   /** Wall hit flashes and the attack compass (seeing attacks without sound). */
@@ -124,6 +139,9 @@ export class Battle implements TutorialApi {
   private endTimer = -1;
   /** Time since anything last hurt the castle (seconds), for the stalemate check. */
   private sinceDamage = 0;
+  /** The stalemate's progress check: time to the next look, and how close the nearest goblin was then (cm). */
+  private progressTimer = 0;
+  private lastClosest = Infinity;
 
   // What the player did in this battle, for the lessons.
   private eatenCount = 0;
@@ -137,6 +155,13 @@ export class Battle implements TutorialApi {
   private lastSpin = 0;
   private lastHeight = 0;
   private lessonGoblin: Goblin | null = null;
+  /** The powder keg of the trigger lesson, and how many triggers of each kind were set off. */
+  private lessonTrigger: Trigger | null = null;
+  private triggerCount = noTriggers();
+  private pauses = 0;
+  /** "Measure reach" from the pause panel: the reach check runs on a frozen battle, then play goes on. */
+  private measureTime = -1;
+  private measureDone = 0;
 
   // The hint sign.
   private shownStep: TutorialStep | null = null;
@@ -154,12 +179,15 @@ export class Battle implements TutorialApi {
       damageCastle(this.state, CASTLE_HEALTH.wallHitDamage);
       this.sinceDamage = 0;
     };
+    // A climber running on the rampart: the wall under it flashes red like a hit (no damage).
+    parts.goblins.onRampartStep = (goblin) => parts.threat.wallHit(goblin, false);
     parts.slingshot.onHit = () => this.slingHits++;
     parts.slingshot.onEvent = (event) => this.sling[event]++;
     for (const tool of Object.values(parts.tools)) {
       tool.onUse = (count) => (this.toolUseCount[tool.name] += count);
       tool.onGrab = () => this.toolGrabCount[tool.name]++;
     }
+    parts.triggers.onSetOffKind = (kind) => this.triggerCount[kind]++;
     // A tick on each second of the reach check's countdown.
     this.reach.onTick = () => parts.audio.play('readyTick');
     this.loadBoardScale();
@@ -247,6 +275,9 @@ export class Battle implements TutorialApi {
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     this.lessonGoblin = null;
+    this.lessonTrigger = null;
+    this.triggerCount = noTriggers();
+    this.pauses = 0;
     this.shownStep = null;
     this.doneFlash = 0;
     // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
@@ -301,6 +332,76 @@ export class Battle implements TutorialApi {
     this.parts.ghost.hide();
   }
 
+  /** True while a battle is being fought (the wrist button and auto-pause only work then). */
+  get canPause(): boolean {
+    return this.running && this.state.phase === 'playing';
+  }
+
+  /** Paused: the sign, the marker and the ghost hand step away. The next update brings them back. */
+  hideHints(): void {
+    this.parts.sign.show(null);
+    this.parts.markers.hide();
+    this.parts.ghost.hide();
+    this.parts.ghostAim.hide();
+    this.parts.pointer.hide();
+  }
+
+  /** The game was paused and play goes on again (for the pause lesson). */
+  notePaused(): void {
+    this.pauses++;
+  }
+
+  /**
+   * "Measure reach" on the pause panel: the reach check, without starting the
+   * battle again. The battle stays frozen while the player stretches out an
+   * arm, then the board grows or shrinks to them and play goes on.
+   */
+  startMeasure(): void {
+    this.hideHints();
+    this.measureTime = 0;
+    this.measureDone = 0;
+    this.reach.start();
+  }
+
+  /** Every frame while measuring. Returns true when it is over (measured, or given up without hands). */
+  updateMeasure(dt: number, hands: HandState[], head: Vector3, forward: Vector3): boolean {
+    const { sign, markers } = this.parts;
+    this.head.copy(head);
+    this.forward.copy(forward);
+    sign.update(dt);
+    markers.hide();
+    if (this.measureDone > 0) {
+      this.measureDone -= dt;
+      if (this.measureDone > 0) return false;
+      this.measureTime = -1;
+      this.hideHints();
+      return true;
+    }
+    this.measureTime += dt;
+    this.reach.update(dt, hands, head);
+    this.updateGhost(dt, 'reach', hands, head);
+    const header = 'Your size';
+    if (this.reachChecked()) {
+      this.parts.ghost.hide();
+      this.parts.audio.play('lessonDone');
+      sign.show({ kind: 'lesson', header, text: 'Done! You can rest your arm now.', done: true, sub: 'Nice!' });
+      this.measureDone = HINT_SIGN.doneTime;
+      return false;
+    }
+    if (this.measureTime > TUTORIAL_TIMING.reachTimeout) {
+      this.stopReachCheck();
+      this.measureTime = -1;
+      this.hideHints();
+      return true;
+    }
+    const text =
+      this.reach.phase === 'counting'
+        ? `Great, hold it there... ${this.reach.secondsLeft}`
+        : 'Sit back and stretch one arm straight out: hand flat, thumb up, fingers spread.';
+    sign.show({ kind: 'lesson', header, text, icon: ICONS.target });
+    return false;
+  }
+
   noteEaten(): void {
     this.eatenCount++;
   }
@@ -325,6 +426,14 @@ export class Battle implements TutorialApi {
       // A goblin the player can reach, or holds, or has in the slingshot is never a
       // stalemate: they can still deal with it, so the wave must wait for them.
       this.sinceDamage = intruders > 0 || goblins.anyInReach() ? 0 : this.sinceDamage + dt;
+      // Goblins still getting closer (walking in, fighting their way in) are no stalemate either.
+      this.progressTimer -= dt;
+      if (this.progressTimer <= 0) {
+        this.progressTimer = CASTLE_HEALTH.progressEvery;
+        const closest = goblins.closestRadius();
+        if (closest < this.lastClosest - CASTLE_HEALTH.progressCm) this.sinceDamage = 0;
+        this.lastClosest = closest;
+      }
       // Stalemate: every goblin is out, some are left far away, but none has hurt the castle for a long time.
       if (this.wave >= 0 && spawner.allOut && goblins.aliveCount > 0 && this.sinceDamage > CASTLE_HEALTH.stalemateSeconds) {
         console.info('[battle] stalemate: the leftover goblins run off');
@@ -358,6 +467,8 @@ export class Battle implements TutorialApi {
       sign.show(null);
       markers.hide();
       ghost.hide();
+      this.parts.ghostAim.hide();
+      this.parts.pointer.hide();
       return;
     }
     if (this.doneFlash > 0) {
@@ -365,6 +476,8 @@ export class Battle implements TutorialApi {
       sign.show(this.doneContent);
       markers.hide();
       ghost.hide();
+      this.parts.ghostAim.hide();
+      this.parts.pointer.hide();
       return;
     }
     const step = (this.director?.current ?? null) as TutorialStep | null;
@@ -375,15 +488,22 @@ export class Battle implements TutorialApi {
       sign.show(null);
       markers.hide();
       ghost.hide();
+      this.parts.ghostAim.hide();
+      this.parts.pointer.hide();
       return;
     }
     const target = this.markerPosition(hint.marker, markerAt);
     this.updateGhost(dt, !mic.on && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
     markers.update(dt, target);
+    // The 3D arrow in front of the face points at it while it is off to the side.
+    this.parts.pointer.update(dt, head, this.forward, target);
+    // The first trigger lesson: ghost aim dots from the pouch to the keg.
+    this.parts.ghostAim.update(dt, hint.aimDots && target ? this.parts.slingshot.partWorld('pouch', pouchAt) : null, target);
     // No mic: the bell is out in place of the megaphone, with its own words and demo.
     let text = !mic.on && hint.whenNoMic ? hint.whenNoMic : hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
+    if (hint.whenWrist && this.parts.wristButton(temp)) text = hint.whenWrist;
     // A food tool lesson without enough food says so (a climber comes to eat).
     if (hint.whenLocked && hint.tool && !this.canAfford(hint.tool)) text = hint.whenLocked;
     // The reach check counts down while the arm is out, so the player knows when to rest.
@@ -401,6 +521,15 @@ export class Battle implements TutorialApi {
     if (!demo) return;
     view.head.copy(head);
     this.parts.slingshot.shotDirection(view.shot);
+    // From the pouch toward the lesson's trigger, level (the keg lesson's pull goes straight back from it).
+    view.aim.copy(view.shot);
+    const t = this.lessonTrigger;
+    if (t?.standing) {
+      this.parts.triggers.topWorld(t, temp);
+      this.parts.slingshot.partWorld('pouch', pouchAt);
+      temp.sub(pouchAt).setY(0);
+      if (temp.lengthSq() > 1e-6) view.aim.copy(temp.normalize());
+    }
     const anchors = (anchor: GhostAnchor, out: Vector3, arcDeg?: number): Vector3 | null => this.ghostAnchor(anchor, out, arcDeg);
     // Steps out of the way while a real hand is where the demo ends.
     let near = false;
@@ -433,6 +562,15 @@ export class Battle implements TutorialApi {
         out.x += -temp.z * CALIBRATION.demoRight;
         out.z += temp.x * CALIBRATION.demoRight;
         out.y -= CALIBRATION.demoDown;
+        return out;
+      }
+      case 'palmShow': {
+        // In front of the face, a little left and low: where the left palm shows the pause button.
+        temp.copy(this.forward).setY(0).normalize();
+        out.copy(this.head).addScaledVector(temp, GHOST_HAND.palmForward);
+        out.x += temp.z * GHOST_HAND.palmLeft;
+        out.z -= temp.x * GHOST_HAND.palmLeft;
+        out.y -= GHOST_HAND.palmDown;
         return out;
       }
       case 'lessonGoblin': {
@@ -481,6 +619,19 @@ export class Battle implements TutorialApi {
         return slingshot.partWorld('bowl', out);
       case 'pouch':
         return slingshot.partWorld('pouch', out);
+      case 'lessonTrigger': {
+        const t = this.lessonTrigger;
+        return t && t.standing ? this.parts.triggers.topWorld(t, out) : null;
+      }
+      case 'wristButton':
+        return this.parts.wristButton(out);
+      case 'baitGoblin': {
+        const g = this.parts.bait.first();
+        if (!g || this.parts.isHeld(g)) return null;
+        goblins.centerWorld(g, out);
+        out.y += g.stats.height * 0.01 * this.parts.stage.boardScale;
+        return out;
+      }
       default:
         return null;
     }
@@ -733,5 +884,46 @@ export class Battle implements TutorialApi {
 
   slingLoaded(): boolean {
     return this.parts.slingshot.isLoaded;
+  }
+
+  startTriggerLesson(kind: TriggerKind): void {
+    const { triggers, stage } = this.parts;
+    // Its kind comes onto the roads now, if it was not there yet.
+    triggers.revealKind(kind);
+    // The one nearest the front of the board right now (the player may have spun it).
+    this.lessonTrigger = triggers.readyNearest(kind, stage.spin);
+    if (this.lessonTrigger) triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);
+  }
+
+  sendPastTrigger(): void {
+    const kind = this.lessonTrigger?.kind ?? 'keg';
+    if (!this.lessonTrigger?.standing) this.lessonTrigger = this.parts.triggers.readyNearest(kind, this.parts.stage.spin);
+    // Only the goblins that are gone (picked up, or knocked out another way) are replaced.
+    if (this.lessonTrigger) this.parts.triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);
+    this.parts.markers.pulse();
+  }
+
+  endTriggerLesson(): void {
+    this.parts.goblins.releaseWaiting();
+  }
+
+  baitMoving(): void {
+    this.parts.bait.patrol(this.parts.stage.spin);
+  }
+
+  baitForTool(): void {
+    this.parts.bait.onRampart(this.parts.stage.spin);
+  }
+
+  releaseBait(): void {
+    this.parts.bait.release();
+  }
+
+  triggersSetOff(kind: TriggerKind): number {
+    return this.triggerCount[kind];
+  }
+
+  pausedCount(): number {
+    return this.pauses;
   }
 }

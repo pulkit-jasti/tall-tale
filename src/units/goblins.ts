@@ -21,7 +21,8 @@ import {
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { CASTLE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GoblinStats, type GoblinType } from '../config/game.js';
-import { angleOf, clearOfTowers, groundAt, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
+import { angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
+import type { Particles } from '../fx/particles.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
@@ -111,6 +112,34 @@ export class Goblin {
   strikeTimer = 0;
   /** Animation time not played yet (far goblins update their animation every other frame). */
   animDt = 0;
+  /** A road this goblin must take at the end of the one it walks (the trigger lesson group), or -1 to pick freely. */
+  nextRoad = -1;
+  /**
+   * The trigger lessons: the goblin stops at this spot (graph road, cm along
+   * it) and waits there until it is released, so the player can take their
+   * time. -1 walks on as usual.
+   */
+  waitRoad = -1;
+  waitAt = 0;
+  waiting = false;
+  /** Lesson bait: the slingshot shoots past it (no aim bend, no hit), so shots reach the trigger behind it. */
+  bait = false;
+  /**
+   * The slingshot lesson: walks back and forth on this graph road between
+   * two spots (cm along it), a moving target, until released. -1: off.
+   */
+  patrolRoad = -1;
+  patrolFrom = 0;
+  patrolTo = 0;
+  /** Stays still on the rampart (a lesson goblin), instead of running about, and never jumps in until released. */
+  calm = false;
+  /** Peppered: time to its next sneeze, and the sneeze's head jerk left (seconds). */
+  sneezeIn = 0;
+  sneezing = 0;
+  /** Running about on the rampart: pause left before the next dash (seconds), the board angle it runs to, and the wall mark timer. */
+  dashPause = 0;
+  dashTo = 0;
+  markTimer = 0;
 
   constructor(
     template: ModelTemplate,
@@ -187,6 +216,8 @@ const starMatrix = new Matrix4();
 const hiddenMatrix = new Matrix4().makeScale(0, 0, 0);
 /** Goblins that show dizzy stars at once (2 stars each). */
 const STAR_SLOTS = 40;
+/** Peppered goblins that show pepper flakes at once. */
+const SPECK_SLOTS = 30;
 
 export class Goblins {
   readonly list: Goblin[] = [];
@@ -198,11 +229,17 @@ export class Goblins {
   private baseColor = new Color(1, 1, 1);
   private camps: number[];
   private stars!: InstancedMesh;
+  /** Pepper flakes over peppered goblins (one instanced mesh, like the stars). */
+  private specks!: InstancedMesh;
+  /** For the sneeze puffs (set by the game). */
+  particles: Particles | null = null;
   private time = 0;
   private frame = 0;
 
   /** Called on each wall hit from a grunt or runner (castle damage). */
   onWallHit: (goblin: Goblin) => void = () => {};
+  /** Called now and then while a climber runs about on the rampart (a wall flash, no damage). */
+  onRampartStep: (goblin: Goblin) => void = () => {};
 
   constructor(
     private board: Object3D,
@@ -220,6 +257,15 @@ export class Goblins {
     for (let i = 0; i < STAR_SLOTS * 2; i++) this.stars.setMatrixAt(i, hiddenMatrix);
     this.stars.visible = false;
     board.add(this.stars);
+    this.specks = new InstancedMesh(
+      new IcosahedronGeometry(PEPPER.flakeSize / 2, 0),
+      new MeshBasicMaterial({ color: PEPPER.flakeColor }),
+      SPECK_SLOTS * PEPPER.flakeCount,
+    );
+    this.specks.frustumCulled = false;
+    for (let i = 0; i < SPECK_SLOTS * PEPPER.flakeCount; i++) this.specks.setMatrixAt(i, hiddenMatrix);
+    this.specks.visible = false;
+    board.add(this.specks);
   }
 
   async load(): Promise<void> {
@@ -232,6 +278,17 @@ export class Goblins {
     let count = 0;
     for (const g of this.list) if (g.mode !== 'dead') count++;
     return count;
+  }
+
+  /** How far the goblin nearest the castle is from the center (cm), Infinity when there is none. */
+  closestRadius(): number {
+    let best = Infinity;
+    for (const g of this.list) {
+      if (g.mode === 'dead') continue;
+      const p = g.root.position;
+      best = Math.min(best, Math.hypot(p.x, p.z));
+    }
+    return best;
   }
 
   /**
@@ -325,6 +382,16 @@ export class Goblins {
     goblin.foe = null;
     goblin.animDt = 0;
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
+    goblin.nextRoad = -1;
+    goblin.waitRoad = -1;
+    goblin.waiting = false;
+    goblin.bait = false;
+    goblin.patrolRoad = -1;
+    goblin.calm = false;
+    goblin.sneezing = 0;
+    goblin.dashPause = 0;
+    goblin.root.scale.setScalar(1);
+    goblin.body.rotation.x = 0;
     this.setTouch(goblin, 'idle');
     return goblin;
   }
@@ -340,6 +407,62 @@ export class Goblins {
     this.setRoad(goblin, step);
     goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
     return goblin;
+  }
+
+  /**
+   * Spawns a goblin walking along a road (graph road index, `dir` as in
+   * Step) so that it is `before` cm short of the spot `along` (cm along that
+   * road). When the road is too short, it starts on the road before it and
+   * is sent onto this one. The trigger lesson uses it to walk a group past a
+   * keg. Returns null at the unit cap.
+   */
+  spawnBefore(type: GoblinType, road: number, dir: 1 | -1, along: number, before: number, offset = 0): Goblin | null {
+    const graph = this.network.graph;
+    const roads = this.network.roads;
+    const room = dir === 1 ? along : roads[road].length - along;
+    let step: Step = { road, dir };
+    let distance = along - dir * Math.min(before, room);
+    let next = -1;
+    if (room < before) {
+      // The road that leads into this one from farther away.
+      const start = dir === 1 ? graph.roads[road].from : graph.roads[road].to;
+      let best = -1;
+      for (const r of graph.nodes[start].roads) {
+        if (r === road) continue;
+        const far = graph.nodes[graph.other(r, start)].toCastle;
+        if (best < 0 || far > graph.nodes[graph.other(best, start)].toCastle) best = r;
+      }
+      if (best >= 0) {
+        const into: 1 | -1 = graph.roads[best].to === start ? 1 : -1;
+        const left = Math.min(roads[best].length, before - room);
+        step = { road: best, dir: into };
+        distance = into === 1 ? roads[best].length - left : left;
+        next = road;
+      }
+    }
+    const goblin = this.obtain(type);
+    if (!goblin) return null;
+    goblin.mode = 'walking';
+    goblin.offset = offset;
+    this.setRoad(goblin, step);
+    goblin.distance = distance;
+    goblin.road!.pointAt(distance, offset * step.dir, goblin.root.position);
+    goblin.nextRoad = next;
+    goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
+    return goblin;
+  }
+
+  /** Lets every waiting lesson goblin walk on (the trigger was set off, or the lesson ended). */
+  releaseWaiting(): void {
+    for (const g of this.list) {
+      if (g.waitRoad < 0 && !g.bait) continue;
+      g.waitRoad = -1;
+      g.bait = false;
+      if (g.waiting) {
+        g.waiting = false;
+        if (g.mode === 'walking') g.play(g.stats.moveClip, true, g.stats.moveClipSpeed);
+      }
+    }
   }
 
   /** Debug spawning: the camp by its place in the blueprint's camp list. */
@@ -383,16 +506,25 @@ export class Goblins {
   private arrive(g: Goblin): void {
     const graph = this.network.graph;
     const node = graph.endOf(g.step);
+    // A goblin sent onto a road takes it if it is open and starts here.
+    const forced = g.nextRoad;
+    g.nextRoad = -1;
+    if (forced >= 0 && graph.roads[forced].open && graph.nodes[node].roads.includes(forced)) {
+      this.setRoad(g, { road: forced, dir: graph.roads[forced].from === node ? 1 : -1 });
+      return;
+    }
     const next = graph.isWall(node) ? null : graph.next(node, this.rng);
     if (next) this.setRoad(g, next);
     else this.headToWall(g);
   }
 
+  /** Out of the game at once. Goblins keep their poof of particles (made by the caller), no shrink. */
   kill(goblin: Goblin): void {
     if (this.aimed === goblin) this.setAimed(null);
     goblin.mode = 'dead';
     goblin.root.visible = false;
     goblin.road = null;
+    goblin.stunned = 0;
   }
 
   killAll(): void {
@@ -523,6 +655,9 @@ export class Goblins {
   pepper(goblin: Goblin): boolean {
     if (!this.isHittable(goblin) || goblin.seasoned) return false;
     goblin.seasoned = true;
+    // It sneezes now (below), and again and again after that (see sneeze()).
+    goblin.sneezeIn = this.rng.range(PEPPER.sneezeEvery[0], PEPPER.sneezeEvery[1]);
+    goblin.sneezing = PEPPER.sneezeJerkTime;
     goblin.applyColor();
     this.audio.play('sneeze', this.worldPosition(goblin, temp), 1, 0.12);
     switch (goblin.mode) {
@@ -558,10 +693,15 @@ export class Goblins {
     this.frame++;
     let star = 0;
     const far2 = TROOPS.farAnimFrom * TROOPS.farAnimFrom;
+    let speck = 0;
     for (let i = 0; i < this.list.length; i++) {
       const g = this.list[i];
       if (g.mode === 'dead') continue;
       this.step(g, dt);
+      if (g.seasoned) {
+        this.sneeze(g, dt);
+        if (speck < SPECK_SLOTS) this.placeSpecks(g, speck++);
+      }
       // Far goblins play their animation every other frame (half the cost, hard to see that far).
       g.animDt += dt;
       const p = g.root.position;
@@ -578,6 +718,50 @@ export class Goblins {
     this.stars.visible = star > 0;
     if (star > 0 || this.starsShown) this.stars.instanceMatrix.needsUpdate = true;
     this.starsShown = star > 0;
+    for (let i = speck * PEPPER.flakeCount; i < SPECK_SLOTS * PEPPER.flakeCount; i++) this.specks.setMatrixAt(i, hiddenMatrix);
+    this.specks.visible = speck > 0;
+    if (speck > 0 || this.specksShown) this.specks.instanceMatrix.needsUpdate = true;
+    this.specksShown = speck > 0;
+  }
+
+  private specksShown = false;
+
+  /**
+   * Peppered goblins sneeze now and then, like an old cartoon: the head
+   * jerks forward, a little puff of pepper flies out in front of the face,
+   * and a sneeze sound. Pepper flakes circle over the head meanwhile (placeSpecks).
+   */
+  private sneeze(g: Goblin, dt: number): void {
+    if (g.sneezing > 0) {
+      g.sneezing = Math.max(0, g.sneezing - dt);
+      const t = 1 - g.sneezing / PEPPER.sneezeJerkTime;
+      // A quick wind-up back, then a snap forward and back to upright.
+      g.body.rotation.x = Math.sin(t * Math.PI * 2) * -0.25 + Math.sin(t * Math.PI) * 0.45;
+      if (g.sneezing <= 0) g.body.rotation.x = 0;
+    }
+    g.sneezeIn -= dt;
+    if (g.sneezeIn > 0) return;
+    g.sneezeIn = this.rng.range(PEPPER.sneezeEvery[0], PEPPER.sneezeEvery[1]);
+    g.sneezing = PEPPER.sneezeJerkTime;
+    // The puff, in front of the face (board space to world).
+    const p = g.root.position;
+    temp.set(0, g.stats.height * 0.8, g.stats.height * 0.45).applyQuaternion(g.root.quaternion).add(p);
+    this.board.localToWorld(temp);
+    this.particles?.burst(temp, PEPPER.sneezeColors, 5, 0.08);
+    this.audio.play('sneeze', temp, 0.7, 0.25);
+  }
+
+  /** Pepper flakes circling over a peppered goblin's head (like the dizzy stars). */
+  private placeSpecks(g: Goblin, slot: number): void {
+    const p = g.root.position;
+    const top = p.y + g.stats.height * 1.08;
+    const n = PEPPER.flakeCount;
+    for (let k = 0; k < n; k++) {
+      const a = -this.time * PEPPER.flakeSpeed + (k * Math.PI * 2) / n + slot;
+      const bob = Math.sin(this.time * 5 + k * 2) * 0.25;
+      starMatrix.makeRotationY(a * 2).setPosition(p.x + Math.cos(a) * PEPPER.flakeOrbit, top + bob, p.z + Math.sin(a) * PEPPER.flakeOrbit);
+      this.specks.setMatrixAt(slot * n + k, starMatrix);
+    }
   }
 
   private starsShown = false;
@@ -606,7 +790,25 @@ export class Goblins {
       case 'walking': {
         const road = g.road!;
         const dir = g.step.dir;
+        // A lesson goblin stops at its spot and waits there until released.
+        if (g.waitRoad === g.step.road) {
+          const next = g.distance + g.speed * dt * dir;
+          if (dir === 1 ? next >= g.waitAt : next <= g.waitAt) {
+            g.distance = g.waitAt;
+            road.pointAt(g.distance, g.offset * dir, p);
+            if (!g.waiting) {
+              g.waiting = true;
+              g.play('idle');
+            }
+            break;
+          }
+        }
         g.distance += g.speed * dt * dir;
+        // A patrolling lesson goblin turns round at the ends of its stretch.
+        if (g.patrolRoad === g.step.road) {
+          if (dir === 1 && g.distance > g.patrolTo) g.step.dir = -1;
+          else if (dir === -1 && g.distance < g.patrolFrom) g.step.dir = 1;
+        }
         // The lane offset flips with the direction, so a goblin keeps its side of the road.
         road.pointAt(g.distance, g.offset * dir, p);
         road.directionAt(g.distance, temp);
@@ -640,8 +842,15 @@ export class Goblins {
         break;
       }
       case 'rampart': {
+        // A calm one (a lesson goblin) waits still and never jumps in until released.
+        if (g.calm) break;
         g.timer -= dt;
-        if (g.timer <= 0) this.jumpIntoCourtyard(g);
+        if (g.timer <= 0) {
+          this.jumpIntoCourtyard(g);
+          break;
+        }
+        // A tutorial climber with a long wait stands still to be picked up. The others run about.
+        if (g.rampartWait <= GOBLIN_RULES.rampartWait) this.runOnRampart(g, dt);
         break;
       }
       case 'intruder': {
@@ -710,12 +919,77 @@ export class Goblins {
   }
 
   /** The climber pops up on the rampart, in reach, facing the giant. */
+  /**
+   * Climbers on the rampart run about, causing chaos: short dashes back and
+   * forth along the wall top between the two towers, with quick stops, until
+   * they jump into the courtyard.
+   */
+  private runOnRampart(g: Goblin, dt: number): void {
+    const p = g.root.position;
+    const at = angleOf(p.x, p.z);
+    // Whatever stretch of wall it stands or runs on flashes red, like a wall hit (no damage).
+    g.markTimer -= dt;
+    if (g.markTimer <= 0) {
+      g.markTimer = GOBLIN_RULES.rampartMarkEvery;
+      this.onRampartStep(g);
+    }
+    if (g.dashPause > 0) {
+      g.dashPause -= dt;
+      if (g.dashPause <= 0) {
+        // The next dash: somewhere else along the wall top, between the same two towers.
+        const [lo, hi] = towerGap(at);
+        const a = at + degToRad(this.rng.range(-GOBLIN_RULES.rampartDashDeg, GOBLIN_RULES.rampartDashDeg));
+        g.dashTo = Math.min(hi, Math.max(lo, a));
+        g.hasTarget = true;
+        g.play('sprint', true, 1.4);
+      }
+      return;
+    }
+    if (!g.hasTarget) {
+      g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
+      return;
+    }
+    // Along the wall's own curve, never across it: always right on the rampart.
+    const step = ((g.speed * GOBLIN_RULES.rampartRunShare) / CASTLE.rampartRadius) * dt;
+    // The short way round (angles wrap at the back of the board).
+    let d = g.dashTo - at;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    const arrived = Math.abs(d) <= step;
+    const next = arrived ? at + d : at + Math.sign(d) * step;
+    p.set(polarX(CASTLE.rampartRadius, next), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, next));
+    // Facing along the wall, the way it runs.
+    const s = Math.sign(d) || 1;
+    g.face(Math.cos(next) * s, Math.sin(next) * s);
+    if (arrived) {
+      g.hasTarget = false;
+      g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
+      g.play('idle');
+      g.faceCenter();
+    }
+  }
+
+  /** Lets lesson goblins on the rampart and patrolling ones go on as usual. */
+  releaseLesson(): void {
+    for (const g of this.list) {
+      if (g.calm) {
+        g.calm = false;
+        g.rampartWait = GOBLIN_RULES.rampartWait;
+        if (g.mode === 'rampart') g.timer = GOBLIN_RULES.rampartWait;
+      }
+      g.patrolRoad = -1;
+    }
+  }
+
   private popUp(g: Goblin): void {
     const p = g.root.position;
     const a = angleOf(p.x, p.z);
     p.set(polarX(CASTLE.rampartRadius, a), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, a));
     g.mode = 'rampart';
     g.timer = g.rampartWait;
+    g.hasTarget = false;
+    // A breath after the jump up, then it starts running about.
+    g.dashPause = GOBLIN_RULES.rampartStop[1];
     g.faceCenter();
     g.play('jump', false);
   }
@@ -793,6 +1067,9 @@ export class Goblins {
       case 'wallTop':
         g.mode = 'rampart';
         g.timer = g.rampartWait;
+        // A fresh dash target on the wall, never an old one from somewhere else.
+        g.hasTarget = false;
+        g.dashPause = GOBLIN_RULES.rampartStop[1];
         g.faceCenter();
         g.play('idle');
         break;

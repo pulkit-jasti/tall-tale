@@ -66,7 +66,7 @@ Arm length varies a lot between players, and the default size felt too close in 
 - **Countdown:** as soon as a hand is stretched out (more than 33 cm from the head, level), the sign shows "Great, hold it there... 3", then 2, then 1, with a tick each second (the text pops on each number). If the arm drops for more than 0.4 s, it waits again. When it ends, a chime plays and the ticked sign says "Done! You can rest your arm now."
 - **What it measures:** the farthest the pinch point gets, as a level distance from the head (not the seat, so leaning forward does not count), smoothed so a tracking spike never counts.
 - **What it changes:** the whole board (everything in `boardLift`: board, castle, goblins, ring, tools, flags, sign, panels) scales so the rampart sits at 88% of the measured reach, a comfortable reach rather than a full stretch. Everything keeps its place relative to the wall. The scale stays within 0.85 to 1.45, and the board grows or shrinks to it smoothly, so the player sees it fit them.
-- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. Debug page: "Measure reach again" forgets it and runs the check again. A "measure again" option in the pause menu comes later.
+- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. "Measure reach" on the pause panel runs the check again right away, on the frozen battle, without starting it again. "Measure reach again" on the debug page forgets it and starts the battle with the check.
 - Numbers in `CALIBRATION` in `src/config/game.ts`, code in `src/player/reachCheck.ts`.
 
 ### Holding a tool
@@ -85,6 +85,9 @@ After the step 4 test, tools stuck to the hand at whatever angle the grab happen
 ### Threat cues
 
 Players who cannot hear, or play with the sound off, still need to know where goblins are hurting the castle. On by default (`THREAT` in config, `src/ui/threatCues.ts`):
+
+- **Red pointer arrow (step 6):** a goblin hitting the wall, climbing it or running on the rampart that has been at the edge of the view or out of it for 1.5 s gets a fast blinking red 3D arrow in front of the face pointing at it, so no goblin hides behind the player.
+- **Rampart flash:** the stretch of wall under a climber running on the rampart flashes red like a wall hit (no damage).
 
 - **Wall hit flash:** every hit makes that part of the wall top flash red and fade, with a small dust puff. The wall top is easy to see from the seat, also out of the corner of the eye.
 - An "attack compass" arc with red marks inside the ring was tried and removed after the headset test: the wall flash alone reads well enough.
@@ -145,7 +148,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 ### Placement and fallbacks
 
 - **Auto placement:** when the player presses Play, the board is placed at a fixed distance below the head, facing where the player is looking.
-- **Reset table:** a button in the pause menu runs auto placement again, for when the board ends up somewhere odd.
+- **Reset table:** a button in the pause menu runs auto placement again (at the starting height), for when the board ends up somewhere odd.
 - **Quest recenter:** if the player recenters with the Meta button, the game catches it and places the board again. A web game cannot trigger the system recenter itself, which is why "Reset table" exists.
 
 ---
@@ -198,8 +201,17 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 - **Wrist button on the left wrist** (right wrist once handedness exists). It fades in only when the left palm faces the player's face for about 0.3 seconds, and fades out when the hand turns away.
 - **Poke it with the right index finger** to pause. The button presses in, with a click sound.
 - **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Reset table", "Restart battle".
-- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". Build step 1 already has a simple version: the game freezes and all sound stops while the session or the page is not fully visible, and resumes by itself. The FPS panel shows "paused" while it is.
+- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". The FPS panel shows "paused" while it is.
 - Settings come later (not in the MVP).
+
+**Built in step 6** (`src/ui/pauseMenu.ts`, numbers in `PAUSE`):
+- The wrist button is the shared poke button with a pause icon, in the middle of the left palm, standing upright and facing the eyes (so the pause bars always read upright, whatever way the fingers point). It pops in once the left palm faces the eyes (within about 53 degrees) for 0.3 s, while the palm is within 60 cm of the eyes and the left hand holds nothing. It hides only once the palm clearly turned away (past about 75 degrees) for 0.6 s, never while the right index finger is near it. It does not follow every tracking wobble: it stands still in the world where the palm was when it came out, and only glides after the palm (filtered with a One Euro filter) once the palm moved 4.5 cm away, 6 cm while the right index finger is within 12 cm. It is drawn on top, 3 cm out from the palm, so the hand's own mesh never cuts into it. Only the right index finger pokes it, once it is fully out.
+- **Taught first:** the tutorial's first lesson (after the reach check) shows it with a ghost left hand turning its palm toward the eyes, then asks the player to poke it and Resume.
+- Pausing lets go of everything the hands hold (goblins drop, tools go back), freezes the battle and all sound, and hides the hint sign, marker and ghost hand.
+- The pause panel opens in front of the head, not on the board, at the same spot from the eyes as the end panel and sized with the board, so its buttons are always in the best reach band (about 47 to 49 cm from the eyes), even when the board ended up somewhere odd. It always draws on top of everything (no depth test), so the castle or the sign never hide it. It **follows the head lazily**, like the Quest's own menus: it stays still while the head turns a little, and swings back in front once the head turned more than 25 degrees (or moved 12 cm), so it is never behind the player. Four poke buttons: **Resume**, **Reset table** (auto placement again at the starting height, then play goes on), **Measure reach** (the reach check right away on the frozen battle, the board resizes, then play goes on, no restart) and **Restart** (the battle again). Its buttons ignore pokes for 1 s after it opens.
+- Sound stops only for the Quest menu, so the pause panel's clicks are heard.
+- Auto-pause in VR during a battle shows the same panel when the player comes back. Outside a battle (welcome or end panel) and in the browser it still resumes by itself.
+- Debug: Space pauses or resumes, and the debug page's "Pause panel button 1 to 4" pokes a panel button.
 
 ---
 

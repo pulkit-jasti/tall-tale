@@ -25,11 +25,11 @@
 // the burned village, forests and lumber camps; the terrain flattens them),
 // then the hilltop and hillside places on the finished terrain. Built from kit pieces (houses from wall tiles and roofs)
 // into one StaticBatch: a few draw calls for all of it.
-import { Group, Matrix4, Quaternion, Vector3 } from 'three';
+import { Group, Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import { BOARD, ROADS, SETTLEMENTS, type LandmarkKind } from '../config/game.js';
 import { groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
-import { loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
+import { cloneStatic, loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
 import type { Road } from './roads.js';
 import { campDistance, type CampSpot, type RoadField, type Terrain } from './terrain.js';
 
@@ -100,7 +100,7 @@ function roadGap(roads: RoadField, x: number, z: number, size: number): number {
  * Step 1, before the terrain: villages beside the roads, their fields, and
  * the forests. The villages and fields go back to the terrain as flat spots.
  */
-export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random): SettlementPlan {
+export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random, keepClear: Spot[] = []): SettlementPlan {
   const { villages: V, farms: F, forests: W } = SETTLEMENTS;
   const villages: Spot[] = [];
   for (let tries = 0; villages.length < V.count && tries < 4000; tries++) {
@@ -108,7 +108,7 @@ export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random
     const size = rng.range(...V.radius);
     const gap = roadGap(roads, x, z, size);
     if (gap < V.roadGap[0] || gap > V.roadGap[1]) continue;
-    if (campDistance(camps, x, z) < V.campGap) continue;
+    if (campDistance(camps, x, z) < V.campGap || gapTo(keepClear, x, z) < size) continue;
     if (villages.some((v) => distance(v, x, z) < V.spacing)) continue;
     villages.push({ x, z, size });
   }
@@ -127,7 +127,7 @@ export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random
       const z = village.z - Math.cos(a) * d;
       if (Math.hypot(x, z) - size < 90 || Math.hypot(x, z) + size > BOARD.outerRadius - 40) continue;
       if (roadGap(roads, x, z, size) < 2) continue;
-      if (campDistance(camps, x, z) < 40) continue;
+      if (campDistance(camps, x, z) < 40 || gapTo(keepClear, x, z) < size) continue;
       if (gapTo(villages, x, z) < size * 0.6 || fields.some((f) => distance(f, x, z) < f.size + size + 2)) continue;
       // Its local x along the village's edge, so the long side faces the village.
       fields.push({ x, z, size, length, width, yaw: Math.atan2(Math.cos(a), Math.sin(a)) + Math.PI / 2, crop: rng.pick(CROPS), village });
@@ -191,9 +191,10 @@ export function flatSpots(plan: SettlementPlan): CampSpot[] {
 }
 
 /** Step 2, on the finished terrain: watch towers on hilltops by the roads, the windmill, the wrecks by the camps. */
-export function placeLandmarks(plan: SettlementPlan, terrain: Terrain, camps: CampSpot[], rng: Random): void {
+export function placeLandmarks(plan: SettlementPlan, terrain: Terrain, camps: CampSpot[], rng: Random, keepClear: Spot[] = []): void {
   const { towers: T, windmill: M, ruins: R } = SETTLEMENTS;
-  const homes: Spot[] = [...plan.villages, ...plan.fields];
+  // The triggers on the roads count as homes here: towers, the windmill and wrecks keep clear of them.
+  const homes: Spot[] = [...plan.villages, ...plan.fields, ...keepClear];
   // Towers: the highest spots right beside a road.
   const candidates: { x: number; z: number; height: number }[] = [];
   for (let i = 0; i < 900; i++) {
@@ -441,10 +442,30 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     add(towerMid, base.clone().multiply(local(1.01, 0)));
     add(towerTop, base.clone().multiply(local(2.02, 0)));
   }
-  // The windmill, its sails toward the giant.
+  // The windmill: a tall mill house (the kit's windmill model is only the
+  // sails, centered on their axle), its door and sails toward the giant. The
+  // sails are their own object, so they can turn (see Windmill below).
+  let sails: Object3D | null = null;
   if (plan.windmill) {
     const { x, z } = plan.windmill;
-    add(windmill, place(x, lowestGround(x, z, 4) - 0.3, z, facing(x, z, 0, 0), SETTLEMENTS.windmill.height / 3.11));
+    const M = SETTLEMENTS.windmill;
+    const tile = M.height / (M.floors + 0.5);
+    const base = place(x, lowestGround(x, z, tile) - 0.15, z, facing(x, z, 0, 0), tile);
+    for (let floor = 0; floor < M.floors; floor++) {
+      for (let side = 0; side < 4; side++) {
+        const piece = floor === 0 && side === 0 ? wallDoor : side % 2 === 0 ? wallWindow : wall;
+        add(piece, base.clone().multiply(local(floor, side)));
+      }
+    }
+    add(roofPoint, base.clone().multiply(local(M.floors, 0)));
+    // The sails on the front wall, near the top, their axle (the model's x) straight out of the wall.
+    const pivot = new Group();
+    base.clone().multiply(new Matrix4().makeTranslation(0.5 + M.axleOut, M.floors - 0.35, 0)).decompose(pivot.position, pivot.quaternion, pivot.scale);
+    const blades = cloneStatic(windmill);
+    blades.scale.setScalar((M.sailRadius * 2) / 3.11);
+    pivot.add(blades);
+    pivot.userData.blades = blades;
+    sails = pivot;
   }
   // Wrecked siege machines by the camps.
   for (const ruin of plan.ruins) {
@@ -454,7 +475,20 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
   await buildFarPlaces(plan, add, { walls: [wall, wallWindow, wood, woodWindow, wallDoor, woodDoor], roof: roofGable, cart, barrel, box, boxLarge }, rng);
   const group = batch.build();
   group.name = 'settlements';
+  if (sails) {
+    group.add(sails);
+    group.userData.sails = sails.userData.blades;
+  }
   return group;
+}
+
+/** Turns the windmill's sails slowly (decor only). */
+export class Windmill {
+  constructor(private blades: Object3D | null) {}
+
+  update(dt: number): void {
+    if (this.blades) this.blades.rotation.x += dt * SETTLEMENTS.windmill.spin;
+  }
 }
 
 type Add = (template: ModelTemplate, matrix: Matrix4) => void;

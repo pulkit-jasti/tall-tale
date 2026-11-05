@@ -396,6 +396,7 @@ export class Troops {
     if (t.foe && t.foe.foe === t) t.foe.foe = null;
     t.foe = null;
     t.mode = 'dead';
+    // Soldiers, like goblins, keep their poof (no shrink).
     t.root.visible = false;
   }
 }

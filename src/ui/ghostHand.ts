@@ -244,6 +244,8 @@ export interface ViewFrame {
   up: Vector3;
   /** Level direction of the slingshot's shot, for demos with frame 'shot'. */
   shot: Vector3;
+  /** Level direction from the pouch toward the lesson's target, for demos with frame 'aim'. */
+  aim: Vector3;
 }
 
 const right = new Vector3();
@@ -361,6 +363,7 @@ export class GhostHand {
     if (!anchors(key.at, anchorPoint, key.arcDeg)) return false;
     // The key's frame: forward is level, from the head toward the anchor (or along the shot).
     if (demo.frame === 'shot') forward.copy(view.shot);
+    else if (demo.frame === 'aim') forward.copy(view.aim);
     else forward.copy(anchorPoint).sub(view.head);
     forward.y = 0;
     if (forward.lengthSq() < 1e-8) forward.set(0, 0, -1);
