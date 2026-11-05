@@ -66,7 +66,7 @@ export class FlySwatter extends HandTool {
     }
     // The head touching the ground (courtyard, wall top or field) on the way down is a swat.
     let groundSwat = false;
-    const ground = landingHeight(Math.hypot(current.x, current.z));
+    const ground = landingHeight(current.x, current.z);
     if (ground !== null) {
       const above = current.y - ground;
       if (this.armed && above < SWATTER.groundContact && current.y < this.last.y && speed > SWATTER.minHitSpeed) {

@@ -8,7 +8,7 @@ Status: first pass decided. Sample level mockup: `maps/castle-3d.html` (random l
 - These are the default sizes. The reach check at the start scales the whole board to the player's arms (0.85 to 1.45 times), see [controls-and-ui.md](controls-and-ui.md#reach-check-show-me-how-big-you-are-giant).
 - Castle wall from 46 to 52 cm, **about 6 cm high** (the mockup still shows 40 to 46 cm and 10 cm high). Moved out after the step 4 review, as far as the reach band allows: climbers on the rampart (49 cm) stay in reach ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)).
 - The courtyard (40 to 44 cm for intruders) is empty for now. Houses, stalls and workers come back once the main gameplay is done.
-- Soldiers about 2.5 cm tall, goblins about 3.5 cm tall.
+- Soldiers about 2.5 cm tall, goblins about 3.9 cm tall (raised from 3.5 after a headset test).
 
 ### No hidden strip outside the wall
 
@@ -33,6 +33,9 @@ Back to [GDD index](GDD.md). Related: [Enemies](enemies.md), [Giant tools](giant
 
 - The whole world is a raised round board at about hand height, like a big round table with a hole in the middle for the player.
 - Flat around the castle, then rising gently toward the horizon so far enemies face the player.
+- Hilly low-poly ground on top of that slope: rolling hills and dips from just past the wall (62 cm out), about 13 cm near the castle up to about 32 cm far out, flat only around the castle and right at the camps. The roads ride over the hills (softened to three quarters of their height on the road), so goblins can disappear behind a hill and pop up again: a surprise, on purpose (`TERRAIN` in config, `src/world/terrain.ts`).
+- Where people live, placed with a reason (`SETTLEMENTS` in config, `src/world/settlements.ts`): villages of 3 to 5 houses around a little square, beside a road between the castle and the camps, on ground the terrain flattens for them; farm fields next to each village; watch towers on the hilltops beside the roads; one windmill on a hill by a field; wrecked siege machines near the enemy camps, left from old battles; forests out in the wild ring past the camps, where the tree groves grow. Out past the camps, in goblin lands: a goblin hamlet behind each camp, one kingdom village the goblins burned (roofless, ash on the ground), lumber camps at the forest edges, a stone quarry on a far hillside, and five tall landmarks on the highest far hills, spread around the circle (a tall watchtower, a hexagon mage tower, a gatehouse, a ruined tower, a small keep).
+- Dense decor from the Nature Kit: groves of trees, rock piles, bushes, flower patches, mushrooms, stumps and logs, off the roads and camps (`DECOR` in config).
 - The castle sits in the middle with a low wall (about 6 cm) at about 46 to 52 cm from the player, within reach.
 - Zones: near (up to about 60 cm, in reach), middle (60 to 150 cm), far (beyond 150 cm).
 - The board is always a full 360 degree circle. The player rotates it and sets its height with the ring handle (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).

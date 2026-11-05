@@ -547,7 +547,7 @@ export class Triggers {
       p.addScaledVector(d.velocity, dt);
       d.object.rotation.x += d.spin * dt;
       d.object.rotation.z += d.spin * 0.7 * dt;
-      const ground = landingHeight(Math.hypot(p.x, p.z)) ?? boardHeight(Math.hypot(p.x, p.z));
+      const ground = landingHeight(p.x, p.z) ?? boardHeight(Math.hypot(p.x, p.z));
       if (p.y < ground) {
         p.y = ground;
         // One bounce, then it slides to a stop.

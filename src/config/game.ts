@@ -23,51 +23,237 @@ export const BOARD = {
 };
 
 /**
- * The grass on the board (src/world/grass.ts): soft light and dark meadow
- * patches, a little darker next to the wall, worn and yellower along the
- * roads and dirty around the camps, with a faint fine grain up close. On it,
- * thousands of tiny low-poly grass tufts and some flowers (one instanced mesh
- * each), much smaller than the 3.5 cm goblins, so they never hide them.
+ * The uneven low-poly ground (src/world/terrain.ts): rolling hills and dips
+ * on top of the board's slope, flat faceted triangles lit by the sun. Flat
+ * around the castle (reach band, wall) and at the camps. Small near the
+ * castle, big far out. The roads ride over the hills (a little softened), so
+ * goblins can disappear behind a hill and pop up again: a surprise, on purpose.
+ */
+export const TERRAIN = {
+  /** Flat up to here (cm from the center, just past the goblins attacking the wall at 57), then the hills grow in until rampTo. */
+  flatUntil: 62,
+  rampTo: 105,
+  /**
+   * Hill height near (at rampTo) and at the far edge (cm). Raised from 2.5
+   * and 10, then 7 and 22, after headset tests: the battlefield still looked
+   * flat.
+   */
+  nearHeight: 13,
+  farHeight: 32,
+  /** The hills fade out again toward the board's edge, so it meets the skirt and the hills ring (cm from the center). */
+  edgeFadeFrom: 545,
+  edgeFadeTo: 592,
+  /** Hill sizes (cm across): big rolling ones and smaller ones on top, and how much the small ones count (share). */
+  sizes: [130, 42] as [number, number],
+  smallShare: 0.42,
+  /** How deep the dips go, as a share of the hill height (the rest rises). */
+  dipShare: 0.65,
+  /** On the roads the hills keep this share of their height (softer slopes to walk), back to full at roadFade past the road's edge (cm). */
+  roadKeep: 0.75,
+  roadFlat: 4,
+  roadFade: 20,
+  /** Flat only right at each camp: past the camp's size, flat until campFlat, full hills at campFade (cm). */
+  campFlat: 2,
+  campFade: 14,
+  /** The ground mesh: rings this far apart near and far (cm), and points around each ring. Points are nudged, so no rings show. */
+  ringStepNear: 4,
+  ringStepMid: 9,
+  ringStepFar: 14,
+  segments: 160,
+  /** How much each point is nudged (share of the gap to its neighbour). */
+  jitter: 0.35,
+};
+
+/**
+ * The grass colors on the uneven ground (src/world/grass.ts): lighter on the
+ * tops of the bumps, darker in the dips (the sun's light on each facet does
+ * the rest), a little darker next to the wall, worn and yellower along the
+ * roads and dirty around the camps.
  */
 export const GRASS = {
-  /** Meadow patches: dark and light grass, and how big the patches are (cm, a large and a small size). */
-  darkColor: 0x7aad48,
-  lightColor: 0xa6cf6c,
-  patchSizes: [190, 55] as [number, number],
+  /** Grass in the dips (blue-green) and on the tops (yellow-green). A wider range than before (0x7aad48 to 0xa3cc68), so the hills read. */
+  // All the nature and sky colors were made more saturated (same lightness) twice after headset tests: they looked faded.
+  // The board grass was then toned halfway back: the second step was too much for it.
+  darkColor: 0x3da435,
+  lightColor: 0xc1f04d,
+  /** Each triangle is nudged this much in brightness (share) and hue (share of the color wheel). */
+  vary: 0.08,
+  hueVary: 0.012,
+  /** Steep slopes turn earthier: this color, up to this share, from steepness slopeFrom to slopeTo (0 = flat, 1 = a wall). */
+  slopeColor: 0x9c9a3c,
+  slopeShare: 0.4,
+  slopeFrom: 0.04,
+  slopeTo: 0.25,
+  /** Ash on the ground of the burned village: its color, and how far past the village's size it fades (cm). */
+  ashColor: 0x5b5048,
+  ashWidth: 10,
   /** Worn grass along the roads: its color, and how far out from the road's edge it fades (cm). */
-  wornColor: 0xb6b46a,
+  wornColor: 0xc9c559,
   wornWidth: 6,
   /** Dirt around the camps: its color, and how far past the camp's size it fades (cm). */
-  dirtColor: 0xa89a62,
+  dirtColor: 0xb8a351,
   dirtWidth: 16,
   /** The grass right outside the wall is darker, like a soft shadow (share, and how far out it fades, cm). */
   wallShade: 0.16,
   wallShadeTo: 78,
-  /** Fine grain up close: how strong (share), its size (cm), and where it fades out (cm from the center). */
-  grain: 0.1,
-  grainSize: 1.6,
-  grainFadeFrom: 120,
-  grainFadeTo: 380,
+};
+
+/**
+ * Where people live on the board (src/world/settlements.ts), placed with a
+ * reason, not at random: villages in the calmer ring between the castle and
+ * the camps, beside a road (people live by the roads) but never on one, on
+ * ground the terrain flattens for them, each with its farm fields; watch
+ * towers on the hilltops beside the roads, watching them; one windmill on a
+ * hill by a farm; wrecked siege machines near the enemy camps, left from old
+ * battles; and forests out in the hilly far ring, away from the villages,
+ * where the decor's tree groves grow. All merged into a few meshes.
+ */
+export const SETTLEMENTS = {
+  villages: {
+    count: 4,
+    /** Distance from the center (cm, between the castle and the camps at 227 to 277), radius of each village (cm), and houses in each. */
+    from: 105,
+    to: 240,
+    radius: [16, 21] as [number, number],
+    houses: [3, 5] as [number, number],
+    /** Gap from the village's edge to the nearest road (cm): close by a road, never on it. */
+    roadGap: [4, 30] as [number, number],
+    /** Keep this far from the enemy camps and from each other (cm). */
+    campGap: 70,
+    spacing: 115,
+  },
+  houses: {
+    /** One wall tile (cm): a house is 1 tile across, a bit taller than a soldier (2.5 cm). */
+    size: 4.5,
+    twoStoryShare: 0.3,
+    chimneyShare: 0.5,
+    woodShare: 0.5,
+  },
+  farms: {
+    /** Fields per village, and each field's size (cm, long side and short side). */
+    perVillage: [1, 2] as [number, number],
+    length: [12, 16] as [number, number],
+    width: [9, 12] as [number, number],
+    /** Gap between the village and its field (cm), rows and crops apart (cm), fence piece length (cm). */
+    gap: 3,
+    rowGap: 2.2,
+    cropGap: 2,
+    fence: 3,
+  },
+  towers: {
+    count: 4,
+    /** Along the roads, which run from the wall to the camps (cm from the center). */
+    from: 110,
+    to: 300,
+    /** Right beside a road: the gap from the road's edge (cm). */
+    roadGap: [6, 26] as [number, number],
+    spacing: 110,
+    /** One tower piece (cm across and tall). */
+    size: 3.4,
+  },
+  /** The one windmill: its height (cm), on the highest spot this close to a field (cm). */
+  windmill: { height: 15, near: 70 },
+  ruins: {
+    count: 4,
+    /** This far past an enemy camp's edge (cm), and how wide (cm). */
+    campGap: [14, 45] as [number, number],
+    width: [5, 7] as [number, number],
+  },
+  forests: {
+    count: 7,
+    from: 260,
+    to: 545,
+    radius: [55, 90] as [number, number],
+    /** Keep this far from villages, fields and the far settlements (cm). */
+    clear: 50,
+  },
+  /** Out past the camps, in goblin lands: */
+  /** A goblin hamlet behind each camp (the gap past the camp's edge, cm), with a cabin, tents, a cage and branch fences. */
+  goblinHamlets: { gap: [30, 55] as [number, number], radius: [12, 15] as [number, number], cabinHeight: 6, tentHeight: 4 },
+  /** One kingdom village the goblins burned: roofless houses with missing walls, wrecked carts, ash on the ground. */
+  burnedVillage: { from: 290, to: 430, radius: 18, houses: 4, campGap: 70 },
+  /** Lumber camps at the edge of a forest, on its castle side: log stacks, logs, stumps, planks and a tent. */
+  lumberCamps: { count: 2, radius: 8 },
+  /** One stone quarry on a far hillside: big cut stones and rock piles. */
+  quarry: { from: 300, to: 520, radius: 12 },
   /**
-   * Grass tufts (3 thin blades each), from near to far: how many in each
-   * ring (cm from the center) and how tall (cm). A little bigger far away,
-   * so they still read. They grow in clumps (the meadow patches) and keep
-   * off the roads and camps.
+   * Tall landmarks on the highest far hills, spread around the circle, so the
+   * horizon has things to spot. One of each kind, in this order: a tall
+   * watchtower, a hexagon mage tower, a gatehouse on the old border, a
+   * ruined tower and a small keep. About 30 cm tall at most.
    */
-  tuftRings: [
-    { from: 56, to: 200, count: 2600, height: [0.6, 1.1] },
-    { from: 200, to: 380, count: 1800, height: [0.8, 1.4] },
-    { from: 380, to: 590, count: 1400, height: [1, 1.7] },
-  ] as { from: number; to: number; count: number; height: [number, number] }[],
-  /** Tufts keep this far from a road's edge (cm). */
-  roadClear: 1.2,
-  /** Tip of a blade is this much brighter than its base. */
-  tipShade: 1.3,
-  baseShade: 0.72,
-  /** Small flowers on top of some tufts: how many, their size (cm across) and colors. */
-  flowerCount: 420,
-  flowerSize: 0.55,
-  flowerColors: [0xfff6e0, 0xffd84a, 0xff9ab8, 0xb59bff],
+  landmarks: {
+    from: 300,
+    to: 535,
+    spacing: 190,
+    kinds: ['tallTower', 'mageTower', 'gatehouse', 'ruinedTower', 'keep'] as LandmarkKind[],
+    /** Tower piece size (cm across and per floor). */
+    size: 3.6,
+  },
+};
+
+export type LandmarkKind = 'tallTower' | 'mageTower' | 'gatehouse' | 'ruinedTower' | 'keep';
+
+/** One kind of decor: its models (in public/gltf/, without .glb), sizes, how many, and how far it keeps from roads (cm). */
+export interface DecorKind {
+  files: string[];
+  height: [number, number];
+  count: number;
+  clear: number;
+  /** Some grow in groups: how many groups, how wide each is (cm), and the share of the count that grows in them. */
+  groups?: { count: number; radius: number; share: number };
+  /** The groups grow inside the forests (SETTLEMENTS.forests). */
+  inForests?: boolean;
+}
+
+/**
+ * Decor on the board (trees, rocks, bushes, flowers, stumps), from the
+ * Kenney Nature Kit (docs/assets.md). Static, so all of it is merged into
+ * one mesh per material: about a dozen draw calls however many there are.
+ * The kit's mint greens are tinted to match the grass.
+ */
+export const DECOR = {
+  /** Spread between these distances from the center (cm). */
+  from: 72,
+  to: 565,
+  /** Material name to color, for the kit's greens. */
+  tints: { grass: 0x5e9e3c, leafsGreen: 0x4f9437, leafsDark: 0x3a7432 } as Record<string, number>,
+  kinds: [
+    {
+      files: ['tree_default', 'tree_oak', 'tree_cone', 'tree_fat', 'tree_pineRoundA', 'tree_pineTallA', 'tree_simple', 'tree_small', 'tree_tall', 'tree_pineSmallA'].map((f) => `trees/nature/${f}`),
+      height: [6, 14],
+      count: 260,
+      clear: 4,
+      groups: { count: 26, radius: 32, share: 0.7 },
+      inForests: true,
+    },
+    {
+      files: ['rock_largeA', 'rock_largeB', 'rock_largeC', 'rock_largeD', 'rock_smallA', 'rock_smallB', 'rock_smallC', 'rock_smallD', 'rock_tallA', 'rock_tallB', 'rock_tallC'].map((f) => `rocks/nature/${f}`),
+      height: [1.5, 7],
+      count: 140,
+      clear: 3,
+      groups: { count: 18, radius: 14, share: 0.5 },
+    },
+    {
+      files: ['plant_bush', 'plant_bushLarge', 'plant_bushSmall', 'plant_bushDetailed'].map((f) => `plants/nature/${f}`),
+      height: [1.5, 4],
+      count: 240,
+      clear: 2,
+    },
+    {
+      files: ['flower_yellowA', 'flower_redA', 'flower_purpleA'].map((f) => `plants/nature/${f}`),
+      height: [1.2, 2.4],
+      count: 260,
+      clear: 1.5,
+      groups: { count: 40, radius: 10, share: 0.8 },
+    },
+    {
+      files: ['mushroom_redGroup', 'mushroom_tanGroup', 'stump_round', 'stump_old', 'log', 'log_stack'].map((f) => `plants/nature/${f}`),
+      height: [1, 3],
+      count: 90,
+      clear: 2,
+    },
+  ] as DecorKind[],
 };
 
 /**
@@ -103,8 +289,8 @@ export const CASTLE = {
 
 export const ROADS = {
   width: 6,
-  /** Height of the road ribbon above the board (cm). */
-  lift: 0.15,
+  /** Height of the road ribbon above the ground (cm). Raised from 0.15 for the hills, so no hill facet pokes through it. Units on the road stand on it. */
+  lift: 0.8,
   color: 0xd9c08a,
   /** Max sideways offset of a goblin from the road center (cm). */
   laneJitter: 1.8,
@@ -280,9 +466,10 @@ export interface GoblinStats {
 }
 
 export const GOBLINS: Record<GoblinType, GoblinStats> = {
-  grunt: { height: 3.5, speed: 6, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.3 },
-  runner: { height: 3, speed: 13, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.4 },
-  climber: { height: 3.5, speed: 5.5, tint: [0.85, 0.6, 1.15], moveClip: 'walk', moveClipSpeed: 1.2 },
+  // Heights raised about 11% (from 3.5, 3 and 3.5) after a headset test, so they read better on the hills.
+  grunt: { height: 3.9, speed: 6, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.3 },
+  runner: { height: 3.35, speed: 13, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.4 },
+  climber: { height: 3.9, speed: 5.5, tint: [0.85, 0.6, 1.15], moveClip: 'walk', moveClipSpeed: 1.2 },
 };
 
 export const GOBLIN_RULES = {
@@ -1182,12 +1369,19 @@ export const SKY = {
   sunElevationDeg: 13,
   sunDistance: 150,
   /** The sunlight comes from the sun's side, but higher, so the board's tops stay bright (degrees above the horizon). */
-  lightElevationDeg: 45,
+  lightElevationDeg: 40,
+  /**
+   * Sunlight strength. Raised from 1.6 while the soft sky fill (the scene
+   * file's IBLGradient intensity) went from 1 to 0.6, so slopes facing the sun
+   * are clearly lit and the ones facing away clearly shaded, live as the
+   * board spins.
+   */
+  lightIntensity: 2.2,
   /** The sky dome (meters, inside the camera's 200 m far plane) and its colors: top, horizon (the fog color too), below the horizon. */
   domeRadius: 175,
-  domeTopColor: 0x5fa6e6,
-  domeHorizonColor: 0xc9dce6,
-  domeBottomColor: 0xb4c8cf,
+  domeTopColor: 0x46a8ff,
+  domeHorizonColor: 0xb1e5fe,
+  domeBottomColor: 0xa2d1e1,
   /**
    * The sunrise glow on the dome: a wide orange haze and a tight yellow one
    * around the sun, strongest low on the horizon. Spread is how wide each one
@@ -1245,12 +1439,21 @@ export const SKY = {
   highCloudMaxDistance: 950,
   highCloudHeight: [120, 260] as [number, number],
   highCloudSize: [28, 60] as [number, number],
+  /**
+   * A canopy of bigger clouds that always stays over the giant (they wrap
+   * inside this square, cm from the center), so looking up is never an
+   * empty sky. Well above the eyes and the hands.
+   */
+  canopyCount: 16,
+  canopyMaxDistance: 320,
+  canopyHeight: [150, 300] as [number, number],
+  canopySize: [60, 120] as [number, number],
   /** Wind: direction (degrees, 0 = front) and speed (board cm per second). Slow, so it reads as calm. */
   windDeg: 70,
   windSpeed: 5,
   /** Top of each puff, and its underside: a light sky blue, so the faces read without looking stormy. */
   cloudColor: 0xffffff,
-  cloudShade: 0xd6e6f5,
+  cloudShade: 0xcde6fe,
   /** The clouds are sorted far to near this often (seconds), so nearer ones paint over farther ones. */
   sortEvery: 0.5,
 };
@@ -1283,14 +1486,14 @@ export const HILLS = {
   groundFrom: 590,
   groundTo: 2900,
   groundRise: 70,
-  groundNearColor: 0x8fbf5a,
-  groundFarColor: 0x5f8f3e,
+  groundNearColor: 0x91e831,
+  groundFarColor: 0x58b31a,
   layers: [
     // About twice as many as before, a little wider, and the rings overlap, so there are no flat gaps between them.
-    { count: 85, from: 620, to: 960, width: [60, 140], height: [12, 30], colors: [0xb5dc7a, 0xa8d46c, 0xbfe387], peaked: false },
-    { count: 85, from: 900, to: 1420, width: [110, 230], height: [30, 65], colors: [0x86bb52, 0x7cb24a, 0x8fc25a], peaked: false },
-    { count: 85, from: 1350, to: 1920, width: [180, 340], height: [55, 110], colors: [0x5a8f3a, 0x4f8534, 0x629a40], peaked: true },
-    { count: 90, from: 1850, to: 2650, width: [240, 440], height: [100, 200], colors: [0x8a623e, 0x7a5636, 0x96704a], peaked: true },
+    { count: 85, from: 620, to: 960, width: [60, 140], height: [12, 30], colors: [0xbdff57, 0xaefb45, 0xc6ff6a], peaked: false },
+    { count: 85, from: 900, to: 1420, width: [110, 230], height: [30, 65], colors: [0x86e627, 0x7add1f, 0x8fed2f], peaked: false },
+    { count: 85, from: 1350, to: 1920, width: [180, 340], height: [55, 110], colors: [0x50b514, 0x43a910, 0x58c218], peaked: true },
+    { count: 90, from: 1850, to: 2650, width: [240, 440], height: [100, 200], colors: [0xa9601f, 0x96541a, 0xb5702b], peaked: true },
   ] as HillLayer[],
 };
 

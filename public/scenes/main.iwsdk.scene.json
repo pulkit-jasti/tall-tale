@@ -6,7 +6,7 @@
       "sky": [0.75, 0.82, 0.9, 1],
       "equator": [0.72, 0.76, 0.78, 1],
       "ground": [0.55, 0.55, 0.48, 1],
-      "intensity": 1
+      "intensity": 0.6
     }
   },
   "resources": {},

@@ -981,7 +981,7 @@ export class Slingshot {
           out.ground = hit.root.position.y;
         } else {
           hit.center(out.point);
-          out.ground = landingHeight(Math.hypot(out.point.x, out.point.z)) ?? out.point.y - hit.radius;
+          out.ground = landingHeight(out.point.x, out.point.z) ?? out.point.y - hit.radius;
         }
         return;
       }
@@ -1125,7 +1125,7 @@ export class Slingshot {
   private landed(p: Vector3): boolean {
     const r = Math.hypot(p.x, p.z);
     if (r > BOARD.outerRadius) return true;
-    const ground = landingHeight(r);
+    const ground = landingHeight(p.x, p.z);
     if (ground === null) return false;
     if (p.y <= ground) {
       p.y = ground;

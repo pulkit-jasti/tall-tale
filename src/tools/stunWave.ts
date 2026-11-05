@@ -27,8 +27,10 @@ export class StunWave {
     private audio: GameAudio,
     private particles: Particles,
   ) {
-    this.material = new MeshBasicMaterial({ color: STUN.ringColor, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    // Drawn over everything, so the hills never hide the flat ring as it sweeps out.
+    this.material = new MeshBasicMaterial({ color: STUN.ringColor, transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false });
     this.ring = new Mesh(new RingGeometry(0.92, 1, 48, 1), this.material);
+    this.ring.renderOrder = 30;
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.visible = false;
     stage.boardSpin.add(this.ring);

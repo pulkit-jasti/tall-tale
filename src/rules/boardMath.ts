@@ -5,9 +5,22 @@ const DEG = Math.PI / 180;
 
 export const degToRad = (deg: number): number => deg * DEG;
 
-/** Board surface height at a distance from the center (cm). */
+/** The board's smooth slope at a distance from the center (cm), without the bumps. Roads and camps sit on it. */
 export function boardHeight(r: number): number {
   return Math.max(0, r - BOARD.flatTo) * BOARD.rise;
+}
+
+/** Bump height on top of the slope at a board point (cm). Smooth until the terrain sets it. */
+let bumps: (x: number, z: number) => number = () => 0;
+
+/** Sets the board's bumps (src/world/terrain.ts, when the board is built). Tests keep the board smooth. */
+export function setBumps(fn: (x: number, z: number) => number): void {
+  bumps = fn;
+}
+
+/** Ground height at a board point (cm): the slope plus the bumps. Anything standing or landing in the field uses this. */
+export function groundAt(x: number, z: number): number {
+  return boardHeight(Math.hypot(x, z)) + bumps(x, z);
 }
 
 /**
@@ -37,15 +50,15 @@ export function zoneAt(r: number): Zone {
   return 'off';
 }
 
-/** Ground height where a dropped thing lands (cm), or null if it falls off. */
-export function landingHeight(r: number): number | null {
-  switch (zoneAt(r)) {
+/** Ground height where a dropped thing lands at a board point (cm), or null if it falls off. */
+export function landingHeight(x: number, z: number): number | null {
+  switch (zoneAt(Math.hypot(x, z))) {
     case 'courtyard':
       return 0;
     case 'wallTop':
       return CASTLE.wallHeight;
     case 'field':
-      return boardHeight(r);
+      return groundAt(x, z);
     default:
       return null;
   }

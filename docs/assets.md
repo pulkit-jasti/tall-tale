@@ -24,9 +24,9 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Troop (main) | `characters/mini-arena/character-soldier.glb` | 2.5 cm tall | Own colors |
 | Troop (variety) | `characters/mini-forest/character-archer.glb` | 2.5 cm tall | Own colors |
 | Worker in the courtyard | `characters/mini-dungeon/character-human.glb` | 2.5 cm tall | Own colors |
-| Grunt | `characters/mini-dungeon/character-orc.glb` | 3.5 cm tall | Green (own colors) |
-| Runner | `characters/mini-dungeon/character-orc.glb` | 3 cm tall | Yellow accent |
-| Climber | `characters/mini-dungeon/character-orc.glb` | 3.5 cm tall | Purple accent |
+| Grunt | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Green (own colors) |
+| Runner | `characters/mini-dungeon/character-orc.glb` | 3.35 cm tall | Yellow accent |
+| Climber | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Purple accent |
 
 - Goblin types share one model and differ by size, tint and speed (each type has its own color accent, see [enemies.md](enemies.md)). The agent picks the exact tints.
 - **Performance fallback:** 40 to 80 skinned characters may be too slow on Quest 3S. If the frame rate drops, switch goblins to code-made shapes (one InstancedMesh per body part, animated in code). First headset test: about 50 skinned goblins hold 72 Hz, so the fallback is not needed yet. Decide again with troops in step 5 ([performance.md](performance.md)).
@@ -77,14 +77,23 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Boulder hill | `rocks/nature/rock_largeA.glb` to `rock_largeD.glb` | 8 to 10 cm | Beside the road, under the boulder |
 | Leaning tree (trigger) | `trees/fantasy-town/tree-crooked.glb` | 12 cm tall | Leans over the road, falls 90 degrees |
 | Keg and tree debris | `props/survival/resource-planks.glb`, `resource-wood.glb` | 1 to 2 cm | Pooled |
-| Decor trees | `trees/nature/tree_default.glb`, `tree_oak.glb`, `tree_cone.glb`, `tree_fat.glb`, `tree_pineRoundA.glb`, `tree_pineTallA.glb`, `tree_simple.glb`, `tree_small.glb` | 6 to 12 cm tall | Instanced, off the roads |
-| Decor rocks | `rocks/nature/rock_largeA.glb` to `rock_largeD.glb`, `rock_smallA.glb` to `rock_smallD.glb`, `rock_tallA.glb` to `rock_tallC.glb` | 1 to 8 cm | Instanced |
-| Decor plants | `plants/nature/plant_bush.glb`, `plant_bushLarge.glb`, `plant_bushSmall.glb`, `grass.glb`, `grass_large.glb`, `flower_purpleA.glb`, `flower_redA.glb`, `flower_yellowA.glb`, `mushroom_redGroup.glb`, `stump_round.glb`, `log.glb` | 1 to 3 cm | Instanced, many and cheap |
+| Decor trees | `trees/nature/tree_default.glb`, `tree_oak.glb`, `tree_cone.glb`, `tree_fat.glb`, `tree_pineRoundA.glb`, `tree_pineTallA.glb`, `tree_simple.glb`, `tree_small.glb`, `tree_tall.glb`, `tree_pineSmallA.glb` | 6 to 14 cm tall | About 260, mostly in groves, off the roads. All decor is merged into one mesh per material (`StaticBatch`, `DECOR` in config), and the kit's mint greens are tinted to match the grass |
+| Decor rocks | `rocks/nature/rock_largeA.glb` to `rock_largeD.glb`, `rock_smallA.glb` to `rock_smallD.glb`, `rock_tallA.glb` to `rock_tallC.glb` | 1.5 to 7 cm | About 140, some in piles |
+| Decor plants | `plants/nature/plant_bush.glb`, `plant_bushLarge.glb`, `plant_bushSmall.glb`, `plant_bushDetailed.glb`, `flower_purpleA.glb`, `flower_redA.glb`, `flower_yellowA.glb`, `mushroom_redGroup.glb`, `mushroom_tanGroup.glb`, `stump_round.glb`, `stump_old.glb`, `log.glb`, `log_stack.glb` | 1 to 4 cm | About 240 bushes, 260 flowers (in patches), 90 mushrooms, stumps and logs |
 | Fields | `farm/nature/crops_dirtRow.glb`, `crops_wheatStageB.glb`, `crops_cornStageB.glb`, `crop_pumpkin.glb`, `fence_simple.glb` | Rows 4 cm long, crops 1 to 2 cm | A few small fields outside the wall |
-| Far houses | `castle/castle-kit/tower-square-mid-windows.glb` + `town/fantasy-town/roof-point.glb` | 5 cm tall | Optional, far zone only |
-| Windmill | `town/fantasy-town/windmill.glb` | 15 cm tall | Optional, one only, far zone. Blades can spin in code |
+| Village houses | `town/fantasy-town/wall.glb`, `wall-door.glb`, `wall-window-shutters.glb`, `wall-wood.glb`, `wall-wood-door.glb`, `wall-wood-window-shutters.glb`, `roof-gable.glb`, `roof-point.glb`, `chimney.glb` | 4.5 cm wall tile, one or two floors | Built from tiles in code (4 walls, door toward the square, a roof, sometimes a chimney), 3 to 5 per village. `src/world/settlements.ts` |
+| Village squares | `town/fantasy-town/stall.glb`, `stall-red.glb`, `stall-green.glb`, `cart.glb`, `lantern.glb`, `props/survival/barrel.glb`, `box.glb`, `box-large.glb`, `camp/survival/signpost.glb` | Stall 3 cm, cart 4 cm long, barrels and boxes about 1 cm, signpost 2 cm | One stall, lantern and cart per square, barrels and boxes, a signpost where the village meets its road |
+| Farm fields | `farm/nature/crops_dirtRow.glb`, `crops_wheatStageB.glb`, `crops_cornStageB.glb`, `crop_pumpkin.glb`, `crop_melon.glb`, `fence_simple.glb` | Fields 12 to 16 by 9 to 12 cm, crops 1 to 2 cm | 1 or 2 per village, one crop each, a fence with a gap toward the village |
+| Watch towers | `castle/castle-kit/tower-square-base.glb` + `tower-square-mid-windows.glb` + `tower-square-top-roof-high.glb` | 3.4 cm across, about 11 cm tall | 4, on hilltops beside the roads |
+| Windmill | `town/fantasy-town/windmill.glb` | 15 cm tall | One, on the highest spot near a field. Its sails are part of one mesh, so they cannot spin |
+| Tall far landmarks | `castle/castle-kit/tower-square-base.glb`, `tower-square-mid.glb`, `tower-square-mid-windows.glb`, `tower-square-mid-door.glb`, `tower-square-mid-open.glb`, `tower-square-mid-open-simple.glb`, `tower-square-top-roof-high.glb`, `tower-top.glb`, `tower-hexagon-base.glb`, `tower-hexagon-mid.glb`, `tower-hexagon-top.glb`, `tower-hexagon-roof.glb`, `wall-doorway.glb`, `gate.glb`, `flag.glb` | 3.4 to 4.1 cm pieces, up to about 23 cm tall | Stacked in code: a tall watchtower, a hexagon mage tower, a gatehouse with flags, a ruined tower, a small keep (walls are stretched base blocks). One of each on the highest far hills |
+| Goblin hamlets | `camp/goblin/cabbin_1.glb`, `cabbin_2.glb`, `stone_house.glb`, `tent_1.glb`, `tent_3.glb`, `tent_5.glb`, `branch_cage.glb`, `branch_fence_1.glb`, `branch_fence_2.glb`, `camp/nature/campfire_stones.glb` | Cabin 6 cm, tents 4 cm, cage 3 cm | One behind each enemy camp, decor only (the cabins, cage and stone house were "not in the MVP map" before; now far decor) |
+| Burned village | The village wall tiles and roof, `town/fantasy-town/cart.glb`, `props/survival/barrel.glb`, `box.glb`, `box-large.glb` | Village sizes | One, far out between two camps: roofless houses with missing walls, a toppled cart, knocked barrels, ash on the ground |
+| Lumber camps | `plants/nature/log_stack.glb`, `trees/survival/tree-log.glb`, `tree-trunk.glb`, `props/survival/resource-planks.glb`, `camp/nature/tent_detailedOpen.glb`, `campfire_logs.glb` | 0.4 to 2 cm | Two, at forest edges on the castle side |
+| Quarry | `rocks/survival/rock-a.glb`, `rock-b.glb`, `rock-c.glb`, `resource-stone-large.glb`, `resource-stone.glb`, `props/survival/resource-planks.glb` | 0.6 to 5 cm | One, on a high far hillside |
+| Old battle wrecks | `props/castle-kit/siege-catapult-demolished.glb`, `siege-trebuchet-demolished.glb`, `siege-ram-demolished.glb`, `siege-ballista-demolished.glb`, `siege-tower-demolished.glb` | 5 to 7 cm wide | One near each enemy camp, decor only |
 
-Not in the MVP map: siege machines, bridge, forest, mud, hill features, cage, cabins, stone house, `stone_1` and `stone_2`. The troop gate is an invisible spawner in the MVP, so it has no model (`castle/castle-kit/gate.glb` is kept for later gate mechanics).
+Not in the MVP map as gameplay: siege machines, bridge, forest, mud, hill features, `stone_1` and `stone_2`. (The wrecked siege machines, the cage, cabins and stone house are used as far decor only.) The troop gate is an invisible spawner in the MVP, so it has no model (`castle/castle-kit/gate.glb` is kept for later gate mechanics).
 
 ## 5. Around the player (fixed, does not rotate)
 

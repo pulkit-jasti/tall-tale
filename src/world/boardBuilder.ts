@@ -1,11 +1,8 @@
 // Builds the board, roads, castle, camps and decor inside the turning board group.
 import {
   BoxGeometry,
-  BufferGeometry,
-  Color,
   CylinderGeometry,
   DoubleSide,
-  Float32BufferAttribute,
   Group,
   InstancedMesh,
   Matrix4,
@@ -16,14 +13,16 @@ import {
   RingGeometry,
   Vector3,
 } from 'three';
-import { BOARD, CASTLE } from '../config/game.js';
+import { BOARD, CASTLE, DECOR, ROADS, SETTLEMENTS } from '../config/game.js';
 import type { Blueprint } from '../rules/blueprint.js';
 import { RoadGraph, type GraphNode } from '../rules/roadGraph.js';
-import { boardHeight, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import { boardHeight, degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import { createRandom, type Random } from '../rules/random.js';
-import { cloneStatic, InstancedModel, loadTemplate } from './models.js';
-import { RoadNetwork, type Road } from './roads.js';
-import { addGrain, buildGrassTufts, Meadow } from './grass.js';
+import { cloneStatic, InstancedModel, loadTemplate, StaticBatch } from './models.js';
+import { RoadNetwork } from './roads.js';
+import { Meadow } from './grass.js';
+import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
+import { campDistance, RoadField, Terrain, type CampSpot } from './terrain.js';
 import { flatMaterial } from './shapes.js';
 
 const yAxis = new Vector3(0, 1, 0);
@@ -37,51 +36,15 @@ function placeMatrix(x: number, y: number, z: number, yaw: number, scale = 1): M
 }
 
 /**
- * Grass disc with a hole, flat near the castle and rising toward the
- * horizon. Smooth shaded, with the meadow's soft patches, worn road edges and
- * camp dirt baked into its points (fine enough to show them), and a faint
- * grain up close.
+ * Uneven grass disc with a hole: the terrain's hills on the board's slope
+ * (src/world/terrain.ts builds its points). Low poly: flat shaded triangles,
+ * each with one solid grass color (src/world/grass.ts), so each facet catches
+ * the sun differently and reads on its own.
  */
-function buildBoardMesh(meadow: Meadow): Group {
+function buildBoardMesh(terrain: Terrain, meadow: Meadow): Group {
   const group = new Group();
-  const radii: number[] = [];
-  for (let r = BOARD.holeRadius; r < BOARD.outerRadius; ) {
-    radii.push(r);
-    r += r < 120 ? 4 : r < 300 ? 8 : 12;
-  }
-  radii.push(BOARD.outerRadius);
-  const segments = 160;
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-  const color = new Color();
-  for (const r of radii) {
-    for (let j = 0; j < segments; j++) {
-      const a = (j / segments) * Math.PI * 2;
-      const x = polarX(r, a);
-      const z = polarZ(r, a);
-      positions.push(x, boardHeight(r), z);
-      meadow.colorAt(x, z, r, color);
-      colors.push(color.r, color.g, color.b);
-    }
-  }
-  for (let i = 0; i < radii.length - 1; i++) {
-    for (let j = 0; j < segments; j++) {
-      const a = i * segments + j;
-      const b = (i + 1) * segments + j;
-      const c = i * segments + ((j + 1) % segments);
-      const d = (i + 1) * segments + ((j + 1) % segments);
-      indices.push(a, c, b, c, d, b);
-    }
-  }
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  const material = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
-  addGrain(material);
-  group.add(new Mesh(geometry, material));
+  const material = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true });
+  group.add(new Mesh(terrain.geometry((x, z, r, steepness, out) => meadow.faceColor(x, z, r, steepness, out)), material));
 
   // Table skirts: the inner edge of the hole and the far outer edge.
   const skirtMaterial = flatMaterial(BOARD.skirtColor);
@@ -192,7 +155,7 @@ async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Ob
       const d = size * rng.range(0.45, 0.65);
       const x = cx + Math.cos(a) * d;
       const z = cz + Math.sin(a) * d;
-      rng.pick(rockSets).add(placeMatrix(x, boardHeight(Math.hypot(x, z)), z, rng.range(0, 6.28), rng.range(0.75, 1.4)));
+      rng.pick(rockSets).add(placeMatrix(x, groundAt(x, z), z, rng.range(0, 6.28), rng.range(0.75, 1.4)));
     }
     const tentCount = 1 + rng.int(2);
     for (let i = 0; i < tentCount; i++) {
@@ -200,52 +163,73 @@ async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Ob
       const a = ca + rng.range(-0.25, 0.25);
       const d = cr + size * 0.7 + rng.range(2, 6);
       const tent = cloneStatic(rng.pick(tents));
-      tent.position.set(polarX(d, a), boardHeight(d), polarZ(d, a));
+      tent.position.set(polarX(d, a), 0, polarZ(d, a));
+      tent.position.y = groundAt(tent.position.x, tent.position.z);
       tent.rotation.y = rng.range(0, Math.PI * 2);
       group.add(tent);
     }
     const fireObject = cloneStatic(fire);
     const fd = cr + size * 0.6;
     const fa = ca + 0.12;
-    fireObject.position.set(polarX(fd, fa), boardHeight(fd), polarZ(fd, fa));
+    fireObject.position.set(polarX(fd, fa), 0, polarZ(fd, fa));
+    fireObject.position.y = groundAt(fireObject.position.x, fireObject.position.z);
     group.add(fireObject);
   }
   return group;
 }
 
-/** Instanced trees, rocks and plants, kept off the roads and camps. */
-async function buildDecor(roads: Road[], camps: GraphNode[], rng: Random): Promise<Group> {
-  const group = new Group();
-  const kinds: { files: string[]; height: [number, number]; count: number; radius: number }[] = [
-    { files: ['trees/nature/tree_default', 'trees/nature/tree_oak', 'trees/nature/tree_cone', 'trees/nature/tree_fat'], height: [6, 12], count: 70, radius: 4 },
-    { files: ['rocks/nature/rock_largeA', 'rocks/nature/rock_smallA', 'rocks/nature/rock_tallA'], height: [1.5, 6], count: 30, radius: 3 },
-    { files: ['plants/nature/plant_bush', 'plants/nature/grass_large', 'plants/nature/flower_yellowA', 'plants/nature/flower_redA'], height: [1, 3], count: 80, radius: 1.5 },
-  ];
-  for (const kind of kinds) {
+/**
+ * Trees, rocks, bushes, flowers, mushrooms and stumps (DECOR), some in
+ * groups (rock piles, flower patches, and tree groves inside the forests),
+ * kept off the roads, camps, villages, fields and landmarks, standing on the
+ * hills. All merged into one mesh per material.
+ */
+async function buildDecor(terrain: Terrain, camps: CampSpot[], built: Spot[], forests: Spot[], rng: Random): Promise<Group> {
+  const batch = new StaticBatch(DECOR.tints);
+  const roadEdge = ROADS.width / 2;
+  const spot = (): [number, number] => {
+    // Even over the area, not bunched near the castle.
+    const r = Math.sqrt(rng.range(DECOR.from * DECOR.from, DECOR.to * DECOR.to));
+    const a = rng.range(0, Math.PI * 2);
+    return [polarX(r, a), polarZ(r, a)];
+  };
+  /** A group's middle inside a forest. */
+  const inForest = (): [number, number] => {
+    const forest = rng.pick(forests);
+    const d = forest.size * 0.7 * Math.sqrt(rng.next());
+    const a = rng.range(0, Math.PI * 2);
+    return [forest.x + Math.sin(a) * d, forest.z - Math.cos(a) * d];
+  };
+  for (const kind of DECOR.kinds) {
     const templates = await Promise.all(kind.files.map((f) => loadTemplate(`${f}.glb`, { height: 1 })));
-    const sets = templates.map((t) => new InstancedModel(t, kind.count));
-    sets.forEach((s) => group.add(s.group));
+    const middle = kind.inForests && forests.length > 0 ? inForest : spot;
+    const groups = kind.groups ? Array.from({ length: kind.groups.count }, middle) : [];
+    const grouped = kind.groups ? Math.round(kind.count * kind.groups.share) : 0;
     let placed = 0;
     for (let tries = 0; placed < kind.count && tries < kind.count * 20; tries++) {
-      const r = rng.range(72, 520);
-      const a = rng.range(0, Math.PI * 2);
-      const x = polarX(r, a);
-      const z = polarZ(r, a);
+      let x: number;
+      let z: number;
+      if (placed < grouped && kind.groups) {
+        // Around a group's middle, thicker in the middle.
+        const [gx, gz] = rng.pick(groups);
+        const d = kind.groups.radius * Math.sqrt(rng.next()) * rng.range(0.4, 1);
+        const a = rng.range(0, Math.PI * 2);
+        x = gx + Math.sin(a) * d;
+        z = gz - Math.cos(a) * d;
+      } else {
+        [x, z] = spot();
+      }
+      const r = Math.hypot(x, z);
+      if (r < DECOR.from || r > DECOR.to) continue;
       const size = rng.range(kind.height[0], kind.height[1]);
-      const clear = kind.radius + 5;
-      if (roads.some((road) => road.distanceTo(x, z) < clear)) continue;
-      if (
-        camps.some((c) => {
-          const ca = degToRad(c.at[1]);
-          return Math.hypot(polarX(c.at[0], ca) - x, polarZ(c.at[0], ca) - z) < c.size + 10;
-        })
-      )
-        continue;
-      rng.pick(sets).add(placeMatrix(x, boardHeight(r), z, rng.range(0, Math.PI * 2), size));
+      if (terrain.roads.distance(x, z) < roadEdge + kind.clear + 2) continue;
+      if (campDistance(camps, x, z) < 10 || gapTo(built, x, z) < kind.clear) continue;
+      // On the hills, sunk a little so the base never floats on a slope.
+      batch.add(rng.pick(templates), placeMatrix(x, groundAt(x, z) - size * 0.08, z, rng.range(0, Math.PI * 2), size));
       placed++;
     }
   }
-  return group;
+  return batch.build();
 }
 
 export interface BuiltBoard {
@@ -264,16 +248,27 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
     return { x: polarX(c.at[0], a), z: polarZ(c.at[0], a), size: c.size };
   });
   // Each part gets its own seeded stream, so loading order never changes the layout.
-  const meadow = new Meadow(network.roads, campSpots, createRandom(seed));
-  parent.add(buildBoardMesh(meadow), buildGrassTufts(meadow, createRandom(seed + 4)));
+  // Where people live comes first (the villages sit by the roads, so this needs road distances far out).
+  const roadField = new RoadField(network.roads, ROADS.width / 2 + SETTLEMENTS.villages.radius[1] + SETTLEMENTS.villages.roadGap[1] + 6);
+  const plan = planSettlements(roadField, campSpots, createRandom(seed + 6));
+  // Then the terrain, flat under the camps, villages and fields: from here on groundAt() has its hills.
+  const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan)], createRandom(seed));
+  placeLandmarks(plan, terrain, campSpots, createRandom(seed + 7));
+  // The village squares are worn to dirt, like the camps.
+  const plazas = plan.villages.map((v) => ({ ...v, size: v.size * 0.45 }));
+  // So are the goblin hamlets and the lumber camps; the burned village is ash.
+  const worn = [...campSpots, ...plazas, ...plan.hamlets.map((h) => ({ ...h, size: h.size * 0.6 })), ...plan.lumber.map((l) => ({ ...l, size: l.size * 0.5 }))];
+  const meadow = new Meadow(terrain, worn, createRandom(seed + 5), plan.burned ? [{ ...plan.burned, size: plan.burned.size * 0.8 }] : []);
+  parent.add(buildBoardMesh(terrain, meadow));
   for (const road of network.roads) parent.add(road.buildMesh());
   const hills = new Map<string, Object3D>();
   // The courtyard stays empty until the main gameplay is done (houses and stalls come back with the polish).
-  const [castle, camps, decor] = await Promise.all([
+  const [castle, camps, decor, settlements] = await Promise.all([
     buildCastle(),
     buildCamps(campNodes, createRandom(seed + 2), hills),
-    buildDecor(network.roads, campNodes, createRandom(seed + 3)),
+    buildDecor(terrain, campSpots, builtSpots(plan), plan.forests, createRandom(seed + 3)),
+    buildSettlements(plan, network.roads, createRandom(seed + 8)),
   ]);
-  parent.add(castle, camps, decor);
+  parent.add(castle, camps, decor, settlements);
   return { network, hills };
 }

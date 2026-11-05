@@ -21,7 +21,7 @@ import {
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { CASTLE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GoblinStats, type GoblinType } from '../config/game.js';
-import { angleOf, boardHeight, clearOfTowers, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
+import { angleOf, clearOfTowers, groundAt, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
@@ -619,7 +619,8 @@ export class Goblins {
           if (g.type === 'climber') this.startClimbing(g);
           else this.startAttacking(g);
         }
-        p.y = boardHeight(Math.hypot(p.x, p.z));
+        // Off the road (after a toss): it walks over the bumps.
+        p.y = groundAt(p.x, p.z);
         break;
       }
       case 'atWall': {
@@ -744,7 +745,7 @@ export class Goblins {
     const z = p.z + g.vz * dt;
     // Flying into something higher than the goblin (the wall side): stop
     // moving sideways and slide down it instead of popping on top.
-    const ahead = landingHeight(Math.hypot(x, z));
+    const ahead = landingHeight(x, z);
     if (ahead !== null && ahead > p.y) {
       g.vx = g.vz = 0;
     } else {
@@ -752,7 +753,7 @@ export class Goblins {
       p.z = z;
     }
     p.y += g.vy * dt;
-    const ground = landingHeight(Math.hypot(p.x, p.z));
+    const ground = landingHeight(p.x, p.z);
     if (ground === null) {
       // Over the hole or past the edge: falls out of the world.
       if (p.y < -60) this.kill(g);

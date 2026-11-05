@@ -1,16 +1,20 @@
-// Loading, sizing, cloning and instancing of the glTF models in public/gltf/.
-// Each file is loaded once (AssetManager caches it) and then cloned or instanced.
+// Loading, sizing, cloning, instancing and batching of the glTF models in public/gltf/.
+// Each file is loaded once (AssetManager caches it) and then cloned, instanced or batched.
 import { AssetManager } from '@iwsdk/core';
 import {
   Box3,
+  type BufferGeometry,
   Group,
   InstancedMesh,
+  type Material,
   Matrix4,
   Mesh,
+  MeshStandardMaterial,
   Object3D,
   Vector3,
   type AnimationClip,
 } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 export const gltfUrl = (path: string): string =>
@@ -21,6 +25,12 @@ export interface Fit {
   height?: number;
   /** Target width: the larger of the x and z sizes (board units). */
   width?: number;
+  /**
+   * Keep the model's own origin instead of centering it (kit pieces made to
+   * snap together on a 1 x 1 tile: walls on a tile's edge, roofs on top).
+   * Without a height or width it keeps its own size too.
+   */
+  keepOrigin?: boolean;
 }
 
 export interface ModelTemplate {
@@ -54,7 +64,8 @@ export async function loadTemplate(
     scale = fit.width / Math.max(size.x, size.z, 1e-6);
   }
   model.scale.setScalar(scale);
-  model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+  if (fit.keepOrigin) model.position.set(0, 0, 0);
+  else model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
   const object = new Group();
   object.name = path;
   object.add(model);
@@ -165,5 +176,59 @@ export class InstancedPool {
     if (!this.dirty) return;
     for (const part of this.parts) part.mesh.instanceMatrix.needsUpdate = true;
     this.dirty = false;
+  }
+}
+
+/**
+ * Merges many copies of many static models into one mesh per material (by
+ * material name and texture), so hundreds of trees, rocks, plants and house
+ * pieces of a dozen kinds cost only a few draw calls. For things that never
+ * move (decor, villages). Kit models that share one texture image (a whole
+ * pack) merge into one mesh. Optional tints recolor a material by name (the
+ * kit's greens to the game's).
+ */
+export class StaticBatch {
+  private buckets = new Map<string, { material: Material; textured: boolean; parts: BufferGeometry[] }>();
+  private temp = new Matrix4();
+
+  constructor(private tints: Record<string, number> = {}) {}
+
+  /** Adds one copy. The matrix places the template in the batch's space. */
+  add(template: ModelTemplate, matrix: Matrix4): void {
+    template.object.updateMatrixWorld(true);
+    template.object.traverse((child: Object3D) => {
+      const mesh = child as Mesh;
+      if (!mesh.isMesh) return;
+      const source = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      // Each pack has its own texture image, so the image is part of the key.
+      const map = source instanceof MeshStandardMaterial ? source.map : null;
+      const key = `${source.name || source.uuid}|${map ? map.source.uuid : ''}`;
+      let bucket = this.buckets.get(key);
+      if (!bucket) {
+        const material = source.clone();
+        const tint = this.tints[source.name];
+        if (tint !== undefined && material instanceof MeshStandardMaterial) material.color.setHex(tint);
+        bucket = { material, textured: !!map, parts: [] };
+        this.buckets.set(key, bucket);
+      }
+      const geometry = mesh.geometry.clone();
+      // Only what every part has, so they can be merged (and the texture spots when textured).
+      const keep = bucket.textured ? ['position', 'normal', 'uv'] : ['position', 'normal'];
+      for (const name of Object.keys(geometry.attributes)) if (!keep.includes(name)) geometry.deleteAttribute(name);
+      geometry.applyMatrix4(this.temp.multiplyMatrices(matrix, mesh.matrixWorld));
+      bucket.parts.push(geometry.index ? geometry.toNonIndexed() : geometry);
+    });
+  }
+
+  /** One mesh per material, with everything added so far. */
+  build(): Group {
+    const group = new Group();
+    for (const { material, parts } of this.buckets.values()) {
+      const merged = mergeGeometries(parts);
+      for (const part of parts) part.dispose();
+      if (merged) group.add(new Mesh(merged, material));
+    }
+    this.buckets.clear();
+    return group;
   }
 }

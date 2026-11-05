@@ -8,7 +8,7 @@ import {
   Vector3,
 } from 'three';
 import { ROADS } from '../config/game.js';
-import { boardHeight, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import { degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { RoadGraph } from '../rules/roadGraph.js';
 import { flatMaterial } from './shapes.js';
 
@@ -43,7 +43,8 @@ export class Road {
       side.crossVectors(tangent, up).normalize();
       out.addScaledVector(side, offset);
     }
-    out.y = boardHeight(Math.hypot(out.x, out.z));
+    // On the ground over the hills, on top of the road ribbon when on the road.
+    out.y = groundAt(out.x, out.z) + (Math.abs(offset) <= ROADS.width / 2 ? ROADS.lift : 0);
     return out;
   }
 
@@ -53,7 +54,7 @@ export class Road {
     return this.curve.getTangentAt(u, out);
   }
 
-  /** Flat sandy ribbon a little above the board. */
+  /** Sandy ribbon a little above the ground, following the hills. */
   buildMesh(): Mesh {
     const segments = Math.max(16, Math.ceil(this.length / 4));
     const positions: number[] = [];
@@ -68,7 +69,7 @@ export class Road {
       for (const s of [-1, 1]) {
         const x = center.x + side.x * half * s;
         const z = center.z + side.z * half * s;
-        positions.push(x, boardHeight(Math.hypot(x, z)) + ROADS.lift, z);
+        positions.push(x, groundAt(x, z) + ROADS.lift, z);
       }
       if (i < segments) {
         const a = i * 2;
@@ -128,6 +129,6 @@ export class RoadNetwork {
   nodePosition(node: number, out: Vector3): Vector3 {
     const [r, deg] = this.graph.nodes[node].at;
     const a = degToRad(deg);
-    return out.set(polarX(r, a), boardHeight(r), polarZ(r, a));
+    return out.set(polarX(r, a), 0, polarZ(r, a)).setY(groundAt(out.x, out.z));
   }
 }

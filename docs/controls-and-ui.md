@@ -156,7 +156,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 ### Pick up (pinch)
 
-- Goblins are tiny (about 3.5 cm), too small to pick up reliably with tracked fingers. So the pinch zone is much bigger than the goblin: about 5 to 6 cm around the hand's pinch point.
+- Goblins are tiny (about 3.9 cm), too small to pick up reliably with tracked fingers. So the pinch zone is much bigger than the goblin: about 5 to 6 cm around the hand's pinch point.
 - When the player pinches (thumb and index) inside that zone, it snaps to the nearest goblin. The goblin lifts into the fingers.
 - A grabbed goblin struggles: arms and legs wave, it squeals.
 - The goblin that would be grabbed shows the Ready state while the hand is near (see [Interaction feedback](#interaction-feedback-applies-to-everything-you-can-touch)).

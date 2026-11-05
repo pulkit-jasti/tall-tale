@@ -2,10 +2,10 @@
   "name": "tutorial",
   "seed": 1234,
   "nodes": [
-    { "id": "campNorth", "kind": "camp", "at": [210, 6], "size": 24 },
-    { "id": "campEast", "kind": "camp", "at": [232, 86], "size": 28 },
-    { "id": "campSouth", "kind": "camp", "at": [220, 196], "size": 22 },
-    { "id": "campWest", "kind": "camp", "at": [182, -82], "size": 18 },
+    { "id": "campNorth", "kind": "camp", "at": [255, 6], "size": 24 },
+    { "id": "campEast", "kind": "camp", "at": [277, 86], "size": 28 },
+    { "id": "campSouth", "kind": "camp", "at": [265, 196], "size": 22 },
+    { "id": "campWest", "kind": "camp", "at": [227, -82], "size": 18 },
 
     { "id": "jNorth", "kind": "junction", "at": [132, 2] },
     { "id": "jNorthEast", "kind": "junction", "at": [138, 44] },
@@ -26,24 +26,24 @@
     { "id": "wWest", "kind": "wall", "at": [58, -60] }
   ],
   "roads": [
-    { "from": "campNorth", "to": "jNorth", "via": [[176, 9]] },
+    { "from": "campNorth", "to": "jNorth", "via": [[196, 9]] },
     { "from": "jNorth", "to": "kNorth", "via": [[108, -4]] },
     { "from": "kNorth", "to": "wNorth", "via": [[72, 4]] },
     { "from": "kNorth", "to": "wNorthEast", "via": [[76, 38]] },
     { "from": "jNorth", "to": "jNorthEast", "via": [[138, 22]] },
     { "from": "jNorthEast", "to": "wNorthEast", "via": [[104, 50], [78, 57]] },
 
-    { "from": "campEast", "to": "jEast", "via": [[188, 84]] },
+    { "from": "campEast", "to": "jEast", "via": [[210, 84]] },
     { "from": "jEast", "to": "jNorthEast", "via": [[142, 68]] },
     { "from": "jEast", "to": "kEast", "via": [[112, 96]] },
     { "from": "kEast", "to": "wEast", "via": [[72, 112]] },
 
-    { "from": "campSouth", "to": "jSouth", "via": [[176, 200]] },
+    { "from": "campSouth", "to": "jSouth", "via": [[198, 200]] },
     { "from": "jSouth", "to": "kSouth", "via": [[108, 183]] },
     { "from": "kSouth", "to": "wSouth", "via": [[72, 179]] },
     { "from": "jSouth", "to": "wSouthWest", "via": [[112, 216], [82, 234]] },
 
-    { "from": "campWest", "to": "jWest", "via": [[152, -84]] },
+    { "from": "campWest", "to": "jWest", "via": [[176, -84]] },
     { "from": "jWest", "to": "kWest", "via": [[104, -70]] },
     { "from": "kWest", "to": "wWest", "via": [[72, -61]] },
     { "from": "jWest", "to": "jNorth", "via": [[130, -40]] }

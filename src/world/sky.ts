@@ -204,14 +204,20 @@ export class Sky {
     dome.frustumCulled = false;
     this.group.add(dome);
     this.buildSun();
-    const total = (SKY.cloudCount + SKY.highCloudCount) * SKY.puffsPerCloud;
+    const total = (SKY.cloudCount + SKY.highCloudCount + SKY.canopyCount) * SKY.puffsPerCloud;
     this.puffs = new InstancedMesh(puffGeometry(), skyMaterial({ vertexColors: true }), total);
     // Spread all around and always moving: skip culling instead of recomputing bounds.
     this.puffs.frustumCulled = false;
     this.puffs.renderOrder = ORDER.clouds;
     board.add(this.puffs);
     for (let i = 0; i < SKY.cloudCount; i++) this.clouds.push(this.lowCloud(rng));
-    for (let i = 0; i < SKY.highCloudCount; i++) this.clouds.push(this.highCloud(rng));
+    for (let i = 0; i < SKY.highCloudCount; i++) {
+      this.clouds.push(this.highCloud(rng, SKY.highCloudMaxDistance, SKY.highCloudHeight, SKY.highCloudSize));
+    }
+    // The canopy: always over the giant's head.
+    for (let i = 0; i < SKY.canopyCount; i++) {
+      this.clouds.push(this.highCloud(rng, SKY.canopyMaxDistance, SKY.canopyHeight, SKY.canopySize));
+    }
     const w = SKY.windDeg * DEG;
     this.wind.set(Math.sin(w), 0, -Math.cos(w)).multiplyScalar(SKY.windSpeed);
     this.place(true);
@@ -277,14 +283,12 @@ export class Sky {
     return this.makeCloud(rng, at, Math.max(12, lift), size, false, SKY.cloudMaxDistance);
   }
 
-  /** A high cloud over the board and the giant, spread evenly over its square, always well above the eyes. */
-  private highCloud(rng: Random): Cloud {
+  /** A high cloud over the board and the giant, spread evenly over its square (`half`, cm), always well above the eyes. */
+  private highCloud(rng: Random, half: number, height: [number, number], size: [number, number]): Cloud {
     const angle = rng.range(0, Math.PI * 2);
-    const d = Math.sqrt(rng.range(0, 1)) * SKY.highCloudMaxDistance;
+    const d = Math.sqrt(rng.range(0, 1)) * half;
     const at = new Vector3(Math.sin(angle) * d, 0, -Math.cos(angle) * d);
-    const lift = rng.range(...SKY.highCloudHeight);
-    const size = rng.range(...SKY.highCloudSize);
-    return this.makeCloud(rng, at, lift, size, true, SKY.highCloudMaxDistance);
+    return this.makeCloud(rng, at, rng.range(...height), rng.range(...size), true, half);
   }
 
   /** A cloud: a few round puffs side by side, the middle ones bigger and higher, turned to a random direction. */

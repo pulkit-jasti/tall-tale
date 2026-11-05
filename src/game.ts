@@ -106,7 +106,7 @@ export class GameSystem extends createSystem({}) {
 
     this.stage = new Stage(root);
     // The sunlight comes from the sun's side. Like the sky, it never turns.
-    const sun = new DirectionalLight(0xfff4e0, 1.6);
+    const sun = new DirectionalLight(0xfff4e0, SKY.lightIntensity);
     skyDirection(SKY.sunAngleDeg, SKY.lightElevationDeg, sun.position).multiplyScalar(7);
     root.add(sun, sun.target);
     // Haze in the dome's horizon color. It starts past the board and thickens
