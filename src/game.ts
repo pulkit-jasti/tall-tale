@@ -6,7 +6,7 @@ import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { DEBUG, FPS, HANDLES, SKY, STAGE, TRIGGERS, XR } from './config/game.js';
+import { BALLOONS, DEBUG, FPS, HANDLES, SKY, STAGE, TRIGGERS, XR } from './config/game.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -33,7 +33,7 @@ import { Particles } from './fx/particles.js';
 import { GrabEat } from './player/grabEat.js';
 import { BoardHandles } from './player/handles.js';
 import { HandTracker } from './player/hands.js';
-import { degToRad } from './rules/boardMath.js';
+import { angleOf, degToRad } from './rules/boardMath.js';
 import { createRandom, type Random } from './rules/random.js';
 import { checkReach } from './rules/reach.js';
 import { Bell } from './tools/bell.js';
@@ -45,6 +45,9 @@ import { Slingshot } from './tools/slingshot.js';
 import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
 import { Troops } from './units/troops.js';
+import { Balloons } from './units/balloons.js';
+import { GearDebris } from './fx/gearDebris.js';
+import { Juice } from './fx/juice.js';
 import { Hills } from './world/hills.js';
 import { Sky, skyDirection } from './world/sky.js';
 import { Triggers } from './world/triggers.js';
@@ -85,6 +88,9 @@ export class GameSystem extends createSystem({}) {
   private stun!: StunWave;
   private tools: HandTool[] = [];
   private troops!: Troops;
+  private balloons!: Balloons;
+  private gearDebris!: GearDebris;
+  private juice!: Juice;
   private triggers!: Triggers;
   private sky: Sky | null = null;
   private fog!: Fog;
@@ -134,6 +140,7 @@ export class GameSystem extends createSystem({}) {
     if (SKY.enabled) this.sky = new Sky(root, this.stage.boardLift, createRandom(seed + 700));
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
     this.particles = new Particles(root, createRandom(seed + 101));
+    this.juice = new Juice(root, createRandom(seed + 102));
     this.handles = new BoardHandles(this.stage);
     // The giant's seat: the hole is filled at board level, and the giant's body comes out of it.
     buildSeatFloor(this.stage.boardLift, createRandom(seed + 720));
@@ -161,16 +168,21 @@ export class GameSystem extends createSystem({}) {
     this.tools = [this.swatter, this.pepper, this.megaphone, this.bell];
     this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
     this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
+    this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
+    this.gearDebris = new GearDebris(this.stage.boardSpin, createRandom(seed + 960));
+    this.goblins.debris = this.gearDebris;
     await Promise.all([
-      this.goblins.load(),
       this.slingshot.load(),
       this.food.load(),
       this.troops.load(),
       this.triggers.load(blueprint.triggers),
+      this.goblins.load().then(() => this.gearDebris.load(['goblinSpear', 'goblinHelmet'], this.goblins.unitScale)),
       ...this.tools.map((t) => t.load()),
     ]);
     // Every trigger can be shot: the aim assist bends toward it and it glows while aimed at.
     for (const target of this.triggers.targets) this.slingshot.addTarget(target);
+    // Balloons too: a big still target, so the aim assist bends toward it.
+    for (const target of this.balloons.targets) this.slingshot.addTarget(target);
     this.fps.countUnits = () => this.goblins.aliveCount + this.troops.aliveCount;
     this.fps.onReport = (stats) => {
       sendRunStats(stats);
@@ -186,21 +198,24 @@ export class GameSystem extends createSystem({}) {
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
+    const waves = new WaveSpawner(this.stage.boardSpin, built.network, this.goblins, built.hills, this.audio, createRandom(seed + 500));
+    // A wave's balloons float straight in from their camp's direction.
+    const campAt = new Vector3();
+    waves.onBalloon = (camp) => {
+      built.network.nodePosition(camp, campAt);
+      return this.balloons.spawn(angleOf(campAt.x, campAt.z)) !== null;
+    };
+    // The threat cue: the wall under a carrying balloon flashes red.
+    this.balloons.onThreat = (rider) => this.threat.wallHit(rider, false);
     this.battle = new Battle({
       stage: this.stage,
       goblins: this.goblins,
-      spawner: new WaveSpawner(
-        this.stage.boardSpin,
-        built.network,
-        this.goblins,
-        built.hills,
-        this.audio,
-        createRandom(seed + 500),
-      ),
+      spawner: waves,
       slingshot: this.slingshot,
       tools: { swatter: this.swatter, pepper: this.pepper, megaphone: this.megaphone, bell: this.bell },
       troops: this.troops,
       triggers: this.triggers,
+      balloons: this.balloons,
       stun: this.stun,
       food: this.food,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
@@ -394,6 +409,8 @@ export class GameSystem extends createSystem({}) {
     this.battle.update(dt, this.hands.hands, headPosition, headForward);
     this.goblins.update(dt);
     this.troops.update(dt);
+    this.balloons.update(dt);
+    this.gearDebris.update(dt);
     this.triggers.update(dt);
     // No mic: the bell is out instead. If the megaphone is ever out anyway (debug), it is tied down.
     this.megaphone.tiedDown = !mic.on;
@@ -407,6 +424,7 @@ export class GameSystem extends createSystem({}) {
     if (this.battle.canPause) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
     else this.threat.hideArrow();
     this.particles.update(dt);
+    this.juice.update(dt, headPosition);
     this.sky?.update(dt);
     this.windmill.update(dt);
     this.fog.near = SKY.fogNear * this.stage.boardScale;
@@ -560,6 +578,7 @@ export class GameSystem extends createSystem({}) {
         this.spawner.clear();
         this.goblins.killAll();
         this.troops.clear();
+        this.balloons.clear();
         this.fps.resetRun();
         break;
       case 'resetRun':
@@ -678,6 +697,20 @@ export class GameSystem extends createSystem({}) {
       case 'spinRight':
         // A bigger spin moves the board to the left as seen from the seat.
         this.handles.nudge(degToRad(id === 'spinLeft' ? DEBUG.spinStepDeg : -DEBUG.spinStepDeg), 0);
+        break;
+      case 'balloonFront':
+        this.balloons.spawn(this.stage.spin + degToRad(this.debugRng.range(-8, 8)), BALLOONS.introRadius);
+        break;
+      case 'popBalloons':
+        for (const b of this.balloons.list) this.balloons.pop(b);
+        break;
+      case 'helmetGrunts':
+        this.goblins.helmetNext += 3;
+        this.spawner.sendGroup('grunt');
+        break;
+      case 'celebrate':
+        this.juice.celebrate(false);
+        this.troops.cheerAll();
         break;
       case 'boardUp':
       case 'boardDown':

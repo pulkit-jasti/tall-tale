@@ -5,7 +5,7 @@
 // points at a goblin hitting the wall while it has been out of view for a
 // moment, so no goblin hides behind the player.
 import { BoxGeometry, Mesh, MeshBasicMaterial, Vector3, type Object3D } from 'three';
-import { CASTLE, POINTER, THREAT } from '../config/game.js';
+import { BALLOONS, CASTLE, POINTER, THREAT } from '../config/game.js';
 import { PointerArrow } from './pointerArrow.js';
 import type { Particles } from '../fx/particles.js';
 import { angleOf, polarX, polarZ } from '../rules/boardMath.js';
@@ -76,8 +76,10 @@ export class ThreatCues {
     let best: Goblin | null = null;
     let bestTime = POINTER.threatAfter;
     for (const g of goblins.list) {
-      // At the wall, climbing it, or on top of it running about.
-      if (g.mode !== 'atWall' && g.mode !== 'climbing' && g.mode !== 'rampart') {
+      // At the wall, climbing it, on top of it running about, or riding a balloon over it.
+      const p = g.root.position;
+      const overWall = g.mode === 'riding' && p.x * p.x + p.z * p.z < (CASTLE.wallOut + BALLOONS.threatOut) ** 2;
+      if (g.mode !== 'atWall' && g.mode !== 'climbing' && g.mode !== 'rampart' && !overWall) {
         if (this.unseen.has(g)) this.unseen.delete(g);
         continue;
       }

@@ -12,7 +12,8 @@ import type { RoadNetwork } from '../world/roads.js';
 import type { Goblins } from './goblins.js';
 
 interface Group {
-  type: GoblinType;
+  /** A goblin type, or a balloon with riders (src/units/balloons.ts). */
+  type: GoblinType | 'balloon';
   /** Graph node index of the camp. */
   camp: number;
   count: number;
@@ -35,6 +36,10 @@ const temp = new Vector3();
 export class WaveSpawner {
   /** Spawn speed share, set by the director (0.5 while a step waits for the player). */
   rate = 1;
+  /** Balloons wait while this is true (the first balloon wave holds them until its banner shows). */
+  balloonsHeld = false;
+  /** Sends one balloon from a camp (graph node). False when it cannot come yet (all balloons out, unit cap). */
+  onBalloon: (camp: number) => boolean = () => true;
   private groups: Group[] = [];
   private time = 0;
   private active = false;
@@ -64,6 +69,9 @@ export class WaveSpawner {
     for (const camp of campNodes) this.camps.set(camp, { planned: 0, out: 0 });
     // Split the counts into groups, then shuffle them with the seeded random.
     const sizes: Record<GoblinType, number> = { grunt: WAVES.gruntGroup, runner: WAVES.runnerGroup, climber: 1 };
+    for (let k = 0; k < (plan.balloons ?? 0); k++) {
+      this.groups.push({ type: 'balloon', camp: this.pickCamp(campNodes), count: 1, at: 0, rumbled: false, out: 0, wait: 0 });
+    }
     for (const type of ['grunt', 'runner', 'climber'] as GoblinType[]) {
       let left = plan.counts[type];
       while (left > 0) {
@@ -84,7 +92,7 @@ export class WaveSpawner {
       const x = n > 1 ? i / (n - 1) : 0;
       const jitter = i === 0 ? 0 : this.rng.range(-WAVES.jitter, WAVES.jitter) * gap;
       group.at = Math.max(0, WAVES.firstGroupAt + window * Math.pow(x, WAVES.curve) + jitter);
-      this.camps.get(group.camp)!.planned += group.count;
+      if (group.type !== 'balloon') this.camps.get(group.camp)!.planned += group.count;
     });
     this.groups.sort((a, b) => a.at - b.at);
     this.updateHills();
@@ -113,6 +121,12 @@ export class WaveSpawner {
     this.time += dt * this.rate;
     for (const group of this.groups) {
       if (group.out >= group.count) continue;
+      if (group.type === 'balloon') {
+        // Balloons float straight in from their camp: no rumble, no road.
+        if (this.time < group.at || this.balloonsHeld) continue;
+        if (this.onBalloon(group.camp)) group.out++;
+        continue;
+      }
       if (!group.rumbled) {
         if (this.time < group.at) continue;
         group.rumbled = true;

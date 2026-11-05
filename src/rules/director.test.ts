@@ -90,6 +90,7 @@ function idleApi(): TutorialApi & {
   released: number;
   baited: string[];
   baitReleased: number;
+  balloons: number;
 } {
   return {
     cleared: 0,
@@ -102,6 +103,7 @@ function idleApi(): TutorialApi & {
     released: 0,
     baited: [],
     baitReleased: 0,
+    balloons: 0,
     startWave(index) {
       this.started.push(index);
     },
@@ -154,6 +156,9 @@ function idleApi(): TutorialApi & {
       this.baitReleased++;
     },
     pausedCount: () => 0,
+    balloonIntro() {
+      this.balloons++;
+    },
   };
 }
 

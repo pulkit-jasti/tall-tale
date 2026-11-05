@@ -15,6 +15,8 @@ import {
   GOBLIN_RULES,
   HANDLES,
   HINT_SIGN,
+  GOBLIN_GEAR,
+  BALLOONS,
   TOOL_SPOTS,
   TOOLS,
   TRIGGERS,
@@ -32,6 +34,7 @@ import type { FoodToolName, HandTool } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
+import type { Balloons } from '../units/balloons.js';
 import type { TriggerKind } from '../rules/blueprint.js';
 import type { Trigger, Triggers } from '../world/triggers.js';
 import type { EndPanel } from '../ui/endPanel.js';
@@ -51,6 +54,7 @@ import type { FoodJar } from '../world/foodJar.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
+  firstBalloonWave,
   TUTORIAL_TIMING,
   TUTORIAL_WAVES,
   type HintIcon,
@@ -93,6 +97,8 @@ export interface BattleParts {
   troops: Troops;
   /** Keg, boulder and tree on the roads, reset at each wave. */
   triggers: Triggers;
+  /** Balloon riders (from wave 4). */
+  balloons: Balloons;
   /** The stun of the megaphone and the bell. */
   stun: StunWave;
   food: FoodJar;
@@ -239,6 +245,7 @@ export class Battle implements TutorialApi {
   private clearBoard(): void {
     this.parts.troops.clear();
     this.parts.triggers.hideAll();
+    this.parts.balloons.clear();
   }
 
   /** The step the tutorial is on, for the debug page. */
@@ -625,6 +632,13 @@ export class Battle implements TutorialApi {
       }
       case 'wristButton':
         return this.parts.wristButton(out);
+      case 'balloon': {
+        const b = this.parts.balloons.nearest(stage.spin);
+        if (!b) return null;
+        b.center(out);
+        out.y += 8;
+        return stage.boardSpin.localToWorld(out);
+      }
       case 'baitGoblin': {
         const g = this.parts.bait.first();
         if (!g || this.parts.isHeld(g)) return null;
@@ -701,6 +715,9 @@ export class Battle implements TutorialApi {
     this.inWave = true;
     this.sinceDamage = 0;
     const plan = TUTORIAL_WAVES[index];
+    // Helmets from their wave on. The first balloon wave holds its balloons until the balloon banner shows.
+    this.parts.goblins.helmetsOn = index + 1 >= GOBLIN_GEAR.helmetFromWave;
+    this.parts.spawner.balloonsHeld = index === firstBalloonWave(TUTORIAL_WAVES);
     this.parts.spawner.start(plan);
     // The army marches out toward the attacking camps, and the triggers of this wave stand ready.
     this.parts.troops.deploy(plan.camps);
@@ -921,6 +938,13 @@ export class Battle implements TutorialApi {
 
   triggersSetOff(kind: TriggerKind): number {
     return this.triggerCount[kind];
+  }
+
+  balloonIntro(): void {
+    const { balloons, spawner, stage, rng } = this.parts;
+    spawner.balloonsHeld = false;
+    // One balloon right in front of the player (the board angle in front now), already on its way in.
+    balloons.spawn(stage.spin + degToRad(rng.range(-6, 6)), BALLOONS.introRadius);
   }
 
   pausedCount(): number {

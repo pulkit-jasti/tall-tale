@@ -16,7 +16,10 @@ export type PerfMark =
   | 'pebble shot'
   | 'troop built'
   | 'troop spawn'
-  | 'trigger';
+  | 'trigger'
+  | 'balloon spawn'
+  | 'gear'
+  | 'juice';
 
 const marks = new Set<PerfMark>();
 

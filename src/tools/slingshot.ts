@@ -1184,9 +1184,15 @@ export class Slingshot {
     return false;
   }
 
-  private knockOut(goblin: Goblin): void {
+  /** `heavy` (a goblin shot) goes through a helmet. */
+  private knockOut(goblin: Goblin, heavy = false): void {
     this.goblins.worldPosition(goblin, temp2);
-    this.goblins.kill(goblin);
+    // A helmet takes the hit: it flies off and the goblin is knocked back (a hit for the lessons all the same).
+    if (!heavy && this.goblins.armor(goblin)) {
+      this.onHit(goblin);
+      return;
+    }
+    this.goblins.kill(goblin, true);
     this.particles.burst(temp2, HIT_COLORS, 10);
     this.audio.play('pebbleHit', temp2);
     this.audio.play('poof', temp2, 1, 0.05);
@@ -1206,7 +1212,7 @@ export class Slingshot {
    * any, knocks back the goblins around the impact, and poofs.
    */
   private splash(p: Vector3, hit: Goblin | null, shot: Goblin): void {
-    if (hit) this.knockOut(hit);
+    if (hit) this.knockOut(hit, true);
     const r = GOBLIN_SHOT.splashRadius;
     for (const g of this.goblins.list) {
       if (!this.goblins.isHittable(g)) continue;
