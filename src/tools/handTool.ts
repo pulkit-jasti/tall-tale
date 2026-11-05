@@ -9,9 +9,9 @@
 //   - Not enough food: dimmed and tied down with a little rope. A hand near it
 //     shows Locked, and closing the hand buzzes and wobbles it instead of grabbing.
 //     `tiedDown` does the same whatever the food (the megaphone if it is ever out without a mic).
-//   - Let go, before, during or after a use: it glides back to its platform
-//     (it used to float up in front of the face mid-use, which hid the board).
-//     A running timer keeps running, and it can be grabbed again there.
+//   - Let go before or after a use: it glides back to its platform.
+//   - Dropped mid-use: it hangs for a moment, then floats up to the hand area
+//     above its platform. Its timer keeps running.
 //   - Use over: it blinks for the last seconds, then shrinks, poofs and pops
 //     back onto its platform.
 //   - The tutorial can hold the use timer (`timerHeld`) while it teaches the
@@ -23,7 +23,6 @@
 import { Color, Group, Matrix4, Mesh, Quaternion, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HOLD, PRICE_TAG, TOOL_SPOTS, TOOLS } from '../config/game.js';
-import { popIn, shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
@@ -230,7 +229,7 @@ export abstract class HandTool {
       const stem = post(top - platform.size.y);
       stem.position.set(px, stem.position.y + top - platform.size.y, pz);
       this.root.add(stand, stem);
-      this.buildPriceTag(spot, pa);
+      this.buildPriceTag(spot, pa, this.options.tagToBack ? -1 : 1);
     }
     this.build();
     this.baseColors = this.materials.map((m) => m.color.clone());
@@ -257,23 +256,22 @@ export abstract class HandTool {
   }
 
   /**
-   * The price tag stands on the front edge of the platform, in the middle,
-   * facing the player, like a price label on a market stall. The same spot on
-   * every platform, so the tags sit symmetrically left and right. It stands
-   * on top of the edge, not below it, so the ring never hides it from the seat.
+   * The price tag on the platform's front edge, toward the player and a
+   * little toward the front, so the hand on the tool never covers it. It
+   * stands tilted back toward the eyes, above the ring's line of sight.
    */
-  private buildPriceTag(spot: ToolSpot, a: number): void {
-    const { tiltDeg, height, lift, out } = PRICE_TAG;
+  private buildPriceTag(spot: ToolSpot, a: number, frontSign: number): void {
+    const { inset, side, tiltDeg, height } = PRICE_TAG;
     const priceTag = new PriceTag(this.cost);
     this.priceTag = priceTag;
     const holder = new Group();
-    // Platform frame: z toward the player (the seat), so the tag faces them.
+    // Platform frame: x along the rim (toward the front is -x on the right side, +x on the left), z toward the player.
     holder.rotation.y = -a;
     holder.position.set(polarX(spot.radius, a), TOOL_SPOTS.platformTop, polarZ(spot.radius, a));
+    const toFront = (a < 0 ? 1 : -1) * frontSign;
     const tilt = degToRad(tiltDeg);
     priceTag.group.rotation.x = -tilt;
-    const front = (this.options.platformWidth ?? TOOL_SPOTS.platformWidth) / 2;
-    priceTag.group.position.set(0, lift + (height / 2) * Math.cos(tilt), front + out);
+    priceTag.group.position.set(toFront * side, (height / 2) * Math.cos(tilt), inset);
     holder.add(priceTag.group);
     this.root.add(holder);
   }
@@ -438,9 +436,12 @@ export abstract class HandTool {
     this.resetMotion();
     this.fromPosition.copy(this.body.position);
     this.fromQuaternion.copy(this.body.quaternion);
-    // Always back to its platform, also while its timer runs.
-    this.setPhase('resting');
-    this.returnLeft = TOOLS.returnTime;
+    if (this.use.active) {
+      this.setPhase('loose');
+    } else {
+      this.setPhase('resting');
+      this.returnLeft = TOOLS.returnTime;
+    }
   }
 
   /** Dropped mid-use: hang a moment, then float up to the hand area, and bob there. */
@@ -481,8 +482,7 @@ export abstract class HandTool {
 
   private updateShrink(): void {
     const t = Math.min(1, this.phaseTime / TOOLS.shrinkTime);
-    // The shared despawn look: a small elastic swell, then it shrinks away.
-    this.body.scale.setScalar(Math.max(0.001, shrinkAway(t)));
+    this.body.scale.setScalar(Math.max(0.001, 1 - t));
     if (t < 1) return;
     this.poof(this.body.position, 10);
     this.audio.play('toolReturn', this.stage.boardLift.localToWorld(temp.copy(this.body.position)));
@@ -494,8 +494,8 @@ export abstract class HandTool {
 
   private updatePop(): void {
     const t = Math.min(1, this.phaseTime / TOOLS.popTime);
-    // A small elastic overshoot, so it pops in.
-    this.body.scale.setScalar(Math.max(0.001, t < 1 ? popIn(t) : 1));
+    // A small overshoot, so it pops in.
+    this.body.scale.setScalar(Math.max(0.001, t < 1 ? Math.sin(t * Math.PI * 0.5) * (1 + 0.15 * Math.sin(t * Math.PI)) : 1));
     if (t >= 1) this.setPhase('resting');
   }
 

@@ -21,8 +21,8 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 
 | Thing | File | Target size | Tint |
 |---|---|---|---|
-| Troop (main) | `characters/mini-arena/character-soldier.glb` | 3.9 cm tall (the goblins' size since step 6) | Own colors |
-| Troop (variety) | `characters/mini-forest/character-archer.glb` | 3.9 cm tall | Own colors |
+| Troop (main) | `characters/mini-arena/character-soldier.glb` | 2.5 cm tall | Own colors |
+| Troop (variety) | `characters/mini-forest/character-archer.glb` | 2.5 cm tall | Own colors |
 | Worker in the courtyard | `characters/mini-dungeon/character-human.glb` | 2.5 cm tall | Own colors |
 | Grunt | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Green (own colors) |
 | Runner | `characters/mini-dungeon/character-orc.glb` | 3.35 cm tall | Yellow accent |

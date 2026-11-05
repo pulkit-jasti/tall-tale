@@ -89,17 +89,3 @@ export function angleDelta(from: number, to: number): number {
   while (d < -Math.PI) d += Math.PI * 2;
   return d;
 }
-
-/**
- * The stretch of rampart between the two towers around a board angle
- * (radians), kept CASTLE.towerClearDeg away from each tower: [from, to],
- * with `from` at most `angle` and `to` at least it, so it never wraps.
- */
-export function towerGap(angle: number): [number, number] {
-  const step = 360 / CASTLE.towerCount;
-  const deg = angle / DEG;
-  const k = Math.floor((deg - CASTLE.towerStartDeg) / step);
-  const lo = CASTLE.towerStartDeg + k * step + CASTLE.towerClearDeg;
-  const hi = CASTLE.towerStartDeg + (k + 1) * step - CASTLE.towerClearDeg;
-  return [Math.min(lo, deg) * DEG, Math.max(hi, deg) * DEG];
-}
