@@ -137,7 +137,9 @@ export class PokeButton {
       this.group.worldToLocal(local.copy(hand.indexTip));
       // Generous zone around the round face, and not from far behind it.
       if (Math.hypot(local.x, local.y) > this.radius * zoneScale || local.z < -this.depth) continue;
-      if (local.z > face + readyDistance) continue;
+      // A wider zone once Ready, so a fingertip shaking at the edge never flickers it on and off.
+      const reach = this.touch === 'idle' ? readyDistance : readyDistance * POKE.readyOut;
+      if (local.z > face + reach) continue;
       inZone = true;
       if (local.z > face) {
         near = true;
@@ -152,7 +154,7 @@ export class PokeButton {
     if (push >= 0 && this.armed && !this.fired) {
       // The cap follows the fingertip in, down to the bottom.
       const target = Math.min(travel, push);
-      this.press += (target - this.press) * Math.min(1, dt * 40);
+      this.press += (target - this.press) * Math.min(1, dt * POKE.capFollow);
       if (this.cooldown <= 0 && this.press >= travel * fireShare) {
         this.fired = true;
         this.armed = false;

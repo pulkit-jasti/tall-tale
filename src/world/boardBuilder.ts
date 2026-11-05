@@ -230,6 +230,8 @@ async function buildDecor(terrain: Terrain, camps: CampSpot[], built: Spot[], fo
 
 export interface BuiltBoard {
   network: RoadNetwork;
+  /** The windmill's sails, which turn (decor), or null without a windmill. */
+  sails: Object3D | null;
   /** Camp hills by camp id, so a camp can sink as its enemies come out. */
   hills: Map<string, Object3D>;
 }
@@ -268,5 +270,5 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
     buildSettlements(plan, network.roads, createRandom(seed + 8)),
   ]);
   parent.add(castle, camps, decor, settlements);
-  return { network, hills };
+  return { network, hills, sails: (settlements.userData.sails as Object3D | undefined) ?? null };
 }

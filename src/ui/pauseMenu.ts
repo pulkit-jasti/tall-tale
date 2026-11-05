@@ -16,6 +16,7 @@ import { Group, Matrix4, Quaternion, Vector3, type Material, type Mesh, type Obj
 import type { GameAudio } from '../audio/sound.js';
 import { BOARD, PAUSE, POKE } from '../config/game.js';
 import { PoseSwitch } from '../player/gesture.js';
+import { OneEuro, type OneEuroOptions } from '../player/oneEuro.js';
 import type { HandState } from '../player/hands.js';
 import { Panel, PANEL_INK } from './panel.js';
 import { PokeButton } from './pokeButton.js';
@@ -44,6 +45,14 @@ const z = new Vector3();
 const UP = new Vector3(0, 1, 0);
 const basis = new Matrix4();
 const faceNow = new Vector3();
+const normal = new Vector3();
+const palmIn = [0, 0, 0];
+const normalIn = [0, 0, 0];
+
+/** The config's One Euro numbers in the filter's own words. */
+function filterOptions(f: { still: number; follow: number; derivative: number }): OneEuroOptions {
+  return { minCutoff: f.still, beta: f.follow, derivativeCutoff: f.derivative };
+}
 const turnTo = new Quaternion();
 
 /** The pause button on the left palm. update() returns true on the frame it is poked. */
@@ -54,16 +63,27 @@ class WristButton {
   private facing = new PoseSwitch(PAUSE.wrist.showHold, PAUSE.wrist.hideHold);
   /** 0 hidden, 1 fully out. */
   private shown = 0;
-  /** Where the button stands (world). It moves only when the palm really moved, so tracking jitter never shakes it. */
+  /** Where the button stands (world): the palm filtered with a One Euro filter, so tracking jitter never shakes it. */
   private spot = new Vector3();
   private hasSpot = false;
-  /** Gliding to the palm's new spot, or turning to face the eyes again. */
-  private moving = false;
+  private palmFilter = new OneEuro(3, filterOptions(PAUSE.wrist.filter));
+  private normalFilter = new OneEuro(3, filterOptions(PAUSE.wrist.normalFilter));
   private turning = false;
 
   constructor(parent: Object3D, audio: GameAudio) {
     this.button = new PokeButton(audio, { radius: PAUSE.wrist.radius, icon: 'pause' });
     this.holder.add(this.button.group);
+    // Drawn on top: without the depth test the hand's own mesh never cuts into it (that read as flicker).
+    let order = PAUSE.wrist.renderOrder;
+    this.holder.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) return;
+      const material = mesh.material as Material;
+      material.depthTest = false;
+      material.depthWrite = false;
+      material.transparent = true;
+      mesh.renderOrder = order++;
+    });
     this.holder.visible = false;
     parent.add(this.holder);
   }
@@ -115,23 +135,29 @@ class WristButton {
       this.hasSpot = false;
       return false;
     }
-    // The palm's middle, a little out from it.
-    target.copy(left.palm).addScaledVector(left.palmNormal, W.out);
+    // The palm's middle and its direction, each through a One Euro filter, then a little out from the palm.
+    palmIn[0] = left.palm.x;
+    palmIn[1] = left.palm.y;
+    palmIn[2] = left.palm.z;
+    normalIn[0] = left.palmNormal.x;
+    normalIn[1] = left.palmNormal.y;
+    normalIn[2] = left.palmNormal.z;
+    if (!this.hasSpot) {
+      this.palmFilter.reset();
+      this.normalFilter.reset();
+    }
+    this.palmFilter.filter(palmIn, dt);
+    this.normalFilter.filter(normalIn, dt);
+    normal.set(normalIn[0], normalIn[1], normalIn[2]).normalize();
+    target.set(palmIn[0], palmIn[1], palmIn[2]).addScaledVector(normal, W.out);
     if (!this.hasSpot) {
       this.spot.copy(target);
       this.hasSpot = true;
-      this.moving = false;
       this.faceEyes(head, true);
     } else {
-      const gap = this.spot.distanceTo(target);
-      // Held still while the other finger is about to poke it, unless the palm really went away.
+      // Held completely still while the other finger is about to poke it, unless the palm really went away.
       const poking = right.tracked && right.indexTip.distanceTo(this.spot) < W.lockNear;
-      if (poking) this.moving = gap > W.lockBreak;
-      else if (gap > W.deadband) this.moving = true;
-      if (this.moving) {
-        this.spot.lerp(target, 1 - Math.exp(-dt / W.smoothing));
-        if (this.spot.distanceTo(target) < W.settle) this.moving = false;
-      }
+      if (!poking || this.spot.distanceTo(target) > W.lockBreak) this.spot.copy(target);
       if (!poking) this.faceEyes(head, false);
     }
     this.holder.visible = true;

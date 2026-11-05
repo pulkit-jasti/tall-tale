@@ -24,7 +24,6 @@ import {
 import type { GameAudio } from '../audio/sound.js';
 import { CASTLE, GOBLIN_RULES, TROOPS } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
-import { shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import type { Random } from '../rules/random.js';
 import type { Step } from '../rules/roadGraph.js';
@@ -45,8 +44,6 @@ class Troop {
   private actions = new Map<string, AnimationAction>();
   private current: AnimationAction | null = null;
   mode: TroopMode = 'dead';
-  /** Shrinking away after being knocked down (seconds left). Only reused once this is over. */
-  vanish = 0;
   /** Roads from the wall entry out to the camp (each walked in its `dir`). */
   route: Step[] = [];
   leg = 0;
@@ -215,18 +212,7 @@ export class Troops {
     const far2 = TROOPS.farAnimFrom * TROOPS.farAnimFrom;
     for (let i = 0; i < this.list.length; i++) {
       const t = this.list[i];
-      if (t.mode === 'dead') {
-        // Knocked down: it shrinks away (the shared despawn look), then hides.
-        if (t.vanish > 0) {
-          t.vanish -= dt;
-          t.root.scale.setScalar(Math.max(0.001, shrinkAway(1 - t.vanish / GOBLIN_RULES.vanishTime)));
-          if (t.vanish <= 0) {
-            t.root.visible = false;
-            t.root.scale.setScalar(1);
-          }
-        }
-        continue;
-      }
+      if (t.mode === 'dead') continue;
       if (t.mode === 'walking') this.walk(t, dt);
       else this.fight(t, dt);
       // Knocked down or gone home this frame.
@@ -247,7 +233,7 @@ export class Troops {
   }
 
   private obtain(): Troop | null {
-    let troop = this.list.find((t) => t.mode === 'dead' && t.vanish <= 0) ?? null;
+    let troop = this.list.find((t) => t.mode === 'dead') ?? null;
     if (!troop) {
       if (this.templates.length === 0) return null;
       // Archers for variety: same rules, another look. Picked once per soldier, by the seeded random.
@@ -280,8 +266,6 @@ export class Troops {
     troop.distance = troop.dir === 1 ? 0 : road.length;
     road.pointAt(troop.distance, troop.offset * troop.dir, troop.root.position);
     troop.root.visible = true;
-    troop.root.scale.setScalar(1);
-    troop.vanish = 0;
     troop.play('walk', true, 1.2);
     // A small dust puff where they step out of the hidden gate.
     this.particles.burst(this.board.localToWorld(temp.copy(troop.root.position)), TROOPS.poofColors, 3, 0.08);
@@ -412,12 +396,7 @@ export class Troops {
     if (t.foe && t.foe.foe === t) t.foe.foe = null;
     t.foe = null;
     t.mode = 'dead';
-    // Knocked down: it shrinks away. Gone home inside the castle: it is simply gone.
-    if (knocked && t.root.visible) t.vanish = GOBLIN_RULES.vanishTime;
-    else {
-      t.vanish = 0;
-      t.root.visible = false;
-      t.root.scale.setScalar(1);
-    }
+    // Soldiers, like goblins, keep their poof (no shrink).
+    t.root.visible = false;
   }
 }

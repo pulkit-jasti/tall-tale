@@ -103,7 +103,7 @@ export interface BattleParts {
   ghost: GhostHand;
   /** Ghost aim dots from the pouch to the first trigger lesson's keg. */
   ghostAim: GhostAim;
-  /** The 3D arrow in front of the face that points at the lesson's target. */
+  /** The gold 3D arrow in front of the face that points at the lesson's target. */
   pointer: PointerArrow;
   /** Goblins brought just for a tool's use lesson. */
   bait: LessonBait;

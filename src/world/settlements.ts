@@ -25,11 +25,11 @@
 // the burned village, forests and lumber camps; the terrain flattens them),
 // then the hilltop and hillside places on the finished terrain. Built from kit pieces (houses from wall tiles and roofs)
 // into one StaticBatch: a few draw calls for all of it.
-import { Group, Matrix4, Quaternion, Vector3 } from 'three';
+import { Group, Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import { BOARD, ROADS, SETTLEMENTS, type LandmarkKind } from '../config/game.js';
 import { groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
-import { loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
+import { cloneStatic, loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
 import type { Road } from './roads.js';
 import { campDistance, type CampSpot, type RoadField, type Terrain } from './terrain.js';
 
@@ -442,10 +442,30 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     add(towerMid, base.clone().multiply(local(1.01, 0)));
     add(towerTop, base.clone().multiply(local(2.02, 0)));
   }
-  // The windmill, its sails toward the giant.
+  // The windmill: a tall mill house (the kit's windmill model is only the
+  // sails, centered on their axle), its door and sails toward the giant. The
+  // sails are their own object, so they can turn (see Windmill below).
+  let sails: Object3D | null = null;
   if (plan.windmill) {
     const { x, z } = plan.windmill;
-    add(windmill, place(x, lowestGround(x, z, 4) - 0.3, z, facing(x, z, 0, 0), SETTLEMENTS.windmill.height / 3.11));
+    const M = SETTLEMENTS.windmill;
+    const tile = M.height / (M.floors + 0.5);
+    const base = place(x, lowestGround(x, z, tile) - 0.15, z, facing(x, z, 0, 0), tile);
+    for (let floor = 0; floor < M.floors; floor++) {
+      for (let side = 0; side < 4; side++) {
+        const piece = floor === 0 && side === 0 ? wallDoor : side % 2 === 0 ? wallWindow : wall;
+        add(piece, base.clone().multiply(local(floor, side)));
+      }
+    }
+    add(roofPoint, base.clone().multiply(local(M.floors, 0)));
+    // The sails on the front wall, near the top, their axle (the model's x) straight out of the wall.
+    const pivot = new Group();
+    base.clone().multiply(new Matrix4().makeTranslation(0.5 + M.axleOut, M.floors - 0.35, 0)).decompose(pivot.position, pivot.quaternion, pivot.scale);
+    const blades = cloneStatic(windmill);
+    blades.scale.setScalar((M.sailRadius * 2) / 3.11);
+    pivot.add(blades);
+    pivot.userData.blades = blades;
+    sails = pivot;
   }
   // Wrecked siege machines by the camps.
   for (const ruin of plan.ruins) {
@@ -455,7 +475,20 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
   await buildFarPlaces(plan, add, { walls: [wall, wallWindow, wood, woodWindow, wallDoor, woodDoor], roof: roofGable, cart, barrel, box, boxLarge }, rng);
   const group = batch.build();
   group.name = 'settlements';
+  if (sails) {
+    group.add(sails);
+    group.userData.sails = sails.userData.blades;
+  }
   return group;
+}
+
+/** Turns the windmill's sails slowly (decor only). */
+export class Windmill {
+  constructor(private blades: Object3D | null) {}
+
+  update(dt: number): void {
+    if (this.blades) this.blades.rotation.x += dt * SETTLEMENTS.windmill.spin;
+  }
 }
 
 type Add = (template: ModelTemplate, matrix: Matrix4) => void;

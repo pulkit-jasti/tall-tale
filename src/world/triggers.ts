@@ -138,6 +138,81 @@ function paintMaterial(color: number): MeshStandardMaterial {
   return new MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, flatShading: true, side: DoubleSide });
 }
 
+/**
+ * Gives a tree's leaves their own autumn material. Each triangle whose spot
+ * on the color map is green is a leaf triangle (the trunk's are brown), so
+ * only the leaves change, whole triangles at a time. If the map cannot be
+ * read, triangles in the crown (above TRIGGERS.tree.crownFrom of the height)
+ * count as leaves. Returns the new materials (they glow with the tree).
+ */
+function autumnLeaves(model: Object3D, height: number): MeshStandardMaterial[] {
+  const leaf = new MeshStandardMaterial({ color: TRIGGERS.tree.leafColor, roughness: 1, metalness: 0, flatShading: true });
+  model.updateMatrixWorld(true);
+  model.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const base = mesh.material as MeshStandardMaterial;
+    const pixels = mapPixels(base.map);
+    const g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+    const position = g.getAttribute('position');
+    const uv = g.getAttribute('uv');
+    const triangles = position.count / 3;
+    const isLeaf: boolean[] = [];
+    const v = new Vector3();
+    for (let t = 0; t < triangles; t++) {
+      let green = false;
+      if (pixels && uv) {
+        const u = (uv.getX(t * 3) + uv.getX(t * 3 + 1) + uv.getX(t * 3 + 2)) / 3;
+        const w = (uv.getY(t * 3) + uv.getY(t * 3 + 1) + uv.getY(t * 3 + 2)) / 3;
+        const px = Math.min(pixels.width - 1, Math.max(0, Math.floor((u - Math.floor(u)) * pixels.width)));
+        const py = Math.min(pixels.height - 1, Math.max(0, Math.floor((w - Math.floor(w)) * pixels.height)));
+        const i = (py * pixels.width + px) * 4;
+        const [r, gr, b] = [pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]];
+        green = gr > r * 1.08 && gr > b * 1.08;
+      } else {
+        let y = 0;
+        for (let k = 0; k < 3; k++) y += v.fromBufferAttribute(position, t * 3 + k).applyMatrix4(mesh.matrixWorld).y;
+        green = y / 3 > height * TRIGGERS.tree.crownFrom;
+      }
+      isLeaf.push(green);
+    }
+    // Leaf triangles last, as their own group with the autumn material.
+    const order = [...isLeaf.keys()].sort((a, b) => Number(isLeaf[a]) - Number(isLeaf[b]));
+    const leaves = isLeaf.filter(Boolean).length;
+    if (leaves === 0) return;
+    for (const name of Object.keys(g.attributes)) {
+      const attribute = g.getAttribute(name);
+      const size = attribute.itemSize;
+      const from = attribute.array as Float32Array;
+      const to = new Float32Array(from.length);
+      order.forEach((t, n) => to.set(from.subarray(t * 3 * size, (t + 1) * 3 * size), n * 3 * size));
+      g.setAttribute(name, new Float32BufferAttribute(to, size));
+    }
+    g.clearGroups();
+    g.addGroup(0, (triangles - leaves) * 3, 0);
+    g.addGroup((triangles - leaves) * 3, leaves * 3, 1);
+    mesh.geometry = g;
+    mesh.material = [base, leaf];
+  });
+  return [leaf];
+}
+
+/** The pixels of a color map, or null when it cannot be read back (a compressed texture). */
+function mapPixels(map: MeshStandardMaterial['map']): ImageData | null {
+  try {
+    const image = map?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+    if (!image || !image.width) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const c = canvas.getContext('2d')!;
+    c.drawImage(image, 0, 0);
+    return c.getImageData(0, 0, canvas.width, canvas.height);
+  } catch {
+    return null;
+  }
+}
+
 /** The trunk's middle and radius at a height (model space, cm), measured from the model's own points. */
 function trunkAt(model: Object3D, from: number, to: number): { x: number; z: number; r: number } {
   model.updateMatrixWorld(true);
@@ -152,6 +227,7 @@ function trunkAt(model: Object3D, from: number, to: number): { x: number; z: num
     }
   });
   if (points.length === 0) return { x: 0, z: 0, r: 0.8 };
+  // The middle of the points, then their typical distance (not the farthest: a root or branch would push it out).
   let x = 0;
   let z = 0;
   for (const v of points) {
@@ -160,9 +236,9 @@ function trunkAt(model: Object3D, from: number, to: number): { x: number; z: num
   }
   x /= points.length;
   z /= points.length;
-  let r = 0;
-  for (const v of points) r = Math.max(r, Math.hypot(v.x - x, v.z - z));
-  return { x, z, r: Math.min(r, 2) };
+  const d = points.map((v) => Math.hypot(v.x - x, v.z - z)).sort((a, b) => a - b);
+  const r = d[Math.floor(d.length * 0.6)];
+  return { x, z, r: Math.min(Math.max(r, 0.3), 2) };
 }
 
 /** Modes where a goblin is on its feet on the field (it counts as near a trigger). */
@@ -429,7 +505,8 @@ class Boulder extends Trigger {
   private readonly stopAt: number;
   private distance = 0;
   private spin = 0;
-  private flag: Mesh | null = null;
+  private flag: Group | null = null;
+  private flagYaw = 0;
 
   constructor(owner: Triggers, wave: number, road: number, along: number, rock: ModelTemplate, hill: ModelTemplate) {
     super('boulder', wave, owner, road, along);
@@ -462,46 +539,49 @@ class Boulder extends Trigger {
 
   /**
    * Someone has wedged it, ready to go: a wooden chock under it on the road
-   * side, and a long pry bar under its far side with a red rag flag tied to
-   * the top, like a builder's warning flag. They stay on the hill when the
-   * boulder rolls. Returns their materials (they glow with the boulder).
+   * side, and a straight warning flag planted on the hill beside it, a red
+   * rag on an upright pole, its cloth turned toward the castle so it reads
+   * from the seat. They stay on the hill when the boulder rolls. Returns
+   * their materials (they glow with the boulder).
    */
   private buildLever(): MeshStandardMaterial[] {
-    const { size } = TRIGGERS.boulder;
-    const { leverLength, leverDeg, flagWidth, flagHeight } = TRIGGERS.boulder;
+    const { size, poleHeight, flagWidth, flagHeight } = TRIGGERS.boulder;
     const wood = paintMaterial(TRIGGERS.woodColor);
     const red = paintMaterial(TRIGGERS.paint);
     const props = new Group();
     // In the hill's own space (it only moves, never turns).
     const local = (world: Vector3): Vector3 => world.sub(this.hill.position);
     toRoadDir.subVectors(this.onRoad, this.rest).setY(0).normalize();
-    // The chock: a wooden wedge (a 3 sided prism) under the boulder, on the road side.
-    const chock = new Mesh(new CylinderGeometry(size * 0.22, size * 0.22, size * 0.5, 3), wood);
-    chock.rotation.set(0, Math.atan2(toRoadDir.x, toRoadDir.z), Math.PI / 2, 'YXZ');
-    chock.position.copy(local(temp.copy(this.rest).addScaledVector(toRoadDir, size * 0.42).setY(this.rest.y - size * 0.38)));
-    // The pry bar: from under its far side, out and up.
-    const a = degToRad(leverDeg);
-    leverDir.copy(toRoadDir).multiplyScalar(-Math.cos(a)).setY(Math.sin(a));
-    const start = temp.copy(this.rest).addScaledVector(toRoadDir, -size * 0.25).setY(this.rest.y - size * 0.3);
-    const bar = new Mesh(new CylinderGeometry(0.28, 0.32, leverLength, 6), wood);
-    bar.position.copy(start).addScaledVector(leverDir, leverLength / 2);
-    bar.quaternion.setFromUnitVectors(UP, leverDir);
-    const tip = temp2.copy(start).addScaledVector(leverDir, leverLength);
-    local(bar.position);
-    // The red rag flag at its top, hanging off to one side, square to the view from the castle.
-    const flag = new Mesh(flagGeometry(flagWidth, flagHeight), red);
-    flag.position.copy(local(tip));
-    flag.rotation.y = Math.atan2(toRoadDir.x, toRoadDir.z) + Math.PI / 2;
-    props.add(chock, bar, flag);
+    // Across the road direction, on the ground.
+    leverDir.set(toRoadDir.z, 0, -toRoadDir.x);
+    // The chock: a wooden wedge (a 3 sided prism) lying under the boulder on the road side, across the road direction.
+    const chock = new Mesh(new CylinderGeometry(size * 0.2, size * 0.2, size * 0.6, 3), wood);
+    chock.rotation.set(0, Math.atan2(leverDir.z, -leverDir.x), Math.PI / 2, 'YXZ');
+    chock.position.copy(local(temp.copy(this.rest).addScaledVector(toRoadDir, size * 0.42).setY(this.rest.y - size * 0.4)));
+    // The flag: an upright pole on the hill beside the boulder, away from the road.
+    const ground = this.rest.y - size / 2;
+    const foot = temp.copy(this.rest).addScaledVector(toRoadDir, -size * 0.55).addScaledVector(leverDir, size * 0.45).setY(ground - 0.5);
+    const pole = new Mesh(new CylinderGeometry(0.22, 0.26, poleHeight, 6), wood);
+    pole.position.copy(foot).setY(foot.y + poleHeight / 2);
+    local(pole.position);
+    // The rag hangs from the pole's top, its face toward the board's middle (the castle and the seat).
+    const flag = new Group();
+    const cloth = new Mesh(flagGeometry(flagWidth, flagHeight), red);
+    flag.add(cloth);
+    flag.position.copy(foot).setY(foot.y + poleHeight - 0.2);
+    local(flag.position);
+    this.flagYaw = Math.atan2(-foot.x, -foot.z);
+    flag.rotation.y = this.flagYaw;
+    props.add(chock, pole, flag);
     this.flag = flag;
     this.hill.add(props);
     return [wood, red];
   }
 
-  /** The rag flag flutters a little. */
+  /** The rag flutters a little round its pole, staying upright. */
   protected override stand(): void {
     super.stand();
-    if (this.flag) this.flag.rotation.z = Math.sin(this.time * 4) * 0.12;
+    if (this.flag) this.flag.rotation.y = this.flagYaw + Math.sin(this.time * 3) * 0.18;
   }
 
   private xz(distance: number): [number, number] {
@@ -590,6 +670,8 @@ class Tree extends Trigger {
     super('tree', wave, owner, road, along);
     const model = cloneStatic(template);
     this.materials = ownMaterials(model);
+    // Only the leaves turn autumn orange (whole leaf triangles, never the trunk), so this tree stands out from every other.
+    this.materials.push(...autumnLeaves(model, template.size.y));
     // An axe stuck in the trunk, on the side that faces the castle: someone was chopping it, and it is ready to fall.
     this.materials.push(...this.buildAxe(model, template));
     this.root.add(model);
@@ -611,12 +693,13 @@ class Tree extends Trigger {
     const red = paintMaterial(TRIGGERS.paint);
     const axe = new Group();
     // Built along +x (out of the trunk), then turned to face the castle (the board's middle).
+    // The head: its blade bitten a little into the bark, most of it out in view.
     const head = new Mesh(new BoxGeometry(axeHead * 0.9, axeHead, axeHead * 0.25), steel);
-    head.position.x = trunk.r - axeHead * 0.2;
+    head.position.x = trunk.r + axeHead * 0.15;
     const handle = new Mesh(new CylinderGeometry(0.2, 0.24, axeHandle, 6), red);
     const droop = degToRad(12);
     handle.rotation.z = Math.PI / 2 + droop;
-    handle.position.set(trunk.r + axeHead * 0.25 + (axeHandle / 2) * Math.cos(droop), -(axeHandle / 2) * Math.sin(droop), 0);
+    handle.position.set(trunk.r + axeHead * 0.55 + (axeHandle / 2) * Math.cos(droop), -(axeHandle / 2) * Math.sin(droop), 0);
     axe.add(head, handle);
     axe.position.set(trunk.x, h * axeAt, trunk.z);
     axe.rotation.y = Math.atan2(this.base.z, -this.base.x);

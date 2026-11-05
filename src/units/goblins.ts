@@ -22,7 +22,6 @@ import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { CASTLE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GoblinStats, type GoblinType } from '../config/game.js';
 import { angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
-import { shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
@@ -134,8 +133,6 @@ export class Goblin {
   patrolTo = 0;
   /** Stays still on the rampart (a lesson goblin), instead of running about, and never jumps in until released. */
   calm = false;
-  /** Shrinking away after it was knocked out or eaten (seconds left). It is only reused once this is over. */
-  vanish = 0;
   /** Peppered: time to its next sneeze, and the sneeze's head jerk left (seconds). */
   sneezeIn = 0;
   sneezing = 0;
@@ -362,7 +359,7 @@ export class Goblins {
   }
 
   private obtain(type: GoblinType): Goblin | null {
-    let goblin = this.list.find((g) => g.mode === 'dead' && g.vanish <= 0) ?? null;
+    let goblin = this.list.find((g) => g.mode === 'dead') ?? null;
     if (!goblin) {
       if (this.list.length >= this.cap) return null;
       goblin = new Goblin(this.template, this.template.animations, this.baseColor);
@@ -387,7 +384,6 @@ export class Goblins {
     goblin.bait = false;
     goblin.patrolRoad = -1;
     goblin.calm = false;
-    goblin.vanish = 0;
     goblin.sneezing = 0;
     goblin.dashPause = 0;
     goblin.root.scale.setScalar(1);
@@ -518,15 +514,13 @@ export class Goblins {
     else this.headToWall(g);
   }
 
-  /** Out of the game at once. It shrinks away with a small elastic swell (shared despawn look), then hides. */
+  /** Out of the game at once. Goblins keep their poof of particles (made by the caller), no shrink. */
   kill(goblin: Goblin): void {
     if (this.aimed === goblin) this.setAimed(null);
-    const wasAlive = goblin.mode !== 'dead';
     goblin.mode = 'dead';
+    goblin.root.visible = false;
     goblin.road = null;
     goblin.stunned = 0;
-    if (wasAlive && goblin.root.visible) goblin.vanish = GOBLIN_RULES.vanishTime;
-    else goblin.root.visible = false;
   }
 
   killAll(): void {
@@ -698,17 +692,7 @@ export class Goblins {
     let speck = 0;
     for (let i = 0; i < this.list.length; i++) {
       const g = this.list[i];
-      if (g.mode === 'dead') {
-        if (g.vanish > 0) {
-          g.vanish -= dt;
-          g.root.scale.setScalar(Math.max(0.001, shrinkAway(1 - g.vanish / GOBLIN_RULES.vanishTime)));
-          if (g.vanish <= 0) {
-            g.root.visible = false;
-            g.root.scale.setScalar(1);
-          }
-        }
-        continue;
-      }
+      if (g.mode === 'dead') continue;
       this.step(g, dt);
       if (g.seasoned) {
         this.sneeze(g, dt);

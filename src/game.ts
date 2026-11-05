@@ -51,6 +51,7 @@ import { Triggers } from './world/triggers.js';
 import { buildBoard } from './world/boardBuilder.js';
 import { FoodJar } from './world/foodJar.js';
 import { buildSeatFloor, GiantBody } from './world/giant.js';
+import { Windmill } from './world/settlements.js';
 import { Stage } from './world/stage.js';
 
 const headPosition = new Vector3();
@@ -105,6 +106,7 @@ export class GameSystem extends createSystem({}) {
   private paused = false;
   private pauseMenu!: PauseMenu;
   private giant!: GiantBody;
+  private windmill!: Windmill;
   private heartbeatTimer = 0;
 
   init(): void {
@@ -145,6 +147,7 @@ export class GameSystem extends createSystem({}) {
       loadUiImages(),
       ghost.load(root),
     ]);
+    this.windmill = new Windmill(built.sails);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.goblins.particles = this.particles;
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
@@ -178,7 +181,7 @@ export class GameSystem extends createSystem({}) {
         );
       }
     };
-    this.threat = new ThreatCues(this.stage, this.particles);
+    this.threat = new ThreatCues(this.stage, this.particles, root);
     this.pauseMenu = new PauseMenu(root, this.audio);
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
@@ -313,14 +316,15 @@ export class GameSystem extends createSystem({}) {
     if (hidden !== this.hidden) {
       this.hidden = hidden;
       console.info(`[game] ${hidden ? 'hidden' : 'visible'} (${state})`);
+      // Sound (and the mic, which shares the audio context) stops only while hidden, and always comes back with the view.
+      this.audio.setPaused(hidden);
+      if (!hidden) mic.ensureLive();
       if (hidden && immersive && this.battle.canPause) this.pause();
     }
     if (!this.battle.canPause && this.menuPaused) this.resume();
     const paused = hidden || this.menuPaused;
     if (paused !== this.paused) {
       this.paused = paused;
-      // Sound only stops for the Quest menu: the frozen battle makes none, and the pause panel's clicks must be heard.
-      this.audio.setPaused(hidden);
       this.fps.status = paused ? 'paused' : '';
       // Menu frames and the hitch after it would pollute the measured run.
       this.fps.resetRun();
@@ -399,8 +403,12 @@ export class GameSystem extends createSystem({}) {
     this.stun.update(dt);
     this.food.update(dt);
     this.threat.update(dt);
+    // The red arrow only while a battle is fought.
+    if (this.battle.canPause) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
+    else this.threat.hideArrow();
     this.particles.update(dt);
     this.sky?.update(dt);
+    this.windmill.update(dt);
     this.fog.near = SKY.fogNear * this.stage.boardScale;
     this.fog.far = SKY.fogFar * this.stage.boardScale;
   }
@@ -415,6 +423,7 @@ export class GameSystem extends createSystem({}) {
     this.menuPaused = true;
     this.grabEat.releaseAll();
     this.battle.hideHints();
+    this.threat.hideArrow();
     this.pauseMenu.hideWrist();
     this.audio.play('pauseOpen');
     console.info('[game] paused (pause panel)');

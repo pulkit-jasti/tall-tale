@@ -151,8 +151,13 @@ export const SETTLEMENTS = {
     /** One tower piece (cm across and tall). */
     size: 3.4,
   },
-  /** The one windmill: its height (cm), on the highest spot this close to a field (cm). */
-  windmill: { height: 15, near: 70 },
+  /**
+   * The one windmill: its height (cm) with the roof, on the highest spot this
+   * close to a field (cm). A mill house this many floors high, its sails
+   * (radius in wall tiles) on the front wall near the top, this far out from
+   * it (tiles), turning this fast (radians per second).
+   */
+  windmill: { height: 15, near: 70, floors: 3, sailRadius: 0.85, axleOut: 0.12, spin: 0.8 },
   ruins: {
     count: 4,
     /** This far past an enemy camp's edge (cm), and how wide (cm). */
@@ -519,7 +524,7 @@ export const GOBLINS: Record<GoblinType, GoblinStats> = {
 };
 
 export const GOBLIN_RULES = {
-  /** A knocked out or eaten goblin shrinks away over this long (seconds), with a small elastic swell first. */
+  /** Things (not goblins or soldiers, they poof) shrink away over this long (seconds), with a small elastic swell first. */
   vanishTime: 0.32,
   /**
    * Climbers on the rampart run about, causing chaos: dashes of up to this
@@ -587,7 +592,8 @@ export const ROUTES = {
 export const LESSON_BAIT = {
   rampartCount: 3,
   rampartSpreadDeg: 11,
-  patrolCount: 3,
+  /** One moving goblin for the first shot (3 walked on past the keg lesson's goblins, which felt odd). */
+  patrolCount: 1,
   patrolRadius: 115,
   patrolHalf: 14,
   approach: 25,
@@ -717,19 +723,21 @@ export const PAUSE = {
     maxDistance: 0.6,
     /** It never hides while the right index fingertip is this close to it (meters): the player is poking it. */
     keepNear: 0.1,
-    /** Button size (cm), out from the middle of the palm (meters). */
-    radius: 1.8,
-    out: 0.018,
     /**
-     * Steady, not glued to the palm: hand tracking shakes every joint by a few
-     * mm each frame (worst toward the eyes, so it looked like it grew and
-     * shrank). The button stays put until the palm moved `deadband` away
-     * (meters), then glides there (`smoothing`, seconds) and stops once within
-     * `settle`. It only turns to face the eyes again past `turnDeg` degrees.
+     * Button size (cm), out from the middle of the palm (meters). 3 cm out
+     * (was 1.8), clear of the hand's own mesh, which it flickered through.
      */
-    deadband: 0.015,
-    settle: 0.003,
-    smoothing: 0.1,
+    radius: 1.8,
+    out: 0.03,
+    /**
+     * The palm is filtered with a One Euro filter before the button follows
+     * it (hand joints shake by a few mm every frame): `still` is the cutoff
+     * when the hand is still (Hz, lower is steadier), `follow` how quickly it
+     * catches up when the hand moves. The palm's direction gets its own.
+     */
+    filter: { still: 0.8, follow: 8, derivative: 1 },
+    normalFilter: { still: 0.6, follow: 1.5, derivative: 1 },
+    /** It only turns to face the eyes again past this angle (degrees). */
     turnDeg: 10,
     /**
      * While the right index fingertip is within `lockNear` of it (meters),
@@ -738,6 +746,8 @@ export const PAUSE = {
      */
     lockNear: 0.12,
     lockBreak: 0.06,
+    /** Drawn after everything, without the depth test, so the hand never cuts into it. */
+    renderOrder: 45,
     /** It pops in and out over this long (seconds). */
     popTime: 0.15,
   },
@@ -772,8 +782,11 @@ export const PAUSE = {
 
 /** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. */
 export const POKE = {
-  /** Ready when the fingertip is this close in front of the button face. */
+  /** Ready when the fingertip is this close in front of the button face, and no longer Ready once past readyDistance times readyOut (a gap, so it never flickers). */
   readyDistance: 5,
+  readyOut: 1.35,
+  /** The cap follows the fingertip in at this rate (per second): slower than the finger's own shake, so it does not vibrate. */
+  capFollow: 14,
   /** How far the cap sinks into its rim. It follows the fingertip. */
   travel: 1,
   /** It clicks when pushed this share of the way down. */
@@ -882,22 +895,30 @@ export const MARKERS = {
 };
 
 /**
- * The 3D pointer arrow (src/ui/pointerArrow.ts): in front of the face, a
- * little low, pointing at the lesson's target while it is away from the
- * middle of the view (meters, degrees, seconds).
+ * The 3D pointer arrows (src/ui/pointerArrow.ts): in front of the face, a
+ * little low, pointing at something only while it is at the very edge of the
+ * headset's view or out of it (the Quest 3S sees about 96 by 90 degrees, so
+ * about 45 degrees from the middle is the edge). They blink softly. `lesson`:
+ * gold, at the lesson's target. `threat`: red, at a goblin hitting the wall
+ * out of view, a little lower so both fit (meters, degrees, seconds).
  */
 export const POINTER = {
   length: 0.055,
   distance: 0.4,
-  below: 0.09,
   smoothing: 0.12,
   /** Shows once the target is this far from the middle of the view, hides again once within hideDeg. */
-  showDeg: 22,
-  hideDeg: 14,
+  showDeg: 38,
+  hideDeg: 32,
   popTime: 0.2,
-  color: 0xf2c14e,
-  glow: 0xb07a10,
+  /** The soft blink: glow between these, this many times a second. */
+  blinkMin: 0.25,
+  blinkMax: 0.8,
+  blinkSpeed: 0.8,
   renderOrder: 36,
+  lesson: { color: 0xf2c14e, glow: 0xb07a10, below: 0.09 },
+  threat: { color: 0xe0342a, glow: 0x9a1408, below: 0.16 },
+  /** The red arrow: only for a goblin hitting the wall that has been out of view this long (seconds), so a glance away does not show it. */
+  threatAfter: 1.5,
 };
 
 /** Debug spawning (keys and the stress test), apart from the director. */
@@ -1564,11 +1585,10 @@ export const TRIGGERS = {
     /** Pale stone with a green mossy top (the rocks around are orange). */
     stoneColor: 0xd9d3c6,
     mossColor: 0x6fae3a,
-    /** The pry bar under it: length (cm) and how steep it stands (degrees up), and the red rag flag on its top (cm). */
-    leverLength: 10,
-    leverDeg: 55,
-    flagWidth: 3.2,
-    flagHeight: 2.2,
+    /** The warning flag on the hill beside it: an upright pole this tall, and the red rag at its top (cm). */
+    poleHeight: 10,
+    flagWidth: 3.4,
+    flagHeight: 2.4,
     /** Rolling speed down the road toward the castle (cm per second). */
     speed: 42,
     /** Goblins this close to the rolling boulder are squashed. */
@@ -1586,9 +1606,11 @@ export const TRIGGERS = {
     leanDeg: 12,
     hitRadius: 4,
     /** The axe in its trunk: this share of the way up, handle length and head size (cm). */
-    axeAt: 0.22,
-    axeHandle: 5.5,
-    axeHead: 1.8,
+    axeAt: 0.25,
+    axeHandle: 7,
+    axeHead: 2.4,
+    /** Its leaves (only the leaf triangles) are this autumn orange, so it stands out from every other tree. */
+    leafColor: 0xe8742a,
     /** It falls across the road in this long, until its crown rests on the ground (at most 90 degrees). */
     fallTime: 0.55,
     /** For the resting angle: the crown starts this share up the trunk, and the trunk's radius (cm). */
