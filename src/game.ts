@@ -14,6 +14,7 @@ import tutorialMap from './maps/tutorial.json';
 import { parseBlueprint } from './rules/blueprint.js';
 import { EndPanel } from './ui/endPanel.js';
 import { PauseMenu, type PauseAction } from './ui/pauseMenu.js';
+import { GhostAim } from './ui/ghostAim.js';
 import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { Markers } from './ui/markers.js';
@@ -97,6 +98,8 @@ export class GameSystem extends createSystem({}) {
   private hidden = false;
   /** Paused from the wrist button (or auto-paused in VR): stays paused until Resume. */
   private menuPaused = false;
+  /** "Measure reach" from the pause panel is running (the battle stays frozen). */
+  private measuring = false;
   private paused = false;
   private pauseMenu!: PauseMenu;
   private giant!: GiantBody;
@@ -199,6 +202,8 @@ export class GameSystem extends createSystem({}) {
       sign: new HintSign(this.stage.boardLift, this.audio),
       markers: new Markers(root),
       ghost,
+      ghostAim: new GhostAim(root),
+      wristButton: (out) => this.pauseMenu.wristWorld(out),
       audio: this.audio,
       particles: this.particles,
       threat: this.threat,
@@ -309,7 +314,8 @@ export class GameSystem extends createSystem({}) {
     const paused = hidden || this.menuPaused;
     if (paused !== this.paused) {
       this.paused = paused;
-      this.audio.setPaused(paused);
+      // Sound only stops for the Quest menu: the frozen battle makes none, and the pause panel's clicks must be heard.
+      this.audio.setPaused(hidden);
       this.fps.status = paused ? 'paused' : '';
       // Menu frames and the hitch after it would pollute the measured run.
       this.fps.resetRun();
@@ -342,10 +348,19 @@ export class GameSystem extends createSystem({}) {
     this.debugKeys(dt);
     // The giant's body stays under the head, also while paused.
     this.giant.update(dt, headPosition, headForward, this.stage.boardLift.position.y);
+    if (this.measuring) {
+      // The reach check on the frozen battle. The board grows or shrinks to the player when it is done.
+      this.stage.update(dt);
+      if (this.battle.updateMeasure(dt, this.hands.hands, headPosition, headForward)) {
+        this.measuring = false;
+        this.resume();
+      }
+      return;
+    }
     if (this.menuPaused) {
       // Shown here, not when pausing: auto-pause happens while the head pose is unknown (Quest menu).
       if (!this.pauseMenu.isOpen) this.pauseMenu.show(headPosition, headForward, this.stage.boardScale);
-      const action = this.pauseMenu.update(dt, this.hands.hands);
+      const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
       if (action) this.pauseAction(action);
       return;
     }
@@ -403,7 +418,9 @@ export class GameSystem extends createSystem({}) {
   private resume(): void {
     if (!this.menuPaused) return;
     this.menuPaused = false;
+    this.measuring = false;
     this.pauseMenu.hide();
+    this.battle.notePaused();
     this.audio.play('pauseClose');
     console.info('[game] resumed');
   }
@@ -414,15 +431,16 @@ export class GameSystem extends createSystem({}) {
         this.resume();
         break;
       case 'resetTable':
-        // Auto placement again, at the starting height. It stays paused, so the player can look first.
+        // Auto placement again, at the starting height, and play goes on.
         this.stage.height = 0;
         this.placeBoard();
+        this.resume();
         break;
       case 'measureReach':
-        // Forget the measured reach and start again with the reach check.
-        this.resume();
-        this.battle.forgetReach();
-        this.battle.start();
+        // The reach check right now, on the frozen battle (no restart). Play goes on when it is done.
+        this.pauseMenu.hide();
+        this.measuring = true;
+        this.battle.startMeasure();
         break;
       case 'restart':
         this.resume();

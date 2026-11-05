@@ -86,7 +86,7 @@ function idleApi(): TutorialApi & {
   ended: number;
   held: Record<string, boolean>;
   sentPast: number;
-  revealed: number;
+  lessonKinds: string[];
 } {
   return {
     cleared: 0,
@@ -95,7 +95,7 @@ function idleApi(): TutorialApi & {
     ended: 0,
     held: {},
     sentPast: 0,
-    revealed: 0,
+    lessonKinds: [],
     startWave(index) {
       this.started.push(index);
     },
@@ -127,16 +127,15 @@ function idleApi(): TutorialApi & {
     eaten: () => 0,
     slingCount: () => 0,
     slingLoaded: () => false,
-    startTriggerLesson() {
+    startTriggerLesson(kind) {
       this.sentPast++;
+      this.lessonKinds.push(kind);
     },
     sendPastTrigger() {
       this.sentPast++;
     },
     triggersSetOff: () => 0,
-    revealTriggers() {
-      this.revealed++;
-    },
+    pausedCount: () => 0,
   };
 }
 
@@ -156,6 +155,7 @@ function eagerApi(): ReturnType<typeof idleApi> {
     slingCount: more,
     slingLoaded: () => true,
     triggersSetOff: more,
+    pausedCount: more,
   };
 }
 
@@ -315,36 +315,59 @@ describe('tutorial director', () => {
     expect(director.current?.id).not.toBe('reach-check');
   });
 
-  it('teaches the triggers in wave 2 right after the first shot: the wave holds while a group walks past a keg', () => {
+  it('teaches each trigger in its own lesson in wave 2 right after the first shot: keg, boulder, tree', () => {
     const api = idleApi();
     const steps = buildTutorialSteps(['slingshot']);
     const ids = steps.map((s) => s.id);
-    expect(ids.indexOf('learn-keg')).toBe(ids.indexOf('learn-sling-shoot') + 1);
-    expect(ids.indexOf('learn-triggers')).toBe(ids.indexOf('learn-keg') + 1);
-    expect(ids.indexOf('learn-triggers')).toBeLessThan(ids.indexOf('wave-2-clear'));
+    const shoot = ids.indexOf('learn-sling-shoot');
+    expect(ids.slice(shoot + 1, shoot + 4)).toEqual(['learn-keg', 'learn-boulder', 'learn-tree']);
+    expect(ids.indexOf('learn-tree')).toBeLessThan(ids.indexOf('wave-2-clear'));
+    // Only the first one shows how to aim (ghost hand and ghost aim dots).
+    const hints = ['learn-keg', 'learn-boulder', 'learn-tree'].map((id) => steps.find((s) => s.id === id)!.hint!);
+    expect(hints.map((h) => !!h.demo && !!h.aimDots)).toEqual([true, false, false]);
     const director = new Director<TutorialApi>(steps, api);
     while (director.current?.id !== 'learn-keg') director.skip();
-    expect(api.sentPast).toBe(1);
+    expect(api.lessonKinds).toEqual(['keg']);
     expect(director.spawnRate).toBe(0);
-    // Stuck: the group walks past the keg again (at most twice), and the lesson still never gets stuck.
+    // Stuck: the group walks past again (at most twice).
     run(director, 40);
     expect(api.sentPast).toBe(3);
-    // The player shoots the keg: done, and the info box brings the boulders and trees.
-    api.triggersSetOff = (kind) => (kind === 'keg' ? 1 : 0);
+    // The player shoots the keg: the boulder lesson starts, then the tree lesson.
+    const setOff: Record<string, number> = { keg: 1, boulder: 0, tree: 0 };
+    api.triggersSetOff = (kind) => setOff[kind];
     director.update(0.1);
-    expect(director.current?.id).toBe('learn-triggers');
-    expect(api.revealed).toBe(1);
-    expect((director.current as TutorialStep).hint?.next).toBe(true);
-    director.skip();
+    expect(director.current?.id).toBe('learn-boulder');
+    setOff.boulder = 1;
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-tree');
+    setOff.tree = 1;
+    director.update(0.1);
     expect(director.current?.id).toBe('wave-2-clear');
+    expect(api.lessonKinds).toEqual(['keg', 'boulder', 'tree']);
   });
 
-  it('the trigger lesson moves on after its timeout when no keg is hit', () => {
+  it('a trigger lesson moves on after its timeout when nothing is hit', () => {
     const api = idleApi();
     const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
     while (director.current?.id !== 'learn-keg') director.skip();
     run(director, 61);
-    expect(director.current?.id).toBe('learn-triggers');
+    expect(director.current?.id).toBe('learn-boulder');
+  });
+
+  it('teaches pausing first: done once the player paused and came back, and never stuck without hands', () => {
+    const steps = buildTutorialSteps(['slingshot']);
+    expect(steps[0].id).toBe('learn-pause');
+    expect(steps[0].hint?.demo).toBe('pauseShow');
+    const api = idleApi();
+    const director = new Director<TutorialApi>(steps, api);
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-pause');
+    api.pausedCount = () => 1;
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-spin');
+    const idle = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), idleApi());
+    run(idle, 50);
+    expect(idle.current?.id).not.toBe('learn-pause');
   });
 
   it('numbers the lessons', () => {

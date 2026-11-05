@@ -95,6 +95,8 @@ export const TUTORIAL_TIMING = {
   /** The trigger lesson: the group walks past the keg again after this long, and it moves on after triggerTimeout. */
   triggerStuckAfter: 18,
   triggerTimeout: 60,
+  /** The pause lesson moves on after this long anyway (no hands in the browser). */
+  pauseTimeout: 45,
 };
 
 /** What a marker points at. The battle turns it into a world position. */
@@ -113,11 +115,10 @@ export type MarkerTarget =
   | 'stunTool'
   | 'megaphoneHandle'
   | 'bellHandle'
-  /** The powder keg of the trigger lesson. */
+  /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
-  /** The standing boulder and tree nearest the front of the board. */
-  | 'nearBoulder'
-  | 'nearTree';
+  /** The pause button on the left palm, while it is out. */
+  | 'wristButton';
 
 export type HintIcon = 'pinch' | 'grab' | 'spin' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
 
@@ -129,8 +130,10 @@ export interface Hint {
   text: string;
   icon?: HintIcon;
   marker?: MarkerTarget;
-  /** A second marker, for two things at once (the boulder and the tree). */
-  marker2?: MarkerTarget;
+  /** Ghost aim dots: a see-through arc from the slingshot's pouch to the marker's target (the first trigger lesson). */
+  aimDots?: boolean;
+  /** Shown instead while the pause button is out on the palm (the pause lesson). */
+  whenWrist?: string;
   /** Shown instead when the lesson goblin is on the board, not in the hand (dropped it). */
   whenDropped?: string;
   /** The food tool this lesson is about, and the text shown instead while it cannot be paid for. */
@@ -195,14 +198,18 @@ export interface TutorialApi {
   /** Slingshot steps done since it appeared, and whether something is in the pouch. */
   slingCount(event: 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot'): number;
   slingLoaded(): boolean;
-  /** The trigger lesson: picks the powder keg nearest the front and walks a small group of goblins past it. */
-  startTriggerLesson(): void;
-  /** Walks the group past the lesson keg again (the fallback), with a pulse of the marker. */
+  /**
+   * A trigger lesson: brings that kind onto the roads (if it is not there
+   * yet), picks the one nearest the front and walks a small group of goblins
+   * past it.
+   */
+  startTriggerLesson(kind: TriggerKind): void;
+  /** Walks the group past the lesson's trigger again (the fallback), with a pulse of the marker. */
   sendPastTrigger(): void;
   /** How many triggers of a kind were set off in this battle. */
   triggersSetOff(kind: TriggerKind): number;
-  /** Brings every boulder and tree onto the roads now (they come with the trigger lesson's info box). */
-  revealTriggers(): void;
+  /** How often the player paused (and came back) in this battle. */
+  pausedCount(): number;
 }
 
 const lesson = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Partial<Hint> = {}): Hint => ({
@@ -285,6 +292,18 @@ function introLessons(): TutorialStep[] {
   // Eating counts from the pinch lesson on, so a goblin eaten straight away finishes both.
   let eatenBefore = 0;
   return [
+    // How to pause comes first, so a player who pauses by accident later knows the way back.
+    lessonStep(
+      'learn-pause',
+      lesson('You can pause any time: turn your left palm toward your face, like this.', 'info', 'wristButton', {
+        demo: 'pauseShow',
+        whenWrist: 'There is the pause button! Poke it with your right finger, then poke Resume.',
+        doneText: 'Now you know how to pause!',
+      }),
+      (api, since) => api.pausedCount() > since,
+      (api) => api.pausedCount(),
+      { timeout: TUTORIAL_TIMING.pauseTimeout },
+    ),
     lessonStep(
       'learn-spin',
       lesson('Grab the ring in front of you and pull it sideways to spin the board.', 'spin', 'ring', { demo: 'spin' }),
@@ -383,40 +402,35 @@ function shootLesson(): TutorialStep {
 
 /**
  * In wave 2, right after the shoot lesson: the triggers, which are all set
- * off with the slingshot. The wave holds its spawns while a small group of
- * goblins walks past the powder keg in front of the player. Done when a keg
- * is set off (best with goblins near it). If stuck, the group walks past it
- * again and the marker pulses. Then an info box brings the boulders and
- * trees, with a marker on the nearest of each.
+ * off with the slingshot. One lesson per kind, keg first, then the boulder,
+ * then the tree. Each one brings its kind onto the roads, and the wave holds
+ * its spawns while a small group of goblins walks past the one nearest the
+ * front. Done when one of that kind is set off. If stuck, the group walks
+ * past again and the marker pulses. Only the first (the keg) shows how to
+ * aim, with the ghost hand and ghost aim dots: the others work the same way.
  */
 function triggerLessons(): TutorialStep[] {
   const again = (api: TutorialApi): void => api.sendPastTrigger();
-  return [
+  const kinds: { kind: TriggerKind; text: string; extra: Partial<Hint> }[] = [
+    { kind: 'keg', text: 'See the barrel? Shoot it when goblins walk past! Pull the pouch away from it: the dots show where it lands.', extra: { demo: 'aimKeg', aimDots: true } },
+    { kind: 'boulder', text: 'A boulder on a hill! Shoot it and it rolls down the road, squashing the goblins on it.', extra: {} },
+    { kind: 'tree', text: 'A leaning tree! Shoot it when goblins walk under it: it falls across the road and blocks it.', extra: {} },
+  ];
+  return kinds.map(({ kind, text, extra }) =>
     lessonStep(
-      'learn-keg',
-      lesson('See the barrel? Shoot it when goblins walk past!', 'target', 'lessonTrigger', { demo: 'shoot' }),
-      (api, since) => api.triggersSetOff('keg') > since,
-      (api) => api.triggersSetOff('keg'),
+      `learn-${kind}`,
+      lesson(text, 'target', 'lessonTrigger', extra),
+      (api, since) => api.triggersSetOff(kind) > since,
+      (api) => api.triggersSetOff(kind),
       {
-        start: (api) => api.startTriggerLesson(),
+        start: (api) => api.startTriggerLesson(kind),
         fallbacks: [again, again],
         stuckAfter: TUTORIAL_TIMING.triggerStuckAfter,
         timeout: TUTORIAL_TIMING.triggerTimeout,
         holdSpawns: true,
       },
     ),
-    {
-      ...infoStep(
-        'learn-triggers',
-        banner('Boulders roll down the road and trees fall across it. Shoot them too!', 'info', 'nearBoulder', {
-          marker2: 'nearTree',
-          header: 'Barrels, boulders and trees',
-        }),
-        (api) => api.revealTriggers(),
-      ),
-      slowSpawns: true,
-    },
-  ];
+  );
 }
 
 type FoodTool = Exclude<ToolName, 'slingshot'>;

@@ -670,18 +670,38 @@ export const PAUSE = {
   wrist: {
     /** The button shows while the left palm faces the eyes this well (cosine of the angle)... */
     faceDot: 0.6,
-    /** ...for this long, and hides once it turned away (below faceDot - hideMargin) for hideHold (seconds). */
+    /**
+     * ...for this long, and hides only once the palm clearly turned away
+     * (below hideDot) for hideHold (seconds). The wide gap and the long hide
+     * hold stop the flicker from tracking noise (headset test after step 6).
+     */
     showHold: 0.3,
-    hideMargin: 0.15,
-    hideHold: 0.2,
+    hideDot: 0.25,
+    hideHold: 0.45,
     /** Only while the palm is this close to the eyes (meters): a hand on the lap does not count. */
     maxDistance: 0.6,
-    /** Button size (cm) and where it sits: back from the palm's middle toward the arm, and out of the palm (meters). */
+    /** It never hides while the right index fingertip is this close to it (meters): the player is poking it. */
+    keepNear: 0.1,
+    /** Button size (cm), out from the middle of the palm (meters). */
     radius: 1.8,
-    back: 0.06,
-    out: 0.012,
+    out: 0.018,
+    /** The button follows the palm with this smoothing (seconds), so joint jitter does not shake it. */
+    smoothing: 0.06,
     /** It pops in and out over this long (seconds). */
     popTime: 0.15,
+  },
+  /**
+   * The panel follows the head lazily, like the Quest's own menus: it stays
+   * still while the head turns a little (so it can be poked), and swings
+   * back in front once the head turned more than followDeg away. It is never
+   * behind the player.
+   */
+  follow: {
+    followDeg: 25,
+    /** Swings back with this smoothing (seconds), and moves with the head's position too. */
+    smoothing: 0.3,
+    /** It is in front again once within this angle (degrees), then it stops. */
+    settleDeg: 3,
   },
   /** The panel, in cm from the seat like END_PANEL (sized with the board). */
   panel: {
@@ -775,6 +795,15 @@ export const GHOST_HAND = {
   /** The ghost's mouth point: in front of the face and a little down (meters). */
   mouthForward: 0.16,
   mouthDown: 0.07,
+  /** The pause demo: where the left palm shows the pause button, from the eyes (meters forward, left, down). */
+  palmForward: 0.3,
+  palmLeft: 0.07,
+  palmDown: 0.14,
+  /** Ghost aim dots (the keg lesson): how many, their size (meters), how high the arc rises (share of its length), flow speed. */
+  aimDots: 18,
+  aimDotSize: 0.0045,
+  aimArc: 0.16,
+  aimFlow: 0.5,
 };
 
 /** Tutorial markers (src/ui/markers.ts). */
@@ -1437,8 +1466,13 @@ export const TRIGGERS = {
     hitRadius: 4,
     /** A brighter green than the forests around (color multiply, the trunk too). */
     tint: [1.2, 1.35, 0.85] as [number, number, number],
-    /** It falls across the road (90 degrees) in this long. */
+    /** It falls across the road in this long, until its crown rests on the ground (at most 90 degrees). */
     fallTime: 0.55,
+    /** For the resting angle: the crown starts this share up the trunk, and the trunk's radius (cm). */
+    crownFrom: 0.35,
+    trunkRadius: 0.6,
+    /** Share of the crown's radius that must stay above the ground (leaves may just touch it, never sink half in). */
+    crownRest: 0.75,
     /** Goblins this close to the fallen trunk's line are squashed (cm). */
     crushWidth: 3.2,
     /** The road stays closed this long, then the tree poofs away and the road opens. */

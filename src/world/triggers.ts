@@ -20,11 +20,11 @@
 import { CanvasTexture, Color, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { GOBLIN_RULES, TRIGGERS } from '../config/game.js';
+import { GOBLIN_RULES, ROADS, TRIGGERS } from '../config/game.js';
 import type { Particles } from '../fx/particles.js';
 import { applyAimGlow, applyTouchState } from '../player/feedback.js';
 import type { BlueprintTrigger, TriggerKind } from '../rules/blueprint.js';
-import { boardHeight, degToRad, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
+import { boardHeight, degToRad, groundAt, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import type { SlingTarget } from '../tools/slingshot.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
@@ -480,6 +480,8 @@ class Tree extends Trigger {
   private readonly axis = new Vector3();
   private blockLeft = 0;
   private fallen = false;
+  /** How far it falls (degrees from upright): its crown comes to rest on the ground, never through it. */
+  private readonly fallDeg: number;
 
   constructor(owner: Triggers, wave: number, road: number, along: number, template: ModelTemplate) {
     super('tree', wave, owner, road, along);
@@ -492,6 +494,34 @@ class Tree extends Trigger {
     this.side.subVectors(this.base, temp).setY(0).normalize();
     // Turning around this axis moves the top from straight up toward the road (away from `side`).
     this.axis.crossVectors(this.side, UP).normalize();
+    this.fallDeg = this.restingFall(Math.min(template.size.x, template.size.z) / 2);
+  }
+
+  /**
+   * The fall angle where the tree lies on the ground: the most it can turn
+   * (up to 90 degrees) with its crown (radius `crown`, cm) and trunk still
+   * above the ground and the road along its whole length. A flat 90 degree
+   * fall pushed half the crown into the ground (headset test after step 6).
+   */
+  private restingFall(crown: number): number {
+    const { height, leanDeg } = TRIGGERS.tree;
+    const { crownFrom, trunkRadius, crownRest } = TRIGGERS.tree;
+    crown *= crownRest;
+    for (let deg = 90; deg > leanDeg + 10; deg--) {
+      const a = degToRad(deg);
+      let clear = true;
+      for (let share = 0.2; share <= 1.001 && clear; share += 0.1) {
+        const d = height * share;
+        const x = this.base.x - this.side.x * Math.sin(a) * d;
+        const z = this.base.z - this.side.z * Math.sin(a) * d;
+        const y = this.base.y + Math.cos(a) * d;
+        // The crown is round: its middle part needs its full radius, it narrows toward the tip.
+        const reach = share < crownFrom ? trunkRadius : Math.max(trunkRadius, crown * Math.sin((Math.PI * (share - crownFrom)) / (1 - crownFrom + 0.05)));
+        if (y - reach < groundAt(x, z) + ROADS.lift) clear = false;
+      }
+      if (clear) return deg;
+    }
+    return leanDeg + 10;
   }
 
   center(out: Vector3): Vector3 {
@@ -524,13 +554,13 @@ class Tree extends Trigger {
     if (!this.fallen) {
       // Falls faster and faster, like a real tree.
       const t = Math.min(1, this.time / fallTime);
-      this.lean(leanDeg + (90 - leanDeg) * t * t);
+      this.lean(leanDeg + (this.fallDeg - leanDeg) * t * t);
       if (t < 1) return;
       this.fallen = true;
       this.blockLeft = blockSeconds;
       // Squashes the goblins under the trunk, across the road.
       for (let i = 0; i <= 4; i++) {
-        temp.copy(this.base).addScaledVector(this.side, (-height * 0.9 * i) / 4);
+        temp.copy(this.base).addScaledVector(this.side, (-height * 0.9 * Math.sin(degToRad(this.fallDeg)) * i) / 4);
         this.owner.crush(temp, crushWidth);
       }
       temp.copy(this.base).addScaledVector(this.side, -TRIGGERS.tree.side);
@@ -617,13 +647,9 @@ export class Triggers {
     for (const t of this.list) t.reset(wave);
   }
 
-  /**
-   * Brings in the triggers of waves up to `wave` (1 based) that are still
-   * hidden, with a poof, without touching the ones already standing or used
-   * (the trigger lesson brings the boulders and trees early).
-   */
-  reveal(wave: number): void {
-    for (const t of this.list) if (t.hiddenNow) t.reset(wave);
+  /** Brings every hidden trigger of one kind onto the roads now (its lesson), with a poof. */
+  revealKind(kind: TriggerKind): void {
+    for (const t of this.list) if (t.kind === kind && t.hiddenNow) t.reset(Infinity);
   }
 
   /** The standing trigger of a kind closest to a board angle (radians, 0 = the board's front), or null. */
