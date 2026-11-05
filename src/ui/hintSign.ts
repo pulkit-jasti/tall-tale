@@ -75,6 +75,10 @@ export class HintSign {
     if (!!content.next !== this.nextStand.visible) {
       this.nextStand.visible = !!content.next;
       this.next.reset();
+      // It blinks while it waits, so it catches the eye.
+      this.next.setBlink(
+        content.next ? { color: HINT_SIGN.nextBlinkColor, intensity: HINT_SIGN.nextBlinkIntensity, speed: HINT_SIGN.nextBlinkSpeed } : null,
+      );
     }
     const key = JSON.stringify(content);
     if (key === this.drawn) return;

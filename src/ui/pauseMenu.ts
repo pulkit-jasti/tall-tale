@@ -12,7 +12,7 @@
 //   odd (that is what Reset table is for).
 //
 // Sizes in cm (the rigs are scaled 0.01), poked like every other button.
-import { Group, Matrix4, Vector3, type Object3D } from 'three';
+import { Group, Matrix4, Quaternion, Vector3, type Material, type Mesh, type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { BOARD, PAUSE, POKE } from '../config/game.js';
 import { PoseSwitch } from '../player/gesture.js';
@@ -43,6 +43,8 @@ const y = new Vector3();
 const z = new Vector3();
 const UP = new Vector3(0, 1, 0);
 const basis = new Matrix4();
+const faceNow = new Vector3();
+const turnTo = new Quaternion();
 
 /** The pause button on the left palm. update() returns true on the frame it is poked. */
 class WristButton {
@@ -52,9 +54,12 @@ class WristButton {
   private facing = new PoseSwitch(PAUSE.wrist.showHold, PAUSE.wrist.hideHold);
   /** 0 hidden, 1 fully out. */
   private shown = 0;
-  /** Smoothed spot on the palm (world), so joint jitter does not shake it. */
+  /** Where the button stands (world). It moves only when the palm really moved, so tracking jitter never shakes it. */
   private spot = new Vector3();
   private hasSpot = false;
+  /** Gliding to the palm's new spot, or turning to face the eyes again. */
+  private moving = false;
+  private turning = false;
 
   constructor(parent: Object3D, audio: GameAudio) {
     this.button = new PokeButton(audio, { radius: PAUSE.wrist.radius, icon: 'pause' });
@@ -81,23 +86,26 @@ class WristButton {
     this.button.reset();
   }
 
-  /** `enabled`: a battle is on and the left hand is free. */
-  update(dt: number, left: HandState, right: HandState, head: Vector3, enabled: boolean): boolean {
-    const { faceDot, hideDot, maxDistance, keepNear, out, smoothing, popTime } = PAUSE.wrist;
+  /**
+   * `enabled`: a battle is on. `free`: the left hand holds nothing (only
+   * needed to show it: once out, a pose flicker never hides it).
+   */
+  update(dt: number, left: HandState, right: HandState, head: Vector3, enabled: boolean, free: boolean): boolean {
+    const W = PAUSE.wrist;
     let facing = false;
     let away = true;
     if (enabled && left.tracked && left.usingHand) {
       toEyes.subVectors(head, left.palm);
       const distance = toEyes.length();
       const dot = distance > 0 ? left.palmNormal.dot(toEyes) / distance : 0;
-      facing = dot > faceDot && distance < maxDistance;
-      away = dot < hideDot || distance > maxDistance;
+      facing = dot > W.faceDot && distance < W.maxDistance && (free || this.shown > 0);
+      away = dot < W.hideDot || distance > W.maxDistance;
       // Never hides while the other hand is poking it (the poke can shake the tracking of this hand).
-      if (this.shown > 0 && right.tracked && right.indexTip.distanceTo(this.holder.position) < keepNear) away = false;
+      if (this.shown > 0 && right.tracked && right.indexTip.distanceTo(this.spot) < W.keepNear) away = false;
     }
     this.facing.update(facing, away, dt);
     const goal = this.facing.on ? 1 : 0;
-    const step = dt / popTime;
+    const step = dt / W.popTime;
     this.shown = goal > this.shown ? Math.min(1, this.shown + step) : Math.max(0, this.shown - step);
     if (this.shown <= 0) {
       if (this.holder.visible) {
@@ -107,28 +115,57 @@ class WristButton {
       this.hasSpot = false;
       return false;
     }
-    // In the middle of the palm, a little out from it, smoothed.
-    target.copy(left.palm).addScaledVector(left.palmNormal, out);
+    // The palm's middle, a little out from it.
+    target.copy(left.palm).addScaledVector(left.palmNormal, W.out);
     if (!this.hasSpot) {
       this.spot.copy(target);
       this.hasSpot = true;
+      this.moving = false;
+      this.faceEyes(head, true);
     } else {
-      this.spot.lerp(target, 1 - Math.exp(-dt / smoothing));
+      const gap = this.spot.distanceTo(target);
+      // Held still while the other finger is about to poke it, unless the palm really went away.
+      const poking = right.tracked && right.indexTip.distanceTo(this.spot) < W.lockNear;
+      if (poking) this.moving = gap > W.lockBreak;
+      else if (gap > W.deadband) this.moving = true;
+      if (this.moving) {
+        this.spot.lerp(target, 1 - Math.exp(-dt / W.smoothing));
+        if (this.spot.distanceTo(target) < W.settle) this.moving = false;
+      }
+      if (!poking) this.faceEyes(head, false);
     }
     this.holder.visible = true;
     this.holder.position.copy(this.spot);
-    // Standing upright and facing the eyes, whatever way the fingers point, so the pause bars always read upright.
+    this.holder.scale.setScalar(CM * this.shown);
+    this.holder.updateMatrixWorld(true);
+    // Only the other hand's index finger pokes it, and only once it is fully out.
+    return this.shown >= 1 && this.button.update([right], dt);
+  }
+
+  /**
+   * Standing upright and facing the eyes, whatever way the fingers point, so
+   * the pause bars always read upright. It turns only when the eyes are
+   * clearly off to one side (W.turnDeg), then eases round.
+   */
+  private faceEyes(head: Vector3, snap: boolean): void {
     z.subVectors(head, this.spot).normalize();
     y.copy(UP).addScaledVector(z, -UP.dot(z));
     if (y.lengthSq() < 1e-6) y.set(0, 0, -1);
     y.normalize();
     x.crossVectors(y, z).normalize();
     basis.makeBasis(x, y, z);
-    this.holder.quaternion.setFromRotationMatrix(basis);
-    this.holder.scale.setScalar(CM * this.shown);
-    this.holder.updateMatrixWorld(true);
-    // Only the other hand's index finger pokes it, and only once it is fully out.
-    return this.shown >= 1 && this.button.update([right], dt);
+    turnTo.setFromRotationMatrix(basis);
+    if (snap) {
+      this.holder.quaternion.copy(turnTo);
+      this.turning = false;
+      return;
+    }
+    faceNow.set(0, 0, 1).applyQuaternion(this.holder.quaternion);
+    const off = (Math.acos(Math.min(1, Math.max(-1, faceNow.dot(z)))) * 180) / Math.PI;
+    if (off > PAUSE.wrist.turnDeg) this.turning = true;
+    if (!this.turning) return;
+    this.holder.quaternion.slerp(turnTo, 0.15);
+    if (off < 1) this.turning = false;
   }
 }
 
@@ -158,7 +195,27 @@ export class PauseMenu {
     });
     this.buttonTopPx = ((height / 2 - (buttonY + rim)) / height) * this.panel.layoutHeight;
     this.panel.paint((c, w) => this.draw(c, w));
+    this.drawOnTop();
     this.wrist = new WristButton(parent, audio);
+  }
+
+  /**
+   * Nothing ever hides the pause panel (it went through the towers): every
+   * part skips the depth test and draws last, in a fixed order (the board,
+   * then each button's rim, cap and icon).
+   */
+  private drawOnTop(): void {
+    let order = PAUSE.panel.renderOrder;
+    this.holder.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) return;
+      const material = mesh.material as Material;
+      material.depthTest = false;
+      material.depthWrite = false;
+      // In the transparent pass, so the order below holds against the transparent board.
+      material.transparent = true;
+      mesh.renderOrder = order++;
+    });
   }
 
   get isOpen(): boolean {
@@ -233,7 +290,7 @@ export class PauseMenu {
   updateWrist(dt: number, hands: { left: HandState; right: HandState }, head: Vector3, enabled: boolean): boolean {
     // A hand holding something is busy: the button waits until it is free.
     const free = !hands.left.pinch.on && !hands.left.fist.on;
-    return this.wrist.update(dt, hands.left, hands.right, head, enabled && free && !this.open);
+    return this.wrist.update(dt, hands.left, hands.right, head, enabled && !this.open, free);
   }
 
   hideWrist(): void {

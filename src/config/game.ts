@@ -677,7 +677,7 @@ export const PAUSE = {
      */
     showHold: 0.3,
     hideDot: 0.25,
-    hideHold: 0.45,
+    hideHold: 0.6,
     /** Only while the palm is this close to the eyes (meters): a hand on the lap does not count. */
     maxDistance: 0.6,
     /** It never hides while the right index fingertip is this close to it (meters): the player is poking it. */
@@ -685,8 +685,24 @@ export const PAUSE = {
     /** Button size (cm), out from the middle of the palm (meters). */
     radius: 1.8,
     out: 0.018,
-    /** The button follows the palm with this smoothing (seconds), so joint jitter does not shake it. */
-    smoothing: 0.06,
+    /**
+     * Steady, not glued to the palm: hand tracking shakes every joint by a few
+     * mm each frame (worst toward the eyes, so it looked like it grew and
+     * shrank). The button stays put until the palm moved `deadband` away
+     * (meters), then glides there (`smoothing`, seconds) and stops once within
+     * `settle`. It only turns to face the eyes again past `turnDeg` degrees.
+     */
+    deadband: 0.015,
+    settle: 0.003,
+    smoothing: 0.1,
+    turnDeg: 10,
+    /**
+     * While the right index fingertip is within `lockNear` of it (meters),
+     * the button does not move at all, so it holds still to be poked, unless
+     * the palm moved more than `lockBreak` away (meters).
+     */
+    lockNear: 0.12,
+    lockBreak: 0.06,
     /** It pops in and out over this long (seconds). */
     popTime: 0.15,
   },
@@ -714,6 +730,8 @@ export const PAUSE = {
     /** Gap between button centers (cm). */
     buttonGap: 8.8,
     buttonMargin: 1.2,
+    /** Drawn after everything else (above the markers and ghost hands), never hidden by the castle or the sign. */
+    renderOrder: 40,
   },
 };
 
@@ -765,11 +783,20 @@ export const HINT_SIGN = {
   popTime: 0.25,
   /** A finished lesson shows its ticked box this long before the next one (seconds). */
   doneTime: 1.2,
-  /** Round "Next" poke button: its size, and its spot straight in front, tilted toward the eyes (cm, degrees). */
+  /**
+   * Round "Next" poke button: its size, and its spot straight in front,
+   * tilted toward the eyes (cm, degrees). Moved back toward the wall and up
+   * a little after the step 6 test (was 33.5 out, 9 up: too close to the ring,
+   * hands on the ring pressed it). Still about 49 cm from the eyes.
+   */
   nextRadius: 2.6,
-  nextAt: 33.5,
-  nextY: 9,
+  nextAt: 38.5,
+  nextY: 15,
   nextTiltDeg: 40,
+  /** It blinks while it waits to be poked (emissive pulse, per second), so it catches the eye. */
+  nextBlinkColor: 0xfff1a8,
+  nextBlinkIntensity: 0.75,
+  nextBlinkSpeed: 2.2,
 };
 
 /** Ghost hands that show how to do each lesson (src/ui/ghostHand.ts). */

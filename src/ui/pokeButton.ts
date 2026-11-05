@@ -42,6 +42,9 @@ export class PokeButton {
   private press = 0;
   /** No new press until this runs out (seconds): after a click, or a lock. */
   private cooldown = 0;
+  /** Blinks while idle, to catch the eye (see setBlink). */
+  private blink: { color: number; intensity: number; speed: number } | null = null;
+  private blinkTime = 0;
 
   constructor(
     private audio: GameAudio,
@@ -85,6 +88,16 @@ export class PokeButton {
     this.faceMaterial.map?.dispose();
     this.faceMaterial.map = iconTexture(icon);
     this.faceMaterial.needsUpdate = true;
+  }
+
+  /**
+   * Blinks the cap (an emissive pulse) while it waits to be poked, or stops.
+   * The Ready and Held looks win while a finger is near.
+   */
+  setBlink(blink: { color: number; intensity: number; speed: number } | null): void {
+    this.blink = blink;
+    this.blinkTime = 0;
+    if (!blink) applyTouchState([this.material], this.touch);
   }
 
   reset(): void {
@@ -156,6 +169,13 @@ export class PokeButton {
     }
     this.cap.position.z = travel - this.press;
     this.setTouch(push >= 0 && (this.armed || this.fired) ? 'held' : near && !this.fired ? 'ready' : 'idle');
+    if (this.blink && this.touch === 'idle') {
+      this.blinkTime += dt;
+      // A smooth on and off pulse, fully dark between blinks.
+      const pulse = Math.max(0, Math.sin(this.blinkTime * Math.PI * 2 * this.blink.speed));
+      this.material.emissive.setHex(this.blink.color);
+      this.material.emissiveIntensity = this.blink.intensity * pulse;
+    }
     return fired;
   }
 
