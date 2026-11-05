@@ -100,7 +100,7 @@ function roadGap(roads: RoadField, x: number, z: number, size: number): number {
  * Step 1, before the terrain: villages beside the roads, their fields, and
  * the forests. The villages and fields go back to the terrain as flat spots.
  */
-export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random): SettlementPlan {
+export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random, keepClear: Spot[] = []): SettlementPlan {
   const { villages: V, farms: F, forests: W } = SETTLEMENTS;
   const villages: Spot[] = [];
   for (let tries = 0; villages.length < V.count && tries < 4000; tries++) {
@@ -108,7 +108,7 @@ export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random
     const size = rng.range(...V.radius);
     const gap = roadGap(roads, x, z, size);
     if (gap < V.roadGap[0] || gap > V.roadGap[1]) continue;
-    if (campDistance(camps, x, z) < V.campGap) continue;
+    if (campDistance(camps, x, z) < V.campGap || gapTo(keepClear, x, z) < size) continue;
     if (villages.some((v) => distance(v, x, z) < V.spacing)) continue;
     villages.push({ x, z, size });
   }
@@ -127,7 +127,7 @@ export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random
       const z = village.z - Math.cos(a) * d;
       if (Math.hypot(x, z) - size < 90 || Math.hypot(x, z) + size > BOARD.outerRadius - 40) continue;
       if (roadGap(roads, x, z, size) < 2) continue;
-      if (campDistance(camps, x, z) < 40) continue;
+      if (campDistance(camps, x, z) < 40 || gapTo(keepClear, x, z) < size) continue;
       if (gapTo(villages, x, z) < size * 0.6 || fields.some((f) => distance(f, x, z) < f.size + size + 2)) continue;
       // Its local x along the village's edge, so the long side faces the village.
       fields.push({ x, z, size, length, width, yaw: Math.atan2(Math.cos(a), Math.sin(a)) + Math.PI / 2, crop: rng.pick(CROPS), village });
@@ -191,9 +191,10 @@ export function flatSpots(plan: SettlementPlan): CampSpot[] {
 }
 
 /** Step 2, on the finished terrain: watch towers on hilltops by the roads, the windmill, the wrecks by the camps. */
-export function placeLandmarks(plan: SettlementPlan, terrain: Terrain, camps: CampSpot[], rng: Random): void {
+export function placeLandmarks(plan: SettlementPlan, terrain: Terrain, camps: CampSpot[], rng: Random, keepClear: Spot[] = []): void {
   const { towers: T, windmill: M, ruins: R } = SETTLEMENTS;
-  const homes: Spot[] = [...plan.villages, ...plan.fields];
+  // The triggers on the roads count as homes here: towers, the windmill and wrecks keep clear of them.
+  const homes: Spot[] = [...plan.villages, ...plan.fields, ...keepClear];
   // Towers: the highest spots right beside a road.
   const candidates: { x: number; z: number; height: number }[] = [];
   for (let i = 0; i < 900; i++) {

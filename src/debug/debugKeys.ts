@@ -8,6 +8,10 @@ import { TUTORIAL_WAVES } from '../director/tutorial.js';
 export type DebugCommand =
   | 'skipWave'
   | 'skipStep'
+  | 'pause'
+  | 'pauseAction'
+  | 'giantToggle'
+  | 'triggerLesson'
   | 'loseCastle'
   | 'damageCastle'
   | 'restartBattle'
@@ -93,6 +97,15 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     does: 'Forget the saved reach (the board goes back to its normal size) and start the battle with the reach check ("Show me how big you are, giant!"), then the wave Play starts at',
   },
   { id: 'skipStep', group: 'game', icon: '⏭️', code: 'KeyS', label: 'Skip step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
+  { id: 'pause', group: 'game', icon: '⏸️', code: 'Space', label: 'Pause / resume', does: 'Pause the battle (like the wrist button) or resume it' },
+  {
+    id: 'pauseAction',
+    group: 'game',
+    icon: '🔘',
+    label: 'Pause panel button',
+    does: 'While paused, poke a pause panel button: 1 Resume, 2 Reset table, 3 Measure reach, 4 Restart',
+    args: [1, 2, 3, 4],
+  },
   { id: 'skipWave', group: 'game', icon: '⏩', code: 'KeyW', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
   { id: 'damageCastle', group: 'castle', icon: '💥', code: 'KeyD', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
   { id: 'loseCastle', group: 'castle', icon: '🏳️', code: 'KeyH', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
@@ -117,12 +130,20 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands, every goblin is stunned (costs 6 food, puts the bell out in place of the megaphone)' },
   { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send squad', does: 'A squad of soldiers marches out now toward a camp (normally every 10 s while a wave runs)' },
   { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, no squads come out and the ones out go home (Send squad turns them back on)' },
+  {
+    id: 'triggerLesson',
+    group: 'army',
+    icon: '🛢️',
+    label: 'Trigger lesson group',
+    does: 'Send a small group of grunts past the powder keg nearest the front (what the wave 2 trigger lesson does)',
+  },
   { id: 'triggersReset', group: 'army', icon: '🛢️', code: 'Digit7', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
   { id: 'triggersFire', group: 'army', icon: '💣', code: 'Digit8', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },
   { id: 'spinLeft', group: 'board', icon: '↩️', label: 'Spin left', does: 'Turn the board left one step' },
   { id: 'spinRight', group: 'board', icon: '↪️', label: 'Spin right', does: 'Turn the board right one step' },
   { id: 'boardUp', group: 'board', icon: '⬆️', label: 'Board up', does: 'Raise the board one step' },
   { id: 'boardDown', group: 'board', icon: '⬇️', label: 'Board down', does: 'Lower the board one step' },
+  { id: 'giantToggle', group: 'board', icon: '🧍', label: 'Giant body on/off', does: 'Show or hide the giant body under the head (the seat floor stays)' },
   { id: 'place', group: 'board', icon: '📍', code: 'KeyP', label: 'Place again', does: 'Place the board again in front of you' },
   { id: 'fps', group: 'performance', icon: '🖥️', code: 'KeyF', label: 'FPS panel on/off', does: 'FPS panel on or off (hidden by default; add ?fps to the URL on the hosted build)' },
   { id: 'resetRun', group: 'performance', icon: '⏱️', code: 'KeyN', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },

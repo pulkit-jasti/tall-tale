@@ -119,6 +119,8 @@ Shot with the slingshot. Each one happens once and resets between waves. A trigg
 
 **How it works (step 5, `src/world/triggers.ts`):** each blueprint trigger sits on the road nearest its spot: the keg just beside the road, the boulder on a rock hill 8 cm off it, the tree 5 cm off it, leaning over it. Each stands from its tutorial wave on and resets at the start of every wave. They register with the slingshot as `SlingTarget`s, so the aim assist and the target glow work for them, and they wobble while aimed at. Only a slingshot shot or a goblin shot sets them off (thrown pebbles never do). The tree closes its road for 12 s (`RoadGraph.setOpen`), then poofs away. Numbers in `TRIGGERS`. Debug keys 7 (reset all) and 8 (set off all).
 
+**Easy to notice (step 6):** in the step 5 playtest nobody noticed the triggers. Now there are 16 (6 kegs from wave 2, 5 boulders and 5 trees from wave 3 or the trigger lesson), about 4 on each camp's roads, all three kinds spread around the circle. They are bigger (keg 3 cm, boulder 5 cm, tree 14 cm) and brighter than the scenery (color tints in `TRIGGERS`). The terrain is flat under each one and at two spots on the way from it toward the castle, so no hill hides it from the seat, and villages, towers and decor keep 16 cm clear (`TRIGGERS.ground`). While goblins are within 24 cm of one, it glows softly (emissive only, pulsing) and a small target icon bobs over it. When 2 or more goblins are within 12 cm, a short "now!" cue: a stronger pulse and a sound from its direction (at most every 6 s per trigger, `TRIGGERS.cue`).
+
 ### Chain reactions
 
 - One rule: **explosions set off nearby triggers.**

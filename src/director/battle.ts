@@ -17,6 +17,7 @@ import {
   HINT_SIGN,
   TOOL_SPOTS,
   TOOLS,
+  TRIGGERS,
   WAVES,
 } from '../config/game.js';
 import { WAVE_VOICES } from '../config/sounds.js';
@@ -31,7 +32,8 @@ import type { FoodToolName, HandTool } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
-import type { Triggers } from '../world/triggers.js';
+import type { TriggerKind } from '../rules/blueprint.js';
+import type { Trigger, Triggers } from '../world/triggers.js';
 import type { EndPanel } from '../ui/endPanel.js';
 import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemos.js';
 import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
@@ -59,6 +61,7 @@ const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
 const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'megaphone'];
 const noTools = (): Record<FoodToolName, number> => ({ swatter: 0, pepper: 0, megaphone: 0, bell: 0 });
+const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0 });
 const ICONS: Record<HintIcon, UiImageName> = {
   pinch: 'target',
   grab: 'target',
@@ -72,6 +75,7 @@ const ICONS: Record<HintIcon, UiImageName> = {
 };
 const temp = new Vector3();
 const markerAt = new Vector3();
+const markerAt2 = new Vector3();
 const lastAnchor = new Vector3();
 const view: ViewFrame = { head: new Vector3(), up: new Vector3(0, 1, 0), shot: new Vector3() };
 
@@ -137,6 +141,9 @@ export class Battle implements TutorialApi {
   private lastSpin = 0;
   private lastHeight = 0;
   private lessonGoblin: Goblin | null = null;
+  /** The powder keg of the trigger lesson, and how many triggers of each kind were set off. */
+  private lessonTrigger: Trigger | null = null;
+  private triggerCount = noTriggers();
 
   // The hint sign.
   private shownStep: TutorialStep | null = null;
@@ -160,6 +167,7 @@ export class Battle implements TutorialApi {
       tool.onUse = (count) => (this.toolUseCount[tool.name] += count);
       tool.onGrab = () => this.toolGrabCount[tool.name]++;
     }
+    parts.triggers.onSetOffKind = (kind) => this.triggerCount[kind]++;
     // A tick on each second of the reach check's countdown.
     this.reach.onTick = () => parts.audio.play('readyTick');
     this.loadBoardScale();
@@ -247,6 +255,8 @@ export class Battle implements TutorialApi {
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     this.lessonGoblin = null;
+    this.lessonTrigger = null;
+    this.triggerCount = noTriggers();
     this.shownStep = null;
     this.doneFlash = 0;
     // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
@@ -296,6 +306,18 @@ export class Battle implements TutorialApi {
     this.parts.spawner.stop();
     this.clearBoard();
     this.parts.panel.hide();
+    this.parts.sign.show(null);
+    this.parts.markers.hide();
+    this.parts.ghost.hide();
+  }
+
+  /** True while a battle is being fought (the wrist button and auto-pause only work then). */
+  get canPause(): boolean {
+    return this.running && this.state.phase === 'playing';
+  }
+
+  /** Paused: the sign, the marker and the ghost hand step away. The next update brings them back. */
+  hideHints(): void {
     this.parts.sign.show(null);
     this.parts.markers.hide();
     this.parts.ghost.hide();
@@ -378,8 +400,9 @@ export class Battle implements TutorialApi {
       return;
     }
     const target = this.markerPosition(hint.marker, markerAt);
+    const second = this.markerPosition(hint.marker2, markerAt2);
     this.updateGhost(dt, !mic.on && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
-    markers.update(dt, target);
+    markers.update(dt, target, second);
     // No mic: the bell is out in place of the megaphone, with its own words and demo.
     let text = !mic.on && hint.whenNoMic ? hint.whenNoMic : hint.text;
     const lessonGoblin = this.lessonGoblin;
@@ -481,6 +504,15 @@ export class Battle implements TutorialApi {
         return slingshot.partWorld('bowl', out);
       case 'pouch':
         return slingshot.partWorld('pouch', out);
+      case 'lessonTrigger': {
+        const t = this.lessonTrigger;
+        return t && t.standing ? this.parts.triggers.topWorld(t, out) : null;
+      }
+      case 'nearBoulder':
+      case 'nearTree': {
+        const t = this.parts.triggers.nearestStanding(target === 'nearBoulder' ? 'boulder' : 'tree', stage.spin);
+        return t ? this.parts.triggers.topWorld(t, out) : null;
+      }
       default:
         return null;
     }
@@ -733,5 +765,25 @@ export class Battle implements TutorialApi {
 
   slingLoaded(): boolean {
     return this.parts.slingshot.isLoaded;
+  }
+
+  startTriggerLesson(): void {
+    // The keg nearest the front of the board right now (the player may have spun it).
+    this.lessonTrigger = this.parts.triggers.readyNearest('keg', this.parts.stage.spin);
+    if (this.lessonTrigger) this.parts.triggers.sendPast(this.lessonTrigger, TRIGGERS.lesson.group);
+  }
+
+  sendPastTrigger(): void {
+    if (!this.lessonTrigger?.standing) this.lessonTrigger = this.parts.triggers.readyNearest('keg', this.parts.stage.spin);
+    if (this.lessonTrigger) this.parts.triggers.sendPast(this.lessonTrigger, TRIGGERS.lesson.group);
+    this.parts.markers.pulse();
+  }
+
+  triggersSetOff(kind: TriggerKind): number {
+    return this.triggerCount[kind];
+  }
+
+  revealTriggers(): void {
+    this.parts.triggers.reveal(TUTORIAL_WAVES.length);
   }
 }

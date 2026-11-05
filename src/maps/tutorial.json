@@ -51,7 +51,20 @@
   "gate": { "at": [52, 180] },
   "triggers": [
     { "kind": "keg", "wave": 2, "at": [118, -2] },
-    { "kind": "boulder", "wave": 4, "at": [126, 104] },
-    { "kind": "tree", "wave": 4, "at": [100, 190] }
+    { "kind": "keg", "wave": 2, "at": [170, 85] },
+    { "kind": "keg", "wave": 2, "at": [131, -46] },
+    { "kind": "keg", "wave": 2, "at": [116, 185] },
+    { "kind": "keg", "wave": 2, "at": [150, -81] },
+    { "kind": "keg", "wave": 2, "at": [138, 30] },
+    { "kind": "boulder", "wave": 3, "at": [196, 9] },
+    { "kind": "boulder", "wave": 3, "at": [205, 84] },
+    { "kind": "boulder", "wave": 3, "at": [190, -84] },
+    { "kind": "boulder", "wave": 3, "at": [195, 200] },
+    { "kind": "boulder", "wave": 3, "at": [110, 50] },
+    { "kind": "tree", "wave": 3, "at": [86, 6] },
+    { "kind": "tree", "wave": 3, "at": [104, 97] },
+    { "kind": "tree", "wave": 3, "at": [102, -69] },
+    { "kind": "tree", "wave": 3, "at": [100, 223] },
+    { "kind": "tree", "wave": 3, "at": [142, 64] }
   ]
 }

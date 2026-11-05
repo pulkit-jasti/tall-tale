@@ -184,7 +184,7 @@ export function iconTextureSource(name: UiImageName, tint?: string): HTMLCanvasE
   return image ? tintCanvas(image, tint) : null;
 }
 
-export type ButtonIcon = 'next' | 'play' | 'restart';
+export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach';
 
 /**
  * A crisp button icon drawn in code (256 px), in the same look as the arrows:
@@ -212,6 +212,56 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.lineTo(-s * 0.24, s * 0.34);
     c.closePath();
     c.lineWidth = s * 0.06;
+    c.fill();
+    c.stroke();
+  } else if (icon === 'pause') {
+    // Two upright bars.
+    c.lineWidth = s * 0.06;
+    for (const x of [-s * 0.2, s * 0.06]) {
+      c.beginPath();
+      c.roundRect(x, -s * 0.3, s * 0.14, s * 0.6, s * 0.03);
+      c.fill();
+      c.stroke();
+    }
+  } else if (icon === 'table') {
+    // Reset table: a round board seen from above with a down arrow onto it (placed again).
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.ellipse(0, s * 0.2, s * 0.34, s * 0.13, 0, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    c.beginPath();
+    c.moveTo(0, s * 0.12);
+    c.lineTo(-s * 0.16, -s * 0.06);
+    c.lineTo(-s * 0.07, -s * 0.06);
+    c.lineTo(-s * 0.07, -s * 0.36);
+    c.lineTo(s * 0.07, -s * 0.36);
+    c.lineTo(s * 0.07, -s * 0.06);
+    c.lineTo(s * 0.16, -s * 0.06);
+    c.closePath();
+    c.fill();
+    c.stroke();
+  } else if (icon === 'reach') {
+    // Measure reach: a double arrow between two end bars, like a tape measure.
+    c.lineWidth = s * 0.06;
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.roundRect(side * s * 0.36 - s * 0.04, -s * 0.24, s * 0.08, s * 0.48, s * 0.02);
+      c.fill();
+      c.stroke();
+    }
+    c.beginPath();
+    c.moveTo(-s * 0.28, 0);
+    c.lineTo(-s * 0.12, -s * 0.15);
+    c.lineTo(-s * 0.12, -s * 0.06);
+    c.lineTo(s * 0.12, -s * 0.06);
+    c.lineTo(s * 0.12, -s * 0.15);
+    c.lineTo(s * 0.28, 0);
+    c.lineTo(s * 0.12, s * 0.15);
+    c.lineTo(s * 0.12, s * 0.06);
+    c.lineTo(-s * 0.12, s * 0.06);
+    c.lineTo(-s * 0.12, s * 0.15);
+    c.closePath();
     c.fill();
     c.stroke();
   } else {

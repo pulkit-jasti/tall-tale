@@ -66,16 +66,36 @@ describe('director', () => {
     director.update(0.1);
     expect(director.spawnRate).toBe(1);
   });
+
+  it('holds the spawns completely while a step holds the wave', () => {
+    const ctx: Ctx = { goal: false, log: [] };
+    const director = new Director([step({ holdSpawns: true }), step({ id: 'plain' })], ctx);
+    director.update(0.1);
+    expect(director.spawnRate).toBe(0);
+    ctx.goal = true;
+    director.update(0.1);
+    expect(director.spawnRate).toBe(1);
+  });
 });
 
 /** A fake game: the player does nothing at all. */
-function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: string[]; ended: number; held: Record<string, boolean> } {
+function idleApi(): TutorialApi & {
+  cleared: number;
+  started: number[];
+  shown: string[];
+  ended: number;
+  held: Record<string, boolean>;
+  sentPast: number;
+  revealed: number;
+} {
   return {
     cleared: 0,
     started: [],
     shown: [],
     ended: 0,
     held: {},
+    sentPast: 0,
+    revealed: 0,
     startWave(index) {
       this.started.push(index);
     },
@@ -107,6 +127,16 @@ function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: s
     eaten: () => 0,
     slingCount: () => 0,
     slingLoaded: () => false,
+    startTriggerLesson() {
+      this.sentPast++;
+    },
+    sendPastTrigger() {
+      this.sentPast++;
+    },
+    triggersSetOff: () => 0,
+    revealTriggers() {
+      this.revealed++;
+    },
   };
 }
 
@@ -125,6 +155,7 @@ function eagerApi(): ReturnType<typeof idleApi> {
     eaten: more,
     slingCount: more,
     slingLoaded: () => true,
+    triggersSetOff: more,
   };
 }
 
@@ -282,6 +313,38 @@ describe('tutorial director', () => {
     const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot'], TUTORIAL_WAVES, 0, true), api);
     run(director, 60);
     expect(director.current?.id).not.toBe('reach-check');
+  });
+
+  it('teaches the triggers in wave 2 right after the first shot: the wave holds while a group walks past a keg', () => {
+    const api = idleApi();
+    const steps = buildTutorialSteps(['slingshot']);
+    const ids = steps.map((s) => s.id);
+    expect(ids.indexOf('learn-keg')).toBe(ids.indexOf('learn-sling-shoot') + 1);
+    expect(ids.indexOf('learn-triggers')).toBe(ids.indexOf('learn-keg') + 1);
+    expect(ids.indexOf('learn-triggers')).toBeLessThan(ids.indexOf('wave-2-clear'));
+    const director = new Director<TutorialApi>(steps, api);
+    while (director.current?.id !== 'learn-keg') director.skip();
+    expect(api.sentPast).toBe(1);
+    expect(director.spawnRate).toBe(0);
+    // Stuck: the group walks past the keg again (at most twice), and the lesson still never gets stuck.
+    run(director, 40);
+    expect(api.sentPast).toBe(3);
+    // The player shoots the keg: done, and the info box brings the boulders and trees.
+    api.triggersSetOff = (kind) => (kind === 'keg' ? 1 : 0);
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-triggers');
+    expect(api.revealed).toBe(1);
+    expect((director.current as TutorialStep).hint?.next).toBe(true);
+    director.skip();
+    expect(director.current?.id).toBe('wave-2-clear');
+  });
+
+  it('the trigger lesson moves on after its timeout when no keg is hit', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
+    while (director.current?.id !== 'learn-keg') director.skip();
+    run(director, 61);
+    expect(director.current?.id).toBe('learn-triggers');
   });
 
   it('numbers the lessons', () => {

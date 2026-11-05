@@ -66,7 +66,7 @@ Arm length varies a lot between players, and the default size felt too close in 
 - **Countdown:** as soon as a hand is stretched out (more than 33 cm from the head, level), the sign shows "Great, hold it there... 3", then 2, then 1, with a tick each second (the text pops on each number). If the arm drops for more than 0.4 s, it waits again. When it ends, a chime plays and the ticked sign says "Done! You can rest your arm now."
 - **What it measures:** the farthest the pinch point gets, as a level distance from the head (not the seat, so leaning forward does not count), smoothed so a tracking spike never counts.
 - **What it changes:** the whole board (everything in `boardLift`: board, castle, goblins, ring, tools, flags, sign, panels) scales so the rampart sits at 88% of the measured reach, a comfortable reach rather than a full stretch. Everything keeps its place relative to the wall. The scale stays within 0.85 to 1.45, and the board grows or shrinks to it smoothly, so the player sees it fit them.
-- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. Debug page: "Measure reach again" forgets it and runs the check again. A "measure again" option in the pause menu comes later.
+- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. "Measure reach" on the pause panel (and "Measure reach again" on the debug page) forgets it and starts the battle again with the check.
 - Numbers in `CALIBRATION` in `src/config/game.ts`, code in `src/player/reachCheck.ts`.
 
 ### Holding a tool
@@ -145,7 +145,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 ### Placement and fallbacks
 
 - **Auto placement:** when the player presses Play, the board is placed at a fixed distance below the head, facing where the player is looking.
-- **Reset table:** a button in the pause menu runs auto placement again, for when the board ends up somewhere odd.
+- **Reset table:** a button in the pause menu runs auto placement again (at the starting height), for when the board ends up somewhere odd.
 - **Quest recenter:** if the player recenters with the Meta button, the game catches it and places the board again. A web game cannot trigger the system recenter itself, which is why "Reset table" exists.
 
 ---
@@ -198,8 +198,15 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 - **Wrist button on the left wrist** (right wrist once handedness exists). It fades in only when the left palm faces the player's face for about 0.3 seconds, and fades out when the hand turns away.
 - **Poke it with the right index finger** to pause. The button presses in, with a click sound.
 - **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Reset table", "Restart battle".
-- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". Build step 1 already has a simple version: the game freezes and all sound stops while the session or the page is not fully visible, and resumes by itself. The FPS panel shows "paused" while it is.
+- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". The FPS panel shows "paused" while it is.
 - Settings come later (not in the MVP).
+
+**Built in step 6** (`src/ui/pauseMenu.ts`, numbers in `PAUSE`):
+- The wrist button is the shared poke button with a pause icon, on the inside of the left wrist (6 cm back from the palm's middle), its face out of the palm. It pops in once the left palm faces the eyes (within about 53 degrees) for 0.3 s, while the palm is within 60 cm of the eyes and the left hand holds nothing. Only the right index finger pokes it, once it is fully out.
+- Pausing lets go of everything the hands hold (goblins drop, tools go back), freezes the battle and all sound, and hides the hint sign, marker and ghost hand.
+- The pause panel opens in front of the head, not on the board, at the same spot from the eyes as the end panel and sized with the board, so its buttons are always in the best reach band (about 47 to 49 cm from the eyes), even when the board ended up somewhere odd. Four poke buttons: **Resume**, **Reset table** (auto placement again at the starting height, stays paused so the player can look first), **Measure reach** (forgets the reach and starts the battle again with "Show me how big you are, giant!") and **Restart** (the battle again). The panel says that the last two start the battle again. Its buttons ignore pokes for 1 s after it opens.
+- Auto-pause in VR during a battle shows the same panel when the player comes back. Outside a battle (welcome or end panel) and in the browser it still resumes by itself.
+- Debug: Space pauses or resumes, and the debug page's "Pause panel button 1 to 4" pokes a panel button.
 
 ---
 

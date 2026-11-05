@@ -111,6 +111,8 @@ export class Goblin {
   strikeTimer = 0;
   /** Animation time not played yet (far goblins update their animation every other frame). */
   animDt = 0;
+  /** A road this goblin must take at the end of the one it walks (the trigger lesson group), or -1 to pick freely. */
+  nextRoad = -1;
 
   constructor(
     template: ModelTemplate,
@@ -325,6 +327,7 @@ export class Goblins {
     goblin.foe = null;
     goblin.animDt = 0;
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
+    goblin.nextRoad = -1;
     this.setTouch(goblin, 'idle');
     return goblin;
   }
@@ -338,6 +341,49 @@ export class Goblins {
     goblin.mode = 'walking';
     goblin.offset = this.rng.range(-ROADS.laneJitter, ROADS.laneJitter);
     this.setRoad(goblin, step);
+    goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
+    return goblin;
+  }
+
+  /**
+   * Spawns a goblin walking along a road (graph road index, `dir` as in
+   * Step) so that it is `before` cm short of the spot `along` (cm along that
+   * road). When the road is too short, it starts on the road before it and
+   * is sent onto this one. The trigger lesson uses it to walk a group past a
+   * keg. Returns null at the unit cap.
+   */
+  spawnBefore(type: GoblinType, road: number, dir: 1 | -1, along: number, before: number, offset = 0): Goblin | null {
+    const graph = this.network.graph;
+    const roads = this.network.roads;
+    const room = dir === 1 ? along : roads[road].length - along;
+    let step: Step = { road, dir };
+    let distance = along - dir * Math.min(before, room);
+    let next = -1;
+    if (room < before) {
+      // The road that leads into this one from farther away.
+      const start = dir === 1 ? graph.roads[road].from : graph.roads[road].to;
+      let best = -1;
+      for (const r of graph.nodes[start].roads) {
+        if (r === road) continue;
+        const far = graph.nodes[graph.other(r, start)].toCastle;
+        if (best < 0 || far > graph.nodes[graph.other(best, start)].toCastle) best = r;
+      }
+      if (best >= 0) {
+        const into: 1 | -1 = graph.roads[best].to === start ? 1 : -1;
+        const left = Math.min(roads[best].length, before - room);
+        step = { road: best, dir: into };
+        distance = into === 1 ? roads[best].length - left : left;
+        next = road;
+      }
+    }
+    const goblin = this.obtain(type);
+    if (!goblin) return null;
+    goblin.mode = 'walking';
+    goblin.offset = offset;
+    this.setRoad(goblin, step);
+    goblin.distance = distance;
+    goblin.road!.pointAt(distance, offset * step.dir, goblin.root.position);
+    goblin.nextRoad = next;
     goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
     return goblin;
   }
@@ -383,6 +429,13 @@ export class Goblins {
   private arrive(g: Goblin): void {
     const graph = this.network.graph;
     const node = graph.endOf(g.step);
+    // A goblin sent onto a road takes it if it is open and starts here.
+    const forced = g.nextRoad;
+    g.nextRoad = -1;
+    if (forced >= 0 && graph.roads[forced].open && graph.nodes[node].roads.includes(forced)) {
+      this.setRoad(g, { road: forced, dir: graph.roads[forced].from === node ? 1 : -1 });
+      return;
+    }
     const next = graph.isWall(node) ? null : graph.next(node, this.rng);
     if (next) this.setRoad(g, next);
     else this.headToWall(g);

@@ -7,6 +7,7 @@
 // side by side. Steps only call the game systems through TutorialApi. Nothing
 // tutorial-only lives in those systems. No Three.js here, so it can be tested.
 import { TOOLS, type GoblinType } from '../config/game.js';
+import type { TriggerKind } from '../rules/blueprint.js';
 import type { DirectorStep } from '../rules/director.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
@@ -91,6 +92,9 @@ export const TUTORIAL_TIMING = {
   heightGoal: 4,
   /** The lesson climber waits on the rampart this long instead of jumping in (seconds). */
   lessonClimberWait: 90,
+  /** The trigger lesson: the group walks past the keg again after this long, and it moves on after triggerTimeout. */
+  triggerStuckAfter: 18,
+  triggerTimeout: 60,
 };
 
 /** What a marker points at. The battle turns it into a world position. */
@@ -108,7 +112,12 @@ export type MarkerTarget =
   /** The stun tool that is out: the megaphone, or the bell without a mic. */
   | 'stunTool'
   | 'megaphoneHandle'
-  | 'bellHandle';
+  | 'bellHandle'
+  /** The powder keg of the trigger lesson. */
+  | 'lessonTrigger'
+  /** The standing boulder and tree nearest the front of the board. */
+  | 'nearBoulder'
+  | 'nearTree';
 
 export type HintIcon = 'pinch' | 'grab' | 'spin' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
 
@@ -120,6 +129,8 @@ export interface Hint {
   text: string;
   icon?: HintIcon;
   marker?: MarkerTarget;
+  /** A second marker, for two things at once (the boulder and the tree). */
+  marker2?: MarkerTarget;
   /** Shown instead when the lesson goblin is on the board, not in the hand (dropped it). */
   whenDropped?: string;
   /** The food tool this lesson is about, and the text shown instead while it cannot be paid for. */
@@ -184,6 +195,14 @@ export interface TutorialApi {
   /** Slingshot steps done since it appeared, and whether something is in the pouch. */
   slingCount(event: 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot'): number;
   slingLoaded(): boolean;
+  /** The trigger lesson: picks the powder keg nearest the front and walks a small group of goblins past it. */
+  startTriggerLesson(): void;
+  /** Walks the group past the lesson keg again (the fallback), with a pulse of the marker. */
+  sendPastTrigger(): void;
+  /** How many triggers of a kind were set off in this battle. */
+  triggersSetOff(kind: TriggerKind): number;
+  /** Brings every boulder and tree onto the roads now (they come with the trigger lesson's info box). */
+  revealTriggers(): void;
 }
 
 const lesson = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Partial<Hint> = {}): Hint => ({
@@ -360,6 +379,44 @@ function shootLesson(): TutorialStep {
       slowSpawns: true,
     },
   );
+}
+
+/**
+ * In wave 2, right after the shoot lesson: the triggers, which are all set
+ * off with the slingshot. The wave holds its spawns while a small group of
+ * goblins walks past the powder keg in front of the player. Done when a keg
+ * is set off (best with goblins near it). If stuck, the group walks past it
+ * again and the marker pulses. Then an info box brings the boulders and
+ * trees, with a marker on the nearest of each.
+ */
+function triggerLessons(): TutorialStep[] {
+  const again = (api: TutorialApi): void => api.sendPastTrigger();
+  return [
+    lessonStep(
+      'learn-keg',
+      lesson('See the barrel? Shoot it when goblins walk past!', 'target', 'lessonTrigger', { demo: 'shoot' }),
+      (api, since) => api.triggersSetOff('keg') > since,
+      (api) => api.triggersSetOff('keg'),
+      {
+        start: (api) => api.startTriggerLesson(),
+        fallbacks: [again, again],
+        stuckAfter: TUTORIAL_TIMING.triggerStuckAfter,
+        timeout: TUTORIAL_TIMING.triggerTimeout,
+        holdSpawns: true,
+      },
+    ),
+    {
+      ...infoStep(
+        'learn-triggers',
+        banner('Boulders roll down the road and trees fall across it. Shoot them too!', 'info', 'nearBoulder', {
+          marker2: 'nearTree',
+          header: 'Barrels, boulders and trees',
+        }),
+        (api) => api.revealTriggers(),
+      ),
+      slowSpawns: true,
+    },
+  ];
 }
 
 type FoodTool = Exclude<ToolName, 'slingshot'>;
@@ -557,7 +614,7 @@ export function buildTutorialSteps(
     const startWave = (api: TutorialApi): void => api.startWave(i);
     if (lessonFollows) steps.push({ id: `wave-${i + 1}-start`, start: startWave, done: () => true, timeout: 0 });
     else steps.push(infoStep(`wave-${i + 1}-start`, banner(wave.intro, 'warning'), startWave));
-    if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson());
+    if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson(), ...triggerLessons());
     else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolLesson(wave.newTool));
     // While the wave is fought the sign stays away, so it never covers the enemies.
     // It comes back when the wave is cleared (the breather) or for a lesson.
