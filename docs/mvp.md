@@ -9,14 +9,15 @@ Back to [GDD index](GDD.md).
 ## In the MVP
 
 **World**
-- The raised board, the castle with its low wall, courtyard and workers ([map.md](map.md)).
-- Full 360 degree board. The player spins it and sets its height with the ring handle, marked with big arrows ([controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
+- The raised board, the castle with its low wall and courtyard ([map.md](map.md)). Courtyard workers come back with the polish.
+- Full 360 degree board. The player spins it and sets its height with the ring handle ([controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 - Low wall (about 6 cm) and wall attackers standing a little out from it, so there is no hidden strip ([map.md](map.md#no-hidden-strip-outside-the-wall)).
 - Roads and enemy camps (sand and rock hills, bigger camp means more enemies).
 - Triggers: boulder, powder keg and leaning tree only.
 - Hidden gate at the front as the troop spawner.
 - Two flags in front of the player (castle health and wave progress). They stay still when the board spins ([castle-rules.md](castle-rules.md#2-the-two-flags)).
-- Real models from [assets.md](assets.md) from build step 1. Simple shapes only for the things in [placeholder-shapes.md](placeholder-shapes.md). Scale is in [map.md](map.md#scale-from-the-mockup).
+- Real models from [assets.md](assets.md). Simple shapes only for the things in [placeholder-shapes.md](placeholder-shapes.md). Scale is in [map.md](map.md#scale-from-the-mockup).
+- The giant's seat (packed earth filling the hole) and a chunky low-poly giant body from the waist up under the head.
 
 **Rules and pacing**
 - **Only the tutorial battle:** 5 hand-crafted waves, about 8 minutes, each wave introducing a tool (table below). A hand-made map blueprint, a scripted tutorial director in code, and a fixed seed. No level generator ([map.md](map.md#8-levels-and-the-level-generator)).
@@ -26,34 +27,35 @@ Back to [GDD index](GDD.md).
 
 **Menus**
 - A 2D start page with one "Enter VR" button. It asks for mic permission before entering VR.
-- A single Play button in VR (a simple shape, no menu board yet). Built in step 3: a small "Welcome, giant!" panel with a round poke button appears once the board is placed, and the tutorial starts when it is poked (the same panel and button as Play again).
+- A small "Welcome, giant!" panel with a round Play button once the board is placed in VR. The same panel and button are used for Play again.
 - Board placed automatically when Play is pressed.
-- Pause with a wrist button, plus auto-pause on the Quest menu. Pause panel: Resume, Reset table, Restart battle ([controls-and-ui.md](controls-and-ui.md#5-pause-and-settings)).
+- Pause with a button on the left palm, plus auto-pause on the Quest menu. Pause panel: Resume, Reset table, Measure reach, Restart ([controls-and-ui.md](controls-and-ui.md#5-pause-and-settings)).
 - End of battle: a simple win ("Congratulations") or lose panel with a button to play again ([castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp)).
 
 **Player**
 - Body abilities: **grab and eat only** ([controls-and-ui.md](controls-and-ui.md#3-grab-and-eat)). Goblins are picked up with a pinch. The pinch zone is bigger than the goblin and snaps to the nearest one.
-- **All 4 giant tools:** slingshot, fly swatter, pepper shaker, megaphone ([giant-tools.md](giant-tools.md)). This is the most satisfying part, so it is the main thing to test. The megaphone uses a fixed loudness threshold for now (no calibration). **The bell** triggers the same stun by shaking, so voice is never required. Only one of the two is ever out: the megaphone when mic permission is given, the bell when it is not (a setting to pick the bell with the mic on comes later). A debug key also triggers the stun, for testing without a mic.
-- No loadout, no unlocks. Each tool appears on its platform in its tutorial wave with a poof, and glows until grabbed. The tutorial's hint sign then teaches it step by step.
+- **All 4 giant tools:** slingshot, fly swatter, pepper shaker, megaphone ([giant-tools.md](giant-tools.md)). The megaphone uses a fixed loudness threshold (no calibration). **The bell** triggers the same stun by shaking, so voice is never required. Only one of the two is ever out: the megaphone when mic permission is given, the bell when it is not.
+- No loadout, no unlocks. Each tool appears on its platform in its tutorial wave with a poof, and glows until grabbed.
 - Slingshot aim assist ([giant-tools.md](giant-tools.md#slingshot-aim-assist)).
-- Food currency: eating fills the food jar, tools cost food. Start with 4 food. Food carries over between waves.
-- Tool platforms beside the player, just outside the ring handle, each food tool with a price tag (a food ball and the cost).
+- Food currency: eating fills the food jar, tools cost food (free while in the tutorial, `TOOLS.freeInTutorial`). Start with 4 food. Food carries over between waves.
+- Tool platforms beside the player, just outside the ring handle, each food tool with a price tag.
 
 **Enemies and army**
-- **Grunts, runners and climbers**, plus **balloon riders** from build step 7 ([enemies.md](enemies.md)). Climbers are the main food source.
+- **Grunts, runners, climbers and balloon riders** ([enemies.md](enemies.md)). Climbers are the main food source. Some grunts carry spears, and from wave 3 some wear helmets (one extra hit).
 - Enemy routes on the road graph ([map.md](map.md#4-how-enemies-choose-routes)).
-- Troops with basic behavior: spawn, walk out, fight.
+- Troops in three kinds (swordsmen, spearmen, archers): spawn, walk out, fight.
 
 **Feedback**
-- Spatial enemy sounds, louder as they get closer. Camps rumble before spawning.
-- Real sounds from `public/audio/README.md`, added in the step where each feature is built. Sounds it lists as missing use `public/audio/chime.mp3` until the last step ([audio.md](audio.md)).
-- Basic juice: hit flash, poof, gear flying off.
+- Spatial enemy sounds, louder as they get closer. Camps rumble (and shake) before spawning.
+- Real sounds from `public/audio/README.md`. Sounds it lists as missing use `public/audio/chime.mp3` until the last step ([audio.md](audio.md)).
+- Juice: hit flash, poof, gear flying off, knockout stars and rings, hit stop on big hits, food labels, confetti and fireworks.
+- Threat cues for players with the sound off: the wall flashes red under every attack, and a red arrow points at threats out of view.
 
 ---
 
 ## Tutorial director
 
-The tutorial is a hand-written script in code, not a JSON file, because it waits for the player and reacts when they get stuck. It runs on the hand-made map blueprint `tutorial.json` with a fixed seed.
+The tutorial is a hand-written script in code (`src/director/tutorial.ts`), not a JSON file, because it waits for the player and reacts when they get stuck. It runs on the hand-made map blueprint `tutorial.json` with a fixed seed.
 
 ### How it works
 
@@ -63,48 +65,46 @@ The tutorial is a hand-written script in code, not a JSON file, because it waits
   - **If stuck:** what to do after a while, for example glow the tool again, or spawn the climber again closer.
 - The director moves to the next step only when the current one is done.
 - Steps only call the normal game systems (spawn enemy, show tool, open road). Nothing tutorial-only lives inside those systems.
-- **Learn by doing, with text.** Without text, players do not know what to do. Each lesson shows one short instruction on the hint sign, a bouncing marker on the thing to use, and waits until the player does it. Then its box is ticked with a chime and the next one appears. No "OK" buttons.
-  - **Hint sign:** in front of the player (position below). It rises with the board, never spins and never follows the head. Kenney UI images (`public/ui/`) on a canvas texture. Shows "Step 3 of 8" for lessons and "Wave 2 of 5" banners for waves. **While a wave is fought it is gone**, so it never covers the enemies: after the wave banner's Next it disappears and comes back when the wave is cleared, or for a lesson. No goblin counter: the blue flag shows the progress.
-  - **Marker:** a "!" with a down arrow above the target, drawn on top so the wall never hides it.
-  - **Out of view:** a 3D pointer arrow in front of the face, a little low, points at the lesson's target while it is away from the middle of the view (since step 6). (The arrows on the ring and the "it is to your left" line on the sign were removed after the step 4 review.)
-  - **Ghost hand:** a see-through 3D hand loops the gesture on the real target (Meta's onboarding guidance: animated hand demonstrations). It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`. After the first headset test (angles were wrong and hands went through the ring and the bowl), the hand is turned by named directions (bar or fingers, and palm) matched to axes measured from its own joints, a fist closes around the bar's center line, a pinch puts the tips on the object, and every approach comes from the open side. The accuracy rules are in AGENTS.md ("Ghost hand demos").
-  - **Hint sign position:** it sits past the goblins at the front wall (62 cm out since the castle grew, bottom edge 43 cm above the board, just below the eyes), so it is behind them, never in front of them, and covers only the far edge of the board. It is out of reach, so the **Next button stands apart**, on a post straight in front, in the reach band (38.5 cm out, 15 cm up since step 6, was 33.5 and 9, too close to the ring). It blinks while it waits to be poked.
-  - **Next button:** one click per push. After a click the finger must come back out about 2 cm and 0.6 s must pass, and a new step ignores it for 1 s, so a slow or resting finger never skips several steps.
-  - **Flags** are explained before wave 1 starts ("Your castle"), while nothing attacks.
-  - **Climbers** always climb between two towers (`CASTLE.towerClearDeg`), and the map's wall entries sit in the middle of the tower gaps.
-  - **Marker:** one bouncing down arrow over the target.
-  - **Info steps** (wave banners, the flags, "wave cleared" and new tool breathers) only move on when the player pokes "Next" on the sign. Not by time, and not by looking at something: a player may turn toward a thing without noticing it, so they always get as long as they need. Only lessons, where the player does something with their hands, move on by themselves when it is done.
-  - **New things are taught before their wave**, so no enemies press the player while learning. Lessons that need enemies (shooting a goblin) run at half the spawn rate.
+- **Learn by doing, with text.** Each lesson shows one short instruction on the hint sign, a marker on the thing to use, and waits until the player does it. Then its box is ticked with a chime and the next one appears. No "OK" buttons.
+  - **Hint sign:** past the goblins at the front wall (62 cm out, bottom edge 43 cm above the board, just below the eyes), so it covers only the far edge of the board. It rises with the board, never spins and never follows the head. Shows "Step 3 of 8" for lessons and "Wave 2 of 5" banners for waves. **While a wave is fought it is gone**, so it never covers the enemies. No goblin counter: the blue flag shows the progress.
+  - **Next button:** the sign is out of reach, so Next stands apart on a post straight in front, in the reach band (38.5 cm out, 15 cm up). It blinks while it waits. One click per push: after a click the finger must come back out about 2 cm and 0.6 s must pass, and a new step ignores it for 1 s.
+  - **Marker:** one bouncing down arrow over the target, drawn on top so the wall never hides it.
+  - **Out of view:** a gold 3D pointer arrow in front of the face points at the lesson's target while it is at the edge of the view or out of it.
+  - **Ghost hand:** a see-through 3D hand loops the gesture on the real target. It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`. The accuracy rules are in AGENTS.md ("Ghost hand demos"). Ghost aim dots show the arc from the pouch to the target in the slingshot and trigger lessons.
+  - **Info steps** (wave banners, the flags, the food jar, "wave cleared" breathers, the balloon banner) only move on when the player pokes Next. Not by time, and not by looking at something. Only lessons, where the player does something with their hands, move on by themselves.
+  - **New things are taught before their wave**, so no enemies press the player while learning.
 - **The reach check comes first**, once per player: "Show me how big you are, giant!" sizes the board to their arms ([controls-and-ui.md](controls-and-ui.md#reach-check-show-me-how-big-you-are-giant)). It also runs before a debug "Start at wave" when the reach is not known yet.
-- Lessons in the MVP: spin the board, set its height, pinch the climber, eat it, then (before wave 2) grab the slingshot, take a pebble, load it, and shoot (any shot counts, hit or miss: the player has learned how it works). Before wave 3 the **food jar** (below), then grab the swatter, then swat one goblin; before wave 4 grab the pepper, then pepper goblins; before wave 5 grab the megaphone (or the bell without a mic), read how it works (its own box, Next), then stun goblins. One new tool per breather, so only one thing ever appears at a time. Wave banners and the two flags are explained as the battle starts.
-- **The food jar is taught right before the first food tool**, where food starts to matter (it used to be one info step before wave 1, which was easy to miss): "Wave cleared! This jar on your left holds your food..." (Next), then a climber pops up and the player eats it and watches the jar fill. Then the swatter appears with its price tag, and the grab lesson says "Tools cost food. Here is the fly swatter: its price tag says 4 food."
-- **A new tool is taught by actions only, never with Next** (the food jar's info step is the one exception). When a wave is cleared and a new tool comes, its first lesson starts at once, and the tool appears with it. The wave that brings it starts straight into its use lesson, with no banner in between. Tool lessons count from the moment the tool appears, so steps the player already did are never asked again.
-- **Food tool use lessons:** done as soon as one goblin is hit, anywhere. While one runs, the tool's use timer is held, so a player who pays with an early swat before the goblins arrive keeps the tool until they do (after the step 4 headset test, the timer ran out first and the tool went back to its platform). The timer starts with its full time when the lesson ends. The lesson waits up to 120 s (the goblins first walk to the wall) and also ends if the wave is cleared another way.
-- **Lesson climbers during a wave** wait on the rampart like any climber (8 s), not 90 s, so a fallback climber never holds the wave up long after its lesson.
+- **The lessons, in order:**
+  - Before wave 1: pause (turn the left palm toward the face, poke the button, Resume), spin the board, set its height, pinch the climber, eat it. Then the two flags ("Your castle", Next each).
+  - Before wave 2: grab the slingshot, take a pebble, load it. In wave 2: shoot the one goblin walking back and forth on the road in front (done on a hit). Then one lesson each for the keg, the boulder and the tree: each brings its kind onto the roads, and goblins wait right in what it does until the player sets it off.
+  - Before wave 3: the **food jar** ("This jar holds your food", Next, then a climber to eat), then grab the swatter. In wave 3: swat one goblin.
+  - Before wave 4: grab the pepper. In wave 4: pepper one goblin, then the **balloon banner** ("Look up!", Next) while one balloon floats in right in front. The wave's own balloons wait for it.
+  - Before wave 5: grab the megaphone (the bell without a mic). In wave 5: shout into it or shake the bell.
+- **A new tool is taught by actions only, never with Next.** Its first lesson starts when the wave before is cleared, and the tool appears with it. Its wave starts straight into its use lesson, with no banner. Tool lessons count from the moment the tool appears, so steps the player already did are never asked again.
+- **Tool use lessons** (swatter, pepper, megaphone or bell): three calm climbers wait on the rampart in front, harmless, and the wave holds its spawns until the tool is used on one. The tool's use timer is held while the lesson runs.
+- **No soldiers come out while a lesson is on the sign**, so they never knock out the lesson's goblins.
+- **Lesson climbers during a wave** wait on the rampart like any climber (8 s), so a fallback climber never holds the wave up.
 
 ### Rules that keep it safe
 
 - **Keep fallbacks simple:** at most two. First repeat the step, then make it easier.
-- **It must never get stuck.** Every lesson has a timeout (for example 60 seconds) that moves on anyway. A judge who cannot do something still sees the rest of the game. Info steps have no timeout: they wait for the "Next" button, which always works. **Waves have no timer either:** a wave ends when it is cleared or the castle falls, so a player who ignores it loses. Only a stalemate ends a wave early: every goblin is out, some are left far away, and nothing has hurt the castle for 60 seconds (`CASTLE_HEALTH.stalemateSeconds`), so the leftovers run off. A goblin at or on the wall, in the courtyard, or held (in a hand or the slingshot) always blocks it: the player can still deal with that one. There is only ever one lesson climber: a fallback moves it in front of the player again instead of adding another.
-- **Enemies keep coming while a step waits, but at half the spawn rate.** It still feels like a battle, without piling up on a player who is still learning.
-- **The full step list** (start, goal and fallback for each step) is written and built by the coding agent in build step 3. The developer tunes it after playing it.
+- **It must never get stuck.** Every lesson has a timeout that moves on anyway. A judge who cannot do something still sees the rest of the game. Info steps have no timeout: they wait for Next, which always works. **Waves have no timer either:** a wave ends when it is cleared or the castle falls. Only a stalemate ends a wave early: every goblin is out, none has hurt the castle or got closer for 90 seconds (`CASTLE_HEALTH.stalemateSeconds`, `progressCm`), so the leftovers run off. A goblin at or on the wall, in the courtyard, or held always blocks it. There is only ever one lesson climber.
+- **Enemies keep coming while a step waits, but at half the spawn rate.** Lessons that need their own goblins (the shot, the triggers, the tool uses) hold the wave's spawns completely.
 
 ### Tutorial waves
 
-Starting numbers, kept next to the director's steps and tuned in playtests. Climbers are the food source, so their count keeps food in step with tool costs (start 4, max 10).
+The numbers live in `TUTORIAL_WAVES` (`src/director/tutorial.ts`), with castle damage in `CASTLE_HEALTH`. Climbers are the food source, so their count keeps food in step with tool costs (start 4, max 10). "Start at wave" on the debug page skips the early waves for quick tests.
 
-**Since build step 5 the code uses the numbers below** (`TUTORIAL_WAVES` in `src/director/tutorial.ts`), with lower castle damage (`CASTLE_HEALTH`), balanced with the troops. Steps 3 and 4 used small test waves. "Start at wave" on the debug page skips the early waves for quick tests.
-
-| Wave | New thing | Camps | Grunts | Runners | Climbers | Food check |
-|---|---|---|---|---|---|---|
-| 1 | Hands and eating. One climber is scripted to pop up right in front of the player in the first minute. | 1 | 6 | 0 | 3 | 4 + 3 = 7 |
-| 2 | Slingshot, then the trigger lesson right after it (shoot a powder keg as goblins pass; boulders and trees explained). From here on all three trigger kinds stand on the roads (build step 6). | 2 | 10 | 0 | 2 | 7 + 2 = 9 |
-| 3 | Fly swatter vs runners | 2 | 8 | 12 | 3 | 9 - 4 + 3 = 8 |
-| 4 | Pepper shaker. The first balloon riders (build step 7). | 3 | 14 | 8 | 4 | Up to 10 |
-| 5 | Everything together | 3 | 18 | 16 | 4 | Whatever is left |
+| Wave | New thing | Camps | Grunts | Runners | Climbers | Balloons | Food check |
+|---|---|---|---|---|---|---|---|
+| 1 | Hands and eating. One climber is scripted to pop up right in front of the player in the first minute. | 1 | 6 | 0 | 3 | 0 | 4 + 3 = 7 |
+| 2 | Slingshot, then a lesson for each trigger (keg, boulder, tree). | 2 | 10 | 0 | 2 | 0 | 7 + 2 = 9 |
+| 3 | Fly swatter vs runners. Helmets from here on. | 2 | 8 | 12 | 3 | 0 | 9 - 4 + 3 = 8 |
+| 4 | Pepper shaker. The first balloon riders. | 3 | 14 | 8 | 4 | 3 | Up to 10 |
+| 5 | Megaphone (or bell). Everything together. | 3 | 18 | 16 | 4 | 4 | Whatever is left |
 
 - Enemies come out in small groups through each wave, not all at once, so the board stays within the unit budget.
-- Each wave lasts about 60 to 90 seconds, plus a 5 to 10 second breather.
+- Each wave lasts about 60 to 90 seconds, plus a breather.
 
 ---
 
@@ -114,242 +114,56 @@ Each step should be playable on its own.
 
 **Every step is done when:** `npm run typecheck`, `npm run build` and `npm test` pass, the step's items below exist, and the step is committed and pushed. The developer then checks it on the headset from the GitHub Pages link.
 
-1. **Toy test:** remove the starter template files. Board, castle wall, the ring handle with its arrows (first built as two handles, replaced after the first headset test), a few goblins walking in on simple roads, grab and eat. Prove that grabbing tiny goblins works and that enemies at the wall are visible from the seat.
-   - Done when: a debug key spawns goblins, and the handles, grab and eat work in the code. The developer must test this step on the headset before step 2 builds on it.
-   - **Done (2026-11-03), headset test passed.** Changes from the plan after testing: hold a goblin near the mouth to eat (no letting go or head tilt), one ring handle instead of two handles (full circle for now), the board starts higher, let-go goblins fly in a simple arc, auto-pause on the Quest menu, 72 Hz, unit budget about 50 goblins ([performance.md](performance.md)). Added for testing: FPS panel, laptop debug page at `/__debug` with an automatic stress test.
+1. **Toy test:** board, castle wall, the ring handle, goblins walking in on roads, grab and eat.
+   - **Done (2026-11-03), headset test passed.**
 2. **Slingshot** with aim assist, and the pebble bowl.
-   - Done when: a pebble can be pulled, released and hits goblins, and the bowl refills.
-   - **Done (2026-11-04), headset test passed.** Changes from the plan after testing ([giant-tools.md](giant-tools.md#slingshot-starter-free)):
-     - The slingshot is picked up by its handle and aimed by turning the body. Pinch a pebble from the bowl, click it into the pouch, pull with the other hand. No auto reload.
-     - Once the pull starts, the slingshot locks in place and only the pulling hand aims, because the holding hand often hides behind it. Short tracking-loss graces for both hands. A pull is never shot by a lost hand.
-     - Aim assist: dots along the whole arc, a landing circle on the ground, target glow, a 10 degree bend, 4 cm hit area.
-     - Aim assist targets are generic: goblins plus any `SlingTarget` added with `slingshot.addTarget()`. The step 5 triggers (boulder, tree, keg) must register this way.
-     - Pebbles thrown by hand only knock a goblin back, dazed (half assist, goblins only, never set off triggers).
-     - A held goblin can be loaded into the pouch: it knocks out what it hits and knocks back goblins around it, at the cost of a meal.
-     - Debug keys: L shoot, O load a pebble, J load a goblin, U and I empty and fill the bowl.
-     - Not done yet: re-run the stress test and log it in [performance.md](performance.md).
+   - **Done (2026-11-04), headset test passed.**
 3. **Waves and flags:** blueprint loader and `tutorial.json`, road graph, camps, seeded random, the tutorial director, both flags, win and lose panels.
-   - Done when: the 5 tutorial waves play from start to win, debug keys skip a wave and lose the castle, and the director and win/lose tests pass.
-   - **Done (2026-11-04), headset test passed.** What is in it:
-     - Blueprint `src/maps/tutorial.json` (4 camps, junctions, a ring road with gaps, 6 wall entries in the middle of the tower gaps, gate and trigger spots for step 5), checked by `src/rules/blueprint.ts`. The toy test roads (`toyMap.ts`) are gone.
-     - Road graph `src/rules/roadGraph.ts`: weighted random at junctions, shorter routes more likely, roads can close (goblins on it turn back). Nothing closes a road yet (trees come in step 5).
-     - Waves `src/units/waveSpawner.ts`: camps rumble, small groups, a calm start and a push at the end, camps sink as their goblins come out. Numbers in `TUTORIAL_WAVES` (`src/director/tutorial.ts`) and `WAVES`. **For now small test waves and high castle damage**, balanced with troops in step 5.
-     - Waves have no timer: a wave ends when cleared or when the castle falls. A stalemate check ends one only if goblins are stuck far away (see "Rules that keep it safe").
-     - Director `src/rules/director.ts` and the step list in `src/director/tutorial.ts`: a guided, learn-by-doing tutorial with text (see "Tutorial director"). Hand lessons move on when the player does them, info steps wait for Next, tools are taught by actions only. Steps for tools not built yet are left out.
-     - Castle health in `src/rules/battle.ts` (`CASTLE_HEALTH`): wall hits and intruders damage it, each breather repairs 35% of the damage.
-     - Both flags (`src/world/flags.ts`) in boardLift: they rise with the board, never spin. Explained before wave 1.
-     - Welcome panel with a Play button, and win and lose panels with Play again (`src/ui/endPanel.ts`). One shared poke button for every button (`src/ui/pokeButton.ts`), with icons drawn in code.
-     - Hint sign `src/ui/hintSign.ts` (hidden while a wave is fought), markers `src/ui/markers.ts`, ghost hands `src/ui/ghostHand.ts` and `src/ui/ghostDemos.ts` (accuracy rules in AGENTS.md), Kenney UI images through `src/ui/uiImages.ts`.
-     - Slingshot pouch is now an open upright leather strip, so a loaded stone stays in view.
-     - The welcome panel shows when the start page button is pressed (after the board is placed in VR). Leaving VR ends the battle. The slingshot is hidden until wave 2.
-     - Debug keys: W skip wave, S skip tutorial step, H lose castle, D damage castle, A start or restart the battle. The stress test stops the battle.
-     - Not done on purpose: the stress test waits until the game is built further. Gameplay feels smooth on the headset for now.
-4. **Fly swatter, pepper shaker, food jar and price tags** (first built with food pips).
-   - Done when: each tool works, costs food, shows Locked without enough food, and the food tests pass.
-   - **Done (2026-11-04), headset test passed** after five rounds of headset tests and fixes (listed below). The first build ([giant-tools.md](giant-tools.md)):
-     - Food rules `src/rules/food.ts` (start 4, max 10, +1 per goblin, +2 seasoned, costs and use timers in `FOOD` and `TOOLS`), tested in `food.test.ts`. Food carries over between waves and resets for a new battle.
-     - Food jar `src/world/foodJar.ts`: a pot between the two left platforms with one food ball per food on its mouth.
-     - Shared food tool `src/tools/handTool.ts`: platform, price tag (first pips), fist grab, follows the hand, grabbing is free, the first use pays, Locked (dimmed, rope, wobble, buzz), dropped mid-use it floats back to the hand area (since step 6 it goes back to its platform), use over it shrinks, poofs and pops back. The megaphone and bell in step 5 build on it.
-     - Fly swatter `src/tools/flySwatter.ts` (10 s, 4 food) and pepper shaker `src/tools/pepperShaker.ts` (8 s, 3 food, seasoned goblins).
-     - Tutorial: a "food jar" info step after the flags, and for each new tool a grab lesson in the breather and a use lesson in its wave (swatter wave 3, pepper wave 4). Without enough food the use lesson says so and a climber pops up to eat. The easier fallback tops up the jar. Ghost hand demos `swatterGrab` and `pepperGrab` (left hand, need a headset check).
-     - Debug keys: Y add 3 food, 0 empty the jar, 1 show both tools now, 2 swat the front of the wall, 3 pepper the front of the wall.
-   - **Changes from the headset tests (2026-11-04), all tested and passed:**
-     - **Reach band** ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)): every grab, pinch and poke target is 40 to 50 cm from the eyes (rare ones up to 58). `REACH` in config, a dev warning at start (`src/rules/reach.ts`).
-     - **Bigger castle:** wall 46 to 52 cm (was 40 to 46), courtyard 40 to 44, rampart 49, map wall entries and inner roads 6 cm further out. All courtyard houses, stalls and crates removed until the main gameplay is done.
-     - **Tools outside the ring:** platforms, pebble bowl and food jar 33.5 cm out (were 19), low (tops 6 cm above the board, were 10), in boardLift: they rise with the board, never turn. Flags just behind them (38.5 cm).
-     - **Price tags** replace the food pips: a food ball and the cost as a number on each food tool's platform (`src/ui/priceTag.ts`).
-     - **Tutorial:** the food jar lesson moved to right before the swatter, tools appear with their first lesson, food tool use lessons hold the tool timer and finish on one goblin hit (see "Tutorial director").
-     - **Removed:** the out-of-view arrows on the ring and the "it is to your left" line on the sign.
-     - **Hint sign** 62 cm out and a little bigger, its Next button on its own post in front, in reach.
-     - **Reach check** after the second test (everything still felt too close): the first tutorial step measures the player's reach and scales the whole board so the rampart sits at 88% of it. The board is also placed lower (46 cm below the eyes, was 36, then 40 after the third test), so the player towers over the kingdom. Debug page: "Measure reach again".
-     - **Tool grips** after the third test: a fist grab snaps the tool into the hand the way it is held in real life (swatter face square to the palm, pepper holes above the thumb, slingshot fork up and shooting the way the knuckles point), instead of keeping the grab angle ([controls-and-ui.md](controls-and-ui.md#holding-a-tool)).
-     - **Threat cues** after the third test (goblins at the wall were hard to find with the sound off): the wall top flashes red with a dust puff on each hit ([controls-and-ui.md](controls-and-ui.md#threat-cues)). An attack compass arc was tried and removed after the fourth test.
-     - **Grip slant** after the fourth test: held tools lean forward 35 degrees from the knuckle line (first 25), like a real handle across the palm. The swatter leans 45, so its head reaches the ground easily, and its flat face stands square to the palm.
-     - **Compass letters** on the ring, turning with the board: all 8 directions in raised blocky gold like the bands, the main four bigger (first tried as 4 wooden plaques).
-     - **Tools free in the tutorial** (`TOOLS.freeInTutorial`): a player who used up the jar on the swatter could not pick up the pepper. Price tags say "Free", and the lessons say tools cost food but are free while learning.
-     - **Debug page** sorted into sections with icons. New: "Start at wave 1 to 5" (earlier lessons and waves left out, earlier tools out, a little more food; Play keeps starting there in this tab until "Restart game") and "Restart game". The pages table shows each page's tutorial step. The FPS panel is hidden by default (debug page or key F turns it on).
-   - **Postponed from step 4** (decided, not forgotten):
-     - **Food jar look:** it still reads like another tool stand. Idea: a low "tribute tray" piled with drumsticks (one per food), no post, and the same drumstick icon on the price tags. Needs a food model (Kenney Food Kit is CC0, but a new asset pack needs the developer's OK) or a code-made drumstick. Polish step.
-     - **Courtyard houses, stalls and workers:** removed to keep the castle clear while the gameplay is built. They come back with the polish.
-     - **Locked tools and food costs in play:** tools are free in the tutorial, so the Locked look (dim, rope, buzz) and paying food are only seen with `TOOLS.freeInTutorial` off. They matter once there is a battle after the tutorial (Endless or Daily Battle).
-     - **Pointer to things out of view:** the head direction hints were removed. (Done in step 6: a 3D pointer arrow in front of the face.)
-     - **"Measure reach again"** for players: only on the debug page for now. (Done in step 6: "Measure reach" on the pause panel.)
-     - **Directions in the hints:** the compass letters on the ring can name where goblins come from ("Goblins from the east!") in wave banners and lessons.
-     - **Stress test:** not re-run since step 2. Run it after step 5, since troops add the most units, and log it in [performance.md](performance.md).
-     - **Controller grip:** the fist frame for controllers is a rough guess from the grip space (controllers are low priority).
-5. **Triggers, troops, megaphone, bell and mic permission.** The bell must be in before submission (voice is never required). Each trigger registers with the slingshot as a `SlingTarget` (`src/tools/slingshot.ts`), so the aim assist and hits already work for it.
-   - Done when: a debug key triggers the megaphone, and the bell does the same by hand.
-   - **Carry over from step 4:** the megaphone and the bell build on the shared food tool (`src/tools/handTool.ts`): each needs a real grip pose in `HOLD.poses`, a price tag (free in the tutorial), its grab and use spots in `reachSpots()` (`src/rules/reach.ts`), and ghost hand demos with the same grip slant. Anything new that hurts the castle must show on the wall (threat cues). Board distances turned into meters by hand multiply by `stage.boardScale` (the reach check).
-   - **Built (2026-11-04), needs a headset test.** What is in it:
-     - **Triggers** `src/world/triggers.ts`: powder keg (wave 2), boulder and leaning tree (wave 4), from the blueprint's trigger spots, each on the nearest road. Each registers with the slingshot (`addTarget`), so the aim assist bends toward it, and it glows and wobbles while aimed at. Keg: a blast knocks out goblins within 13 cm and sets off triggers within 30 cm (chain reactions). Boulder: rolls off its hill onto the road and down it toward the castle, squashing goblins in its line, then crumbles. Tree: falls across the road, squashes the goblins under it, and closes the road for 12 s (goblins on it turn back, the road graph routes around it). Each resets at the start of each wave. Pooled planks and wood fly out. Numbers in `TRIGGERS`.
-     - **Troops** `src/units/troops.ts`: while a wave runs, a squad of 3 to 4 soldiers (some archers, same rules) comes out every 10 s (cap 12), walks the roads outward toward the wave's camps in turn, and fights goblins within 4 cm with simple timed hits (soldiers take 2 hits, goblins 1, runners rush past). They walk home at the camp or when the wave ends. The gate is hidden: each squad leaves through the wall entry at the castle end of its camp's shortest road (`RoadGraph.routeToWall`), so troops reach every camp even where the ring road has gaps. The blueprint's `gate` is kept for later gate mechanics. Numbers in `TROOPS`.
-     - **Megaphone** `src/tools/megaphone.ts` and **bell** `src/tools/bell.ts`, side by side on one wider platform on the right (bell in front at 77 degrees, megaphone behind at 88), one price tag (6 food each use, free in the tutorial). Grab the megaphone and scream: mic loudness over `MEGAPHONE.screamLevel` for 0.12 s stuns every goblin (3.5 s), screaming on adds more (up to 8 s). Grab the bell and shake it: two strokes are a ring, harder shaking stuns longer, ringing on adds more. One use each, then a 2.5 s window, then the tool goes back to its platform. Stunned goblins freeze with two dizzy stars over the head (one instanced mesh), and a shock ring runs out across the board (`src/tools/stunWave.ts`, `STUN`).
-     - **Mic permission** `src/audio/mic.ts` on the 2D start page: the first tap asks for the mic, then the button says "Enter VR" (the browser only opens VR right after a tap). Allowed before: the mic opens at load and one tap enters VR. Denied: the bell comes instead of the megaphone.
-     - **Tutorial:** before wave 4, after the pepper grab lesson, "One more!" brings the megaphone and the bell (grab the bell), and in wave 4, after the pepper use lesson, a stun lesson (shake the bell or shout into the megaphone) with ghost hand demos `bellGrab` and `bellRing` (right hand, need a headset check). The real wave numbers from the table above are back.
-     - **Sky** `src/world/sky.ts` (decor only): a sun (two unlit discs) and 11 low-poly clouds (one instanced mesh, 55 puffs) drifting slowly with the wind in front of the scene's gradient dome. Never turns with the board. `SKY.enabled` turns it off (for AR later).
-     - **Performance:** far goblins and soldiers (over 150 cm out) update their animation every other frame, and grab and eat no longer makes a new Set every frame ([performance.md](performance.md) section 5).
-     - Debug keys: 4 megaphone scream (works without a mic), 5 ring the bell, 6 send a squad, 7 reset every trigger now, 8 set off every trigger, 9 troops on or off. 1 now shows the food tools.
-   - **Changes after the first step 5 review (2026-11-04), need a headset test:**
-     - **One tool at a time:** the megaphone moved to its own breather before wave 5 (it came with the pepper before wave 4), and only one stun tool is ever out: the megaphone with a mic, the bell without (the battle picks it, `Battle.stunTool`). Each has its own platform at the same spot (82 degrees). The megaphone's grab lesson is followed by its own info box, "How to shout" (Next), in plain words about the bar and the red dot. Ghost demos `megaphoneGrab` and `megaphoneShout`.
-     - **Megaphone:** the scream level is lowered (0.12 to 0.04). A thin loudness meter lies on top of the cone while it is held: it fills in real time (green, yellow near the target, red past it), and a pulsing red dot with a notch marks the scream level at 80% of the bar. The mic chain now ends in a silent output, in case the browser only runs nodes that lead to the speakers. The debug page's new mic column shows the loudest level while the megaphone is held, to tune `MEGAPHONE.screamLevel`.
-     - **Sky:** a bright cartoon sun (orange rim, yellow face, a shine spot, 14 pointy rays turning slowly, a warm glow) and 26 white clouds (156 puffs, still one instanced mesh), unlit with a light blue underside baked in, lower and closer (3 to 10 m up, 14 to 70 m out). **Flicker fix:** the near plane was 0.001 m, so far away the depth buffer could not tell apart things a meter or two apart (overlapping puffs, the sun's layers). Now sky pieces never write depth and draw in a fixed order (`renderOrder`, clouds sorted far to near twice a second), and the near plane is 1 cm (`iwsdk.config.json`).
-     - **Hills** `src/world/hills.ts` (decor only): a grass ring past the board's edge with 34 small green hills (in boardLift, so they rise and size with the board, never turn) and 26 big hazy hills far away (world). Three draw calls. The fog now runs from 5 to 24 m (was 3.5 to 9), so the hills fade softly into the sky.
-   - **Changes after the second step 5 review (2026-11-04), need a headset test:**
-     - **Made to scale:** clouds and hills now live in boardLift (cm), sized against the 3.5 cm goblins and 6 to 12 cm trees, so the player towers over them: 90 small clouds (450 puffs, still one draw call) about chin high near the board, never over the battlefield, and four rings of hills, light green near, darker green, dark green peaks, then brown mountains at the back. The hills are closed shapes now, and the ground ring faces up (it faced down before, which is why the sky showed through).
-     - **3D sun:** a faceted ball with baked shading and pyramid rays (`src/world/sky.ts`).
-     - **Fewer soldiers for testing:** at most 4, squads of 2 every 16 s (`TROOPS`). Debug key 9 turns the troops off and on.
-   - **Changes after the third step 5 review (2026-11-04), need a headset test:**
-     - **Still only the board turns** (a whole-world turn was tried and dropped: too likely to cause motion sickness). A comfort setting that turns the board in snap steps comes later.
-     - **Sun** 35 degrees right of the first view, low like a morning sun, so the sunrise glow is in view. The sunlight comes from the same side, higher (45 degrees).
-     - **Sunrise glow:** our own sky dome replaces the IWSDK `DomeGradient`: blue top, pale horizon, a wide orange and a tight yellow glow around the sun, strongest on the horizon. One draw call.
-     - **High clouds** over the board and the giant's head (22, 1.2 to 2.6 m above the board), in the same instanced mesh.
-     - **Fog on the hills:** none until just past the board, thicker farther out (6.6 to 32 m, grows with the board size), in the horizon color, so the last mountains fade into the sky.
-     - **Denser hills:** about twice as many, in overlapping rings, so there are no flat gaps.
-     - **Megaphone lesson:** one step to grab, one to use. The "How to shout" box is gone; the shout lesson text explains the bar and the red dot.
-     - **Hint sign higher:** its bottom edge is just below eye height (`HINT_SIGN.y` 43, was 12; 48 felt too high), tipped a little toward the eyes, so it only covers the far edge of the board. The Next button stays in reach.
-     - **Welcome, win and lose panel** a little back and up (`END_PANEL` 41 cm out, middle 24 cm up, were 36 and 20). Its button stays in the best reach band (about 48 cm from the eyes). The reach check now counts the panel's tilt.
-     - **Hilly low-poly ground** `src/world/terrain.ts` (`TERRAIN`): rolling hills and dips from 62 cm out (about 13 cm near, up to 32 cm far; tries at 2.5 and 10, then 7 and 22, still looked flat), flat shaded facets, no rings showing. Flat around the castle and right at the camps. The roads ride over the hills at three quarters height, so goblins can vanish behind a hill and pop up (on purpose). Everything on the ground uses `groundAt(x, z)` (`src/rules/boardMath.ts`), read from the mesh's own triangles: units on roads, tossed goblins, pebbles, debris, the swatter, the aim marker, camps and decor. The road ribbon sits 0.8 cm up (was 0.15). The stun ring draws over the hills.
-     - **Faceted grass colors and stronger sun:** one solid color per triangle (yellow-green tops, blue-green dips, earthier steep slopes, each triangle a little different, `GRASS`). The sun is stronger (`SKY.lightIntensity` 2.2, was 1.6, 40 degrees up, was 45) and the sky fill softer (IBLGradient intensity 0.6, was 1), so sunny and shaded slopes read clearly. This also makes the shaded side of every model a little darker. The board mesh now has about 69,000 points (each triangle its own 3), still one draw call.
-     - **Villages, farms, towers, a windmill and wrecks** `src/world/settlements.ts` (`SETTLEMENTS`), placed with a reason: 4 villages beside the roads between the castle and the camps (houses built from wall tiles, doors toward a square with a stall, cart, lantern and barrels, a signpost by the road), 1 or 2 fenced fields per village (one crop each), 4 watch towers on hilltops by the roads, a windmill on the highest spot near a field, a wrecked siege machine by each camp, and 7 forests in the wild ring past the camps (the tree groves grow there). Villages and fields sit on ground the terrain flattens. All merged into a few meshes (`StaticBatch` now keeps textures and groups by texture). No hit shapes: pebbles and tossed goblins pass through buildings.
-     - **Camps farther out and bigger goblins:** the four camps moved about 45 cm farther out (now 227 to 277 cm from the center, were 182 to 232), with their roads' bend points moved with them, so goblins walk about 7 s longer to the wall (re-check wave timing). Goblins are about 11% bigger (grunts and climbers 3.9 cm, runners 3.35). Villages and towers now spread out to the new camp distance.
-     - **Far places, past the camps** (same file and config): a goblin hamlet behind each camp (cabin, tents, campfire, cage, branch fences), a burned kingdom village (roofless houses, missing walls, a toppled cart, ash ground), 2 lumber camps at forest edges, a stone quarry on a far hillside, and 5 tall landmarks stacked from castle kit pieces on the highest far hills (tall watchtower about 23 cm, hexagon mage tower, gatehouse with flags, ruined tower with a fallen floor, small keep with four towers, walls and a hall). The hamlets, burned village and lumber camps sit on flattened ground; the wide landmarks only on hilltops that are not too steep.
-     - **Cloud canopy:** 16 bigger clouds that always stay over the giant (1.5 to 3 m above the board), so looking up is never empty sky.
-     - **Dense decor** (`DECOR`): about 260 trees (mostly groves), 140 rocks, 240 bushes, 260 flowers in patches, 90 mushrooms, stumps and logs, from the Nature Kit. All merged into one mesh per material (`StaticBatch` in `src/world/models.ts`), about a dozen draw calls. The kit's mint greens are tinted to match the grass. Grass colors (`GRASS`): lighter tops, darker dips, worn road edges, camp dirt. The tiny grass tufts, flowers, grain and noise patches are gone (too small to see, or blotchy).
-     - **One shared panel** `src/ui/panel.ts`: the parchment board, its canvas, placement, tilt and pop. The hint sign and the end panel both use it and only draw their own content.
-     - **No soldiers during lessons:** while a lesson is on the sign, no squads come out (`Troops.held`). The first squad comes 4 s after the lesson is done.
-     - **Moved to later steps:** the trigger lesson and more, easier to see triggers (step 6); gear and variants for troops and goblins, the stress test with troops and the troop balance (step 7).
-6. **Pause, triggers, and the giant's seat and body.** Three separate parts, built together in one step.
-   - **Part A, pause:** wrist button, pause panel, auto-pause, Reset table.
-     - Done when: the battle freezes and resumes, and Reset table places the board again.
-   - **Part B, triggers: more of them, easy to notice, and their own lesson.** In the step 5 playtest the barrels, boulders and trees went completely unnoticed, and there is no lesson for them.
-   - **More of them:** about 2 to 3 per road between the camps and the castle instead of 3 in total, all three kinds spread around the circle, so one is almost always near a group of goblins. Spots in the blueprint (`triggers` in `tutorial.json`), still one seeded layout.
-   - **Easy to see:**
-     - Bigger than now (keg about 3 cm, boulder 5 cm, tree 14 cm), with brighter colors than the scenery around them.
-     - Never hidden by a hill: placed on the player's side of a hill or on flat ground (the terrain flattens a small spot under each, like the camps), never in a dip behind a bump.
-     - The decor keeps clear of them (no trees or houses right beside a keg).
-     - A soft pulsing glow (emissive only) and a small floating icon above each one while goblins are near it, so the player sees "this can be used now".
-     - A short "now!" cue when a group walks right past one: a stronger glow pulse and a sound from its direction.
-   - **The lesson, in wave 2, right after the slingshot lesson** (everything here is set off by the slingshot, so it is taught as soon as the player can shoot):
-     - The wave holds its spawns. A small group of goblins walks toward a powder keg on the road in front of the player.
-     - The hint sign: "See the barrel? Shoot it when goblins walk past!" The marker bounces over the keg, and a ghost hand shows aiming at it and letting go.
-     - Done when the keg is set off (best with goblins near it). If stuck, the group is sent past the keg again and the marker pulses.
-     - Then a short info box (Next): "Boulders roll down the road and trees fall across it. Shoot them too!", with the marker on the nearest boulder and tree. From then on all three kinds stand on the roads.
-     - The wave 5 banner keeps its reminder.
-   - Triggers done when: they are easy to spot from the seat, the wave 2 lesson runs from start to finish, and the director tests cover the new steps.
-   - **Part C, the giant's seat and body.**
-   - **Fill the hole:** today looking down shows blue emptiness and brown walls. Close it with ground at board level, flush with the courtyard (stone or packed earth to match the castle).
-   - **The giant from the waist up**, coming out of that ground: a chunky, low-poly belt, tunic, belly and shoulders (no legs; no arms, since the tracked hands float, which is normal in VR). The hole (25 cm) is about exactly a seated giant's torso, so it fits.
-   - **Follows the player gently:** it sits under the head and turns slowly toward where the player faces (not 1:1, so leaning never looks wrong).
-   - **Never in the way:** below and a bit behind the normal view; it shows when looking down, but never blocks the courtyard, the tools or the reach band.
-   - **Stylized**, matching the low-poly look: a realistic body that does not match the real one feels wrong.
-   - Seat and body done when: looking down shows the giant's body on solid ground from the seat, from more than one head angle, and nothing interactive is covered.
-   - **Done (2026-11-05), headset test passed** after six rounds of headset tests and fixes (each round is listed below, newest first, under the first build). Where it ended up:
-     - **Pause:** a pause button in the middle of the left palm (upright, facing the eyes, drawn on top, standing still where the palm was and only gliding after it once the palm moved 4.5 cm), poked with the right index finger. Taught first in the tutorial (`learn-pause`, ghost hand `pauseShow`). The pause panel opens in front of the head, follows it lazily, is drawn on top of everything, and has Resume, Reset table (places the board again and resumes), Measure reach (the reach check on the frozen battle, no restart) and Restart. Auto-pause on the Quest menu or with the headset off stays paused until Resume.
-     - **Triggers:** 16 on the roads (6 kegs, 5 boulders, 5 trees), about 4 per camp route. Each tells its story in the world: a bigger red banded keg (4.2 cm), a pale boulder wedged with a chock and a red rag flag on an upright pole beside it, and the only autumn tree on the board (orange leaf triangles). Flat ground under and in front of each, decor and buildings keep clear, a soft glow while goblins are near and a "now!" pulse and sound when a group passes. No chain reactions. The keg and the boulder knock goblins out, the tree only blocks the road. A fallen tree rests on its crown, never in the ground.
-     - **Wave 2 lessons:** the first shot is at one goblin walking back and forth on the road in front (ghost hand and ghost aim dots, done on a hit, so the aim assist is felt). Then one lesson each for the keg (ghost hand and aim dots), the boulder and the tree (aim dots): each brings its kind onto the roads, and goblins wait right in what it does until it is set off, however many tries it takes. The wave holds its spawns during all of them.
-     - **Tool use lessons** (swatter, pepper, megaphone or bell): three calm climbers wait on the rampart in front, harmless, and the wave holds until the tool is used.
-     - **Pointer arrows:** a gold 3D arrow in front of the face points at the lesson's target and a fast blinking red one at a goblin hitting, climbing or running on the wall, both only while the target is at the edge of the view or out of it.
-     - **Seat and body:** the hole is filled with packed earth and stones, and a chunky low-poly giant from the waist up sits under the head.
-     - **Also in this step:** the Next button moved back from the ring and blinks, price tags stand in the middle of each platform's front edge, food tools always glide back to their platform, climbers run about on the rampart (the wall under them flashes red), peppered goblins keep sneezing with pepper flakes over the head, pebbles lie where they land for 2.5 s, things (not goblins or soldiers) shrink away with an elastic pop, soldiers are as big as the goblins, the windmill is a mill house with turning sails, and the stalemate check no longer ends waves while goblins are still on their way.
-   - **Left for later** (decided, not forgotten):
-     - **Still to confirm in the headset:** the giant's body and seat floor from more than one head angle, the megaphone after opening and closing the Quest menu (two possible causes were fixed, nothing was confirmed), and the two new ghost hand demos (`pauseShow` and `aimKeg`).
-     - **Wave 5 trigger reminder:** its intro text ("Shoot the barrels, boulders and trees") is never shown, because wave 5 starts straight into the megaphone lesson. It could show as a short line after that lesson.
-     - **Code cleanup:** the unused "loose" phase in `src/tools/handTool.ts` (tools no longer float up mid-use) and its unused `tagToBack` option.
-     - **Stress test** (step 7): not re-run since step 2. This step added the pointer arrows, lesson goblins, sneeze puffs and 13 more triggers. Log it in [performance.md](performance.md).
-     - **"Now!" sound:** still `chime.mp3` (missing sounds come in step 8).
-     - **Chain reactions:** off (`TRIGGERS.keg.chainRadius` 0). They can come back later if playtests want them.
-     - **Pause button spot:** if the Quest's own left palm menu icon ever clashes with it, the fallback is the inside of the wrist.
-   - **First build (2026-11-05).** What was in it:
-     - **Pause** `src/ui/pauseMenu.ts` (`PAUSE`): the wrist button on the inside of the left wrist pops in while the left palm faces the eyes for 0.3 s (left hand free, within 60 cm of the eyes), poked with the right index finger. Pausing lets go of everything held, freezes the battle and the sound, and hides the sign, marker and ghost hand. The pause panel opens in front of the head (not on the board, so it is always in reach) with Resume, Reset table (placed again at the starting height, stays paused), Measure reach (the postponed "measure again", it restarts the battle with the reach check) and Restart. Auto-pause in VR during a battle (Quest menu, headset off) now stays paused and shows the panel on return. Outside a battle it resumes by itself as before. Both new button rows are in `reachSpots()`.
-     - **Triggers, more and easy to see** (`src/world/triggers.ts`, `TRIGGERS`, `tutorial.json`): 16 instead of 3 (6 kegs from wave 2, 5 boulders and 5 trees from wave 3), about 4 on each camp's roads, all kinds spread around the circle. Bigger (keg 3, boulder 5, tree 14 cm) and tinted brighter. Flat ground under each one and on two spots toward the castle, so no hill hides it, and villages, towers, the windmill, wrecks and decor keep 16 cm clear. A soft pulsing glow and a floating target icon while goblins are within 24 cm, and a "now!" cue (strong pulse and a sound from its direction, `triggerNow`, chime for now) when 2 or more are within 12 cm.
-     - **Trigger lesson** in wave 2, right after the shoot lesson: the wave holds its spawns (new `holdSpawns` on a director step), 3 grunts walk past the keg nearest the front of the board ("See the barrel? Shoot it when goblins walk past!", marker on the keg, the `shoot` ghost demo). Done when a keg is set off. If stuck (18 s), the group walks past again and the marker pulses (twice at most), timeout 60 s. If the player already used every keg, the nearest one comes back. Then an info box (Next, slow spawns): "Boulders roll down the road and trees fall across it. Shoot them too!" with markers on the nearest boulder and tree, and every boulder and tree pops onto the roads. Director tests cover the new steps.
-     - **Seat and body** `src/world/giant.ts` (`GIANT`): the hole is filled with packed earth flush with the courtyard and a ring of flat stones (the old hole skirt is gone). A chunky low-poly giant from the waist up (belt with a gold buckle, green tunic with a belly, shoulders and collar, no arms, legs or head), real size, under the head and 7 cm behind it, following with smoothing and turning toward the view only past 20 degrees, slowly. The tunic stretches from the floor to the shoulders, which sit 27 cm below the eyes and about 15 cm out, so they stay under the sight lines to the ring, the tools and the courtyard. About 4 draw calls.
-     - Debug: Space pause or resume, "Pause panel button 1 to 4", "Trigger lesson group" (a group walks past the keg nearest the front), "Giant body on/off".
-     - Not done: the wave 5 reminder about triggers is in its intro text, which is not shown because wave 5 starts straight into the megaphone lesson.
-   - **Changes after the sixth step 6 review (2026-11-05), tested:**
-     - **Climbers on the rampart** run along the wall's own curve (no shortcuts across it), always on the wall top between two towers, and the stretch of wall under them flashes red every 0.35 s like a wall hit (no damage, no dust).
-     - **The red arrow** now also points at climbers (climbing or running on the rampart), not only at goblins hitting the wall from the ground, and blinks fast and strong (3.5 times a second). The gold one keeps its soft blink.
-     - **First shot:** ghost aim dots from the pouch to the moving goblin.
-     - **Tree:** the axe is gone. The orange leaves are the sign.
-     - **Palm pause button:** it now stands still in the world where the palm was when it came out, and only glides after the palm once it moved 4.5 cm away (6 cm while the right finger is near). Following the palm, even filtered, still looked like it vibrated. It stays drawn on top, 3 cm out from the palm.
-   - **Changes after the fifth step 6 review (2026-11-05), tested:**
-     - **Pointer arrows** only show when the target is at the very edge of the headset's view or out of it (more than 38 degrees from the middle, gone again within 32; the Quest 3S sees about 96 by 90 degrees), and blink softly (the glow breathes about once a second).
-     - **Red threat arrow:** the same arrow in red, a little lower, points at a goblin hitting or climbing the wall once it has been out of view for 1.5 s, so no goblin hides behind the player (`POINTER.threat`, `src/ui/threatCues.ts`). Only while a battle is fought.
-     - **Palm pause button, the flicker:** (1) it is drawn on top of everything without the depth test, 3 cm out from the palm (was 1.8): the hand's own mesh cut through it as the tracking shook, which read as flicker; (2) the palm's spot and direction go through a One Euro filter (steady when still, quick when moving, the usual fix for jittery hand anchored UI) instead of the deadband; (3) every poke button now has a gap between Ready on and off, and its cap follows the fingertip more slowly, so a shaking fingertip no longer makes it flicker or buzz. It still holds still while the right finger is within 12 cm.
-     - **The first shot has one moving goblin** (was 3, the others walked past the keg lesson's goblins).
-     - **Boulder:** a straight, upright pole with a red rag flag on the hill beside it, its cloth turned toward the castle, fluttering round the pole (the slanted pry bar is gone). **Tree:** its leaves are autumn orange: only leaf triangles change (each triangle whose spot on the color map is green gets the orange material), never the trunk. The axe is bigger (7 cm handle) and sits out of the bark, not inside it.
-     - **Goblins and soldiers poof again** (particles, gone at once). The shrink away look is for things only (pebbles, debris, tools, the tree).
-     - **Windmill:** the kit's windmill model is only the sails (centered on their axle), which is why it sat half underground. Now it is a three floor mill house with a pointed roof, and the sails turn on its front wall (`SETTLEMENTS.windmill`).
-     - **Megaphone:** no code bug was found by reading it. Two things that can silence it were fixed: the shared audio context is now woken every time the view comes back (it could stay suspended after the Quest menu), and while the megaphone is held the mic is checked every frame and reopened if the browser stopped the track in the background (no prompt, it stays "on", so the bell never swaps in mid battle). If it still fails, the debug page's mic column shows what the mic reads while it is held.
-   - **Changes after the fourth step 6 review (2026-11-05), tested:**
-     - **Bug: waves ended with goblins left.** The stalemate check (every goblin out, none hurting the castle for 60 s) also fired while goblins were still walking in from the far camps or fighting soldiers. Now its clock also starts over whenever the goblin nearest the castle got 1.5 cm closer (checked every 2 s), and it waits 90 s (`CASTLE_HEALTH.progressCm`, `stalemateSeconds`).
-     - **Bug: one keg blew up every keg.** The blast read the other triggers' centers into the same scratch vector it measured from, so every trigger was "0 cm away". Fixed, and chain reactions are off (`TRIGGERS.keg.chainRadius` 0): a keg never sets off a boulder or a tree.
-     - **Kegs appear with their lesson**, after the first hit, not at the start of wave 2 (keg spots are wave 3 in the blueprint, and each trigger lesson brings its own kind).
-     - **The first shot is at moving goblins:** 3 grunts (1 since the fifth review) walk back and forth on the road in front (`LESSON_BAIT`, `src/units/lessonBait.ts`), the wave holds its spawns, and the lesson ends on a hit, not on any shot ("Just aim near one: your shot bends toward it."). Fallback: a pebble in the pouch and missing goblins replaced. Timeout 150 s.
-     - **Every tool use lesson brings its own goblins:** 3 calm climbers wait on the rampart in front (swatter, pepper, megaphone or bell), harmless and standing still, and the wave holds its spawns until the tool is used. The marker points at them. They go on as usual when the lesson ends.
-     - **3D pointer arrow** in front of the face, a little low (`src/ui/pointerArrow.ts`, `POINTER`), pointing at the lesson's target while it is more than 22 degrees from the middle of the view, gone once the player looks at it.
-     - **Trigger props instead of paint:** the boulder is wedged with a chock and a pry bar with a red rag flag, the tree has a red handled axe stuck in its trunk. The red stripe and the autumn tree are gone.
-     - **Price tags** stand on the middle of each platform's front edge, the same on every platform (they sat off to one side).
-     - **Climbers on the rampart run about**: dashes back and forth between the two towers, with quick stops, until they jump in. Tutorial climbers waiting for a lesson stand still.
-     - **Peppered goblins sneeze**: every 1.4 to 3.2 s the head jerks forward with a puff and a sneeze sound, and three red pepper flakes circle over the head (like the dizzy stars).
-     - **Pebbles stay where they land** for 2.5 s, then shrink away (pool raised to 16).
-     - **Shared despawn look** (`src/fx/ease.ts`): a small elastic swell, then a quick shrink. Landed pebbles, debris, a tool whose use is over and the tree when its road opens go away like this (goblins and soldiers were changed back to their poof in the fifth review).
-     - **Food tools always go back to their platform** when let go, also while their timer runs (they floated up in front of the face).
-   - **Changes after the third step 6 review (2026-11-05), tested:**
-     - **Trigger lessons wait for the player:** the goblins of each lesson walk to the trigger and wait right in what it does (beside the keg, on the road below the boulder, on the road just before the tree) until it is set off, however many tries that takes. The slingshot shoots past them (no aim bend, no hit, they are lesson bait), so a miss never ruins the lesson. After 25 s the marker pulses and goblins that went missing (picked up) are replaced, twice at most. Timeout 240 s, so it still never gets stuck. When the lesson ends, they walk on.
-     - **Ghost aim dots in all three lessons**, the ghost hand only in the keg lesson.
-     - **The texts say what each does:** the keg blows up and knocks out the goblins next to it, the boulder rolls down the road and squashes the goblins below, the tree falls across the road and blocks it (goblins must turn back). **The tree no longer squashes goblins**, it only blocks the road.
-     - **Red danger paint instead of the floating icon** (replaced by props in the fourth review): the keg's red bands (keg bigger, 4.2 cm, was 3), a red stripe round a pale boulder, a red and white band round the tree's trunk, and the tree is the only autumn tree (orange red leaves). The soft glow while goblins are near and the "now!" cue stay.
-     - **Soldiers as big as the goblins** (3.9 cm, were 2.5), engage range 5 cm (was 4).
-   - **Changes after the second step 6 review (2026-11-05), tested:**
-     - **Wrist button steady:** it no longer follows every tracking wobble of the palm (it looked like it shook and grew and shrank). It stays put until the palm moved 1.5 cm, then glides there and stops. It turns to face the eyes only past 10 degrees. While the right index finger is within 12 cm, it does not move at all (unless the palm moved 6 cm away), so it holds still to be poked. Once out, a hand pose flicker never hides it, and it hides only after the palm is turned away for 0.6 s.
-     - **Pause panel on top of everything:** it went through the towers. Now every part of it skips the depth test and draws last (`PAUSE.panel.renderOrder`), so nothing hides it.
-     - **Next button** moved back toward the wall and up (38.5 cm out, 15 cm up, was 33.5 and 9), still about 49 cm from the eyes: a hand on the ring pressed it by accident. It blinks while it waits to be poked (`HINT_SIGN.nextBlink*`).
-   - **Changes after the first step 6 review (2026-11-05), tested:**
-     - **Pause lesson first** (`learn-pause`, before the spin lesson): "You can pause any time: turn your left palm toward your face, like this." A ghost left hand (`pauseShow`) comes up from the lap and turns its palm toward the eyes (an open hand, never a pinch). Once the button is out, the sign says to poke it and then Resume, and the marker points at it. Done when the player paused and came back. Timeout 45 s.
-     - **Wrist button:** in the middle of the palm now (was on the wrist), standing upright and facing the eyes whatever way the fingers point, so the pause bars always read upright. **Flicker fix:** it follows the palm with smoothing, shows past 53 degrees for 0.3 s but hides only past 75 degrees for 0.45 s, and never hides while the right index finger is within 10 cm of it.
-     - **The pause panel follows the head** lazily, like the Quest's own menus: still while the head turns a little (so it can be poked), back in front once the head turned past 25 degrees or moved 12 cm. A player who paused by accident and turned around still finds it.
-     - **Reset table** resumes right away. **Measure reach** no longer restarts: the battle stays frozen, the sign shows the reach check with its ghost hand and countdown, the board grows or shrinks to the player, and play goes on. Sound now only stops for the Quest menu, so the pause panel's clicks are heard.
-     - **One lesson per trigger** in wave 2 after the shoot lesson: keg, then boulder, then tree. Each one brings its kind onto the roads (the boulders and trees no longer wait for an info box), holds the wave's spawns, and walks a group past the one nearest the front, with the marker on it. Only the keg lesson shows how to aim: a ghost hand (`aimKeg`) pulls the pouch straight back away from the keg, and see-through ghost aim dots arc from the pouch to the keg (`src/ui/ghostAim.ts`). The info box is gone.
-     - **Tree fall:** it falls only until its crown rests on the ground (worked out per tree from the ground under it, `TRIGGERS.tree.crownRest`), instead of a flat 90 degrees that pushed half the crown into the ground.
-7. **Army and enemy variety.**
-   - **Troop variants, built in code (no model editing):**
-     - Bodies from the Kenney character packs we already have (mini-arena, mini-dungeon, mini-forest), which share the same animations.
-     - Recolored materials per variant (the kingdom's blue and gold).
-     - Gear on the hand bone, so it moves with the animation: swords, spears and shields from the mini-arena and mini-dungeon props.
-     - Small proportion changes per variant.
-     - About three readable kinds: swordsmen, spearmen and archers.
-   - **Goblin gear:** the same way (weapons on the hand bone, helmets on the head bone).
-   - **Balloon riders** ([enemies.md](enemies.md#balloon-riders)), the first flying enemy:
-     - Goblins hanging under a balloon, floating over the wall at about head height in straight lines (no roads).
-     - They drop goblins into the courtyard (they become intruders, food in reach).
-     - The slingshot pops the balloon and the riders fall; grabbing or swatting works when close; the megaphone and bell stun them.
-     - First seen in wave 4 with a short banner ("Look up! Pop the balloons with your slingshot.").
-     - A threat cue when one is over the wall (threat cues rule).
-   - **Then the stress test with troops** (log it in [performance.md](performance.md)), and the **troop balance** (now at most 4 soldiers in squads of 2 for testing; the plan was up to 12).
+   - **Done (2026-11-04), headset test passed.**
+4. **Fly swatter, pepper shaker, food jar and price tags.**
+   - **Done (2026-11-04), headset test passed.**
+5. **Triggers, troops, megaphone, bell and mic permission.**
+   - **Done (2026-11-04), headset test passed.**
+6. **Pause, triggers (more of them, easy to notice, their own lessons), and the giant's seat and body.**
+   - **Done (2026-11-05), headset test passed.**
+7. **Army and enemy variety:** three troop kinds with gear, goblin gear, balloon riders, the stress test with troops, the troop balance.
    - Done when: three troop kinds and the goblins carry gear, balloon riders work in wave 4, and the stress test result is logged.
-   - **Built (2026-11-05), needs a headset test.** What is in it:
-     - **Gear in code** `src/units/gear.ts` (`GEAR`): every piece is merged into the character's own skinned mesh and bound to a small extra bone under a hand or the head, so it swings with the animation and costs no extra draw call. One rigged template carries every gear option, and each unit shows only its own (a hidden piece's bone is scaled to almost nothing). Kenney packs each have their own palette image, so gear from another pack, and the gear made in code, gets its texture spots moved to the body palette's nearest color. Troop recolors move the body's own palette spots to the kingdom's blue and gold, keeping their shading. **Gear positions are worked out from the rig's bind pose, not seen:** check them in the headset and tune `GEAR.pieces` (`at`, `dir`, `scale`).
-     - **Three troop kinds** (`TROOP_KINDS`, `src/units/troops.ts`): swordsmen (soldier body, sword and round shield, a little stockier), spearmen (human body, spear, tall shield and a gold brimmed kettle hat, taller and thinner, 6.5 cm reach) and archers (archer body, bow, quiver and a blue plume, slimmer). All in blue and gold. **Archers stop and shoot** goblins within 16 cm: pooled arrows (one instanced mesh, `ARCHERS`) fly in a small arc, lead walking goblins a little, and knock one out 55% of the time. Up close they fight like the others. Soldiers cheer (arms up) for a moment after a knockout, and all of them when a wave is won.
-     - **Goblin gear** (`GOBLIN_GEAR`): 60% of grunts carry a spear, and from wave 3 35% wear a steel helmet with a spike. A helmet is one extra hit from a slingshot pebble, an archer or a soldier: it flies off with sparks and the goblin is knocked back, dazed. Big hits (swatter, keg, boulder, goblin shot) go through. Pepper makes a goblin sneeze its spear loose. Gear flies off when a goblin poofs (`src/fx/gearDebris.ts`, one small instanced pool per kind). Runners and climbers stay bare handed. Lesson goblins in waves 1 and 2 never wear helmets.
-     - **Balloon riders** (`src/units/balloons.ts`, `BALLOONS`): a patched red and yellow goblin balloon (one instanced mesh for all, one draw call) with two grunts hanging under its basket floats straight in from a camp at about head height (envelope 44 cm up, riders about 31), stops over the courtyard and drops its riders in one by one (intruders), then rises and drifts away. The slingshot pops it (a `SlingTarget`, full aim assist, it glows brighter while aimed at) and the riders fall and poof where they land. Riders can be pinched off (the rider spots are in `reachSpots()`), swatted or knocked out by a pebble, and the megaphone and bell stun them (a balloon with stunned riders stops in the air). Threat cue: the wall under a carrying balloon flashes red, and the red arrow points at riders over the wall.
-     - **Waves:** 3 balloons in wave 4, 4 in wave 5 (`balloons` in `TUTORIAL_WAVES`). In wave 4, after the pepper lesson, the info step "Balloons!" ("Look up! ... Pop the balloons with your slingshot.", Next) brings one balloon in right in front, with the marker on it. The wave's own balloons wait until that banner shows. Director test added.
-     - **Troop balance:** `TROOPS.max` 8 (was 4 for testing), squads of 2 to 3 every 14 s. Tune after the headset test.
-     - **Stress test with troops:** the automatic stress test now keeps `STRESS_TEST.troops` soldiers of all three kinds (walking on the spot) and `STRESS_TEST.balloons` hovering balloons with riders on the board from the baseline on, then adds grunts as before. **Not run yet** (needs the headset). Log the result in [performance.md](performance.md).
-     - Debug keys: `,` balloon in front, `.` pop every balloon, `/` a group of grunts that all wear helmets, `;` celebrate (confetti and cheering).
+   - **Built (2026-11-05), not tested on the headset yet.**
+     - **Gear** (`src/units/gear.ts`, `GEAR`): merged into each character's own skinned mesh on a small extra bone under a hand or the head, so it moves with the animation and costs no extra draw call. Each unit shows only its own pieces. Gear from another Kenney pack, and gear made in code, takes the body palette's nearest colors. **The gear positions are worked out from the rig, never seen:** check them first and tune `GEAR.pieces` (`at`, `dir`, `scale`).
+     - **Troop kinds** (`TROOP_KINDS`, `src/units/troops.ts`), all recolored to the kingdom's blue and gold: swordsmen (soldier body, sword, round shield), spearmen (human body, spear, tall shield, gold brimmed kettle hat, a little more reach) and archers (archer body, bow, quiver, blue plume). Archers stop and shoot arrows at goblins within 16 cm (`ARCHERS`). Soldiers cheer after a knockout and when a wave is won.
+     - **Goblin gear** (`GOBLIN_GEAR`): 60% of grunts carry a spear, and from wave 3 35% wear a helmet. A helmet takes one pebble, arrow or soldier hit and flies off. Big hits (swatter, keg, boulder, goblin shot) go through it. Pepper makes a goblin sneeze its spear loose. Gear flies off when a goblin poofs (`src/fx/gearDebris.ts`).
+     - **Balloon riders** (`src/units/balloons.ts`, `BALLOONS`): a patched goblin balloon with two grunts hanging under it floats straight in from a camp at about head height, stops over the courtyard and drops its riders in, then drifts away. The slingshot pops it (full aim assist, it glows while aimed at) and the riders fall and poof. Riders can be pinched off, swatted or shot one by one, and a stun stops the balloon in the air. The wall under a carrying balloon flashes red, and the red arrow points at riders over the wall. 3 balloons in wave 4 (after the balloon banner), 4 in wave 5.
+     - **Troop balance:** at most 8 soldiers (`TROOPS.max`), squads of 2 to 3 every 14 s.
+     - **Stress test with troops:** 8 soldiers of all kinds and 2 hovering balloons with riders stay on the board from the baseline on, then grunts are added as before (`STRESS_TEST.troops`, `balloons`).
+   - **Still to do:** the headset test, then run the stress test and log it in [performance.md](performance.md).
+   - Debug keys: `,` balloon in front, `.` pop every balloon, `/` a group of grunts that all wear helmets, 6 send a squad.
 8. **Juice**, then the **missing sounds** last (the ones still using `chime.mp3`).
    - Done when: every sound name in the sound config points to a real file.
-   - **Juice built (2026-11-05), needs a headset test.** `src/fx/juice.ts` (`JUICE`): every effect is a pooled instanced mesh (rings, stars, confetti: 3 draw calls, drawn only while something shows) plus 6 small sprites, with a per instance fade added to the basic material's shader. No lights, no post processing, nothing moves the board or the view.
-     - **Knockouts:** a comic pow star facing the player and a shock ring on every goblin knocked out by a tool, a trigger, a soldier, an arrow or a fall.
-     - **Big hits:** a keg blast, a balloon pop and three or more knockouts in one frame get a big ring, an upright ring, a big star and a **hit stop** (the units run at 8% speed for 0.07 s, the board, view and hands never slow down).
-     - **Hit flash:** a goblin that is hit but not knocked out (helmet knocked off, pebble bonk, peppered) flashes white for a moment.
-     - **Food:** "+1", "+2" (seasoned) or "Full!" rises from the food jar when a goblin is eaten.
-     - **Celebrations:** confetti in blue, gold, white, red and green flutters down over the castle when a wave is won, and the soldiers cheer. After the last wave a fireworks show of 9 bursts follows.
-     - **Goblins:** they pop out of their camp with an elastic bounce, squash and stretch when they land, and runners kick up dust.
-     - **Camps** shake and puff dust while they rumble before a group comes out, so the next attack is seen as well as heard.
-     - **Slingshot:** shots leave a faint trail of puffs. **Swatter:** a ring where it slaps. **Troops:** sparks where blades meet.
-     - **Flags:** the health flag jerks and flashes when the castle is hit, the wave flag pops bigger when it climbs.
-   - **Missing sounds: not done** (left out on purpose in this step). New things reuse existing sounds (balloon pop: pebble hit and poof, arrows: the sling release at low volume).
+   - **Juice built (2026-11-05), not tested on the headset yet** (`src/fx/juice.ts`, `JUICE`). Pooled instanced meshes (3 draw calls, only while something shows) and 6 sprites. No lights, no post processing, nothing moves the board or the view.
+     - A pow star and a shock ring on every knockout. A keg blast, a balloon pop or 3 knockouts at once get a bigger burst and a **hit stop** (the units run at 8% speed for 0.07 s, never the board, the view or the hands).
+     - A white flash on a goblin hit but not knocked out (helmet off, pebble bonk, peppered).
+     - "+1", "+2" or "Full!" rising from the food jar when a goblin is eaten.
+     - Confetti over the castle when a wave is won, and a fireworks show after the win.
+     - Goblins pop out of their camp, squash and stretch when they land, and runners kick up dust. Camps shake and puff dust while they rumble.
+     - Shot trails, a ring where the swatter slaps, sparks when swords clash.
+     - The health flag jerks and flashes when the castle is hit, the wave flag pops when it climbs.
+   - **Still to do:** the headset test (if the hit stop feels wrong, lower or remove it in `JUICE`), then the **missing sounds** (not started). New things reuse existing sounds for now.
+   - Debug keys: `;` celebrate, 8 set off every trigger (keg blast), D damage the castle (flag jolt), B eat the front goblin (food label).
+
+### Open items from earlier steps
+
+Decided, not forgotten. Everything else from steps 1 to 6 is done.
+
+- **Headset checks still open:** the giant's body and seat floor from more than one head angle, the megaphone after opening and closing the Quest menu (two possible causes were fixed, nothing confirmed), and the ghost hand demos `pauseShow` and `aimKeg`.
+- **Wave 5 trigger reminder:** its intro text ("Shoot the barrels, boulders and trees") is never shown, because wave 5 starts straight into the megaphone lesson. It could show as a short line after that lesson.
+- **Code cleanup:** the unused "loose" phase in `src/tools/handTool.ts` and its unused `tagToBack` option.
+- **Food jar look:** it still reads like another tool stand. Idea: a low "tribute tray" piled with drumsticks (needs a food model, a new asset pack needs the developer's OK, or a code-made drumstick). Polish.
+- **Courtyard houses, stalls and workers:** removed to keep the castle clear while the gameplay was built. They come back with the polish.
+- **Locked tools and food costs in play:** tools are free in the tutorial, so the Locked look and paying food only matter once there is a battle after the tutorial (Endless or Daily Battle).
+- **Directions in the hints:** the compass letters on the ring could name where goblins come from ("Goblins from the east!").
+- **Chain reactions:** off (`TRIGGERS.keg.chainRadius` 0). They can come back if playtests want them.
+- **Pause button spot:** if the Quest's own left palm menu icon ever clashes with it, the fallback is the inside of the wrist.
+- **Controller grip:** the fist frame for controllers is a rough guess (controllers are low priority).
 
 If time runs short, cut from the end of this list.
 
