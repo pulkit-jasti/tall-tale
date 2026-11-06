@@ -51,7 +51,7 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Stun shock ring | A thin flat ring (unlit, transparent) running out across the board from the castle when the megaphone or bell stuns. | Up to 2.6 m |
 | Dizzy stars | Two small yellow low-poly balls circling over each stunned goblin's head, all in one instanced mesh. | 0.55 cm |
 | Pebble | A low-poly ball like the sun (icosahedron, flat faces), its corners pushed in and out a little and squashed to 85%, stone grey (`SLINGSHOT.pebbleLumps`, `pebbleSquash`, `pebbleColor`). A miss rolls on along the ground, turning as it rolls and slowing down, then lies still (`rollKeep`, `rollFriction`, `rollStop`). | 2.5 cm |
-| Slider | The shared slider (`src/ui/slider.ts`): a dark groove track, its filled part in the button green, a round warm gold handle (3.2 cm), grey at off. Idle, Ready and Held on the handle (emissive only). | 14 cm track (26 in the settings) |
+| Slider | The shared slider (`src/ui/slider.ts`): a dark groove track, its filled part in the parchment's warm tan, a round handle like the buttons (their green cap in a dark rim, 3.2 cm), grey at off. Idle, Ready and Held on the handle (emissive only). | 14 cm track (26 in the settings) |
 | Pebble bowl | Shallow open bowl (lathe), clay color, on a short post. Built in step 2 at 11 cm (`PEBBLE_BOWL.width`), so it fits between the slingshot platform and the ring handle. | 11 cm wide |
 | Tool platform posts | Dark wooden cylinder under each tool platform and under the pebble bowl. | 1 cm thick, 12 to 14 cm long |
 | Slingshot trajectory dots | Small white low-poly spheres, one instanced mesh, along the whole arc to the impact while pulling. | 0.9 cm |

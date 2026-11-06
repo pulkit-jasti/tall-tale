@@ -13,17 +13,17 @@ import { armControls, bottomRowY, drawLine, drawTitleBanner, Panel, panelMap, Po
 
 export type EndKind = 'welcome' | 'won' | 'lost';
 
+/** As little text as possible: a title, and one word or two over each button. */
 interface PanelText {
   title: string;
-  subtitle: string;
-  /** The label above the round button: "Poke to play again". */
+  /** The label above the round button. */
   button: string;
 }
 
 const TEXT: Record<EndKind, PanelText> = {
-  welcome: { title: 'Welcome, giant!', subtitle: 'The tiny kingdom needs you', button: 'Poke the button to play' },
-  won: { title: 'Congratulations!', subtitle: 'The kingdom is safe!', button: 'Poke the button to play again' },
-  lost: { title: 'Oh no!', subtitle: 'The castle has fallen', button: 'Poke the button to try again' },
+  welcome: { title: 'Welcome, giant!', button: 'Play' },
+  won: { title: 'The kingdom is safe!', button: 'Play again' },
+  lost: { title: 'The castle has fallen', button: 'Try again' },
 };
 
 /** Text keeps this far from the panel's sides (layout pixels). */
@@ -105,14 +105,9 @@ export class EndPanel {
 
   private drawText(c: CanvasRenderingContext2D, w: number, text: PanelText): void {
     const textWidth = w - TEXT_MARGIN * 2;
-    // Title on a banner, the rest below it, all above the button. Every line shrinks to fit inside the panel.
-    const bannerTop = 22;
-    const bannerH = 86;
-    drawTitleBanner(c, text.title, w * 0.1, bannerTop, w * 0.8, bannerH, 44);
-    // The label sits just above the button's rim, the subtitle between it and the banner.
-    const labelY = this.buttonTopPx - 26;
-    const subtitleY = (bannerTop + bannerH + labelY - 20) / 2;
-    drawLine(c, text.subtitle, w / 2, subtitleY, textWidth, 40, UI_COLORS.ink);
+    // Title on a banner, the button's label just above its rim. Every line shrinks to fit inside the panel.
+    drawTitleBanner(c, text.title, w * 0.1, 16, w * 0.8, 80, 44);
+    const labelY = this.buttonTopPx - 22;
     // The main label stays clear of the Settings button on the welcome panel.
     const settingsShown = this.kind === 'welcome';
     const at = panelMap(END_PANEL.width, END_PANEL.height, w, this.panel.layoutHeight);

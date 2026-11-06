@@ -243,8 +243,7 @@ export class PauseMenu {
     // Small labels under the two top buttons.
     const under = at.y(S.backAt[1] - S.buttonRadius * POKE.rimScale) + 12;
     drawLine(c, 'Back', at.x(S.backAt[0]), under, 110, 18, UI_COLORS.accent);
-    drawLine(c, 'Measure reach', at.x(S.reachAt[0]) - 20, under, 150, 18, UI_COLORS.accent);
-    drawLine(c, 'Sound: touch a slider and slide it. All the way left is off.', left, at.y(S.soundTitleY), w - left * 2, 18, UI_COLORS.note, 'left');
+    drawLine(c, 'Reach', at.x(S.reachAt[0]), under, 110, 18, UI_COLORS.accent);
     // Each group's name and level on the left, clear of its slider.
     const labelRight = at.x(S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius - 1);
     for (const row of this.rows) {
@@ -259,12 +258,9 @@ export class PauseMenu {
     const bannerTop = 18;
     const bannerH = 74;
     drawTitleBanner(c, 'Paused', w * 0.18, bannerTop, w * 0.64, bannerH, 40);
-    const subtitleY = bannerTop + bannerH + 30;
-    drawLine(c, 'The battle waits for you. Poke a button.', w / 2, subtitleY, w - 70, 26);
-    // A label over each button.
+    // A word over each button, nothing else.
     const at = panelMap(PAUSE.panel.width, PAUSE.panel.height, w, this.panel.layoutHeight);
     const labelY = this.buttonTopPx - 18;
     BUTTONS.forEach((b, i) => drawLine(c, b.label, at.x(buttonX(i)), labelY, PAUSE.panel.buttonGap * at.px - 8, 22, UI_COLORS.accent));
-    drawLine(c, 'Restart starts the battle again. Settings: reach and sound.', w / 2, (subtitleY + labelY) / 2 + 4, w - 70, 18, UI_COLORS.note);
   }
 }

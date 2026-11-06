@@ -353,6 +353,15 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     pumpkin,
     melon,
     fence,
+    bench,
+    hedge,
+    bucket,
+    barrelOpen,
+    woodPile,
+    planks,
+    chest,
+    bannerRed,
+    bannerGreen,
     ...wrecks
   ] = await Promise.all([
     town('wall'),
@@ -383,6 +392,15 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     load('farm/nature/crop_pumpkin'),
     load('farm/nature/crop_melon'),
     load('farm/nature/fence_simple'),
+    town('stall-bench'),
+    town('hedge'),
+    load('props/survival/bucket'),
+    load('props/survival/barrel-open'),
+    load('props/survival/resource-wood'),
+    load('props/survival/resource-planks'),
+    load('props/survival/chest'),
+    town('banner-red'),
+    town('banner-green'),
     ...['siege-catapult', 'siege-trebuchet', 'siege-ram', 'siege-ballista', 'siege-tower'].map((n) => load(`props/castle-kit/${n}-demolished`)),
   ]);
   const batch = new StaticBatch();
@@ -422,18 +440,54 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
       const z = village.z - Math.cos(a) * d;
       house(x, z, facing(x, z, village.x, village.z));
     }
-    // The square: a stall, a lantern, a cart and some barrels and boxes.
+    // The square: two stalls, two lanterns, a cart, benches, and barrels, boxes, wood and buckets about.
     const y = (px: number, pz: number): number => groundAt(px, pz) - 0.05;
     const s = (dx: number, dz: number): [number, number] => [village.x + dx, village.z + dz];
-    const [sx, sz] = s(rng.range(-2, 2), rng.range(-2, 2));
-    add(rng.pick([stall, stallRed, stallGreen]), place(sx, y(sx, sz), sz, rng.range(0, Math.PI * 2), 3.2));
-    const [lx, lz] = s(rng.range(-4, 4), rng.range(-4, 4));
-    add(lantern, place(lx, y(lx, lz), lz, 0, 2.6));
-    const [cx, cz] = s(rng.range(-5, 5), rng.range(-5, 5));
+    /** A spot in the square, within `share` of the village's size from its middle. */
+    const inSquare = (share: number): [number, number] => {
+      const a = rng.range(0, Math.PI * 2);
+      const d = rng.range(0, share) * village.size;
+      return s(Math.sin(a) * d, -Math.cos(a) * d);
+    };
+    const stalls = [stall, stallRed, stallGreen];
+    for (let i = 0; i < 2; i++) {
+      const [sx, sz] = inSquare(0.3);
+      add(stalls[(i + rng.int(3)) % 3], place(sx, y(sx, sz), sz, rng.range(0, Math.PI * 2), 3.2));
+    }
+    for (let i = 0; i < 2; i++) {
+      const [lx, lz] = inSquare(0.35);
+      add(lantern, place(lx, y(lx, lz), lz, 0, 2.6));
+    }
+    const [cx, cz] = inSquare(0.35);
     add(cart, place(cx, y(cx, cz), cz, rng.range(0, Math.PI * 2), 3));
-    for (let i = 0; i < 4; i++) {
-      const [bx, bz] = s(rng.range(-5, 5), rng.range(-5, 5));
+    const P = SETTLEMENTS.villages.props;
+    for (let i = 0; i < P.barrels; i++) {
+      const [bx, bz] = inSquare(0.4);
       add(rng.pick([barrel, box, boxLarge]), place(bx, y(bx, bz), bz, rng.range(0, Math.PI * 2), 3.4));
+    }
+    const extras: [ModelTemplate, number][] = [
+      [bench, 3],
+      [bucket, 3.4],
+      [barrelOpen, 3.4],
+      [woodPile, 3],
+      [planks, 3],
+      [chest, 3.2],
+    ];
+    for (let i = 0; i < P.extras; i++) {
+      const [template, size] = extras[i % extras.length];
+      const [ex, ez] = inSquare(0.42);
+      add(template, place(ex, y(ex, ez), ez, rng.range(0, Math.PI * 2), size));
+    }
+    // A banner on the square's edge (the kingdom's red or green), and hedges between some houses.
+    const [fx, fz] = inSquare(0.45);
+    add(rng.next() < 0.5 ? bannerRed : bannerGreen, place(fx, y(fx, fz), fz, rng.range(0, Math.PI * 2), 5));
+    for (let i = 0; i < count; i++) {
+      if (rng.next() < 0.4) continue;
+      const a = start + ((i + 0.5) / count) * Math.PI * 2;
+      const hx = village.x + Math.sin(a) * village.size * 0.82;
+      const hz = village.z - Math.cos(a) * village.size * 0.82;
+      // The hedge's length (its z) along the ring of houses.
+      add(hedge, place(hx, y(hx, hz), hz, Math.PI / 2 - a, 4));
     }
     // A signpost where the village meets its road.
     signpostBy(village, roads, (x, z, yaw) => add(signpost, place(x, groundAt(x, z), z, yaw, 4.5)));

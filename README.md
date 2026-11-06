@@ -324,7 +324,9 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 46. **Camps shaking before goblins come out:** too cartoony for buildings. Only the drum sound is left.
 47. **Camps close to the castle:** most of the board was empty. Camps moved out to about 400 cm (the front one to 300 cm, so its details can be seen), became bigger war camps, each different, and the empty land got story scenes, villagers and road torches.
 48. **Big round glows around torches:** they read as floating balls, not light. Road torches now light a soft oval pool on the ground, and castle torches and lanterns have only a small halo.
-49. **A volume slider with minus and plus buttons and a mute button:** too much. Just one long slider per sound group now, all the way left is off, with a gold handle that turns grey at off.
+49. **A volume slider with minus and plus buttons and a mute button:** too much. Just one long slider per sound group now, all the way left is off, its handle like the buttons (green in a dark rim, a gold one looked out of place), grey at off.
+52. **Menus with explaining text:** subtitles and help lines are gone. Each menu shows only its title and a word over each button.
+53. **Buttons that wanted a slow push:** a quick poke was missed (the click waited for the animated cap to catch up, and a fast finger could skip past the button between two tracking frames). The click now goes by the finger itself, and a finger that was in front one frame and in the next counts.
 50. **Menus placed by hand-picked heights:** the settings page grew too tall and its low rows were hard to touch. Every menu now gets its height from one rule: right in front of the eyes, never higher than 2 cm above them or lower than 30 cm below (`UI_ZONE`).
 51. **UI code written again in each panel:** buttons on posts, button rows, panel text, canvas textures and draw-on-top code were copied around. It all lives in our own UI library now (`src/ui/kit/`), and new UI must be built from it.
 

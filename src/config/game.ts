@@ -160,9 +160,13 @@ export const SETTLEMENTS = {
     count: 4,
     /** Distance from the center (cm, between the castle and the camps at 390 to 425), radius of each village (cm), and houses in each. */
     from: 105,
-    to: 240,
-    radius: [16, 21] as [number, number],
-    houses: [3, 5] as [number, number],
+    to: 260,
+    // Bigger and busier after the step 7 and 8 test (were 16 to 21 cm with 3 to 5 houses): more houses, a second stall,
+    // benches, hedges, wood piles, buckets, a chest and a banner in each square (`props` below), and more villagers.
+    radius: [20, 26] as [number, number],
+    houses: [5, 7] as [number, number],
+    /** Small things in each village square: how many barrels and boxes, and how many of the other props. */
+    props: { barrels: 7, extras: 6 },
     /** Gap from the village's edge to the nearest road (cm): close by a road, never on it. */
     roadGap: [4, 30] as [number, number],
     /** Keep this far from the enemy camps and from each other (cm). */
@@ -230,15 +234,18 @@ export const SETTLEMENTS = {
   quarry: { from: 300, to: 520, radius: 12 },
   /**
    * Tall landmarks on the highest far hills, spread around the circle, so the
-   * horizon has things to spot. One of each kind, in this order: a tall
-   * watchtower, a hexagon mage tower, a gatehouse on the old border, a
-   * ruined tower and a small keep. About 30 cm tall at most.
+   * horizon has things to spot: tall watchtowers, hexagon mage towers,
+   * gatehouses on the old border, ruined towers and small keeps, in the
+   * order of `kinds` (as many as fit on far hills, at most one per kind
+   * listed). About 30 cm tall at most.
    */
+  // Twice as many after the step 7 and 8 test (the far land was still empty), closer together, the kinds
+  // taking turns so neighbours differ. The list is the order they are placed in, one per far hill.
   landmarks: {
-    from: 300,
-    to: 535,
-    spacing: 190,
-    kinds: ['tallTower', 'mageTower', 'gatehouse', 'ruinedTower', 'keep'] as LandmarkKind[],
+    from: 280,
+    to: 560,
+    spacing: 110,
+    kinds: ['tallTower', 'mageTower', 'gatehouse', 'ruinedTower', 'keep', 'mageTower', 'tallTower', 'ruinedTower', 'keep', 'tallTower', 'gatehouse', 'ruinedTower'] as LandmarkKind[],
     /** Tower piece size (cm across and per floor). */
     size: 3.6,
   },
@@ -771,8 +778,9 @@ export const END_PANEL = {
   radius: 41,
   /** Tilted back a little, toward the eyes (degrees). */
   tiltDeg: 20,
+  /** Only a title and a word over each button now (was 24 tall with a subtitle and long labels). */
   width: 32,
-  height: 24,
+  height: 19,
   /** The round poke button at the bottom, below all the text, in front of the panel (cm). */
   buttonRadius: BUTTON_SIZE.primary,
   /** Space between the button's rim and the panel's bottom edge (cm). */
@@ -840,8 +848,9 @@ export const PAUSE = {
   panel: {
     radius: 41,
     tiltDeg: 20,
+    // "Paused" and a word over each button only (was 23 tall with two more lines of text).
     width: 38,
-    height: 23,
+    height: 17,
     buttonRadius: BUTTON_SIZE.large,
     /** Gap between button centers (cm). */
     buttonGap: 8.8,
@@ -860,16 +869,16 @@ export const PAUSE = {
   // Made shorter (38 to 32 cm) after its low rows were hard to touch: Back and Measure reach share the
   // top row beside the title. Then just one long slider per row (no mute, no minus and plus), the
   // buttons small (BUTTON_SIZE, 3.6 cm across) and the slider handle 3.2 cm, rows 4.6 cm apart.
+  // Then no help line any more (menus keep text to a minimum), so it is 30 cm tall.
   settings: {
     width: 46,
-    height: 32,
+    height: 30,
     pxPerCm: 15,
     buttonRadius: BUTTON_SIZE.small,
-    backAt: [-19.5, 12.9] as [number, number],
-    reachAt: [19.5, 12.9] as [number, number],
+    backAt: [-19.5, 12.6] as [number, number],
+    reachAt: [19.5, 12.6] as [number, number],
     labelX: -21.5,
-    soundTitleY: 8.6,
-    firstRowY: 5,
+    firstRowY: 6.6,
     rowGap: 4.6,
     sliderX: 6.9,
     sliderLength: 26,
@@ -879,8 +888,10 @@ export const PAUSE = {
 /**
  * The slider (src/ui/slider.ts), from Meta's hands guidelines: targets well
  * over 22 mm with gaps over 12 mm, touched with the index finger only (cm,
- * in the slider's own frame, its face toward +z). The handle (3.2 cm) is a
- * warm gold against the green fill and the dark track, grey at 0 (off). Its
+ * in the slider's own frame, its face toward +z). The handle (3.2 cm) looks
+ * like the buttons (their green cap in a dark rim), over a warm parchment
+ * fill and the dark track, so it matches the theme and still stands out
+ * (the gold first tried looked out of place); grey at 0 (off). Its
  * face is at trackDepth + handleDepth; a finger within touchAt of the
  * slider's back grabs it (it has to come from the front), and it lets go
  * once the finger is back past releaseOut. Ready (hover) within
@@ -894,9 +905,10 @@ export const SLIDER = {
   trackDepth: 0.8,
   handleRadius: 1.6,
   handleDepth: 1,
-  handleColor: 0xffb83a,
+  /** The buttons' green (POKE.color), the parchment's warm tan, a grey for off. */
+  handleColor: 0x6fae4a,
   offColor: 0x9a948a,
-  fillColor: 0x6fae4a,
+  fillColor: 0xe2c48a,
   zoneHeight: 2.2,
   zoneBehind: 2.5,
   readyDistance: 6,
@@ -917,8 +929,14 @@ export const POKE = {
   fireShare: 0.85,
   /** After a click, the fingertip must come back out this far in front of the face before another press... */
   releaseDistance: 2,
-  /** ...and this long must pass (seconds). */
-  cooldown: 0.6,
+  /** ...and this long must pass (seconds). Was 0.6: quick pokes in a row felt ignored (Meta uses 0.25). */
+  cooldown: 0.35,
+  /**
+   * A quick poke: a fingertip in front of the face one frame and pushed in
+   * the next clicks at once, even if no frame caught it on the way in, and
+   * it still counts this far (cm) past the button's back.
+   */
+  quickBehind: 3,
   /** A button whose job just changed (the sign shows a new step) ignores presses this long (seconds). */
   lockAfterChange: 1,
   /** The poke zone is this much wider than the button. */
@@ -2030,8 +2048,9 @@ export interface TroopKindSpec {
 export const VILLAGERS = {
   enabled: true,
   height: 3.9,
-  perVillage: 2,
-  max: 10,
+  /** Four in each of the bigger villages now (were 2). */
+  perVillage: 4,
+  max: 18,
   speed: 2.4,
   walkFrom: 0.1,
   walkTo: 0.4,

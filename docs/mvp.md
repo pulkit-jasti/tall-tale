@@ -67,7 +67,7 @@ The tutorial is a hand-written script in code (`src/director/tutorial.ts`), not 
 - Steps only call the normal game systems (spawn enemy, show tool, open road). Nothing tutorial-only lives inside those systems.
 - **Learn by doing, with text.** Each lesson shows one short instruction on the hint sign, a marker on the thing to use, and waits until the player does it. Then its box is ticked with a chime and the next one appears. No "OK" buttons.
   - **Hint sign:** past the goblins at the front wall (62 cm out, bottom edge 43 cm above the board, just below the eyes), so it covers only the far edge of the board. It rises with the board, never spins and never follows the head. Shows "Step 3 of 8" for lessons and "Wave 2 of 5" banners for waves. **While a wave is fought it is gone**, so it never covers the enemies. No goblin counter: the blue flag shows the progress.
-  - **Next button:** the sign is out of reach, so Next stands apart on a post straight in front, in the reach band (38.5 cm out, 15 cm up). It no longer blinks (it looked busy). One click per push: after a click the finger must come back out about 2 cm and 0.6 s must pass, and a new step ignores it for 1 s.
+  - **Next button:** the sign is out of reach, so Next stands apart on a post straight in front, in the reach band (38.5 cm out, 15 cm up). It no longer blinks (it looked busy). One click per push: after a click the finger must come back out about 2 cm and 0.35 s must pass (was 0.6), and a new step ignores it for 1 s. A quick poke counts too (see "Quick pokes" in [controls-and-ui.md](controls-and-ui.md)).
   - **Marker:** one bouncing down arrow over the target, drawn on top so the wall never hides it.
   - **Out of view:** a gold 3D pointer arrow in front of the face points at the lesson's target while it is at the edge of the view or out of it.
   - **Ghost hand:** a see-through 3D hand loops the gesture on the real target. It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`. The accuracy rules are in AGENTS.md ("Ghost hand demos"). Ghost aim dots show the arc from the pouch to the target in the slingshot and trigger lessons.
@@ -242,7 +242,9 @@ Not part of the MVP build order. Built on the branch `feat/day-night-cycle` (202
 **A livelier world (same branch, after the step 7 and 8 test, not tested on the headset yet):**
 - **Goblin camps:** farther out (about 390 to 425 cm), except the front one at 300 cm, close enough to see its details. Each is a war camp inside a palisade (`CAMP_LOOK`), and no two look alike: spiked, branch or plank fences, red or green banners, a different siege machine each (catapult, ballista, ram, trebuchet), different tents, a weapon rack or a pile of supplies, goblin standing stones at most gates.
 - **Story scenes** in the empty land (`STORY_SPOTS`): stone circles, ruined watchtowers, old battlefields, a shrine, travelers' camps by the roads, an archery range, a goblin trap baited with coins.
-- **Villagers** (`VILLAGERS`): two per village walk about the square, stop to work or look about, and walk on.
+- **Villagers** (`VILLAGERS`): four per village walk about the square, stop to work or look about, and walk on.
+- **Bigger, busier villages:** 20 to 26 cm across with 5 to 7 houses (were 16 to 21 with 3 to 5), two stalls, two lanterns, benches, wood piles, buckets, a chest, a banner and hedges.
+- **More tall landmarks** far out: up to 12 (were 5) towers, mage towers, gatehouses, ruined towers and keeps on the far hills, the kinds taking turns.
 - No farm animals: none of the Kenney packs in Downloads has any (only fish, in the survival kit).
 
 **Debug:** `]` changes to the next time of day. "Time of day" 1 to 4 on the debug page ("Day and night" section). Both use the real 8 s change and hold until the next battle starts.
@@ -270,7 +272,9 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-06), after the day an
 **Menus and UI** ([controls-and-ui.md](controls-and-ui.md))
 - **Pause button in front** on a post, below the Next button's spot (was on the wrist).
 - **Settings page** from the pause panel and from the welcome panel (its bottom right corner): Back, Measure reach (moved here from the pause panel), and one long slider per sound group, all the way left is off.
-- **The slider:** touch and slide with the index finger (touching the track jumps the handle), snaps to off and full near the ends, a gold handle that turns grey at off.
+- **The slider:** touch and slide with the index finger (touching the track jumps the handle), snaps to off and full near the ends, a handle like the buttons (green in a dark rim) over a tan fill, grey at off.
+- **Quick pokes work:** buttons and sliders used to miss a fast poke; they now click as soon as the fingertip is in, and catch a finger that jumped through between two tracking frames.
+- **Minimal text:** each menu shows only its title and a word over each button (no subtitles, no help lines); the panels got shorter to match.
 - **Menus right in front of the eyes** (`UI_ZONE`): never higher than 2 cm above the eyes or lower than 30 cm below; a test checks every panel.
 - **Button sizes** (`BUTTON_SIZE`): five sizes from 3.6 to 9.1 cm across, the dev build warns outside 3 to 9.1 cm.
 - **Clean icons:** no dark outline and no dark edge on the button icons. The Next button no longer blinks.
@@ -289,7 +293,7 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-06), after the day an
 
 **Still open on this branch**
 - **Run typecheck, build and tests**, then fix what they find. Much was written without them.
-- **Headset checks:** everything above. Most of all: the settings page and slider feel (touch, drag, the gold handle, the rows' spacing), the menus' height, the pause button in front, the balloon and pepper lessons, road torch pools and the small halos at night, the new camps and scenes from the seat, villagers walking through the village square's stall or cart, story scenes floating or sinking on bumpy ground (they sit on the terrain, it is not flattened for them).
+- **Headset checks:** everything above. Most of all: the settings page and slider feel (touch, drag, the handle's look, the rows' spacing), quick pokes on every button, the menus' height, the pause button in front, the balloon and pepper lessons, road torch pools and the small halos at night, the new camps and scenes from the seat, villagers walking through the village square's stall or cart, story scenes floating or sinking on bumpy ground (they sit on the terrain, it is not flattened for them).
 - **Stress test** with the new load ([performance.md](performance.md)), by day and at night.
 - **Pacing:** with the camps farther out a grunt walks about 60 s to the wall (was about 33 s). Raise the goblin speeds if the waves drag.
 - **Music:** check the battle loop point (32 s, taken from the file's name), and the music layers idea ([audio.md](audio.md)).

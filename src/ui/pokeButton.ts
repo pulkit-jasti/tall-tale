@@ -44,6 +44,8 @@ export class PokeButton implements Control {
   private press = 0;
   /** No new press until this runs out (seconds): after a click, or a lock. */
   private cooldown = 0;
+  /** Each hand's fingertip depth in front of the face last frame (while over the button), to catch quick pokes. */
+  private lastZ = new Map<HandState, number>();
   /** Blinks while idle, to catch the eye (see setBlink). */
   private blink: { color: number; intensity: number; speed: number } | null = null;
   private blinkTime = 0;
@@ -110,6 +112,7 @@ export class PokeButton implements Control {
     this.fired = false;
     this.press = 0;
     this.cooldown = 0;
+    this.lastZ.clear();
     this.cap.position.z = POKE.travel;
     this.setTouch('idle');
   }
@@ -134,14 +137,25 @@ export class PokeButton implements Control {
     let inZone = false;
     let near = false;
     let push = -1;
+    /** A finger that was in front of the face last frame and is well in now: a quick poke (tracking skips the frames between). */
+    let quick = false;
     /** Closest fingertip distance in front of the face (cm). */
     let front = Infinity;
     this.group.updateWorldMatrix(true, false);
     for (const hand of hands) {
-      if (!hand.tracked) continue;
+      if (!hand.tracked) {
+        this.lastZ.delete(hand);
+        continue;
+      }
       this.group.worldToLocal(local.copy(hand.indexTip));
-      // Generous zone around the round face, and not from far behind it.
-      if (Math.hypot(local.x, local.y) > this.radius * zoneScale || local.z < -this.depth) continue;
+      // Generous zone around the round face, and not from far behind it (a quick poke may land deep).
+      if (Math.hypot(local.x, local.y) > this.radius * zoneScale || local.z < -(this.depth + travel + POKE.quickBehind)) {
+        this.lastZ.delete(hand);
+        continue;
+      }
+      const before = this.lastZ.get(hand);
+      this.lastZ.set(hand, local.z);
+      if (before !== undefined && before > face && local.z <= face - travel * fireShare) quick = true;
       // A wider zone once Ready, so a fingertip shaking at the edge never flickers it on and off.
       const reach = this.touch === 'idle' ? readyDistance : readyDistance * POKE.readyOut;
       if (local.z > face + reach) continue;
@@ -156,11 +170,13 @@ export class PokeButton implements Control {
     if (near && push < 0 && !this.fired) this.armed = true;
     if (!inZone) this.armed = false;
     let fired = false;
-    if (push >= 0 && this.armed && !this.fired) {
-      // The cap follows the fingertip in, down to the bottom.
+    if (push >= 0 && (this.armed || quick) && !this.fired) {
+      // The cap follows the fingertip in, down to the bottom. The click goes by the finger itself, not
+      // by the cap catching up, so a quick poke clicks at once (the cap's smoothing only calms its look).
       const target = Math.min(travel, push);
       this.press += (target - this.press) * Math.min(1, dt * POKE.capFollow);
-      if (this.cooldown <= 0 && this.press >= travel * fireShare) {
+      if (this.cooldown <= 0 && push >= travel * fireShare) {
+        this.press = travel;
         this.fired = true;
         this.armed = false;
         this.cooldown = cooldown;

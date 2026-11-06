@@ -3,8 +3,8 @@
 //
 //   - A wide track with a big round handle (well over the 22 mm minimum
 //     target), the filled part of the track showing the value at a glance.
-//     The handle is a warm gold, so it stands out against the green fill and
-//     the dark track, and turns grey at 0 (off), so the state shows in color.
+//     The handle looks like the buttons (green cap, dark rim) over a warm
+//     parchment fill, and turns grey at 0 (off), so the state shows in color.
 //   - Touch it with the index finger, on the handle or anywhere on the track
 //     (the handle jumps there, so it works without dragging too), then slide
 //     the finger along: the handle follows 1:1. It lets go once the finger
@@ -50,6 +50,8 @@ export class Slider implements Control {
   /** The finger came from the front (it was over the face), so touching the face grabs it. */
   private armed = false;
   private held: HandState | null = null;
+  /** Each hand's fingertip depth last frame (while over the track), to catch quick touches. */
+  private lastZ = new Map<HandState, number>();
   /** No grab until this runs out (seconds), after a panel opens. */
   private cooldown = 0;
 
@@ -71,6 +73,12 @@ export class Slider implements Control {
     this.handle = new Mesh(new CylinderGeometry(S.handleRadius, S.handleRadius, S.handleDepth, POKE.segments), this.handleMaterial);
     this.handle.rotation.x = Math.PI / 2;
     this.handle.position.z = S.trackDepth + S.handleDepth / 2;
+    // A dark rim around the handle, like the buttons' rim.
+    const rim = new Mesh(new CylinderGeometry(S.handleRadius * POKE.rimScale * 0.85, S.handleRadius * POKE.rimScale * 0.85, S.handleDepth * 0.6, POKE.segments), flatMaterial(POKE.rimColor));
+    rim.rotation.x = Math.PI / 2;
+    // Just behind the cap (the handle is turned, so its own y points out of the slider's face).
+    rim.position.y = -S.handleDepth * 0.2;
+    this.handle.add(rim);
     this.group.add(track, this.fill, this.handle);
     this.show();
   }
@@ -98,6 +106,7 @@ export class Slider implements Control {
   reset(): void {
     this.held = null;
     this.armed = false;
+    this.lastZ.clear();
     this.setTouch('idle');
   }
 
@@ -124,14 +133,24 @@ export class Slider implements Control {
     // Ready while a finger is over the track, in front of it; grabbed when it touches the face.
     let ready = false;
     for (const hand of hands) {
-      if (!hand.tracked) continue;
+      if (!hand.tracked) {
+        this.lastZ.delete(hand);
+        continue;
+      }
       this.group.updateWorldMatrix(true, false);
       this.group.worldToLocal(local.copy(hand.indexTip));
       const along = Math.abs(local.x) <= this.length / 2 + S.handleRadius;
-      if (!along || Math.abs(local.y) > S.zoneHeight || local.z < -S.zoneBehind) continue;
+      if (!along || Math.abs(local.y) > S.zoneHeight || local.z < -S.zoneBehind) {
+        this.lastZ.delete(hand);
+        continue;
+      }
+      // A quick touch: in front of the face last frame and on it now grabs at once, even if no frame caught the way in.
+      const before = this.lastZ.get(hand);
+      this.lastZ.set(hand, local.z);
+      const quick = before !== undefined && before > S.touchAt + 0.3;
       if (local.z > S.readyDistance) continue;
       ready = true;
-      if (local.z <= S.touchAt && this.armed && this.cooldown <= 0) {
+      if (local.z <= S.touchAt && (this.armed || quick) && this.cooldown <= 0) {
         this.held = hand;
         this.setTouch('held');
         this.moveTo(local.x, false);
@@ -170,7 +189,7 @@ export class Slider implements Control {
   private show(): void {
     const x = (this.value - 0.5) * this.length;
     this.handle.position.x = x;
-    // Gold while on, grey at 0 (off): the state shows in color, not just in where the handle is.
+    // Green while on, grey at 0 (off): the state shows in color, not just in where the handle is.
     this.handleMaterial.color.setHex(this.value <= 0 ? SLIDER.offColor : SLIDER.handleColor);
     const filled = Math.max(0.001, this.value * this.length + SLIDER.trackHeight / 2);
     this.fill.scale.x = filled;
