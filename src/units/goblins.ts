@@ -149,6 +149,8 @@ export class Goblin {
   /** Peppered: time to its next sneeze, and the sneeze's head jerk left (seconds). */
   sneezeIn = 0;
   sneezing = 0;
+  /** Seconds of sneezing left after the pepper (PEPPER.sneezeFor). Harmless while above 0. */
+  sneezeLeft = 0;
   /** Running about on the rampart: pause left before the next dash (seconds), the board angle it runs to, and the wall mark timer. */
   dashPause = 0;
   dashTo = 0;
@@ -357,10 +359,10 @@ export class Goblins {
     return false;
   }
 
-  /** Goblins in one mode right now (for example intruders, for castle damage). `awake`: stunned ones are left out. */
+  /** Goblins in one mode right now (for example intruders, for castle damage). `awake`: stunned and sneezing ones are left out. */
   countMode(mode: GoblinMode, awake = false): number {
     let count = 0;
-    for (const g of this.list) if (g.mode === mode && !(awake && g.stunned > 0)) count++;
+    for (const g of this.list) if (g.mode === mode && !(awake && (g.stunned > 0 || g.sneezeLeft > 0))) count++;
     return count;
   }
 
@@ -458,6 +460,7 @@ export class Goblins {
     goblin.patrolRoad = -1;
     goblin.calm = false;
     goblin.sneezing = 0;
+    goblin.sneezeLeft = 0;
     goblin.dashPause = 0;
     goblin.root.scale.setScalar(1);
     goblin.body.rotation.x = 0;
@@ -818,6 +821,7 @@ export class Goblins {
   pepper(goblin: Goblin): boolean {
     if (!this.isHittable(goblin) || goblin.seasoned) return false;
     goblin.seasoned = true;
+    goblin.sneezeLeft = PEPPER.sneezeFor;
     this.flash(goblin);
     // It sneezes now (below), and again and again after that (see sneeze()).
     goblin.sneezeIn = this.rng.range(PEPPER.sneezeEvery[0], PEPPER.sneezeEvery[1]);
@@ -875,9 +879,16 @@ export class Goblins {
         if (g.flashTime <= 0) this.applyLook(g);
       }
       if (g.popTime > 0 || g.squash > 0 || g.type === 'runner') this.juice(g, dt);
-      if (g.seasoned) {
-        this.sneeze(g, dt);
-        if (speck < SPECK_SLOTS) this.placeSpecks(g, speck++);
+      // Sneezing (and harmless) for a while after the pepper, then it stops, still seasoned.
+      if (g.sneezeLeft > 0) {
+        g.sneezeLeft -= dt;
+        if (g.sneezeLeft > 0) {
+          this.sneeze(g, dt);
+          if (speck < SPECK_SLOTS) this.placeSpecks(g, speck++);
+        } else {
+          g.sneezing = 0;
+          g.body.rotation.x = 0;
+        }
       }
       // Far goblins play their animation every other frame (half the cost, hard to see that far).
       g.animDt += dt;
@@ -1027,6 +1038,8 @@ export class Goblins {
         break;
       }
       case 'atWall': {
+        // A sneezing goblin is too busy to hit the wall.
+        if (g.sneezeLeft > 0) break;
         g.timer -= dt;
         if (g.timer <= 0) {
           g.timer = GOBLIN_RULES.wallHitInterval * this.rng.range(0.85, 1.15);

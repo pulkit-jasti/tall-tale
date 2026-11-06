@@ -2,9 +2,11 @@
 // point in the world, so they turn with the board and get quieter far away.
 import { AssetManager } from '@iwsdk/core';
 import { Audio, AudioListener, Object3D, PositionalAudio, Quaternion, Vector3 } from 'three';
-import { SOUND_MIX, SOUNDS, type SoundDef, type SoundName } from '../config/sounds.js';
+import { SOUND_MIX, SOUNDS, soundCategory, type SoundCategory, type SoundDef, type SoundName } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Random } from '../rules/random.js';
+import { Music } from './music.js';
+import { SoundSettings } from './soundSettings.js';
 
 const POSITIONAL_VOICES = 12;
 const FLAT_VOICES = 6;
@@ -32,6 +34,12 @@ export class GameAudio {
   private lastPlayed = new Map<SoundName, number>();
   private listener: AudioListener;
   private muffles: Muffle[] = [];
+  /** The background music, on the same listener. */
+  readonly music: Music;
+  /** The player's volume for each sound group (pause panel settings). */
+  readonly settings = new SoundSettings();
+  /** What each voice plays now: its group and its own level, so a settings change can follow it. */
+  private playing = new Map<Audio | PositionalAudio, { category: SoundCategory; level: number }>();
 
   constructor(
     private scene: Object3D,
@@ -66,14 +74,18 @@ export class GameAudio {
       this.muffles.push({ lowpass, gain, behind: 0 });
     }
     for (let i = 0; i < FLAT_VOICES; i++) this.flat.push(new Audio(this.listener));
+    this.music = new Music(this.listener);
+    this.music.setVolume(this.settings.level('music'));
+    this.settings.onChange = () => this.applySettings();
   }
 
   /** Loads every sound file in the config. */
   async load(): Promise<void> {
     const files = new Set<string>();
     for (const def of Object.values(SOUNDS) as SoundDef[]) def.files.forEach((f) => files.add(f));
-    await Promise.all(
-      [...files].map(async (file) => {
+    await Promise.all([
+      this.music.load(),
+      ...[...files].map(async (file) => {
         try {
           const buffer = await AssetManager.loadAudio(`${import.meta.env.BASE_URL}audio/${file}`);
           this.buffers.set(file, buffer);
@@ -81,7 +93,7 @@ export class GameAudio {
           console.warn(`[audio] could not load ${file}`, error);
         }
       }),
-    );
+    ]);
   }
 
   /** Browsers only play sound after a user tap. Call from a click handler. */
@@ -124,7 +136,7 @@ export class GameAudio {
       voice = this.flat[this.nextFlat];
       this.nextFlat = (this.nextFlat + 1) % this.flat.length;
     }
-    this.start(voice, def, buffer, volume);
+    this.start(voice, def, buffer, volume, soundCategory(name));
   }
 
   /**
@@ -170,12 +182,45 @@ export class GameAudio {
     }
   }
 
-  private start(voice: Audio | PositionalAudio, def: SoundDef, buffer: AudioBuffer, volume: number): void {
+  /** The player's group volumes changed: playing sounds follow at once (a muted group stops), the music too. */
+  private applySettings(): void {
+    this.music.setVolume(this.settings.level('music'));
+    const now = this.listener.context.currentTime;
+    for (const [voice, playing] of this.playing) {
+      if (!voice.isPlaying) continue;
+      const level = this.settings.level(playing.category);
+      if (level <= 0) {
+        voice.stop();
+        continue;
+      }
+      voice.gain.gain.cancelScheduledValues(now);
+      voice.gain.gain.setTargetAtTime(playing.level * level, now, 0.03);
+    }
+  }
+
+  private start(voice: Audio | PositionalAudio, def: SoundDef, buffer: AudioBuffer, volume: number, category: SoundCategory): void {
+    const groupLevel = this.settings.level(category);
+    if (groupLevel <= 0) return;
+    this.playing.set(voice, { category, level: def.volume * volume });
     if (voice.isPlaying) voice.stop();
     voice.setBuffer(buffer);
     voice.duration = def.maxSeconds;
-    voice.setVolume(def.volume * volume);
-    voice.setPlaybackRate(this.rng.range(0.94, 1.06));
+    const rate = this.rng.range(0.94, 1.06);
+    voice.setPlaybackRate(rate);
+    const level = def.volume * volume * groupLevel;
+    const gain = voice.gain.gain;
+    const now = this.listener.context.currentTime;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(level, now);
+    // Long sounds (drums, horn, fanfare) fade out to nothing by their end instead of stopping dead.
+    // Short cues keep their sharp ends, they are meant to catch the ear.
+    const F = SOUND_MIX.fadeOut;
+    const length = Math.min(def.maxSeconds ?? Infinity, buffer.duration) / rate;
+    if (length >= F.longFrom) {
+      const fade = Math.min(F.seconds, length * F.maxShare);
+      gain.setValueAtTime(level, now + length - fade);
+      gain.linearRampToValueAtTime(0, now + length);
+    }
     voice.play();
   }
 }

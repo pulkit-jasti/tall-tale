@@ -62,6 +62,8 @@ export class Balloon implements SlingTarget {
   /** Height gained since it turned away (cm). */
   lift = 0;
   aimed = false;
+  /** The balloon lesson: it stops this far out (cm) and hovers there, riders aboard, until popped. Null: it comes all the way in. */
+  waitAt: number | null = null;
   readonly radius = BALLOONS.radius * 1.2;
   readonly assist = 1;
 
@@ -149,6 +151,13 @@ export class Balloons {
   readonly list: Balloon[] = [];
   /** The stress test: balloons hover where they are (they still bob). */
   hold = false;
+  /** Balloons popped since the game started (the balloon lesson counts them). */
+  pops = 0;
+
+  /** The balloon lesson is over: a balloon still hovering comes on in. */
+  releaseWaiting(): void {
+    for (const b of this.list) b.waitAt = null;
+  }
   private mesh: InstancedMesh;
   private time = 0;
   /** Called with each balloon popped (juice: a ring and stars), at its world position. */
@@ -201,7 +210,7 @@ export class Balloons {
    * A balloon comes in along a board angle (radians), from `from` cm out.
    * Returns null when all balloons are out, or no rider could be spawned (unit cap).
    */
-  spawn(angle: number, from: number = BALLOONS.startRadius): Balloon | null {
+  spawn(angle: number, from: number = BALLOONS.startRadius, waitAt: number | null = null): Balloon | null {
     const balloon = this.list.find((b) => b.phase === 'off');
     if (!balloon) return null;
     const riders: Goblin[] = [];
@@ -220,6 +229,7 @@ export class Balloons {
     balloon.age = 0;
     balloon.lift = 0;
     balloon.aimed = false;
+    balloon.waitAt = waitAt;
     this.tint(balloon);
     this.place(balloon, 0);
     this.mesh.visible = true;
@@ -245,7 +255,9 @@ export class Balloons {
   /** Hit by a slingshot shot: it bursts, and its riders fall and poof where they land. */
   pop(balloon: Balloon): void {
     if (!balloon.hittable()) return;
+    this.pops++;
     balloon.phase = 'popped';
+    balloon.waitAt = null;
     balloon.timer = BALLOONS.popTime;
     // Riders fall, drifting on a little the way it floated (inward).
     const vx = -polarX(1, balloon.angle) * BALLOONS.speed * 0.8;
@@ -293,8 +305,10 @@ export class Balloons {
       switch (b.phase) {
         case 'approach':
           if (!stunned && !this.hold) b.radiusOut -= BALLOONS.speed * dt;
+          // The lesson balloon hovers outside the wall, riders aboard, until it is popped.
+          if (b.waitAt !== null && b.radiusOut <= b.waitAt) b.radiusOut = b.waitAt;
           if (b.riders.length === 0) b.phase = 'leave';
-          else if (b.radiusOut <= BALLOONS.dropRadius) {
+          else if (b.waitAt === null && b.radiusOut <= BALLOONS.dropRadius) {
             b.radiusOut = BALLOONS.dropRadius;
             b.phase = 'drop';
             b.timer = BALLOONS.dropGap * 0.5;

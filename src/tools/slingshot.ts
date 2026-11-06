@@ -107,8 +107,10 @@ interface Pebble {
   share: number;
   /** Landed: it lies there this long (seconds) before it shrinks away. -1 while it flies. */
   rest: number;
-  /** Its spin when it landed, so it lies still. */
-  restTurn: number;
+  /** Its turn while it rolls and once it lies still. */
+  readonly spin: Quaternion;
+  /** Landed and still rolling on (it slows down, then lies there for `rest`). */
+  rolling: boolean;
   /** Time to the next trail puff (seconds). */
   trail: number;
 }
@@ -163,6 +165,33 @@ const traceNext = new Vector3();
 const matrix = new Matrix4();
 const restAt = new Vector3();
 const restScale = new Vector3();
+const rollAxis = new Vector3();
+const rollTurn = new Quaternion();
+
+/**
+ * The pebble: a low-poly ball like the sun (flat faces), a little squashed
+ * and lumpy so it reads as a stone. Rests on y = 0 like a fitted model.
+ */
+function pebbleTemplate(): ModelTemplate {
+  const r = SLINGSHOT.pebbleSize / 2;
+  const geometry = new IcosahedronGeometry(r, 1);
+  const at = geometry.attributes.position;
+  for (let i = 0; i < at.count; i++) {
+    const x = at.getX(i);
+    const y = at.getY(i);
+    const z = at.getZ(i);
+    // From the corner's own spot, so the copies of a shared corner move together and no gaps open.
+    const push = 1 + SLINGSHOT.pebbleLumps * Math.sin(x * 7.1 + y * 3.7) * Math.cos(z * 5.3 - y * 2.9);
+    at.setXYZ(i, x * push, y * push * SLINGSHOT.pebbleSquash, z * push);
+  }
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox!;
+  geometry.translate(0, -box.min.y, 0);
+  const object = new Group();
+  object.add(new Mesh(geometry, flatMaterial(SLINGSHOT.pebbleColor)));
+  return { object, animations: [], size: new Vector3(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) };
+}
 const handMatrix = new Matrix4();
 const quaternion = new Quaternion();
 const targetPosition = new Vector3();
@@ -289,11 +318,11 @@ export class Slingshot {
   ) {}
 
   async load(): Promise<void> {
-    const [platform, stone, pile] = await Promise.all([
+    const [platform, pile] = await Promise.all([
       loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width: TOOL_SPOTS.platformWidth }),
-      loadTemplate('rocks/survival/resource-stone.glb', { width: SLINGSHOT.pebbleSize }),
       loadTemplate('rocks/survival/resource-stone-large.glb', { width: PEBBLE_BOWL.pileWidth }),
     ]);
+    const stone = pebbleTemplate();
     this.stoneTemplate = stone;
     this.buildPlatform(platform);
     this.buildFrame();
@@ -374,7 +403,8 @@ export class Slingshot {
         target: null,
         share: 1,
         rest: -1,
-        restTurn: 0,
+        spin: new Quaternion(),
+        rolling: false,
         trail: 0,
       });
     }
@@ -871,6 +901,7 @@ export class Slingshot {
     pebble.alive = true;
     pebble.age = 0;
     pebble.rest = -1;
+    pebble.rolling = false;
     pebble.kind = kind;
     pebble.goblin = goblin;
     pebble.position.copy(origin);
@@ -1028,6 +1059,32 @@ export class Slingshot {
       pebble.age += dt;
       const p = pebble.position;
       const v = pebble.velocity;
+      // Landed after a miss: it rolls on over the ground, slowing down, turning as it rolls.
+      if (pebble.rolling) {
+        const speed = Math.hypot(v.x, v.z);
+        const slower = Math.max(0, speed - SLINGSHOT.rollFriction * dt);
+        if (speed > 0) v.multiplyScalar(slower / speed);
+        p.x += v.x * dt;
+        p.z += v.z * dt;
+        const ground = landingHeight(p.x, p.z);
+        if (ground === null) {
+          this.removePebble(i);
+          continue;
+        }
+        p.y = ground + this.pebbleHeight / 2;
+        // Rolling, not sliding: it turns its own size's worth for every step it moves.
+        if (slower > 0) {
+          rollAxis.set(v.z, 0, -v.x).normalize();
+          rollTurn.setFromAxisAngle(rollAxis, (slower * dt) / (this.pebbleHeight / 2));
+          pebble.spin.premultiply(rollTurn);
+        }
+        this.placeResting(i, pebble, 1);
+        if (slower < SLINGSHOT.rollStop) {
+          pebble.rolling = false;
+          pebble.rest = SLINGSHOT.pebbleRest;
+        }
+        continue;
+      }
       // Landed: it lies there a moment, then shrinks away (the shared despawn look).
       if (pebble.rest >= 0) {
         pebble.rest -= dt;
@@ -1036,11 +1093,7 @@ export class Slingshot {
           this.removePebble(i);
           continue;
         }
-        quaternion.setFromAxisAngle(UP, pebble.restTurn);
-        restScale.setScalar(Math.max(0.001, shrinkAway(t)));
-        restAt.set(p.x, p.y - (this.pebbleHeight / 2) * restScale.x, p.z);
-        matrix.compose(restAt, quaternion, restScale);
-        this.pool.set(i, matrix);
+        this.placeResting(i, pebble, Math.max(0.001, shrinkAway(t)));
         continue;
       }
       // 4. Gentle bend toward the target while it stays in the cone.
@@ -1093,12 +1146,16 @@ export class Slingshot {
           continue;
         }
         p.y = ground + this.pebbleHeight / 2;
+        // It keeps some of its speed along the ground and rolls on (see above), so a miss feels real.
+        // The rest timer counts only once it stops; while it rolls it is a landed pebble a new shot may take over.
+        v.y = 0;
+        v.x *= SLINGSHOT.rollKeep;
+        v.z *= SLINGSHOT.rollKeep;
+        pebble.rolling = true;
         pebble.rest = SLINGSHOT.pebbleRest;
-        pebble.restTurn = pebble.age * 12;
+        pebble.spin.setFromAxisAngle(UP, pebble.age * 12);
         pebble.target = null;
-        quaternion.setFromAxisAngle(UP, pebble.restTurn);
-        matrix.makeRotationFromQuaternion(quaternion).setPosition(p.x, p.y - this.pebbleHeight / 2, p.z);
-        this.pool.set(i, matrix);
+        this.placeResting(i, pebble, 1);
         continue;
       }
       if (pebble.age > SLINGSHOT.maxFlight || p.y < SLINGSHOT.killBelow) {
@@ -1395,6 +1452,18 @@ export class Slingshot {
     this.launch(this.aimOrigin, this.aimVelocity, best, ...load);
     this.audio.play('slingRelease', this.pouchWorld(temp));
     this.onEvent('shot');
+  }
+
+  /**
+   * A landed pebble at its spot, turned by its spin around its middle (the
+   * model rests on its bottom), at `size` (it shrinks away at the end).
+   */
+  private placeResting(index: number, pebble: Pebble, size: number): void {
+    const p = pebble.position;
+    restAt.set(0, (-this.pebbleHeight / 2) * size, 0).applyQuaternion(pebble.spin).add(p);
+    restScale.setScalar(size);
+    matrix.compose(restAt, pebble.spin, restScale);
+    this.pool.set(index, matrix);
   }
 
   /** Debug: puts the goblin nearest the castle into the empty pouch without hands. */

@@ -184,7 +184,7 @@ export function iconTextureSource(name: UiImageName, tint?: string): HTMLCanvasE
   return image ? tintCanvas(image, tint) : null;
 }
 
-export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach';
+export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach' | 'minus' | 'plus' | 'sound' | 'muted' | 'settings' | 'back';
 
 /**
  * A crisp button icon drawn in code (256 px), in the same look as the arrows:
@@ -204,7 +204,81 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
   c.lineCap = 'round';
   c.strokeStyle = '#6d4b27';
   c.fillStyle = '#f7e2b0';
-  if (icon === 'play') {
+  if (icon === 'minus' || icon === 'plus') {
+    // A fat bar, and for plus a second one across it.
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.roundRect(-s * 0.3, -s * 0.08, s * 0.6, s * 0.16, s * 0.04);
+    if (icon === 'plus') c.roundRect(-s * 0.08, -s * 0.3, s * 0.16, s * 0.6, s * 0.04);
+    c.fill();
+    c.stroke();
+    if (icon === 'plus') {
+      // The crossing is filled again, so no outline shows through the middle.
+      c.fillRect(-s * 0.08 + 2, -s * 0.08 + 2, s * 0.16 - 4, s * 0.16 - 4);
+    }
+  } else if (icon === 'sound' || icon === 'muted') {
+    // A speaker: a box and a cone, then sound waves, or a cross when muted.
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.moveTo(-s * 0.34, -s * 0.1);
+    c.lineTo(-s * 0.18, -s * 0.1);
+    c.lineTo(s * 0.02, -s * 0.28);
+    c.lineTo(s * 0.02, s * 0.28);
+    c.lineTo(-s * 0.18, s * 0.1);
+    c.lineTo(-s * 0.34, s * 0.1);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.lineWidth = s * 0.07;
+    if (icon === 'sound') {
+      for (const r of [0.14, 0.26]) {
+        c.beginPath();
+        c.arc(s * 0.06, 0, s * r, -0.8, 0.8);
+        c.stroke();
+      }
+    } else {
+      c.beginPath();
+      c.moveTo(s * 0.14, -s * 0.14);
+      c.lineTo(s * 0.36, s * 0.14);
+      c.moveTo(s * 0.36, -s * 0.14);
+      c.lineTo(s * 0.14, s * 0.14);
+      c.stroke();
+    }
+  } else if (icon === 'settings') {
+    // A gear: a toothed ring around a hole.
+    c.lineWidth = s * 0.05;
+    c.beginPath();
+    const teeth = 8;
+    for (let i = 0; i < teeth * 2; i++) {
+      const a = (i / (teeth * 2)) * Math.PI * 2;
+      const r = i % 2 === 0 ? s * 0.36 : s * 0.27;
+      const a0 = a - Math.PI / (teeth * 2) * 0.55;
+      const a1 = a + Math.PI / (teeth * 2) * 0.55;
+      c.lineTo(Math.cos(a0) * r, Math.sin(a0) * r);
+      c.lineTo(Math.cos(a1) * r, Math.sin(a1) * r);
+    }
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.beginPath();
+    c.arc(0, 0, s * 0.11, 0, Math.PI * 2);
+    c.fillStyle = '#6d4b27';
+    c.fill();
+  } else if (icon === 'back') {
+    // Back: an arrow pointing left.
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.moveTo(-s * 0.34, 0);
+    c.lineTo(-s * 0.06, -s * 0.28);
+    c.lineTo(-s * 0.06, -s * 0.1);
+    c.lineTo(s * 0.32, -s * 0.1);
+    c.lineTo(s * 0.32, s * 0.1);
+    c.lineTo(-s * 0.06, s * 0.1);
+    c.lineTo(-s * 0.06, s * 0.28);
+    c.closePath();
+    c.fill();
+    c.stroke();
+  } else if (icon === 'play') {
     // A play triangle, pointing right, nudged right so it looks centered.
     c.beginPath();
     c.moveTo(s * 0.36, 0);

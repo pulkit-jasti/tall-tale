@@ -1,37 +1,36 @@
-// The terrain fade: at night the board, the castle, the roads, the decor and
-// the hills turn darker, a little blue and a little less colorful
-// (DayLook.terrainFade), so their bright day colors match the dark sky. It
-// only ever darkens (a multiply), never washes them out. One shared amount (set by
-// the day and night cycle), a few shader lines at the end of each material,
-// no extra draw call. Units, tools and anything that glows are left out, so
-// goblins and the touch states keep their colors.
+// The terrain look for the time of day: the board, the castle, the roads,
+// the decor and the hills lose a little color and are multiplied by a tint
+// (DayLook.terrainTint, terrainBright, terrainGrey). At night darker, a
+// little blue and less colorful, so the bright day colors match the dark
+// sky (never washed out); in the noon sun warm and golden. One shared tint
+// (set by the day and night cycle), a few shader lines at the end of each
+// material, no extra draw call. Units, tools and anything that glows are
+// left out, so goblins and the touch states keep their colors.
 import { Color, type Material, type MeshLambertMaterial, type MeshStandardMaterial, type Object3D } from 'three';
-import { DAY_NIGHT } from '../config/game.js';
 
-const amount = { value: 0 };
-const tint = { value: new Color(DAY_NIGHT.terrainTint) };
-const desaturate = { value: DAY_NIGHT.terrainDesaturate };
+const tint = { value: new Color(1, 1, 1) };
+const grey = { value: 0 };
 
-/** Sets the fade on all the terrain at once (0 = its own colors, 1 = full). */
-export function setNightFade(value: number): void {
-  amount.value = value;
+/** Sets the look of all the terrain at once: the multiply tint (linear, may go past 1) and the share of color lost. */
+export function setTerrainLook(color: Color, greyShare: number): void {
+  tint.value.copy(color);
+  grey.value = greyShare;
 }
 
 function addNightFade(material: MeshStandardMaterial | MeshLambertMaterial): void {
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.nightFade = amount;
-    shader.uniforms.nightTint = tint;
-    shader.uniforms.nightDesaturate = desaturate;
+    shader.uniforms.terrainTint = tint;
+    shader.uniforms.terrainGrey = grey;
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float nightFade;\nuniform vec3 nightTint;\nuniform float nightDesaturate;')
+      .replace('#include <common>', '#include <common>\nuniform vec3 terrainTint;\nuniform float terrainGrey;')
       .replace(
         '#include <opaque_fragment>',
         [
           '#include <opaque_fragment>',
-          // A little less color (toward its own brightness, so never lighter), then multiplied by the dark cool tint.
-          'float nightLuma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));',
-          'gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(nightLuma), nightDesaturate * nightFade);',
-          'gl_FragColor.rgb *= mix(vec3(1.0), nightTint, nightFade);',
+          // A little less color (toward its own brightness, so never lighter), then multiplied by the tint.
+          'float terrainLuma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));',
+          'gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(terrainLuma), terrainGrey);',
+          'gl_FragColor.rgb *= terrainTint;',
         ].join('\n'),
       );
   };

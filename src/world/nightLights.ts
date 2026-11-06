@@ -6,8 +6,11 @@
 // No real lights (they hurt the Quest frame rate): the windows are bright
 // unlit panes with a small soft glow on the wall around them, the flames are
 // bright unlit cones that flicker, and the torches and lanterns get a round
-// glow that always faces the player (turned in its shader). 5 draw calls in
-// all, and all but the torch sticks are hidden while the lights are off.
+// glow that always faces the player (turned in its shader). Torches stand on
+// the castle towers and on posts beside the roads, each road torch with a
+// flat pool of warm light on the ground (so goblins show up against it). 6
+// draw calls in all, and all hidden while the lights are off (by day the
+// torches are gone).
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -73,7 +76,16 @@ export class NightLights {
     depthWrite: false,
     blending: AdditiveBlending,
   });
+  private sticks: InstancedMesh;
   private flames: InstancedMesh;
+  private pools: InstancedMesh | null = null;
+  private poolMaterial = new MeshBasicMaterial({
+    map: glowTexture(),
+    fog: false,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  });
   private glows: InstancedMesh;
   private glowMaterial = facingGlowMaterial();
   /** Where each torch's flame is (board cm). */
@@ -81,8 +93,12 @@ export class NightLights {
   private time = 0;
   private level = -1;
 
-  /** Everything goes in `board` (it turns with the board). `windows` and `lanterns` are their placements there. */
-  constructor(board: Object3D, windows: Matrix4[], lanterns: Matrix4[], lanternHeight: number) {
+  /**
+   * Everything goes in `board` (it turns with the board). `windows` and
+   * `lanterns` are their placements there, `roadTorches` the ground spots
+   * of the torches beside the roads.
+   */
+  constructor(board: Object3D, windows: Matrix4[], lanterns: Matrix4[], lanternHeight: number, roadTorches: Vector3[] = []) {
     // Windows: a warm pane just out of the wall, and a glow on the wall around it (a tile faces +x, its outside at 0.5).
     if (windows.length > 0) {
       const pane = new PlaneGeometry(L.paneSize[0], L.paneSize[1]).rotateY(Math.PI / 2).translate(L.paneOut, L.paneHeight, 0);
@@ -100,16 +116,28 @@ export class NightLights {
       }
     }
     // Torches: one on the courtyard side of each tower, a stick and a flame.
+    const stickLengths: number[] = [];
     for (let i = 0; i < CASTLE.towerCount; i++) {
       const a = degToRad(CASTLE.towerStartDeg + (360 / CASTLE.towerCount) * i);
       this.torches.push(new Vector3(polarX(L.torchRadius, a), L.torchHeight, polarZ(L.torchRadius, a)));
+      stickLengths.push(L.torchStick);
     }
-    const sticks = new InstancedMesh(new CylinderGeometry(0.25, 0.18, L.torchStick, 6), flatMaterial(L.torchStickColor), this.torches.length);
+    // Torches on tall posts beside the roads, out across the board, each with a pool of warm light on the
+    // ground around it, so the goblins walking past show up against it at night.
+    for (const ground of roadTorches) {
+      this.torches.push(new Vector3(ground.x, ground.y + L.roadTorchStick + L.torchFlame * 0.45, ground.z));
+      stickLengths.push(L.roadTorchStick);
+    }
+    const sticks = new InstancedMesh(new CylinderGeometry(0.25, 0.18, 1, 6), flatMaterial(L.torchStickColor), this.torches.length);
     this.torches.forEach((p, i) => {
-      at.set(p.x, p.y - L.torchFlame * 0.45 - L.torchStick / 2, p.z);
-      sticks.setMatrixAt(i, matrix.compose(at, still, size.set(1, 1, 1)));
+      const stick = stickLengths[i];
+      at.set(p.x, p.y - L.torchFlame * 0.45 - stick / 2, p.z);
+      sticks.setMatrixAt(i, matrix.compose(at, still, size.set(1, stick, 1)));
     });
     sticks.computeBoundingSphere();
+    // Torches only stand there while they burn (sunset and night), never as dead sticks by day.
+    sticks.visible = false;
+    this.sticks = sticks;
     board.add(sticks);
     this.flames = new InstancedMesh(flameGeometry(), new MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false }), this.torches.length);
     this.flames.frustumCulled = false;
@@ -125,6 +153,18 @@ export class NightLights {
     });
     this.glows.visible = false;
     board.add(this.glows);
+    // The pools of light on the ground under the road torches (flat, additive, a little above the ground).
+    if (roadTorches.length > 0) {
+      const pool = new PlaneGeometry(L.roadPoolSize, L.roadPoolSize).rotateX(-Math.PI / 2);
+      this.pools = new InstancedMesh(pool, this.poolMaterial, roadTorches.length);
+      roadTorches.forEach((g, i) => {
+        at.set(g.x, g.y + 0.4, g.z);
+        this.pools!.setMatrixAt(i, matrix.compose(at, still, size.set(1, 1, 1)));
+      });
+      this.pools.computeBoundingSphere();
+      this.pools.visible = false;
+      board.add(this.pools);
+    }
   }
 
   /** Every frame: `level` is how bright the lights are now (0 = off). The flames flicker while they show. */
@@ -132,7 +172,8 @@ export class NightLights {
     if (level !== this.level) {
       this.level = level;
       const on = level > 0.01;
-      for (const mesh of [this.panes, this.windowGlows, this.flames, this.glows]) if (mesh) mesh.visible = on;
+      for (const mesh of [this.panes, this.windowGlows, this.sticks, this.flames, this.glows, this.pools]) if (mesh) mesh.visible = on;
+      this.poolMaterial.color.setHex(L.roadPoolColor).multiplyScalar(L.roadPoolStrength * level);
       this.paneMaterial.color.setHex(L.paneColor).multiplyScalar(level);
       this.windowGlowMaterial.color.setHex(L.windowGlowColor).multiplyScalar(L.windowGlowStrength * level);
       (this.glowMaterial.uniforms.color.value as Color).setHex(L.glowColor).multiplyScalar(L.glowStrength * level);

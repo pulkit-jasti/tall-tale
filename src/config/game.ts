@@ -108,10 +108,57 @@ export const GRASS = {
  * battles; and forests out in the hilly far ring, away from the villages,
  * where the decor's tree groves grow. All merged into a few meshes.
  */
+/**
+ * The goblin war camps (src/world/boardBuilder.ts buildCamps): the camp hill
+ * in the middle (it sinks as goblins come out) inside a spiked palisade, with
+ * the gate toward the castle where the road leaves and red banners beside
+ * it, a big war tent at the back, smaller tents and a catapult at the sides,
+ * a weapon rack, a fire, and tall rocks looming behind the fence. Sizes are
+ * board cm for a camp of size 30 (they grow and shrink with the camp).
+ * Merged into one mesh per material for all camps. Moved out to about 400 cm
+ * and made bigger after the step 7 and 8 test (they looked too small and
+ * plain, and most of the board was empty).
+ */
+export const CAMP_LOOK = {
+  /** The palisade's distance from the middle (share of the camp size: the flat ground ends there), and one piece's length. */
+  fenceRadius: 1,
+  fencePiece: 6,
+  warTentHeight: 10,
+  tentHeight: 6,
+  catapultWidth: 9,
+  bannerHeight: 8,
+  rackWidth: 3,
+  fireWidth: 3.2,
+  /** Goblin standing stones beside some gates. */
+  totemHeight: 6,
+  /** Tall rocks just outside the palisade, behind the camp (count, height range). */
+  rocks: 3,
+  rockHeight: [8, 14] as [number, number],
+};
+
+/**
+ * Little scenes in the empty land (src/world/storySpots.ts): how many of each
+ * and how big (cm across from the middle), the ring they go in (cm from the
+ * board's middle), and the gaps they keep to roads (the travelers' camp sits
+ * within travelersNear of one), camps, everything built, and each other.
+ * Added after the step 7 and 8 test: much of the board was empty meadow.
+ */
+export const STORY_SPOTS = {
+  counts: { stoneCircle: 2, ruinedTower: 2, battlefield: 2, shrine: 1, travelers: 2, archery: 1, goblinTrap: 1 },
+  sizes: { stoneCircle: 12, ruinedTower: 10, battlefield: 16, shrine: 10, travelers: 10, archery: 12, goblinTrap: 8 },
+  from: 110,
+  to: 520,
+  roadGap: 4,
+  travelersNear: 10,
+  campGap: 25,
+  gap: 8,
+  spacing: 40,
+};
+
 export const SETTLEMENTS = {
   villages: {
     count: 4,
-    /** Distance from the center (cm, between the castle and the camps at 227 to 277), radius of each village (cm), and houses in each. */
+    /** Distance from the center (cm, between the castle and the camps at 390 to 425), radius of each village (cm), and houses in each. */
     from: 105,
     to: 240,
     radius: [16, 21] as [number, number],
@@ -751,9 +798,58 @@ export const PAUSE = {
     /** Drawn after everything else (above the markers and ghost hands), never hidden by the castle or the sign. */
     renderOrder: 40,
   },
+  /**
+   * The settings page (Settings on the pause panel): a bigger panel at the
+   * same spot, laid out in cm from its middle (x right, y up). Back at the
+   * top left, Measure reach on the right of its row, then one row per sound
+   * group: its name and level, a mute button, and a slider with minus and
+   * plus (SLIDER). Rows rowGap apart, so the targets keep over 12 mm between
+   * them (Meta's hands guidelines).
+   */
+  settings: {
+    width: 46,
+    height: 38,
+    y: 24,
+    pxPerCm: 15,
+    buttonRadius: 1.3,
+    backAt: [-19, 15] as [number, number],
+    reachAt: [17, 10] as [number, number],
+    labelX: -21.5,
+    soundTitleY: 6.5,
+    firstRowY: 2.5,
+    rowGap: 4.6,
+    muteX: -7,
+    sliderX: 8.2,
+    sliderLength: 12,
+  },
 };
 
 /** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. */
+/**
+ * The slider (src/ui/slider.ts), from Meta's hands guidelines: targets well
+ * over 22 mm with gaps over 12 mm, touched with the index finger only (cm,
+ * in the slider's own frame, its face toward +z). The handle's face is at
+ * trackDepth + handleDepth; a finger within touchAt of the slider's back
+ * grabs it (it has to come from the front), and it lets go once the finger
+ * is back past releaseOut. Ready (hover) within readyDistance in front.
+ */
+export const SLIDER = {
+  length: 14,
+  trackHeight: 1.6,
+  trackDepth: 0.8,
+  handleRadius: 1.5,
+  handleDepth: 1,
+  handleColor: 0xf7e2b0,
+  fillColor: 0x6fae4a,
+  buttonRadius: 1.3,
+  buttonGap: 1.3,
+  zoneHeight: 2.6,
+  zoneBehind: 2.5,
+  readyDistance: 6,
+  touchAt: 2.1,
+  releaseOut: 4,
+};
+
 export const POKE = {
   /** Ready when the fingertip is this close in front of the button face, and no longer Ready once past readyDistance times readyOut (a gap, so it never flickers). */
   readyDistance: 5,
@@ -1020,6 +1116,22 @@ export const SLINGSHOT = {
   pebbleFade: 0.35,
   /** Pebble size (cm). Bigger than real pebbles, so they are easy to see and pinch. */
   pebbleSize: 2.5,
+  /**
+   * The pebble's look (made in code, like the sun): a low-poly ball with
+   * flat faces, its corners pushed in and out by up to pebbleLumps (share),
+   * squashed to pebbleSquash of its height, in a stone grey.
+   */
+  pebbleLumps: 0.12,
+  pebbleSquash: 0.85,
+  pebbleColor: 0x9b958a,
+  /**
+   * A pebble that lands (a miss) rolls on: it keeps this share of its speed
+   * along the ground, slows by rollFriction (cm/s each second) and lies
+   * still below rollStop (cm/s), then its pebbleRest starts.
+   */
+  rollKeep: 0.3,
+  rollFriction: 160,
+  rollStop: 4,
   /** Longest flight before a pebble is dropped (seconds). */
   maxFlight: 4,
   /** Below this height (cm, board) a pebble that fell into the hole is gone. */
@@ -1351,6 +1463,12 @@ export const PEPPER = {
    * stars, one instanced mesh): this many, this big and this far out (cm), this fast.
    */
   sneezeEvery: [1.4, 3.2] as [number, number],
+  /**
+   * It sneezes for this long after the pepper (seconds), and does no castle
+   * damage meanwhile (no wall hits, an intruder does not count). Then it
+   * stops and can hurt the castle again; it stays seasoned (double food).
+   */
+  sneezeFor: 10,
   sneezeJerkTime: 0.35,
   sneezeColors: [0xffffff, 0xf1e6d0, 0xd23c28],
   flakeCount: 3,
@@ -1849,6 +1967,45 @@ export interface TroopKindSpec {
   speed: number;
 }
 
+/**
+ * Villagers (src/units/villagers.ts): peaceful people in the village squares
+ * who walk about, stop to work or look about, and walk on. The human and the
+ * archer bodies without gear, in plain work clothes (brown, cream, straw,
+ * moss green). perVillage each, at most max in all. Walk spots are shares of
+ * the village size from its middle (inside the ring of houses). They
+ * animate every animEvery frames (far away and small).
+ */
+export const VILLAGERS = {
+  enabled: true,
+  height: 3.9,
+  perVillage: 2,
+  max: 10,
+  speed: 2.4,
+  walkFrom: 0.1,
+  walkTo: 0.4,
+  /** Share of stops spent working (the rest standing and looking about), and how long each lasts (seconds). */
+  workShare: 0.6,
+  workSeconds: [3, 7] as [number, number],
+  lookSeconds: [2, 5] as [number, number],
+  animEvery: 3,
+  kinds: [
+    {
+      body: 'characters/mini-dungeon/character-human.glb',
+      recolor: [
+        { mesh: 'body', uv: [3 / 16, 4 / 16, 0.5, 1], color: [138, 92, 56] },
+        { mesh: 'body', uv: [13 / 16, 14 / 16, 0.5, 1], color: [222, 206, 168] },
+      ] as Recolor[],
+    },
+    {
+      body: 'characters/mini-forest/character-archer.glb',
+      recolor: [
+        { mesh: 'body', uv: [3 / 16, 4 / 16, 0.75, 1], color: [196, 160, 84] },
+        { mesh: 'head', uv: [3 / 16, 4 / 16, 0.75, 1], color: [110, 128, 70] },
+      ] as Recolor[],
+    },
+  ],
+};
+
 export const TROOP_KINDS: Record<TroopKind, TroopKindSpec> = {
   sword: {
     body: 'characters/mini-arena/character-soldier.glb',
@@ -1952,8 +2109,13 @@ export const BALLOONS = {
   /** Where it comes in from (cm from the center) and how fast it floats (cm per second). */
   startRadius: 175,
   speed: 7.5,
-  /** The scripted first balloon (wave 4 banner) starts closer, right in front. */
+  /**
+   * The balloon lesson (in the slingshot wave): one balloon starts closer,
+   * right in front, and hovers this far out (outside the wall, clear of its
+   * threat flash) with its riders until the player pops it.
+   */
   introRadius: 120,
+  lessonWaitAt: 80,
   /** It stops over the courtyard here and drops one rider every dropGap. */
   dropRadius: 43,
   dropGap: 0.6,
@@ -2048,9 +2210,6 @@ export const JUICE = {
   /** Shot pebbles leave a faint trail: a puff this often (seconds). */
   pebbleTrailEvery: 0.035,
   pebbleTrailColors: [0xffffff, 0xf3ead8] as number[],
-  /** The camps shake while they rumble before a group comes out (tilt in radians, and speed). */
-  campWobble: 0.12,
-  campWobbleSpeed: 38,
   /** The health flag jolts when the castle is hit (degrees, seconds), and the wave flag pops when it climbs. */
   flagJoltDeg: 14,
   flagJoltTime: 0.35,
@@ -2171,7 +2330,7 @@ export const SKY = {
    * player (degrees) so the rings read as rings, and rolled a little.
    */
   planetAngleDeg: 0,
-  planetRadius: 22,
+  planetRadius: 17,
   planetDistance: 178,
   planetRingInner: 1.35,
   planetRingOuter: 2.35,
@@ -2189,6 +2348,13 @@ export const SKY = {
   planetColor: 0xb7a4e0,
   planetBands: [1.06, 0.9, 1, 0.8, 0.95, 0.84, 1.02, 0.9],
   planetRingBands: [1.08, 0.94, 0, 0.82, 1, 0.88],
+  /**
+   * A warm orange-red mixed into some bands (share of it per band, 0 = the
+   * lavender only), so the planet has warm stripes and a warm ring.
+   */
+  planetWarm: 0xe0704a,
+  planetWarmBands: [0, 0.55, 0.15, 0.75, 0, 0.6, 0.25, 0.45],
+  planetWarmRings: [0.2, 0.65, 0, 0.4, 0.8, 0.3],
   planetSkyBlend: 0.55,
 };
 
@@ -2226,8 +2392,15 @@ export interface DayLook {
   cloudTint: number;
   /** The bright edge on troops and goblins (0 = off, 1 = full), so they stand out at night. */
   rim: number;
-  /** The board, the castle and the hills turn darker and a little blue by this much (0 = their own colors), to match a dark sky. */
-  terrainFade: number;
+  /**
+   * The board, the castle and the hills: their colors are multiplied by this
+   * tint (white = their own colors) times terrainBright, after losing
+   * terrainGrey of their color (0 = none, 1 = grey). Cool and dark at night,
+   * warm and golden in the noon sun. Anything that glows is left out.
+   */
+  terrainTint: number;
+  terrainBright: number;
+  terrainGrey: number;
   /** Height of the ringed planet's middle above the horizon (degrees; below the horizon is cut off). Low enough and it is gone. */
   planetAt: number;
   /** How bright the night lights are: glowing windows, torches, lanterns (0 = off, 1 = full). */
@@ -2254,13 +2427,6 @@ export const DAY_NIGHT = {
   rimPower: 2.4,
   rimGoblin: 0xc6ff6e,
   rimTroop: 0xffd66b,
-  /**
-   * The terrain fade at full strength: its colors are multiplied by this cool
-   * dark tint (darker, a little blue, never lighter), and lose a little of
-   * their color (0 = none, 1 = grey). Anything that glows (emissive) is left out.
-   */
-  terrainTint: 0x9aa8d4,
-  terrainDesaturate: 0.3,
   looks: {
     // The first look, as tuned in the headset tests: a low sun a little right of front, so the
     // sunrise glow is in view and clear of the hint sign. Sunlight 2.2 with the fill at 0.6,
@@ -2285,20 +2451,25 @@ export const DAY_NIGHT = {
       fill: 0.6,
       cloudTint: 0xffffff,
       rim: 0,
-      terrainFade: 0,
+      terrainTint: 0xffffff,
+      terrainBright: 1,
+      terrainGrey: 0,
       planetAt: -25,
       lights: 0,
     },
-    // Super sunny: a high sun, warm golden light, a soft blue top over a warm peach haze (the fog
+    // Super sunny: a high sun, warm golden light, a soft blue top over a warm orange haze (the fog
     // too, so the air has an orange tint), a wide warm glow, cream clouds. Warmer after the
-    // first look: the cool blue day did not feel sunny.
+    // first look: the cool blue day did not feel sunny. Then more orange and red, and the
+    // terrain golden like grass in strong sun (it read too green). Then less pink: a blue top
+    // fading into a peach horizon mixes to pink in between, so the top is a greener sky blue
+    // and the horizon a yellower orange with little blue in it.
     day: {
-      domeTop: 0x5aa8f0,
-      domeHorizon: 0xffd6a0,
-      domeBottom: 0xf0c49a,
-      glowWide: 0xffb860,
-      glowTight: 0xfff0c0,
-      glowWideStrength: 0.45,
+      domeTop: 0x5ab4e4,
+      domeHorizon: 0xffb450,
+      domeBottom: 0xeea04c,
+      glowWide: 0xff8a2c,
+      glowTight: 0xffdc8c,
+      glowWideStrength: 0.55,
       glowTightStrength: 0.75,
       sunAt: [20, 42],
       sunShow: 0.9,
@@ -2307,12 +2478,15 @@ export const DAY_NIGHT = {
       moonShow: 0,
       stars: 0,
       lightAt: [20, 62],
-      lightColor: 0xffe0aa,
-      lightIntensity: 2.6,
+      lightColor: 0xffc27a,
+      lightIntensity: 2.7,
       fill: 0.7,
-      cloudTint: 0xfff0dc,
+      cloudTint: 0xffdcaa,
       rim: 0,
-      terrainFade: 0,
+      // Less blue and a little less green, a little brighter: green grass turns golden yellow-green.
+      terrainTint: 0xffe2b4,
+      terrainBright: 1.1,
+      terrainGrey: 0,
       planetAt: -25,
       lights: 0,
     },
@@ -2337,7 +2511,9 @@ export const DAY_NIGHT = {
       fill: 0.5,
       cloudTint: 0xffc4a6,
       rim: 0.35,
-      terrainFade: 0.15,
+      terrainTint: 0xf3f4f9,
+      terrainBright: 1,
+      terrainGrey: 0.045,
       planetAt: -25,
       lights: 0.35,
     },
@@ -2360,12 +2536,15 @@ export const DAY_NIGHT = {
       stars: 1,
       lightAt: [45, 50],
       lightColor: 0xa9bfff,
-      lightIntensity: 0.95,
+      lightIntensity: 0.7,
       fill: 0.3,
       cloudTint: 0x3a4670,
       rim: 1,
-      terrainFade: 0.7,
-      planetAt: 26,
+      // Darker, a little blue and a little less colorful, never lighter.
+      terrainTint: 0xbfc6e1,
+      terrainBright: 1,
+      terrainGrey: 0.21,
+      planetAt: 21,
       lights: 1,
     },
   } satisfies Record<TimeOfDay, DayLook>,
@@ -2383,11 +2562,11 @@ export const NIGHT_LIGHTS = {
   paneSize: [0.3, 0.36] as [number, number],
   paneHeight: 0.52,
   paneOut: 0.515,
-  paneColor: 0xffc45a,
-  /** The small soft glow around each window, on the wall (share of a tile across), its color and strength. */
-  windowGlowSize: 1,
-  windowGlowColor: 0xffa63a,
-  windowGlowStrength: 0.9,
+  paneColor: 0xffb43c,
+  /** The soft glow around each window, on the wall (share of a tile across), its color and strength. Brighter and more yellow-orange after the step 7 and 8 test. */
+  windowGlowSize: 1.3,
+  windowGlowColor: 0xffa024,
+  windowGlowStrength: 1.4,
   /** Torches: distance from the board's middle (just inside each tower), the flame's height above the board, the stick's length and the flame's size. */
   torchRadius: 44.2,
   torchHeight: 8.4,
@@ -2402,11 +2581,27 @@ export const NIGHT_LIGHTS = {
   flickerSpeed: 9,
   /** The round glows that always face the player, around each flame and each village lantern (cm across), their color and strength. */
   torchGlowSize: 10,
-  lanternGlowSize: 7,
-  glowColor: 0xffa040,
-  glowStrength: 0.85,
+  lanternGlowSize: 8,
+  glowColor: 0xffa030,
+  glowStrength: 1.15,
   /** Where the lantern model's light is (share of its height). */
   lanternLightAt: 0.82,
+  /**
+   * Torches beside the roads (src/world/boardBuilder.ts roadTorchSpots):
+   * one every roadTorchEvery cm along each road, sides taking turns,
+   * roadTorchOut cm past the road's edge, only between roadTorchFrom and
+   * roadTorchTo cm from the middle, at most roadTorchMax. A taller post, and
+   * a pool of warm light on the ground around each (cm across, color, strength).
+   */
+  roadTorchEvery: 45,
+  roadTorchOut: 3,
+  roadTorchFrom: 85,
+  roadTorchTo: 380,
+  roadTorchMax: 40,
+  roadTorchStick: 6,
+  roadPoolSize: 22,
+  roadPoolColor: 0xff9a3a,
+  roadPoolStrength: 0.55,
 };
 
 /** One ring of hills around the board (board cm). */

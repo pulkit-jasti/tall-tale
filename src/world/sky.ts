@@ -241,16 +241,17 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
   // From the moon's side (upper right), toward the player.
   const light = new Vector3(0.55, 0.45, 0.7).normalize();
   const base = new Color(SKY.planetColor);
+  const warm = new Color(SKY.planetWarm);
   // The night sky a little above the horizon, where the planet sits.
   const sky = new Color(DAY_NIGHT.looks.night.domeHorizon).lerp(new Color(DAY_NIGHT.looks.night.domeTop), 0.35);
-  /** The planet's color in one shade, softly lit, blended toward the sky (into `color`). */
-  const shade = (amount: number, lit: number): Color =>
-    color.copy(base).multiplyScalar(amount * lit).lerp(sky, SKY.planetSkyBlend);
+  /** The planet's color (with `warmth` of the warm color in it) in one shade, softly lit, blended toward the sky (into `color`). */
+  const shade = (amount: number, lit: number, warmth = 0): Color =>
+    color.copy(base).lerp(warm, warmth).multiplyScalar(amount * lit).lerp(sky, SKY.planetSkyBlend);
   const bands = SKY.planetBands;
   const ball = bakeFaces(new IcosahedronGeometry(r, 2), light, (facing, normal) => {
     const height = normal.y + 0.1 * Math.sin(normal.x * 5 + normal.z * 3);
     const band = Math.min(bands.length - 1, Math.max(0, Math.floor((0.5 - height * 0.5) * bands.length)));
-    return shade(bands[band], 0.62 + 0.38 * Math.max(0, facing));
+    return shade(bands[band], 0.62 + 0.38 * Math.max(0, facing), SKY.planetWarmBands[band] ?? 0);
   });
   const segments = 48;
   const inner = r * SKY.planetRingInner;
@@ -266,7 +267,7 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
       // The far half is the side away from the player (before the tilt).
       const half = Math.sin((t0 + t1) / 2) < 0 ? halves.back : halves.front;
       // A little lighter and darker in turn, so the facets read.
-      shade(amount, s % 2 === 0 ? 0.95 : 0.85);
+      shade(amount, s % 2 === 0 ? 0.95 : 0.85, SKY.planetWarmRings[k] ?? 0);
       const corners: [number, number][] = [
         [r0, t0],
         [r1, t0],

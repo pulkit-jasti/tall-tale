@@ -98,6 +98,80 @@ export const SOUNDS = {
 export type SoundName = keyof typeof SOUNDS;
 
 /**
+ * Sound groups the player can turn up, down or off in the pause panel's
+ * settings (src/audio/soundSettings.ts). Every sound is in one group; the
+ * music is its own group.
+ */
+export const SOUND_CATEGORIES = [
+  { id: 'music', label: 'Music' },
+  { id: 'goblins', label: 'Goblins' },
+  { id: 'battle', label: 'Battle' },
+  { id: 'tools', label: 'Tools' },
+  { id: 'voice', label: 'Voice and menus' },
+] as const;
+
+export type SoundCategory = (typeof SOUND_CATEGORIES)[number]['id'];
+
+const GROUPS: Record<Exclude<SoundCategory, 'music'>, SoundName[]> = {
+  goblins: ['chomp', 'gulp', 'squeal', 'goblinCackle', 'sneeze', 'poof', 'campRumble'],
+  battle: ['wallHit', 'swordClash', 'debris', 'treeCreak', 'treeCrash', 'boulderRoll', 'kegBoom', 'triggerNow', 'cheer', 'waveHorn', 'winFanfare'],
+  tools: [
+    'grab',
+    'drop',
+    'slingStretch',
+    'slingRelease',
+    'pebbleLoad',
+    'pebbleHit',
+    'toolPoof',
+    'toolReturn',
+    'foodAdded',
+    'swatWhoosh',
+    'swatSplat',
+    'pepperShake',
+    'bell',
+    'balloonPop',
+    'stunned',
+  ],
+  voice: ['readyTick', 'buttonClick', 'locked', 'pauseOpen', 'pauseClose', 'lessonDone', 'round1', 'round2', 'round3', 'round4', 'finalRound', 'win', 'lose'],
+};
+
+/** The group a sound is in (a sound left out of GROUPS counts as battle). */
+export function soundCategory(name: SoundName): SoundCategory {
+  for (const [category, names] of Object.entries(GROUPS) as [SoundCategory, SoundName[]][]) if (names.includes(name)) return category;
+  return 'battle';
+}
+
+/** The settings' volume steps: the slider and its minus and plus buttons move by 1 / steps. */
+export const SOUND_SETTINGS = { steps: 10, storageKey: 'tallTale.sound' };
+
+export interface MusicTrack {
+  /** Path relative to public/audio/. */
+  file: string;
+  volume: number;
+  /** Loop between these points (seconds) instead of the whole file. */
+  loopStart?: number;
+  loopEnd?: number;
+}
+
+/**
+ * Background music (src/audio/music.ts): `menu` for the welcome, end and
+ * pause panels, `battle` while a battle is fought. Quiet, so the sound cues
+ * stay clear. A change fades across over `fade` seconds.
+ */
+export const MUSIC = {
+  enabled: true,
+  fade: 1.5,
+  menu: { file: '812170__giangallegos__ambient-music.mp3', volume: 0.35 } as MusicTrack,
+  // The file's name says it loops at 32 s: the 4.7 s after that is its tail.
+  battle: {
+    file: '649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac',
+    volume: 0.22,
+    loopStart: 0,
+    loopEnd: 32,
+  } as MusicTrack,
+};
+
+/**
  * How positional sounds are placed. Left and right come from the head model
  * (HRTF), but it hardly tells front from back, so sounds behind the head
  * are muffled and a little quieter (like many games do).
@@ -115,6 +189,12 @@ export const SOUND_MIX = {
     /** How fast it follows a turn of the head or the board (seconds). */
     smoothing: 0.05,
   },
+  /**
+   * Sounds that play at least `longFrom` seconds (as played, after a
+   * maxSeconds cut) fade out over their last `seconds` (at most `maxShare`
+   * of the sound), so they end softly. Shorter sounds keep their sharp end.
+   */
+  fadeOut: { longFrom: 2, seconds: 1.2, maxShare: 0.4 },
 };
 
 /** Wave start voice, by wave (the last wave always says "final round"). */

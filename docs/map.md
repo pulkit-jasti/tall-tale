@@ -189,7 +189,7 @@ A battle is built from three parts that never mix:
 
 ### The level generator (later, not in the MVP)
 
-- A function: `(seed, settings) => blueprint`. Settings are **ranges, not single values** (for example 2 to 3 camps, camp distance 150 to 250 cm), and the generator picks inside them using the seed.
+- A function: `(seed, settings) => blueprint`. Settings are **ranges, not single values** (for example 2 to 3 camps, camp distance 380 to 430 cm, like the tutorial map since the step 7 and 8 test), and the generator picks inside them using the seed.
 - It builds the map from **rules**, for example:
   - every road reaches the wall
   - a minimum distance between camps

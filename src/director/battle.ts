@@ -54,7 +54,6 @@ import type { FoodJar } from '../world/foodJar.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
-  firstBalloonWave,
   TUTORIAL_TIMING,
   TUTORIAL_WAVES,
   type HintIcon,
@@ -155,6 +154,7 @@ export class Battle implements TutorialApi {
 
   // What the player did in this battle, for the lessons.
   private eatenCount = 0;
+  private pepperedEatenCount = 0;
   private pickedCount = 0;
   private slingHits = 0;
   private toolUseCount = noTools();
@@ -282,7 +282,7 @@ export class Battle implements TutorialApi {
     this.inWave = false;
     this.starts++;
     this.endTimer = -1;
-    this.eatenCount = this.pickedCount = this.slingHits = this.spun = this.moved = 0;
+    this.eatenCount = this.pepperedEatenCount = this.pickedCount = this.slingHits = this.spun = this.moved = 0;
     this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
@@ -349,8 +349,15 @@ export class Battle implements TutorialApi {
     return this.running && this.state.phase === 'playing';
   }
 
+  /**
+   * A lesson's yellow marker and arrow show where to look right now, so the
+   * red threat arrow stays away (it would point at the same lesson goblins).
+   */
+  lessonPointing = false;
+
   /** Paused: the sign, the marker and the ghost hand step away. The next update brings them back. */
   hideHints(): void {
+    this.lessonPointing = false;
     this.parts.sign.show(null);
     this.parts.markers.hide();
     this.parts.ghost.hide();
@@ -414,8 +421,9 @@ export class Battle implements TutorialApi {
     return false;
   }
 
-  noteEaten(): void {
+  noteEaten(seasoned = false): void {
     this.eatenCount++;
+    if (seasoned) this.pepperedEatenCount++;
   }
 
   notePicked(): void {
@@ -475,6 +483,7 @@ export class Battle implements TutorialApi {
   private updateHint(dt: number, hands: HandState[], head: Vector3): void {
     const { sign, markers, goblins, ghost } = this.parts;
     sign.update(dt);
+    this.lessonPointing = false;
     if (!this.running || this.state.phase !== 'playing') {
       sign.show(null);
       markers.hide();
@@ -509,6 +518,7 @@ export class Battle implements TutorialApi {
     markers.update(dt, target);
     // The 3D arrow in front of the face points at it while it is off to the side.
     this.parts.pointer.update(dt, head, this.forward, target);
+    this.lessonPointing = target !== null;
     // The first trigger lesson: ghost aim dots from the pouch to the keg.
     this.parts.ghostAim.update(dt, hint.aimDots && target ? this.parts.slingshot.partWorld('pouch', pouchAt) : null, target);
     // No mic: the bell is out in place of the megaphone, with its own words and demo.
@@ -713,7 +723,8 @@ export class Battle implements TutorialApi {
     const plan = TUTORIAL_WAVES[index];
     // Helmets from their wave on. The first balloon wave holds its balloons until the balloon banner shows.
     this.parts.goblins.helmetsOn = index + 1 >= GOBLIN_GEAR.helmetFromWave;
-    this.parts.spawner.balloonsHeld = index === firstBalloonWave(TUTORIAL_WAVES);
+    // Balloons are taught in the slingshot wave now, so a wave's own balloons never wait for a banner.
+    this.parts.spawner.balloonsHeld = false;
     this.parts.spawner.start(plan);
     // The army marches out toward the attacking camps, and the triggers of this wave stand ready.
     this.parts.troops.deploy(plan.camps);
@@ -904,6 +915,10 @@ export class Battle implements TutorialApi {
     return this.eatenCount;
   }
 
+  pepperedEaten(): number {
+    return this.pepperedEatenCount;
+  }
+
   slingCount(event: SlingEvent): number {
     return this.sling[event];
   }
@@ -949,11 +964,19 @@ export class Battle implements TutorialApi {
     return this.triggerCount[kind];
   }
 
-  balloonIntro(): void {
-    const { balloons, spawner, stage, rng } = this.parts;
-    spawner.balloonsHeld = false;
-    // One balloon right in front of the player (the board angle in front now), already on its way in.
-    balloons.spawn(stage.spin + degToRad(rng.range(-6, 6)), BALLOONS.introRadius);
+  balloonLesson(): void {
+    const { balloons, stage, rng } = this.parts;
+    // One balloon right in front of the player (the board angle in front now). It floats in and hovers outside the wall until popped.
+    if (balloons.nearest(stage.spin)) return;
+    balloons.spawn(stage.spin + degToRad(rng.range(-6, 6)), BALLOONS.introRadius, BALLOONS.lessonWaitAt);
+  }
+
+  endBalloonLesson(): void {
+    this.parts.balloons.releaseWaiting();
+  }
+
+  balloonsPopped(): number {
+    return this.parts.balloons.pops;
   }
 
   pausedCount(): number {

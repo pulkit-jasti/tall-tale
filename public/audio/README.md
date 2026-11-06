@@ -51,7 +51,7 @@ Downloaded but not used yet:
 
 - `144497__wuola__medieval-bell-a3.aiff`: the Quest browser cannot play AIFF. Convert to `.ogg` first.
 - `276874__lucabia__sword-hits.wav`: 10 s of many hits. Cut into single hits for `swordClash`.
-- `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac`, `812170__giangallegos__ambient-music.mp3`: music ideas. No music player yet.
+- Music (`MUSIC` in `src/config/sounds.ts`): `812170__giangallegos__ambient-music.mp3` on the menus and the pause panel, `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac` in battle (looped at 32 s).
 - `875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.wav`: ambience idea. 20 MB, needs a shorter loop as `.ogg`.
 
 ## Still missing

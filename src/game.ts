@@ -46,6 +46,7 @@ import { Slingshot } from './tools/slingshot.js';
 import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
 import { Troops } from './units/troops.js';
+import { Villagers } from './units/villagers.js';
 import { Balloons } from './units/balloons.js';
 import { GearDebris } from './fx/gearDebris.js';
 import { fadeAtNight } from './fx/nightFade.js';
@@ -94,6 +95,7 @@ export class GameSystem extends createSystem({}) {
   private stun!: StunWave;
   private tools: HandTool[] = [];
   private troops!: Troops;
+  private villagers!: Villagers;
   private balloons!: Balloons;
   private gearDebris!: GearDebris;
   private juice!: Juice;
@@ -173,7 +175,7 @@ export class GameSystem extends createSystem({}) {
     // Only the board so far (ground, castle, roads, camps, villages, decor): units, triggers and tools come later and keep their colors.
     fadeAtNight(this.stage.boardSpin);
     // After the fade, so the lights keep their colors: glowing windows, torches on the towers, lantern glows.
-    this.nightLights = new NightLights(this.stage.boardSpin, built.windows, built.lanterns, built.lanternHeight);    this.windmill = new Windmill(built.sails);
+    this.nightLights = new NightLights(this.stage.boardSpin, built.windows, built.lanterns, built.lanternHeight, built.roadTorches);    this.windmill = new Windmill(built.sails);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.goblins.particles = this.particles;
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
@@ -190,7 +192,10 @@ export class GameSystem extends createSystem({}) {
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
     this.gearDebris = new GearDebris(this.stage.boardSpin, createRandom(seed + 960));
     this.goblins.debris = this.gearDebris;
+    // Villagers going about their day in the village squares (decor, their own random stream).
+    this.villagers = new Villagers(this.stage.boardSpin, built.villages, createRandom(seed + 970));
     await Promise.all([
+      this.villagers.load(),
       this.slingshot.load(),
       this.food.load(),
       this.troops.load(),
@@ -218,7 +223,6 @@ export class GameSystem extends createSystem({}) {
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
     const waves = new WaveSpawner(this.stage.boardSpin, built.network, this.goblins, built.hills, this.audio, createRandom(seed + 500));
-    waves.particles = this.particles;
     // A wave's balloons float straight in from their camp's direction.
     const campAt = new Vector3();
     waves.onBalloon = (camp) => {
@@ -257,7 +261,7 @@ export class GameSystem extends createSystem({}) {
     });
     this.grabEat.onEat = (goblin) => {
       const added = this.food.eat(goblin.seasoned);
-      this.battle.noteEaten();
+      this.battle.noteEaten(goblin.seasoned);
       // "+1" (or "+2" for a seasoned one) rises from the jar, "Full!" when it is full.
       const label = added <= 0 ? 'full' : added >= 3 ? '+3' : added === 2 ? '+2' : '+1';
       this.juice.label(label, this.food.topWorld(labelAt), this.stage.boardScale);
@@ -426,6 +430,8 @@ export class GameSystem extends createSystem({}) {
     this.giant.update(dt, headPosition, headForward, this.stage.boardLift.position.y);
     // Sounds behind the head are muffled, also while paused (the panel's clicks).
     this.audio.update();
+    // The calm track on the welcome, end and pause panels, the battle track while a battle is fought.
+    this.audio.music.update(this.battle.canPause && !this.menuPaused && !this.measuring ? 'battle' : 'menu');
     if (this.measuring) {
       // The reach check on the frozen battle. The board grows or shrinks to the player when it is done.
       this.stage.update(dt);
@@ -467,6 +473,7 @@ export class GameSystem extends createSystem({}) {
     const unitDt = dt * this.juice.timeScale;
     this.goblins.update(unitDt);
     this.troops.update(unitDt);
+    this.villagers.update(unitDt);
     this.balloons.update(unitDt);
     this.gearDebris.update(unitDt);
     this.triggers.update(unitDt);
@@ -478,8 +485,8 @@ export class GameSystem extends createSystem({}) {
     this.stun.update(dt);
     this.food.update(dt);
     this.threat.update(dt);
-    // The red arrow only while a battle is fought.
-    if (this.battle.canPause) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
+    // The red arrow only while a battle is fought, and not while a lesson's yellow arrow points the way.
+    if (this.battle.canPause && !this.battle.lessonPointing) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
     else this.threat.hideArrow();
     this.particles.update(unitDt);
     this.juice.update(dt, headPosition);

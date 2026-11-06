@@ -68,11 +68,10 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Thing | File | Target size | Notes |
 |---|---|---|---|
 | Board, roads, slope | Code | See [map.md](map.md) | See [placeholder-shapes.md](placeholder-shapes.md) |
-| Camp hill | `props/castle-kit/ground-hills.glb` | 15 to 30 cm wide (bigger camp = bigger hill) | Sinks as enemies come out |
-| Camp rocks | `rocks/survival/rock-sand-a.glb`, `rock-sand-b.glb`, `rock-sand-c.glb` | 3 to 6 cm | 3 to 6 around each hill |
-| Camp tents | `camp/survival/tent.glb`, `tent-canvas.glb`, `camp/nature/tent_smallClosed.glb` | 4 to 5 cm | 1 to 3 per camp |
-| Big camp tent (largest camp only) | `camp/goblin/tent_3.glb` | 8 cm | Heavy (592 triangles). On trial, remove if slow |
-| Camp fence and fire | `camp/goblin/branch_fence_1.glb`, `camp/survival/campfire-pit.glb` | Fence 6 cm long, fire 2 cm | |
+| Camp hill | `props/castle-kit/ground-hills.glb` | 23 to 35 cm wide (bigger camp = bigger hill) | Sinks as enemies come out |
+| Camp palisade and gate | `camp/survival/fence-fortified.glb`, `fence-doorway.glb` | 6 cm pieces in a ring at the camp's edge | The gate faces the castle, on the road. About 120 triangles a piece, 24 to 37 pieces a camp |
+| War camp: banners, tents, catapult | `town/fantasy-town/banner-red.glb`, `camp/goblin/tent_3.glb` (war tent), `tent_1.glb`, `tent_5.glb`, `props/castle-kit/siege-catapult.glb` | Banners 8 cm, war tent 10 cm, tents 6 cm, catapult 9 cm (all for a camp of 30, they grow with it) | Two banners at the gate, the war tent at the back, the catapult aimed at the castle |
+| War camp: rack, fire, rocks | `props/mini-arena/weapon-rack.glb`, `camp/nature/campfire_logs.glb`, `rocks/nature/rock_tallA.glb` to `C` | Rack 3 cm, fire 3 cm, rocks 8 to 14 cm tall | Tall rocks loom outside the fence, behind the camp. Everything but the hill merged into one mesh per material (`CAMP_LOOK`) |
 | Powder keg (trigger) | `props/survival/barrel.glb` | 2 cm tall | Tint red bands if it needs to read as explosive |
 | Boulder (trigger) | `rocks/nature/rock_smallH.glb` | 4 cm | The roundest rock. Spins as it rolls |
 | Boulder hill | `rocks/nature/rock_largeA.glb` to `rock_largeD.glb` | 8 to 10 cm | Beside the road, under the boulder |
@@ -104,7 +103,9 @@ Not in the MVP map as gameplay: siege machines, bridge, forest, mud, hill featur
 | Wave flag | `castle/castle-kit/flag-pennant.glb` | 6 cm tall | Tint blue. Rises one notch per wave on a code-made pole |
 | Tool platforms | `castle/castle-kit/tower-hexagon-top.glb` | 12 to 15 cm wide | One per tool |
 | Food jar | `props/mini-dungeon/pot.glb` | 7 cm tall (10 did not fit between the platforms) | The pot has a narrow neck, so the food shows as a code-made heap of food balls on its mouth, one per food |
-| Pebbles | `rocks/survival/resource-stone.glb` | 2.5 cm (bigger than first planned, easier to see and hit) | Instanced and pooled |
+| Pebbles | Code: a low-poly lumpy ball like the sun ([placeholder-shapes.md](placeholder-shapes.md)) | 2.5 cm (bigger than first planned, easier to see and hit) | Instanced and pooled. Was `rocks/survival/resource-stone.glb` |
+| Villagers (decor) | `characters/mini-dungeon/character-human.glb`, `characters/mini-forest/character-archer.glb`, no gear, recolored to work clothes (`VILLAGERS`) | 3.9 cm like the soldiers | Two per village, walking about the square, working, looking about (`src/units/villagers.ts`) |
+| Story scenes (decor) | Stone circle: `rocks/nature/rock_tallA` to `C`, `props/mini-dungeon/stones`. Ruined tower: `castle/castle-kit/tower-base`, `stairs-stone`, `flag-banner-long`, `props/castle-kit/rocks-large`, `rocks-small`. Old battlefield: `props/mini-arena/weapon-sword`, `weapon-spear`, `props/mini-dungeon/shield-round`, `shield-rectangle`, `props/castle-kit/siege-ram-demolished`. Shrine: `props/mini-arena/statue`, `town/fantasy-town/pillar-stone`, `hedge`. Travelers: `camp/survival/tent`, `tent-canvas`, `campfire-pit`, `props/survival/chest`, `barrel-open`, `bucket`. Archery range: `props/mini-forest/target`, `props/mini-arena/weapon-rack`. Goblin trap: `props/mini-dungeon/trap`, `coin`, `props/survival/chest` | 1 to 9 cm | 11 scenes in the empty land (`STORY_SPOTS`, `src/world/storySpots.ts`), merged into one mesh per material |
 | Pebble pile in the bowl | `rocks/survival/resource-stone-large.glb` | 6 cm | Shrinks as pebbles are taken |
 | Slingshot target (tutorial only, optional) | `props/mini-forest/target.glb` | 8 cm | |
 

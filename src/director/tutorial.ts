@@ -104,6 +104,14 @@ export const TUTORIAL_TIMING = {
    */
   triggerStuckAfter: 25,
   triggerTimeout: 240,
+  /**
+   * The balloon lesson comes after the trigger lessons, once the player has
+   * knocked out this many more goblins (or after this long), and gives up
+   * after balloonTimeout (seconds).
+   */
+  balloonAfterKnockouts: 3,
+  balloonAfterSeconds: 35,
+  balloonTimeout: 120,
   /** The shoot lesson waits this long for a hit (the goblins keep walking back and forth), then moves on anyway. */
   shootTimeout: 150,
   /** The pause lesson moves on after this long anyway (no hands in the browser). */
@@ -208,6 +216,8 @@ export interface TutorialApi {
   /** Goblins picked up and eaten in this battle. */
   picked(): number;
   eaten(): number;
+  /** Goblins eaten while seasoned (peppered). */
+  pepperedEaten(): number;
   /** Slingshot steps done since it appeared, and whether something is in the pouch. */
   slingCount(event: 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot'): number;
   slingLoaded(): boolean;
@@ -231,8 +241,12 @@ export interface TutorialApi {
   triggersSetOff(kind: TriggerKind): number;
   /** How often the player paused (and came back) in this battle. */
   pausedCount(): number;
-  /** The first balloon wave's banner: one balloon floats in right in front, and the wave's balloons may come from now on. */
-  balloonIntro(): void;
+  /** The balloon lesson: one balloon floats in right in front and hovers outside the wall until popped. */
+  balloonLesson(): void;
+  /** The balloon lesson is over: a balloon still hovering comes on in. */
+  endBalloonLesson(): void;
+  /** Balloons popped so far. */
+  balloonsPopped(): number;
 }
 
 const lesson = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Partial<Hint> = {}): Hint => ({
@@ -512,8 +526,8 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
     use: free
-      ? 'Shake pepper over the goblins on your wall. Peppered goblins sneeze, and give double food when eaten.'
-      : `Shake pepper over the goblins on your wall. Peppered goblins sneeze, and give double food when eaten. The first shake takes ${cost('pepper')} food.`,
+      ? 'Shake pepper over the goblins on your wall. They sneeze for a while and cannot hurt your castle. Then eat a sneezing one: double food!'
+      : `Shake pepper over the goblins on your wall (the first shake takes ${cost('pepper')} food). They sneeze for a while and cannot hurt your castle. Then eat a sneezing one: double food!`,
     locked: `Not enough food for the pepper (${cost('pepper')}). Eat a goblin to fill your jar.`,
   },
   megaphone: {
@@ -600,6 +614,8 @@ function toolGrabLesson(tool: FoodTool, afterFood: boolean): TutorialStep {
  */
 function toolLesson(tool: FoodTool): TutorialStep {
   const text = FOOD_TOOL_LESSONS[tool];
+  // The pepper lesson is about what pepper is for: it is done once a peppered goblin is eaten.
+  const pepper = tool === 'pepper';
   return lessonStep(
     `learn-${tool}`,
     // The marker points at the waiting goblins, or for the stun tool at the tool itself (its demo is at the mouth).
@@ -610,8 +626,8 @@ function toolLesson(tool: FoodTool): TutorialStep {
       whenNoMic: text.noMic?.use,
       demoNoMic: text.noMic?.useDemo,
     }),
-    (api, since) => api.toolUses(tool) > since || api.waveCleared(),
-    fromToolShown,
+    pepper ? (api, since) => api.pepperedEaten() > since || api.waveCleared() : (api, since) => api.toolUses(tool) > since || api.waveCleared(),
+    pepper ? (api) => api.pepperedEaten() : fromToolShown,
     {
       start: (api) => {
         api.holdToolTimer(tool, true);
@@ -632,18 +648,41 @@ function toolLesson(tool: FoodTool): TutorialStep {
 }
 
 /**
- * The first balloon wave (build step 7): "Look up!" A balloon floats in right
- * in front while the banner shows (Next). Its riders are dropped into the
- * courtyard if nobody pops it, so it is taught by seeing it, then fighting it.
+ * Balloons, taught in the slingshot wave after the trigger lessons (they are
+ * best fought with the slingshot). First the wave plays on for a while (a few
+ * more knockouts, or some time), then one balloon floats in right in front
+ * and hovers outside the wall with its riders until the player pops it. No
+ * Next button: popping it ends the lesson. The wave waits meanwhile.
  */
-function balloonStep(): TutorialStep {
-  return infoStep(
-    'balloon-intro',
-    banner('Look up! Balloon riders float over the wall and drop goblins inside. Pop the balloons with your slingshot.', 'warning', 'balloon', {
-      header: 'Balloons!',
-    }),
-    (api) => api.balloonIntro(),
-  );
+function balloonLessons(): TutorialStep[] {
+  let knockedOut = 0;
+  return [
+    // No sign: the wave simply plays on for a bit.
+    {
+      id: 'sling-practice',
+      done: (api) => api.toolUses('slingshot') >= knockedOut + TUTORIAL_TIMING.balloonAfterKnockouts,
+      start: (api) => {
+        knockedOut = api.toolUses('slingshot');
+      },
+      timeout: TUTORIAL_TIMING.balloonAfterSeconds,
+    },
+    lessonStep(
+      'learn-balloon',
+      lesson('Look up! A balloon rider! Balloons float over your wall and drop goblins inside. Pop it with your slingshot.', 'target', 'balloon', {
+        aimDots: true,
+      }),
+      (api, since) => api.balloonsPopped() > since,
+      (api) => api.balloonsPopped(),
+      {
+        start: (api) => api.balloonLesson(),
+        end: (api) => api.endBalloonLesson(),
+        // A balloon that got away (riders picked off) comes back.
+        fallbacks: [(api) => api.balloonLesson(), (api) => api.balloonLesson()],
+        timeout: TUTORIAL_TIMING.balloonTimeout,
+        holdSpawns: true,
+      },
+    ),
+  ];
 }
 
 /** The first wave with balloons (0 based), or -1. */
@@ -681,7 +720,6 @@ export function buildTutorialSteps(
   const waveTitle = (i: number): string => `Wave ${i + 1} of ${waves.length}`;
   // The food jar is taught right before the first food tool, where food starts to matter.
   let foodTaught = false;
-  const firstBalloon = firstBalloonWave(waves);
   waves.forEach((wave, i) => {
     if (i === 0) steps.push(...introLessons());
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(...slingshotLessons());
@@ -704,10 +742,8 @@ export function buildTutorialSteps(
     const startWave = (api: TutorialApi): void => api.startWave(i);
     if (lessonFollows) steps.push({ id: `wave-${i + 1}-start`, start: startWave, done: () => true, timeout: 0 });
     else steps.push(infoStep(`wave-${i + 1}-start`, banner(wave.intro, 'warning'), startWave));
-    if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson(), ...triggerLessons());
+    if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson(), ...triggerLessons(), ...balloonLessons());
     else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolLesson(wave.newTool));
-    // The first balloons: a short banner while one floats in right in front (the wave's balloons wait for it).
-    if (wave.balloons && i === firstBalloon) steps.push(balloonStep());
     // While the wave is fought the sign stays away, so it never covers the enemies.
     // It comes back when the wave is cleared (the breather) or for a lesson.
     steps.push({

@@ -46,10 +46,10 @@ Back to [GDD index](GDD.md).
 - Troops in three kinds (swordsmen, spearmen, archers): spawn, walk out, fight.
 
 **Feedback**
-- Spatial enemy sounds, louder as they get closer. Camps rumble (and shake) before spawning.
+- Spatial enemy sounds, louder as they get closer. Camps rumble (war drums, a sound only: the camps never move) before spawning.
 - Real sounds from `public/audio/README.md`. Sounds it lists as missing use `public/audio/chime.mp3` until the last step ([audio.md](audio.md)).
 - Juice: hit flash, poof, gear flying off, knockout stars and rings, hit stop on big hits, food labels, confetti and fireworks.
-- Threat cues for players with the sound off: the wall flashes red under every attack, and a red arrow points at threats out of view.
+- Threat cues for players with the sound off: the wall flashes red under every attack, and a red arrow points at threats out of view (not while a lesson's yellow arrow points the way, so the two never point at the same lesson goblins).
 
 ---
 
@@ -71,14 +71,14 @@ The tutorial is a hand-written script in code (`src/director/tutorial.ts`), not 
   - **Marker:** one bouncing down arrow over the target, drawn on top so the wall never hides it.
   - **Out of view:** a gold 3D pointer arrow in front of the face points at the lesson's target while it is at the edge of the view or out of it.
   - **Ghost hand:** a see-through 3D hand loops the gesture on the real target. It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`. The accuracy rules are in AGENTS.md ("Ghost hand demos"). Ghost aim dots show the arc from the pouch to the target in the slingshot and trigger lessons.
-  - **Info steps** (wave banners, the flags, the food jar, "wave cleared" breathers, the balloon banner) only move on when the player pokes Next. Not by time, and not by looking at something. Only lessons, where the player does something with their hands, move on by themselves.
+  - **Info steps** (wave banners, the flags, the food jar, "wave cleared" breathers) only move on when the player pokes Next. Not by time, and not by looking at something. Only lessons, where the player does something with their hands, move on by themselves.
   - **New things are taught before their wave**, so no enemies press the player while learning.
 - **The reach check comes first**, once per player: "Show me how big you are, giant!" sizes the board to their arms ([controls-and-ui.md](controls-and-ui.md#reach-check-show-me-how-big-you-are-giant)). It also runs before a debug "Start at wave" when the reach is not known yet.
 - **The lessons, in order:**
-  - Before wave 1: pause (turn the left palm toward the face, poke the button, Resume), spin the board, set its height, pinch the climber, eat it. Then the two flags ("Your castle", Next each).
-  - Before wave 2: grab the slingshot, take a pebble, load it. In wave 2: shoot the one goblin walking back and forth on the road in front (done on a hit). Then one lesson each for the keg, the boulder and the tree: each brings its kind onto the roads, and goblins wait right in what it does until the player sets it off.
+  - Before wave 1: pause (poke the pause button in front, then Resume), spin the board, set its height, pinch the climber, eat it. Then the two flags ("Your castle", Next each).
+  - Before wave 2: grab the slingshot, take a pebble, load it. In wave 2: shoot the one goblin walking back and forth on the road in front (done on a hit). Then one lesson each for the keg, the boulder and the tree: each brings its kind onto the roads, and goblins wait right in what it does until the player sets it off. Then the wave plays on until 3 more knockouts (or 35 s), and the **balloon lesson**: one balloon floats in right in front and hovers outside the wall with its riders until the player pops it (no Next: the pop ends it; the wave waits; `TUTORIAL_TIMING.balloon*`, `BALLOONS.lessonWaitAt`). Balloons are taught here because the slingshot is the tool for them; after the pepper lesson they came too fast.
   - Before wave 3: the **food jar** ("This jar holds your food", Next, then a climber to eat), then grab the swatter. In wave 3: swat one goblin.
-  - Before wave 4: grab the pepper. In wave 4: pepper one goblin, then the **balloon banner** ("Look up!", Next) while one balloon floats in right in front. The wave's own balloons wait for it.
+  - Before wave 4: grab the pepper. In wave 4: pepper the goblins, then eat a sneezing one (the lesson ends only then; peppered goblins sneeze for 10 s and do no castle damage meanwhile, `PEPPER.sneezeFor`). The wave's own balloons come as planned (they were taught in wave 2).
   - Before wave 5: grab the megaphone (the bell without a mic). In wave 5: shout into it or shake the bell.
 - **A new tool is taught by actions only, never with Next.** Its first lesson starts when the wave before is cleared, and the tool appears with it. Its wave starts straight into its use lesson, with no banner. Tool lessons count from the moment the tool appears, so steps the player already did are never asked again.
 - **Tool use lessons** (swatter, pepper, megaphone or bell): three calm climbers wait on the rampart in front, harmless, and the wave holds its spawns until the tool is used on one. The tool's use timer is held while the lesson runs.
@@ -144,7 +144,7 @@ Each step should be playable on its own.
      - A white flash on a goblin hit but not knocked out (helmet off, pebble bonk, peppered).
      - "+1", "+2" or "Full!" rising from the food jar when a goblin is eaten.
      - Confetti over the castle when a wave is won, and a fireworks show after the win.
-     - Goblins pop out of their camp, squash and stretch when they land, and runners kick up dust. Camps shake and puff dust while they rumble.
+     - Goblins pop out of their camp, squash and stretch when they land, and runners kick up dust. (Camps used to shake and puff dust while they rumble: removed after the step 7 and 8 test, it looked too cartoony for buildings.)
      - Shot trails, a ring where the swatter slaps, sparks when swords clash.
      - The health flag jerks and flashes when the castle is hit, the wave flag pops when it climbs.
    - **Still to do:** the headset test (if the hit stop feels wrong, lower or remove it in `JUICE`), then the **missing sounds** (not started). New things reuse existing sounds for now.
@@ -222,20 +222,28 @@ Not part of the MVP build order. Built on the branch `feat/day-night-cycle` (202
 
 **The four looks** (`DAY_NIGHT.looks` in `src/config/game.ts`, one `DayLook` each)
 - **Morning:** the look tuned in the earlier headset tests. A low sun 35 degrees right of front with a warm sunrise glow.
-- **Day:** super sunny. A high sun, warm golden light, a soft blue top over a warm peach haze (the fog too, so the air has an orange tint), a wide warm glow, cream clouds. A first cool blue day did not feel sunny.
+- **Day:** super sunny. A high sun, warm orange-gold light, a soft blue top over a warm orange haze (the fog too, so the air has an orange tint), a wide warm glow, cream clouds, and the terrain tinted golden like grass in strong sun (less blue, a little less green, a little brighter). A first cool blue day did not feel sunny, the next one still read too green, and the next had pink in the sky (a blue top fading into a peach horizon mixes to pink), so now a greener sky blue over a yellow-orange horizon.
 - **Sunset:** the sun low on the left, deep orange, a warm horizon under a violet-blue top, orange clouds. The night lights start to come on, a light night rim and terrain fade.
 - **Night:** a dark navy sky, stars, the moon on the right and the ringed planet in front, weaker cool moonlight, dark grey-blue clouds, the terrain darker, full night rim and night lights.
-- Each look sets: the dome's three colors and its glow, where the sun and moon are and how much they show, the sun's tint, stars, the light's direction, color and strength, the sky fill (`scene.environmentIntensity`), the cloud tint, the night rim, the terrain fade, the planet's height and the night lights. The fog color is the dome's horizon color.
+- Each look sets: the dome's three colors and its glow, where the sun and moon are and how much they show, the sun's tint, stars, the light's direction, color and strength, the sky fill (`scene.environmentIntensity`), the cloud tint, the night rim, the terrain look (tint, brightness and color loss), the planet's height and the night lights. The fog color is the dome's horizon color.
 
 **Night pieces** (shapes in [placeholder-shapes.md](placeholder-shapes.md))
 - **Stars:** 360 points that twinkle: now and then each one quickly dims and shrinks, at its own uneven pace (in the shader). The first soft slow pulse could not be seen, so it is stronger now.
 - **Moon:** a faceted low-poly moon with a cool glow, rising on the right.
 - **Ringed planet:** one soft lavender in shades, faded toward the night sky so it reads as far away (a background piece). High in the sky straight in front and far off: at first it sat on the horizon and looked like it was on the ground. Rises out of the horizon as night comes.
-- **Night lights** (`src/world/nightLights.ts`, `NIGHT_LIGHTS`): warm glowing village windows with a small glow on the wall, a flickering torch on the courtyard side of each castle tower, and a glow on each village lantern. No real lights: unlit colors and soft additive glows.
+- **Ringed planet, later:** smaller (17), a little lower (21 degrees up), warm orange-red stripes and ring bands mixed into the lavender (`SKY.planetWarm*`). The moonlight is weaker (0.7).
+- **Road torches:** torches on posts beside the roads across the board, each with a pool of warm light on the ground, so goblins walking past show up at night.
+- **Night lights** (`src/world/nightLights.ts`, `NIGHT_LIGHTS`): bright yellow-orange glowing village windows with a soft glow on the wall, a flickering torch on the courtyard side of each castle tower (only there while lit, at sunset and night), and a glow on each village lantern. No real lights: unlit colors and soft additive glows.
 
 **Readability first.** Goblins must always be easy to spot, the hardest part to get right. The first night (a bright moonlit blue) looked too bright, so the night is now dark, and readability comes from the units instead:
 - **Night rim** (`src/fx/nightRim.ts`): troops get a gold edge and goblins a green one, half at sunset, full at night. Added on top of the emissive color, so the Idle, Ready, Held and Locked glow and the hit flash still work.
-- **Terrain fade** (`src/fx/nightFade.ts`): the board, castle, roads, camps, villages, decor and hills turn darker, a little blue and a little less colorful (a multiply, never lighter). Units, triggers, tools and anything that glows keep their colors. A first version that faded toward grey-blue looked washed out.
+- **Terrain look** (`src/fx/nightFade.ts`, `DayLook.terrainTint`, `terrainBright`, `terrainGrey`): at night the board, castle, roads, camps, villages, decor and hills turn darker, a little blue and a little less colorful (a multiply, never lighter); by day they turn golden. Units, triggers, tools and anything that glows keep their colors. A first version that faded toward grey-blue looked washed out.
+
+**A livelier world (same branch, after the step 7 and 8 test, not tested on the headset yet):**
+- **Goblin camps:** farther out (about 390 to 425 cm), except the front one at 300 cm, close enough to see its details. Each is a war camp inside a palisade (`CAMP_LOOK`), and no two look alike: spiked, branch or plank fences, red or green banners, a different siege machine each (catapult, ballista, ram, trebuchet), different tents, a weapon rack or a pile of supplies, goblin standing stones at most gates.
+- **Story scenes** in the empty land (`STORY_SPOTS`): stone circles, ruined watchtowers, old battlefields, a shrine, travelers' camps by the roads, an archery range, a goblin trap baited with coins.
+- **Villagers** (`VILLAGERS`): two per village walk about the square, stop to work or look about, and walk on.
+- No farm animals: none of the Kenney packs in Downloads has any (only fish, in the survival kit).
 
 **Debug:** `]` changes to the next time of day. "Time of day" 1 to 4 on the debug page ("Day and night" section). Both use the real 8 s change and hold until the next battle starts.
 

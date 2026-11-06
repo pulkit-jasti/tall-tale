@@ -10,11 +10,12 @@
 import { Color, type DirectionalLight, type Fog, type Scene } from 'three';
 import { DAY_NIGHT, type TimeOfDay } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
-import { setNightFade } from '../fx/nightFade.js';
+import { setTerrainLook } from '../fx/nightFade.js';
 import { setNightRim } from '../fx/nightRim.js';
 import { skyDirection, type Sky } from './sky.js';
 
 const tint = new Color();
+const terrain = new Color();
 const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
 /** The light sits this far from the board's middle (meters), toward its direction. */
 const LIGHT_DISTANCE = 7;
@@ -89,7 +90,8 @@ export class DayNight {
     this.fill = lerp(a.fill, b.fill, t);
     this.scene.environmentIntensity = this.fill;
     setNightRim(lerp(a.rim, b.rim, t));
-    setNightFade(lerp(a.terrainFade, b.terrainFade, t));
+    terrain.setHex(a.terrainTint).multiplyScalar(a.terrainBright).lerp(tint.setHex(b.terrainTint).multiplyScalar(b.terrainBright), t);
+    setTerrainLook(terrain, lerp(a.terrainGrey, b.terrainGrey, t));
     this.lightLevel = lerp(a.lights, b.lights, t);
   }
 }

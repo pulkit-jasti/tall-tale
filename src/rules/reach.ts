@@ -48,6 +48,19 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'end panel button', radius: endButtonRadius, y: endButtonY },
     { name: 'pause panel middle buttons', radius: Math.hypot(pauseOut, P.buttonGap / 2), y: pauseY },
     { name: 'pause panel outer buttons', radius: Math.hypot(pauseOut, pauseSide), y: pauseY },
+    // The settings page: its lowest sound row and the Back button (top left), the tilt brings the low row closer.
+    {
+      name: 'settings lowest row',
+      radius: Math.hypot(PAUSE.panel.radius + (PAUSE.settings.firstRowY - 4 * PAUSE.settings.rowGap) * Math.sin(pauseTilt), PAUSE.settings.sliderX),
+      y: PAUSE.settings.y + (PAUSE.settings.firstRowY - 4 * PAUSE.settings.rowGap) * Math.cos(pauseTilt),
+      rare: true,
+    },
+    {
+      name: 'settings Back button',
+      radius: Math.hypot(PAUSE.panel.radius + PAUSE.settings.backAt[1] * Math.sin(pauseTilt), PAUSE.settings.backAt[0]),
+      y: PAUSE.settings.y + PAUSE.settings.backAt[1] * Math.cos(pauseTilt),
+      rare: true,
+    },
     { name: 'climber on the rampart', radius: CASTLE.rampartRadius, y: CASTLE.wallHeight + 2, rare: true },
     { name: 'intruder at the courtyard edge', radius: CASTLE.courtyardMax, y: 2, rare: true },
     // A balloon rider while it is dropped into the courtyard (its middle, under the basket), and as it crosses the wall.
