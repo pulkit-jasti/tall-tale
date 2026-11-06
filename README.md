@@ -14,6 +14,7 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 - **Steps 7 and 8 are built, not tested on the headset yet** (2026-11-05): three troop kinds with gear (swordsmen, spearmen, archers), goblin spears and helmets, balloon riders from wave 4, the stress test with troops, and the juice pass (knockout stars, hit stop, food labels, confetti and more). Next: the headset test, the stress test result, then the missing sounds.
 - Details, open items and the build order are in [docs/mvp.md](docs/mvp.md). Frame rate results are in [docs/performance.md](docs/performance.md).
 - **Day and night is started** on the branch `feat/day-night-cycle` (2026-11-05, not tested on the headset yet, [docs/mvp.md](docs/mvp.md#day-and-night-cycle-started)): four times of day that follow the waves, a dark night with stars, a moon and a ringed planet, glowing windows, torches and lanterns, and a bright edge on the units so goblins stay easy to spot. Stylized hands are a far future idea. The MVP has a hand-made tutorial map. The level generator comes later.
+- **The same branch grew much more** (2026-11-05 to 2026-11-06, mostly not tested on the headset, typecheck, build and tests not run yet, nothing committed, [docs/mvp.md](docs/mvp.md#more-on-the-same-branch-sound-ui-and-a-livelier-world)): real sounds from Freesound and menu and battle music, sound placement fixes (mono, a muffle behind the head, soft ends on long sounds), a pause button in front instead of on the wrist, a settings page with a volume slider per sound group, our own UI library, menus centered in front of the eyes, farther and bigger goblin camps, story scenes, villagers, road torches, a rolling pebble, and tutorial fixes (pepper, balloons).
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---
@@ -266,6 +267,8 @@ The MVP is the submission. Endless, Daily Battle and the other modes are bonus i
 - Castle machines: keep or cut, after the first playtest ([docs/castle-machines.md](docs/castle-machines.md))
 - Endless scoring and difficulty curve ([docs/modes-and-progression.md](docs/modes-and-progression.md))
 - Final food numbers and climber counts (tune in playtests)
+- Goblin walk speeds now that the camps are farther out (a grunt takes about 60 s to reach the wall instead of about 33 s)
+- Background music: the two tracks in place are a first pick. The plan is layers that follow the game (calm by day, a march layer in waves, the ethereal version at night), quiet under the sound cues ([docs/audio.md](docs/audio.md))
 
 ---
 
@@ -313,7 +316,17 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 38. **Visual threat cues off by default:** now on by default (wall hit flash). With the sound off, goblins at the wall were hard to find. An attack compass arc with red marks was tried too and dropped: the wall flash was enough.
 39. **Five times of day (morning, noon, afternoon, sunset, night), one per tutorial wave:** replaced by four looks that work for any number of waves (first morning, last night, the one before sunset, the rest day). Noon and afternoon looked almost the same in the cartoon style.
 40. **A bright moonlit night, so goblins stay visible:** replaced by a dark night where the units carry the readability: a bright edge on troops and goblins, and the terrain darker. A first terrain fade toward grey-blue looked washed out, so it now only darkens.
-41. **A ringed planet sitting on the horizon:** it looked like it was on the ground, so it moved high into the sky, farther away, in one faded color.
+41. **A ringed planet sitting on the horizon:** it looked like it was on the ground, so it moved high into the sky, farther away, in one faded color. Later smaller and a little lower, with warm orange-red stripes.
+42. **Stereo sounds placed as they are:** most files are stereo, which smears where a sound comes from. Every placed sound is mixed to mono in code now (the files stay as they are). A test showed left and right work, but front and back were confusing, so sounds behind the head are muffled and a little quieter. Google's Resonance Audio was looked at and left out (a new dependency, more work on the Quest, and front and back stay hard anyway).
+43. **Long sounds stopping dead:** drums, the horn and the fanfare now fade out over their end. Short cues keep their sharp end.
+44. **A pause button on the wrist:** the palm pose was hard to find and the button flickered. Pause is now a button on a post straight in front, below the Next button's spot, and steps aside while Next shows.
+45. **The balloon banner after the pepper lesson:** it came too fast and the pepper lesson never really ended. The pepper lesson now ends when a peppered goblin is eaten (peppered goblins sneeze for 10 s and do no damage meanwhile), and balloons are taught in the slingshot wave, after the trigger lessons and a few more knockouts: one balloon hovers in front until it is popped, no Next button.
+46. **Camps shaking before goblins come out:** too cartoony for buildings. Only the drum sound is left.
+47. **Camps close to the castle:** most of the board was empty. Camps moved out to about 400 cm (the front one to 300 cm, so its details can be seen), became bigger war camps, each different, and the empty land got story scenes, villagers and road torches.
+48. **Big round glows around torches:** they read as floating balls, not light. Road torches now light a soft oval pool on the ground, and castle torches and lanterns have only a small halo.
+49. **A volume slider with minus and plus buttons and a mute button:** too much. Just one long slider per sound group now, all the way left is off, with a gold handle that turns grey at off.
+50. **Menus placed by hand-picked heights:** the settings page grew too tall and its low rows were hard to touch. Every menu now gets its height from one rule: right in front of the eyes, never higher than 2 cm above them or lower than 30 cm below (`UI_ZONE`).
+51. **UI code written again in each panel:** buttons on posts, button rows, panel text, canvas textures and draw-on-top code were copied around. It all lives in our own UI library now (`src/ui/kit/`), and new UI must be built from it.
 
 ---
 

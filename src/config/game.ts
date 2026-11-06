@@ -733,18 +733,52 @@ export const FLAGS = {
 };
 
 /** Win and lose panels, and the poke buttons on them (docs/castle-rules.md section 4). */
+/**
+ * Button sizes: every PokeButton uses one of these (cap radius, cm; the rim
+ * makes it 1.3 times wider). Across the rim: small 3.6 cm (buttons close
+ * together, the settings page), medium 4.9 cm (a secondary button beside a
+ * big one), standard 6.2 cm (Next, pause), large 7.5 cm (the pause panel),
+ * primary 9.1 cm (Play). Never below min (3 cm across, over Meta's 22 mm
+ * minimum target) or above max; PokeButton warns in the dev build. Keep
+ * at least 1.2 cm between any two targets.
+ */
+export const BUTTON_SIZE = {
+  small: 1.4,
+  medium: 1.9,
+  standard: 2.4,
+  large: 2.9,
+  primary: 3.5,
+  min: 1.15,
+  max: 3.5,
+};
+
+/**
+ * Where menus and panels sit up and down (src/rules/reach.ts uiCenterY),
+ * from the eyes, for the default board (cm): each panel's middle is
+ * centerBelowEyes below the eyes, right in front, and no part of it reaches
+ * higher than highestAboveEyes or lower than lowestBelowEyes (the panel is
+ * moved to fit; the dev server warns about one too tall to fit at all).
+ * Added after the settings page's low rows were hard to touch.
+ */
+export const UI_ZONE = {
+  centerBelowEyes: 15,
+  highestAboveEyes: 2,
+  lowestBelowEyes: 30,
+};
+
 export const END_PANEL = {
-  /** Panel spot, its middle, fixed in front of the player (cm): over the front wall, the button within reach. Moved back and up from 36 and 20. */
+  /** Panel spot, fixed in front of the player (cm, its height from UI_ZONE): over the front wall, the button within reach. */
   radius: 41,
-  y: 24,
   /** Tilted back a little, toward the eyes (degrees). */
   tiltDeg: 20,
   width: 32,
   height: 24,
   /** The round poke button at the bottom, below all the text, in front of the panel (cm). */
-  buttonRadius: 3.5,
+  buttonRadius: BUTTON_SIZE.primary,
   /** Space between the button's rim and the panel's bottom edge (cm). */
   buttonMargin: 1.2,
+  /** The welcome panel's smaller Settings button, in the bottom right corner (cm). */
+  settingsRadius: BUTTON_SIZE.medium,
   /** The panel appears this long after the battle ends, after the last poofs (seconds). */
   showDelay: 1.2,
 };
@@ -783,7 +817,7 @@ export const PAUSE = {
    * hard to find and flickered).
    */
   button: {
-    radius: 2.4,
+    radius: BUTTON_SIZE.standard,
     at: 38.5,
     y: 9,
     tiltDeg: 40,
@@ -802,13 +836,13 @@ export const PAUSE = {
     settleDeg: 3,
   },
   /** The panel, in cm from the seat like END_PANEL (sized with the board). */
+  /** The panel, its height from UI_ZONE. */
   panel: {
     radius: 41,
-    y: 25,
     tiltDeg: 20,
     width: 38,
     height: 23,
-    buttonRadius: 2.9,
+    buttonRadius: BUTTON_SIZE.large,
     /** Gap between button centers (cm). */
     buttonGap: 8.8,
     buttonMargin: 1.2,
@@ -823,50 +857,54 @@ export const PAUSE = {
    * plus (SLIDER). Rows rowGap apart, so the targets keep over 12 mm between
    * them (Meta's hands guidelines).
    */
+  // Made shorter (38 to 32 cm) after its low rows were hard to touch: Back and Measure reach share the
+  // top row beside the title. Then just one long slider per row (no mute, no minus and plus), the
+  // buttons small (BUTTON_SIZE, 3.6 cm across) and the slider handle 3.2 cm, rows 4.6 cm apart.
   settings: {
     width: 46,
-    height: 38,
-    y: 24,
+    height: 32,
     pxPerCm: 15,
-    buttonRadius: 1.3,
-    backAt: [-19, 15] as [number, number],
-    reachAt: [17, 10] as [number, number],
+    buttonRadius: BUTTON_SIZE.small,
+    backAt: [-19.5, 12.9] as [number, number],
+    reachAt: [19.5, 12.9] as [number, number],
     labelX: -21.5,
-    soundTitleY: 6.5,
-    firstRowY: 2.5,
+    soundTitleY: 8.6,
+    firstRowY: 5,
     rowGap: 4.6,
-    muteX: -7,
-    sliderX: 8.2,
-    sliderLength: 12,
+    sliderX: 6.9,
+    sliderLength: 26,
   },
 };
 
-/** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. */
 /**
  * The slider (src/ui/slider.ts), from Meta's hands guidelines: targets well
  * over 22 mm with gaps over 12 mm, touched with the index finger only (cm,
- * in the slider's own frame, its face toward +z). The handle's face is at
- * trackDepth + handleDepth; a finger within touchAt of the slider's back
- * grabs it (it has to come from the front), and it lets go once the finger
- * is back past releaseOut. Ready (hover) within readyDistance in front.
+ * in the slider's own frame, its face toward +z). The handle (3.2 cm) is a
+ * warm gold against the green fill and the dark track, grey at 0 (off). Its
+ * face is at trackDepth + handleDepth; a finger within touchAt of the
+ * slider's back grabs it (it has to come from the front), and it lets go
+ * once the finger is back past releaseOut. Ready (hover) within
+ * readyDistance in front, within zoneHeight above or below its middle (less
+ * than half the settings rows' gap, so two rows never both answer).
+ * No minus and plus buttons any more: touching the track jumps the handle.
  */
 export const SLIDER = {
   length: 14,
   trackHeight: 1.6,
   trackDepth: 0.8,
-  handleRadius: 1.5,
+  handleRadius: 1.6,
   handleDepth: 1,
-  handleColor: 0xf7e2b0,
+  handleColor: 0xffb83a,
+  offColor: 0x9a948a,
   fillColor: 0x6fae4a,
-  buttonRadius: 1.3,
-  buttonGap: 1.3,
-  zoneHeight: 2.6,
+  zoneHeight: 2.2,
   zoneBehind: 2.5,
   readyDistance: 6,
   touchAt: 2.1,
   releaseOut: 4,
 };
 
+/** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. Sizes: BUTTON_SIZE. */
 export const POKE = {
   /** Ready when the fingertip is this close in front of the button face, and no longer Ready once past readyDistance times readyOut (a gap, so it never flickers). */
   readyDistance: 5,
@@ -921,16 +959,13 @@ export const HINT_SIGN = {
    * Round "Next" poke button: its size, and its spot straight in front,
    * tilted toward the eyes (cm, degrees). Moved back toward the wall and up
    * a little after the step 6 test (was 33.5 out, 9 up: too close to the ring,
-   * hands on the ring pressed it). Still about 49 cm from the eyes.
+   * hands on the ring pressed it). Still about 49 cm from the eyes. It no
+   * longer blinks (it looked busy and cheap after the step 7 and 8 test).
    */
-  nextRadius: 2.6,
+  nextRadius: BUTTON_SIZE.standard,
   nextAt: 38.5,
   nextY: 15,
   nextTiltDeg: 40,
-  /** It blinks while it waits to be poked (emissive pulse, per second), so it catches the eye. */
-  nextBlinkColor: 0xfff1a8,
-  nextBlinkIntensity: 0.75,
-  nextBlinkSpeed: 2.2,
 };
 
 /** Ghost hands that show how to do each lesson (src/ui/ghostHand.ts). */
@@ -2596,9 +2631,15 @@ export const NIGHT_LIGHTS = {
   /** Flicker: how much a flame's size wobbles (share) and how fast. */
   flicker: 0.2,
   flickerSpeed: 9,
-  /** The round glows that always face the player, around each flame and each village lantern (cm across), their color and strength. */
-  torchGlowSize: 10,
-  lanternGlowSize: 8,
+  /**
+   * The small soft halos that always face the player, right at each castle
+   * torch's flame and each village lantern (cm across), their color and
+   * strength. Small on purpose: the first 10 cm glows read as floating balls,
+   * not light (headset test). The road torches have none: their light is the
+   * pool on the ground.
+   */
+  torchGlowSize: 2.8,
+  lanternGlowSize: 3,
   glowColor: 0xffa030,
   glowStrength: 1.15,
   /** Where the lantern model's light is (share of its height). */
@@ -2608,7 +2649,9 @@ export const NIGHT_LIGHTS = {
    * one every roadTorchEvery cm along each road, sides taking turns,
    * roadTorchOut cm past the road's edge, only between roadTorchFrom and
    * roadTorchTo cm from the middle, at most roadTorchMax. A taller post, and
-   * a pool of warm light on the ground around each (cm across, color, strength).
+   * a pool of warm light on the ground around each (cm across, color,
+   * strength): a soft oval roadPoolStretch times longer along the road, its
+   * size flickering with the flame by up to roadPoolFlicker (share).
    */
   roadTorchEvery: 45,
   roadTorchOut: 3,
@@ -2617,8 +2660,10 @@ export const NIGHT_LIGHTS = {
   roadTorchMax: 40,
   roadTorchStick: 6,
   roadPoolSize: 22,
+  roadPoolStretch: 1.6,
+  roadPoolFlicker: 0.08,
   roadPoolColor: 0xff9a3a,
-  roadPoolStrength: 0.55,
+  roadPoolStrength: 0.6,
 };
 
 /** One ring of hills around the board (board cm). */

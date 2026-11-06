@@ -111,6 +111,10 @@ export class GameSystem extends createSystem({}) {
   private particles!: Particles;
   private threat!: ThreatCues;
   private sign!: HintSign;
+  private endPanel!: EndPanel;
+  /** The settings page is open from the welcome panel, and the reach check was started from it. */
+  private titleSettings = false;
+  private titleMeasure = false;
   private spawner!: ToySpawner;
   private battle!: Battle;
   private debugRng!: Random;
@@ -232,6 +236,13 @@ export class GameSystem extends createSystem({}) {
     // The threat cue: the wall under a carrying balloon flashes red.
     this.balloons.onThreat = (rider) => this.threat.wallHit(rider, false);
     this.sign = new HintSign(this.stage.boardLift, this.audio);
+    // The welcome panel's Settings button opens the settings page on its own (there is no battle to pause).
+    this.endPanel = new EndPanel(this.stage.boardLift, this.audio);
+    this.endPanel.onSettings = () => {
+      this.endPanel.hide();
+      this.titleSettings = true;
+      this.pauseMenu.showSettings(headPosition, headForward, this.stage.boardScale);
+    };
     this.battle = new Battle({
       stage: this.stage,
       goblins: this.goblins,
@@ -244,7 +255,7 @@ export class GameSystem extends createSystem({}) {
       stun: this.stun,
       food: this.food,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
-      panel: new EndPanel(this.stage.boardLift, this.audio),
+      panel: this.endPanel,
       sign: this.sign,
       markers: new Markers(root),
       ghost,
@@ -438,6 +449,26 @@ export class GameSystem extends createSystem({}) {
       if (this.battle.updateMeasure(dt, this.hands.hands, headPosition, headForward)) {
         this.measuring = false;
         this.resume();
+        // Measured from the welcome panel's settings: back to the welcome panel.
+        if (this.titleMeasure) {
+          this.titleMeasure = false;
+          this.endPanel.showAgain();
+        }
+      }
+      return;
+    }
+    if (this.titleSettings) {
+      // The settings page from the welcome panel: Back brings the welcome panel again, Measure reach runs the reach check.
+      const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
+      if (action === 'measureReach') {
+        this.pauseMenu.hide();
+        this.titleSettings = false;
+        this.titleMeasure = true;
+        this.measuring = true;
+        this.battle.startMeasure();
+      } else if (!this.pauseMenu.isOpen) {
+        this.titleSettings = false;
+        this.endPanel.showAgain();
       }
       return;
     }

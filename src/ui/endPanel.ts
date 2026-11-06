@@ -9,7 +9,7 @@ import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { END_PANEL, POKE } from '../config/game.js';
 import type { HandState } from '../player/hands.js';
-import { armControls, bottomRowY, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS } from './kit/index.js';
+import { armControls, bottomRowY, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY } from './kit/index.js';
 
 export type EndKind = 'welcome' | 'won' | 'lost';
 
@@ -32,20 +32,35 @@ const TEXT_MARGIN = 44;
 export class EndPanel {
   private panel: Panel;
   private button: PokeButton;
+  /** The welcome panel's Settings button (bottom right, smaller than Play). */
+  private settings: PokeButton;
+  private kind: EndKind = 'welcome';
   private buttonTopPx = 0;
+  private settingsX = 0;
+  private settingsTopPx = 0;
+  /** The Settings button was poked (welcome panel only). */
+  onSettings: () => void = () => {};
 
   constructor(parent: Object3D, audio: GameAudio) {
-    const { width, height, buttonRadius, radius, y, tiltDeg } = END_PANEL;
-    // Straight in front of the player, tilted back toward the eyes.
-    this.panel = new Panel(parent, { width, height, radius, centerY: y, tiltDeg, layoutWidth: 512, canvasScale: 2 });
+    const { width, height, buttonRadius, settingsRadius, radius, tiltDeg, buttonMargin } = END_PANEL;
+    // Straight in front of the eyes, tilted back toward them, never too high or too low (UI_ZONE).
+    this.panel = new Panel(parent, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: 512, canvasScale: 2 });
+    const at = panelMap(width, height, this.panel.layoutWidth, this.panel.layoutHeight);
     this.button = new PokeButton(audio, { radius: buttonRadius, icon: 'play' });
     // The button sits at the bottom of the panel, tilting with it. Its rim is wider than its cap.
     const rim = buttonRadius * POKE.rimScale;
-    const buttonY = bottomRowY(height, rim, END_PANEL.buttonMargin);
+    const buttonY = bottomRowY(height, rim, buttonMargin);
     this.button.group.position.set(0, buttonY, 0);
     // Where the rim's top edge is on the canvas (layout pixels from the top), so the text stays above it.
-    this.buttonTopPx = panelMap(width, height, this.panel.layoutWidth, this.panel.layoutHeight).y(buttonY + rim);
-    this.panel.root.add(this.button.group);
+    this.buttonTopPx = at.y(buttonY + rim);
+    // Settings in the bottom right corner, its rim the same distance from both edges.
+    this.settings = new PokeButton(audio, { radius: settingsRadius, icon: 'settings' });
+    const settingsRim = settingsRadius * POKE.rimScale;
+    this.settingsX = width / 2 - settingsRim - buttonMargin;
+    const settingsY = bottomRowY(height, settingsRim, buttonMargin);
+    this.settings.group.position.set(this.settingsX, settingsY, 0);
+    this.settingsTopPx = at.y(settingsY + settingsRim);
+    this.panel.root.add(this.button.group, this.settings.group);
   }
 
   get visible(): boolean {
@@ -53,23 +68,34 @@ export class EndPanel {
   }
 
   show(kind: EndKind): void {
+    this.kind = kind;
     this.draw(TEXT[kind]);
-    // Play to start, restart to play again.
+    // Play to start, restart to play again. Settings only on the welcome panel.
     this.button.setIcon(kind === 'welcome' ? 'play' : 'restart');
+    this.settings.group.visible = kind === 'welcome';
     this.panel.visible = true;
     this.panel.popIn(0.25);
     // A finger still there from the last poke must not start the next battle at once.
-    armControls([this.button]);
+    armControls([this.button, this.settings]);
+  }
+
+  /** Shows the same panel again (after its settings page closed). */
+  showAgain(): void {
+    this.show(this.kind);
   }
 
   hide(): void {
     this.panel.visible = false;
   }
 
-  /** Returns true on the frame the button is poked. */
+  /** Returns true on the frame the main button is poked. A poke on Settings calls onSettings. */
   update(hands: HandState[], dt: number): boolean {
     if (!this.panel.visible) return false;
     this.panel.update(dt);
+    if (this.settings.group.visible && this.settings.update(hands, dt)) {
+      this.onSettings();
+      return false;
+    }
     return this.button.update(hands, dt);
   }
 
@@ -87,6 +113,11 @@ export class EndPanel {
     const labelY = this.buttonTopPx - 26;
     const subtitleY = (bannerTop + bannerH + labelY - 20) / 2;
     drawLine(c, text.subtitle, w / 2, subtitleY, textWidth, 40, UI_COLORS.ink);
-    drawLine(c, text.button, w / 2, labelY, textWidth, 30, UI_COLORS.accent);
+    // The main label stays clear of the Settings button on the welcome panel.
+    const settingsShown = this.kind === 'welcome';
+    const at = panelMap(END_PANEL.width, END_PANEL.height, w, this.panel.layoutHeight);
+    const settingsLeft = at.x(this.settingsX - END_PANEL.settingsRadius * POKE.rimScale);
+    drawLine(c, text.button, w / 2, labelY, settingsShown ? (settingsLeft - w / 2) * 2 - 16 : textWidth, 30, UI_COLORS.accent);
+    if (settingsShown) drawLine(c, 'Settings', at.x(this.settingsX), this.settingsTopPx - 16, 110, 20, UI_COLORS.accent);
   }
 }

@@ -13,7 +13,7 @@
 // Sizes in cm (the rigs are scaled 0.01), poked like every other button.
 import { Group, type Object3D, type Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { BOARD, PAUSE, POKE } from '../config/game.js';
+import { BOARD, PAUSE, POKE, SLIDER } from '../config/game.js';
 import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
 import type { HandState } from '../player/hands.js';
@@ -31,6 +31,7 @@ import {
   Slider,
   StandButton,
   UI_COLORS,
+  uiCenterY,
   type ButtonIcon,
 } from './kit/index.js';
 
@@ -48,7 +49,6 @@ const BUTTONS: { action: PauseAction | 'settings'; icon: ButtonIcon; label: stri
 interface SoundRow {
   category: SoundCategory;
   label: string;
-  mute: PokeButton;
   slider: Slider;
   y: number;
 }
@@ -69,6 +69,8 @@ export class PauseMenu {
   /** The settings page: measure reach again, and the sound groups' volumes. */
   private settings: Panel;
   private page: 'main' | 'settings' = 'main';
+  /** Opened from the welcome panel: only the settings page, Back closes it. */
+  private settingsOnly = false;
   private back: PokeButton;
   private reach: PokeButton;
   private rows: SoundRow[] = [];
@@ -81,10 +83,11 @@ export class PauseMenu {
     board: Object3D,
     private audio: GameAudio,
   ) {
-    const { width, height, radius, y: centerY, tiltDeg, buttonRadius, buttonMargin } = PAUSE.panel;
+    const { width, height, radius, tiltDeg, buttonRadius, buttonMargin } = PAUSE.panel;
     parent.add(this.holder);
     this.follow = new LazyFollow(this.holder, { ...PAUSE.follow, recenter: 0.12 });
-    this.panel = new Panel(this.holder, { width, height, radius, centerY, tiltDeg, layoutWidth: 576, canvasScale: 2 });
+    // Right in front of the eyes, never too high or too low (UI_ZONE).
+    this.panel = new Panel(this.holder, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: 576, canvasScale: 2 });
     const rim = buttonRadius * POKE.rimScale;
     const buttonY = bottomRowY(height, rim, buttonMargin);
     BUTTONS.forEach((b, i) => {
@@ -101,7 +104,7 @@ export class PauseMenu {
       width: S.width,
       height: S.height,
       radius,
-      centerY: S.y,
+      centerY: uiCenterY(S.height, tiltDeg),
       tiltDeg,
       layoutWidth: Math.round(S.width * S.pxPerCm),
       canvasScale: 2,
@@ -116,18 +119,15 @@ export class PauseMenu {
     add(this.reach.group, S.reachAt[0], S.reachAt[1]);
     SOUND_CATEGORIES.forEach((c, i) => {
       const y = S.firstRowY - i * S.rowGap;
-      const mute = new PokeButton(audio, { radius: S.buttonRadius, icon: audio.settings.muted(c.id) ? 'muted' : 'sound' });
-      add(mute.group, S.muteX, y);
+      // Just a slider per group: all the way down is off.
       const slider = new Slider(audio, { length: S.sliderLength, steps: SOUND_SETTINGS.steps, value: audio.settings.volume(c.id) });
       add(slider.group, S.sliderX, y);
-      const row: SoundRow = { category: c.id, label: c.label, mute, slider, y };
       // While dragging only the sound follows (no repaint); the number on the panel updates when it is let go.
       slider.onChange = (value, final) => {
         audio.settings.setVolume(c.id, value, final);
         if (final) this.repaintSettings();
-        this.showMute(row);
       };
-      this.rows.push(row);
+      this.rows.push({ category: c.id, label: c.label, slider, y });
     });
     this.repaintSettings();
     // Nothing ever hides the pause panel (it went through the towers): it draws on top, the board first, then each button's parts.
@@ -151,6 +151,7 @@ export class PauseMenu {
    */
   show(head: Vector3, forward: Vector3, boardScale: number): void {
     this.open = true;
+    this.settingsOnly = false;
     this.pauseButton.show(false);
     this.follow.snap(head, forward, BOARD.eyeToBoard * boardScale, CM * boardScale);
     this.showPage('main');
@@ -158,8 +159,19 @@ export class PauseMenu {
 
   hide(): void {
     this.open = false;
+    this.settingsOnly = false;
     this.panel.visible = false;
     this.settings.visible = false;
+  }
+
+  /**
+   * Only the settings page, from the welcome panel (no battle to pause): it
+   * opens in front of the head like the pause panel, and Back closes it.
+   */
+  showSettings(head: Vector3, forward: Vector3, boardScale: number): void {
+    this.show(head, forward, boardScale);
+    this.settingsOnly = true;
+    this.showPage('settings');
   }
 
   /** One page shows, its buttons reset and locked a moment (the finger that opened it must not press one at once). */
@@ -172,17 +184,9 @@ export class PauseMenu {
       armControls(this.buttons);
       return;
     }
-    armControls([this.back, this.reach, ...this.rows.flatMap((r) => [r.mute, r.slider])]);
-    for (const row of this.rows) {
-      row.slider.setValue(this.audio.settings.volume(row.category));
-      this.showMute(row);
-    }
+    armControls([this.back, this.reach, ...this.rows.map((r) => r.slider)]);
+    for (const row of this.rows) row.slider.setValue(this.audio.settings.volume(row.category));
     this.repaintSettings();
-  }
-
-  /** The mute button shows a crossed speaker while the group is silent. */
-  private showMute(row: SoundRow): void {
-    row.mute.setIcon(this.audio.settings.level(row.category) <= 0 ? 'muted' : 'sound');
   }
 
   private repaintSettings(): void {
@@ -221,23 +225,12 @@ export class PauseMenu {
   private updateSettings(dt: number, hands: HandState[]): PauseAction | null {
     this.settings.update(dt);
     if (this.back.update(hands, dt)) {
-      this.showPage('main');
+      if (this.settingsOnly) this.hide();
+      else this.showPage('main');
       return null;
     }
     if (this.reach.update(hands, dt)) return 'measureReach';
-    for (const row of this.rows) {
-      if (row.mute.update(hands, dt)) {
-        const { settings } = this.audio;
-        // Unmuting a group that was turned all the way down brings it back at half.
-        if (settings.level(row.category) > 0) settings.setMuted(row.category, true);
-        else if (settings.volume(row.category) <= 0) settings.setVolume(row.category, 0.5);
-        else settings.setMuted(row.category, false);
-        row.slider.setValue(settings.volume(row.category));
-        this.showMute(row);
-        this.repaintSettings();
-      }
-      row.slider.update(hands, dt);
-    }
+    for (const row of this.rows) row.slider.update(hands, dt);
     return null;
   }
 
@@ -246,16 +239,19 @@ export class PauseMenu {
     const S = PAUSE.settings;
     const at = panelMap(S.width, S.height, w, h);
     const left = at.x(S.labelX);
-    drawTitleBanner(c, 'Settings', w * 0.3, 14, w * 0.4, 62, 36);
-    // A small label under the Back button.
-    drawLine(c, 'Back', at.x(S.backAt[0]), at.y(S.backAt[1] - S.buttonRadius * POKE.rimScale) + 14, 90, 18, UI_COLORS.accent);
-    drawLine(c, 'Hands: measure your reach again', left, at.y(S.reachAt[1]), at.x(S.reachAt[0] - 3) - left, 24, UI_COLORS.ink, 'left');
-    drawLine(c, 'Sound: poke the speaker to mute, slide or poke - and + to set', left, at.y(S.soundTitleY), w - left * 2, 18, UI_COLORS.note, 'left');
+    drawTitleBanner(c, 'Settings', w * 0.3, 10, w * 0.4, 56, 34);
+    // Small labels under the two top buttons.
+    const under = at.y(S.backAt[1] - S.buttonRadius * POKE.rimScale) + 12;
+    drawLine(c, 'Back', at.x(S.backAt[0]), under, 110, 18, UI_COLORS.accent);
+    drawLine(c, 'Measure reach', at.x(S.reachAt[0]) - 20, under, 150, 18, UI_COLORS.accent);
+    drawLine(c, 'Sound: touch a slider and slide it. All the way left is off.', left, at.y(S.soundTitleY), w - left * 2, 18, UI_COLORS.note, 'left');
+    // Each group's name and level on the left, clear of its slider.
+    const labelRight = at.x(S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius - 1);
     for (const row of this.rows) {
       const level = this.audio.settings.level(row.category);
       const y = at.y(row.y);
-      drawLine(c, row.label, left, y - 9, at.x(S.muteX - 2.5) - left, 24, UI_COLORS.ink, 'left');
-      drawLine(c, level <= 0 ? 'Off' : `${Math.round(level * 100)}%`, left, y + 13, 80, 18, level <= 0 ? UI_COLORS.warn : UI_COLORS.accent, 'left');
+      drawLine(c, row.label, left, y - 10, labelRight - left, 26, UI_COLORS.ink, 'left');
+      drawLine(c, level <= 0 ? 'Off' : `${Math.round(level * 100)}%`, left, y + 14, 90, 20, level <= 0 ? UI_COLORS.warn : UI_COLORS.accent, 'left');
     }
   }
 

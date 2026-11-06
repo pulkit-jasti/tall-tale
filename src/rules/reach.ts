@@ -2,7 +2,25 @@
 // and poke target must be a comfortable reach from the seat. Distances are
 // measured from the eyes, which sit BOARD.eyeToBoard above the board when it
 // is placed. No Three.js here.
-import { BALLOONS, BELL, BOARD, CASTLE, END_PANEL, HANDLES, HINT_SIGN, MEGAPHONE, PAUSE, PEBBLE_BOWL, PEPPER, POKE, REACH, SLINGSHOT, SWATTER, TOOL_SPOTS } from '../config/game.js';
+import {
+  BALLOONS,
+  BELL,
+  BOARD,
+  CASTLE,
+  END_PANEL,
+  HANDLES,
+  HINT_SIGN,
+  MEGAPHONE,
+  PAUSE,
+  PEBBLE_BOWL,
+  PEPPER,
+  POKE,
+  REACH,
+  SLINGSHOT,
+  SWATTER,
+  TOOL_SPOTS,
+  UI_ZONE,
+} from '../config/game.js';
 
 export type ReachZone = 'tooClose' | 'close' | 'sweet' | 'far' | 'tooFar';
 
@@ -19,21 +37,47 @@ export function reachZone(distance: number): ReachZone {
   return 'tooFar';
 }
 
+/** The eyes' height above the board (cm, default board). */
+const EYES = BOARD.eyeToBoard * 100;
+
+/**
+ * Where a panel's middle goes (cm above the board) for UI_ZONE: right in
+ * front, centerBelowEyes below the eyes, moved so its top and bottom stay
+ * inside the zone. `height` is the panel's, tilted back `tiltDeg`.
+ */
+export function uiCenterY(height: number, tiltDeg: number): number {
+  const half = (height / 2) * Math.cos((tiltDeg * Math.PI) / 180);
+  let center = EYES - UI_ZONE.centerBelowEyes;
+  center = Math.min(center, EYES + UI_ZONE.highestAboveEyes - half);
+  center = Math.max(center, EYES - UI_ZONE.lowestBelowEyes + half);
+  return center;
+}
+
+/** True if a panel this tall fits inside UI_ZONE at all. */
+export function fitsUiZone(height: number, tiltDeg: number): boolean {
+  return height * Math.cos((tiltDeg * Math.PI) / 180) <= UI_ZONE.highestAboveEyes + UI_ZONE.lowestBelowEyes;
+}
+
 /** Every interactive spot (cm from the seat, cm above the board), and whether it may sit past the sweet spot. */
 export function reachSpots(): { name: string; radius: number; y: number; rare?: boolean }[] {
   const top = TOOL_SPOTS.platformTop;
-  // The end panel's button: at the bottom of the tilted panel, so the tilt brings it a little closer and higher.
-  const tilt = (END_PANEL.tiltDeg * Math.PI) / 180;
-  const endButtonDown = END_PANEL.height / 2 - END_PANEL.buttonRadius * POKE.rimScale - END_PANEL.buttonMargin;
-  const endButtonY = END_PANEL.y - endButtonDown * Math.cos(tilt);
-  const endButtonRadius = END_PANEL.radius - endButtonDown * Math.sin(tilt);
-  // The pause panel's buttons: the same way, four in a row (the outer ones a little farther, to the sides).
+  // A spot on a tilted panel, `y` cm up from its middle (negative is down): the tilt brings low spots closer and lifts them less.
+  const onPanel = (panelRadius: number, centerY: number, tiltDeg: number, y: number, side = 0): { radius: number; y: number } => {
+    const tilt = (tiltDeg * Math.PI) / 180;
+    return { radius: Math.hypot(panelRadius + y * Math.sin(tilt), side), y: centerY + y * Math.cos(tilt) };
+  };
+  // The end panel's button, at the bottom of the panel.
+  const E = END_PANEL;
+  const endButton = onPanel(E.radius, uiCenterY(E.height, E.tiltDeg), E.tiltDeg, -(E.height / 2 - E.buttonRadius * POKE.rimScale - E.buttonMargin));
+  // The pause panel's buttons, four in a row (the outer ones a little farther, to the sides).
   const P = PAUSE.panel;
-  const pauseTilt = (P.tiltDeg * Math.PI) / 180;
-  const pauseDown = P.height / 2 - P.buttonRadius * POKE.rimScale - P.buttonMargin;
-  const pauseY = P.y - pauseDown * Math.cos(pauseTilt);
-  const pauseOut = P.radius - pauseDown * Math.sin(pauseTilt);
-  const pauseSide = 1.5 * P.buttonGap;
+  const pauseCenter = uiCenterY(P.height, P.tiltDeg);
+  const pauseDown = -(P.height / 2 - P.buttonRadius * POKE.rimScale - P.buttonMargin);
+  // The settings page: its lowest sound row and its top row (Back, Measure reach) at the sides.
+  const S = PAUSE.settings;
+  const settingsCenter = uiCenterY(S.height, P.tiltDeg);
+  const lowestRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.firstRowY - 4 * S.rowGap, S.sliderX + S.sliderLength / 2);
+  const topRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.backAt[1], S.backAt[0]);
   return [
     { name: 'ring handle', radius: HANDLES.radius, y: HANDLES.ringY },
     { name: 'slingshot handle', radius: TOOL_SPOTS.slingshot.radius, y: top + SLINGSHOT.handleHeight / 2 },
@@ -45,22 +89,21 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY },
     // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.
     { name: 'pause button', radius: PAUSE.button.at, y: PAUSE.button.y, rare: true },
-    { name: 'end panel button', radius: endButtonRadius, y: endButtonY },
-    { name: 'pause panel middle buttons', radius: Math.hypot(pauseOut, P.buttonGap / 2), y: pauseY },
-    { name: 'pause panel outer buttons', radius: Math.hypot(pauseOut, pauseSide), y: pauseY },
-    // The settings page: its lowest sound row and the Back button (top left), the tilt brings the low row closer.
+    { name: 'end panel button', ...endButton },
     {
-      name: 'settings lowest row',
-      radius: Math.hypot(PAUSE.panel.radius + (PAUSE.settings.firstRowY - 4 * PAUSE.settings.rowGap) * Math.sin(pauseTilt), PAUSE.settings.sliderX),
-      y: PAUSE.settings.y + (PAUSE.settings.firstRowY - 4 * PAUSE.settings.rowGap) * Math.cos(pauseTilt),
-      rare: true,
+      name: 'welcome panel Settings button',
+      ...onPanel(
+        E.radius,
+        uiCenterY(E.height, E.tiltDeg),
+        E.tiltDeg,
+        -(E.height / 2 - E.settingsRadius * POKE.rimScale - E.buttonMargin),
+        E.width / 2 - E.settingsRadius * POKE.rimScale - E.buttonMargin,
+      ),
     },
-    {
-      name: 'settings Back button',
-      radius: Math.hypot(PAUSE.panel.radius + PAUSE.settings.backAt[1] * Math.sin(pauseTilt), PAUSE.settings.backAt[0]),
-      y: PAUSE.settings.y + PAUSE.settings.backAt[1] * Math.cos(pauseTilt),
-      rare: true,
-    },
+    { name: 'pause panel middle buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, P.buttonGap / 2) },
+    { name: 'pause panel outer buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, 1.5 * P.buttonGap) },
+    { name: 'settings lowest row (slider end)', ...lowestRow, rare: true },
+    { name: 'settings top row (Back)', ...topRow, rare: true },
     { name: 'climber on the rampart', radius: CASTLE.rampartRadius, y: CASTLE.wallHeight + 2, rare: true },
     { name: 'intruder at the courtyard edge', radius: CASTLE.courtyardMax, y: 2, rare: true },
     // A balloon rider while it is dropped into the courtyard (its middle, under the basket), and as it crosses the wall.
@@ -76,5 +119,14 @@ export function checkReach(): void {
     const zone = reachZone(d);
     const ok = zone === 'sweet' || (spot.rare && (zone === 'far' || zone === 'close'));
     if (!ok) console.warn(`[reach] ${spot.name} is ${d.toFixed(0)} cm from the eyes (${zone}), see REACH in src/config/game.ts`);
+  }
+  // Every menu panel must fit between the highest and lowest spot UI may reach.
+  const panels: [string, number, number][] = [
+    ['end panel', END_PANEL.height, END_PANEL.tiltDeg],
+    ['pause panel', PAUSE.panel.height, PAUSE.panel.tiltDeg],
+    ['settings page', PAUSE.settings.height, PAUSE.panel.tiltDeg],
+  ];
+  for (const [name, height, tilt] of panels) {
+    if (!fitsUiZone(height, tilt)) console.warn(`[reach] the ${name} is too tall for UI_ZONE in src/config/game.ts: make it shorter`);
   }
 }

@@ -119,4 +119,14 @@ Still to try if the frame rate drops, in order of expected gain:
 
 **New load from the day and night cycle (branch `feat/day-night-cycle`, not measured yet):** a change between times of day runs only between waves (8 s of color blends and one dome color update per frame, about 2,000 points), never during a wave. By day nothing extra draws except 6 torch sticks (one instanced mesh). At night: stars (1 draw call), the moon (2), the ringed planet (3), window panes and window glows (2 instanced meshes), torch flames and the torch and lantern glows (2 instanced meshes), all small. Shader work that is always on: the night rim on every unit material (a few lines in the fragment shader) and the terrain fade on the board and hill materials (a few lines at the end). The window and torch glows are additive and see-through, so they cost some fill where they cover the view. **Run the stress test at night too** (`]` to night first) and log both. If night drops, lower `SKY.starCount`, then `NIGHT_LIGHTS.windowGlowSize` and `torchGlowSize`.
 
+**New load from the livelier world (same branch, 2026-11-06, not measured yet):**
+- **Camps:** the war camps (palisades, tents, siege machines, banners, rocks) are merged into one mesh per material for all camps, about 30,000 triangles (the palisade pieces are most of it).
+- **Story scenes:** 11 scenes merged the same way, a few thousand triangles (the statue and the trap are the heaviest pieces).
+- **Villagers:** up to 10 skinned characters (about 470 to 570 triangles each), one draw call each, animated every third frame.
+- **Road torches:** up to 40, sharing the torch meshes, plus one instanced mesh of ground pools (additive, see-through, so some fill where they cover the view); their matrices update every frame at night (cheap). The halos are much smaller now (2.8 to 3 cm), so they cost less fill.
+- **Pebbles:** the pebble is a code-made low-poly ball now, and a missed one rolls a moment before it lies still.
+- **Sound:** each placed sound voice (12) has a low pass and a gain node for the behind muffle, updated every frame only while it plays; two music tracks loop all the time (one silent).
+
+If the stress test drops: lower `VILLAGERS.max`, then `NIGHT_LIGHTS.roadTorchMax`, then make the palisades lighter (`camp/survival/fence` instead of the spiked one, or fewer pieces with a bigger `CAMP_LOOK.fencePiece`), then fewer story scenes (`STORY_SPOTS.counts`).
+
 If troops plus enemies still do not fit, use the code-made instanced goblins from [placeholder-shapes.md](placeholder-shapes.md).

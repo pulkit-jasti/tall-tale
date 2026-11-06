@@ -49,14 +49,13 @@ export class HintSign {
       canvasScale: 1.5,
       anisotropy: 4,
     });
-    // "Next" button straight in front, in reach, its face tilted up toward the eyes. It blinks while it waits, so it catches the eye.
+    // "Next" button straight in front, in reach, its face tilted up toward the eyes.
     this.next = new StandButton(parent, audio, {
       radius: HINT_SIGN.nextRadius,
       icon: 'next',
       at: HINT_SIGN.nextAt,
       y: HINT_SIGN.nextY,
       tiltDeg: HINT_SIGN.nextTiltDeg,
-      blink: { color: HINT_SIGN.nextBlinkColor, intensity: HINT_SIGN.nextBlinkIntensity, speed: HINT_SIGN.nextBlinkSpeed },
     });
   }
 

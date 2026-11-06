@@ -20,6 +20,7 @@ import { boardHeight, degToRad, groundAt, polarX, polarZ } from '../rules/boardM
 import { createRandom, type Random } from '../rules/random.js';
 import { cloneStatic, InstancedModel, loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
 import { RoadNetwork } from './roads.js';
+import type { RoadTorch } from './nightLights.js';
 import { buildStorySpots, planStorySpots } from './storySpots.js';
 import { Meadow } from './grass.js';
 import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
@@ -299,8 +300,8 @@ export interface BuiltBoard {
   windows: Matrix4[];
   lanterns: Matrix4[];
   lanternHeight: number;
-  /** Ground spots of the night torches beside the roads. */
-  roadTorches: Vector3[];
+  /** Ground spots of the night torches beside the roads, and the road's direction at each. */
+  roadTorches: RoadTorch[];
   /** The villages (for the villagers who walk about in them). */
   villages: Spot[];
 }
@@ -360,18 +361,21 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
  * Ground spots for the night torches beside the roads (NIGHT_LIGHTS.roadTorch*):
  * evenly along each road, sides taking turns, kept apart where roads meet.
  */
-function roadTorchSpots(roads: { length: number; pointAt(distance: number, offset: number, out: Vector3): Vector3 }[]): Vector3[] {
+function roadTorchSpots(roads: { length: number; pointAt(distance: number, offset: number, out: Vector3): Vector3 }[]): RoadTorch[] {
   const L = NIGHT_LIGHTS;
-  const spots: Vector3[] = [];
+  const spots: RoadTorch[] = [];
   const out = ROADS.width / 2 + L.roadTorchOut;
+  const ahead = new Vector3();
   let side = 1;
   for (const road of roads) {
     for (let d = L.roadTorchEvery / 2; d < road.length && spots.length < L.roadTorchMax; d += L.roadTorchEvery) {
       const p = road.pointAt(d, out * side, new Vector3());
       const r = Math.hypot(p.x, p.z);
       if (r < L.roadTorchFrom || r > L.roadTorchTo) continue;
-      if (spots.some((s) => s.distanceTo(p) < L.roadTorchEvery * 0.6)) continue;
-      spots.push(p);
+      if (spots.some((s) => s.at.distanceTo(p) < L.roadTorchEvery * 0.6)) continue;
+      // The road's direction here, so the pool of light lies along it.
+      road.pointAt(Math.min(road.length, d + 2), out * side, ahead).sub(p);
+      spots.push({ at: p, yaw: Math.atan2(-ahead.z, ahead.x) });
       side = -side;
     }
   }

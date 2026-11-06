@@ -210,12 +210,20 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 - Pausing lets go of everything the hands hold (goblins drop, tools go back), freezes the battle and all sound, and hides the hint sign, marker and ghost hand.
 - The pause panel opens in front of the head, not on the board, at the same spot from the eyes as the end panel and sized with the board, so its buttons are always in the best reach band (about 47 to 49 cm from the eyes), even when the board ended up somewhere odd. It always draws on top of everything (no depth test), so the castle or the sign never hide it. It **follows the head lazily**, like the Quest's own menus: it stays still while the head turns a little, and swings back in front once the head turned more than 25 degrees (or moved 12 cm), so it is never behind the player. Four poke buttons: **Resume**, **Reset table** (auto placement again at the starting height, then play goes on), **Measure reach** (the reach check right away on the frozen battle, the board resizes, then play goes on, no restart) and **Restart** (the battle again). Its buttons ignore pokes for 1 s after it opens.
 - Sound stops only for the Quest menu, so the pause panel's clicks are heard.
-- **Settings page** (the Settings button on the pause panel, `PAUSE.settings`): Back (top left), "measure your reach again" (the reach check, which used to be on the pause panel itself), and one row per sound group (Music, Goblins, Battle, Tools, Voice and menus, `SOUND_CATEGORIES`): its name and level ("70%" or "Off"), a speaker button that mutes and unmutes it, and a slider. Saved in localStorage (`tallTale.sound`), so it holds across visits. A muted group keeps its volume for when it is unmuted.
-- **The slider** (`src/ui/slider.ts`, `SLIDER`, the shared component for every future slider), from Meta's hands guidelines: touch the handle or anywhere on the track with the index finger (the handle jumps there), slide along (it follows 1:1), pull the finger back to let go. No pinch, nothing to hold. Minus and plus poke buttons at the ends step it by 10%, so it works fully without dragging. The handle is 3 cm across (over the 22 mm minimum), targets keep over 12 mm apart, the filled part of the track shows the value, a tick plays at every 10% step and a click on release. The value is saved on release, not during the drag.
+- **Settings page** (the Settings button on the pause panel, or on the welcome panel's bottom right corner, `PAUSE.settings`): Back (top left) and Measure reach (top right, the reach check, which used to be on the pause panel itself) beside the title, then one row per sound group (Music, Goblins, Battle, Tools, Voice and menus, `SOUND_CATEGORIES`): its name and level ("70%" or "Off") and one long slider. All the way left is off; there is no mute button (the slider is easy enough, headset test). Saved in localStorage (`tallTale.sound`), so it holds across visits.
+- **The slider** (`src/ui/slider.ts`, `SLIDER`, the shared component for every future slider), from Meta's hands guidelines: touch the handle or anywhere on the track with the index finger (the handle jumps there, so it works without dragging too), slide along (it follows 1:1), pull the finger back to let go. No pinch, nothing to hold. Near the ends it snaps to off and full. The handle is 3.2 cm across (over the 22 mm minimum), warm gold against the green fill and the dark track for contrast, grey at 0 so off shows in color. Targets keep over 12 mm apart, a tick plays at every 10% step and a click on release. The value is saved on release, not during the drag. (Its minus and plus buttons were removed: not needed.)
+- **Button sizes** (`BUTTON_SIZE`): every button uses one of five sizes, across the rim: small 3.6 cm (the settings page), medium 4.9 cm (Settings on the welcome panel), standard 6.2 cm (Next, pause), large 7.5 cm (the pause panel), primary 9.1 cm (Play). Never below 3 cm or above 9.1 cm (the dev build warns), and at least 1.2 cm between targets.
+- **Button icons** are plain cream shapes, no dark outline (it looked ugly), drawn premultiplied so no dark edge shows either. The tutorial markers' arrow keeps its outline, to read against the sky.
 - Auto-pause in VR during a battle shows the same panel when the player comes back. Outside a battle (welcome or end panel) and in the browser it still resumes by itself.
 - Debug: Space pauses or resumes, and the debug page's "Pause panel button 1 to 4" pokes a panel button.
 
 ---
+
+- **Opened from the welcome panel**, the settings page comes up alone in front of the head; Back brings the welcome panel again, and Measure reach runs the reach check and then brings it back.
+
+### UI height zone
+
+Menus and panels (the welcome and end panel, the pause panel, the settings page) sit right in front of the eyes, never too high or too low (`UI_ZONE`, `uiCenterY` in `src/rules/reach.ts`): each panel's middle is 15 cm below the eyes, and no part of it reaches higher than 2 cm above the eyes or lower than 30 cm below them (the panel is moved to fit; the dev server warns about a panel too tall to fit at all, and a test checks every panel). Added after the settings page's low rows were hard to touch: the page is now 32 cm tall (was 38), with Back and Measure reach beside the title and 3 cm buttons (over Meta's 22 mm) in rows 4.3 cm apart.
 
 ### UI library
 
@@ -224,7 +232,7 @@ All UI is built from one shared library, `src/ui/kit/` (import everything from `
 | Part | What it is | Used by |
 |---|---|---|
 | `PokeButton` | The round button poked with the index finger (Idle, Ready, Held, a blink while it waits) | Every button |
-| `Slider` | Touch and slide, minus and plus buttons, ticks per step (SLIDER) | Sound settings |
+| `Slider` | Touch and slide (touching the track jumps the handle), a gold handle, grey at off, ticks per step (SLIDER) | Sound settings |
 | `StandButton` | A `PokeButton` on a post straight in front, tilted toward the eyes, that starts fresh and locked when it comes out | Next, pause |
 | `Panel` | The parchment board with a canvas, its pop, and `root` for its controls | Hint sign, end, pause, settings |
 | `LazyFollow` | Keeps a menu in front of the head like the Quest's own menus | Pause panel |

@@ -8,7 +8,7 @@
 // (cm in the rigs).
 import { CircleGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Vector3, type CanvasTexture, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { POKE } from '../config/game.js';
+import { BUTTON_SIZE, POKE } from '../config/game.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { flatMaterial } from '../world/shapes.js';
@@ -54,6 +54,9 @@ export class PokeButton implements Control {
   ) {
     const { segments, travel } = POKE;
     const radius = options.radius;
+    if (import.meta.env.DEV && (radius < BUTTON_SIZE.min - 1e-6 || radius > BUTTON_SIZE.max + 1e-6)) {
+      console.warn(`[ui] a ${options.icon} button of radius ${radius} cm is outside BUTTON_SIZE (${BUTTON_SIZE.min} to ${BUTTON_SIZE.max}): pick a size from BUTTON_SIZE`);
+    }
     const depth = options.depth ?? radius * POKE.depthShare;
     this.radius = radius;
     this.depth = depth;
@@ -75,7 +78,7 @@ export class PokeButton implements Control {
     mesh.position.z = depth / 2;
     this.cap.add(mesh);
     // The icon on its face.
-    this.faceMaterial = new MeshBasicMaterial({ map: iconTexture(this.icon), transparent: true, fog: false });
+    this.faceMaterial = new MeshBasicMaterial({ map: iconTexture(this.icon), transparent: true, premultipliedAlpha: true, fog: false });
     const face = new Mesh(new CircleGeometry(radius * POKE.iconShare, segments), this.faceMaterial);
     face.position.z = depth + 0.02;
     this.cap.add(face);
@@ -188,6 +191,13 @@ export class PokeButton implements Control {
   }
 }
 
+/**
+ * The icon as a texture, premultiplied: the see-through canvas pixels around
+ * the icon are black, and without it their color bleeds in as a thin dark
+ * edge when the texture is smoothed.
+ */
 function iconTexture(icon: ButtonIcon): CanvasTexture {
-  return canvasTexture(buttonIconCanvas(icon), 4);
+  const texture = canvasTexture(buttonIconCanvas(icon), 4);
+  texture.premultiplyAlpha = true;
+  return texture;
 }

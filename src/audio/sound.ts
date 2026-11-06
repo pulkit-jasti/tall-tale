@@ -182,7 +182,7 @@ export class GameAudio {
     }
   }
 
-  /** The player's group volumes changed: playing sounds follow at once (a muted group stops), the music too. */
+  /** The player's group volumes changed: playing sounds follow at once (a group turned off stops), the music too. */
   private applySettings(): void {
     this.music.setVolume(this.settings.level('music'));
     const now = this.listener.context.currentTime;

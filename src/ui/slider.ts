@@ -3,19 +3,20 @@
 //
 //   - A wide track with a big round handle (well over the 22 mm minimum
 //     target), the filled part of the track showing the value at a glance.
+//     The handle is a warm gold, so it stands out against the green fill and
+//     the dark track, and turns grey at 0 (off), so the state shows in color.
 //   - Touch it with the index finger, on the handle or anywhere on the track
-//     (the handle jumps there), then slide the finger along: the handle
-//     follows 1:1. It lets go once the finger pulls back off the face, so
-//     there is nothing to pinch or hold.
-//   - Minus and plus poke buttons at the ends move it one step, for anyone
-//     who finds dragging hard (fully usable without the drag).
+//     (the handle jumps there, so it works without dragging too), then slide
+//     the finger along: the handle follows 1:1. It lets go once the finger
+//     pulls back off the face, so there is nothing to pinch or hold. Near
+//     the ends it snaps to 0 and to 1, so off and full are easy to hit.
 //   - The same Idle, Ready and Held looks as every other touchable thing
 //     (emissive only), a tick at every step while it moves and a click when
 //     it is let go, since there are no haptics.
 //
 // Its face points along the group's local +z, like the poke button. Sizes in
 // the parent's units (cm in the rigs). `onChange(value, final)`: final is
-// true when a move ends (a release or a button step), the time to save.
+// true when a move ends (the finger lets go), the time to save.
 import { BoxGeometry, CylinderGeometry, Group, Mesh, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { POKE, SLIDER } from '../config/game.js';
@@ -23,13 +24,12 @@ import type { TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { flatMaterial } from '../world/shapes.js';
 import { changeTouch, type Control } from './kit/controls.js';
-import { clamp01, stepValue } from './kit/layout.js';
-import { PokeButton } from './pokeButton.js';
+import { clamp01 } from './kit/layout.js';
 
 export interface SliderOptions {
   /** Track length (the handle's middle moves this far). Defaults to SLIDER.length. */
   length?: number;
-  /** Steps from one end to the other (for the buttons and the ticks). */
+  /** Steps from one end to the other (a tick at each while it moves). */
   steps: number;
   value: number;
 }
@@ -46,8 +46,6 @@ export class Slider implements Control {
   private fill: Mesh;
   private handle: Mesh;
   private handleMaterial: MeshStandardMaterial;
-  private minus: PokeButton;
-  private plus: PokeButton;
   private touch: TouchState = 'idle';
   /** The finger came from the front (it was over the face), so touching the face grabs it. */
   private armed = false;
@@ -74,20 +72,12 @@ export class Slider implements Control {
     this.handle.rotation.x = Math.PI / 2;
     this.handle.position.z = S.trackDepth + S.handleDepth / 2;
     this.group.add(track, this.fill, this.handle);
-    // Minus and plus at the ends.
-    this.minus = new PokeButton(audio, { radius: S.buttonRadius, icon: 'minus' });
-    this.plus = new PokeButton(audio, { radius: S.buttonRadius, icon: 'plus' });
-    const end = this.length / 2 + S.handleRadius + S.buttonGap + S.buttonRadius * POKE.rimScale;
-    this.minus.group.position.x = -end;
-    this.plus.group.position.x = end;
-    this.group.add(this.minus.group, this.plus.group);
     this.show();
   }
 
-  /** Width from the minus button's outer edge to the plus button's (for laying it out). */
+  /** Width from end to end, the handle at either end included (for laying it out). */
   get width(): number {
-    const S = SLIDER;
-    return 2 * (this.length / 2 + S.handleRadius + S.buttonGap + 2 * S.buttonRadius * POKE.rimScale);
+    return this.length + 2 * SLIDER.handleRadius;
   }
 
   get current(): number {
@@ -100,28 +90,21 @@ export class Slider implements Control {
     this.show();
   }
 
-  /** No grab and no button press for this long (a panel just opened, the finger may still be there). */
+  /** No grab for this long (a panel just opened, the finger may still be there). */
   lock(seconds: number): void {
     this.cooldown = Math.max(this.cooldown, seconds);
-    this.minus.lock(seconds);
-    this.plus.lock(seconds);
   }
 
   reset(): void {
     this.held = null;
     this.armed = false;
     this.setTouch('idle');
-    this.minus.reset();
-    this.plus.reset();
   }
 
   /** Every frame while it shows. */
   update(hands: HandState[], dt: number): void {
     const S = SLIDER;
     this.cooldown = Math.max(0, this.cooldown - dt);
-    const stepSize = 1 / this.steps;
-    if (this.minus.update(hands, dt)) this.stepBy(-stepSize);
-    if (this.plus.update(hands, dt)) this.stepBy(stepSize);
     // Dragging: the handle follows the finger along the track until it pulls back off the face.
     if (this.held) {
       const hand = this.held;
@@ -170,17 +153,12 @@ export class Slider implements Control {
     return false;
   }
 
-  private stepBy(step: number): void {
-    const next = stepValue(this.value, step, this.steps);
-    if (next === this.value) return;
-    this.value = next;
-    this.show();
-    this.onChange(this.value, true);
-  }
-
-  /** The handle to the spot along the track (a tick at every step it passes). */
+  /** The handle to the spot along the track (a tick at every step it passes). Within half a step of an end it snaps to it. */
   private moveTo(x: number, final: boolean): void {
-    const next = clamp01(x / this.length + 0.5);
+    const snap = 0.5 / this.steps;
+    let next = clamp01(x / this.length + 0.5);
+    if (next < snap) next = 0;
+    else if (next > 1 - snap) next = 1;
     if (next === this.value) return;
     const before = Math.round(this.value * this.steps);
     this.value = next;
@@ -192,6 +170,8 @@ export class Slider implements Control {
   private show(): void {
     const x = (this.value - 0.5) * this.length;
     this.handle.position.x = x;
+    // Gold while on, grey at 0 (off): the state shows in color, not just in where the handle is.
+    this.handleMaterial.color.setHex(this.value <= 0 ? SLIDER.offColor : SLIDER.handleColor);
     const filled = Math.max(0.001, this.value * this.length + SLIDER.trackHeight / 2);
     this.fill.scale.x = filled;
     this.fill.position.x = -this.length / 2 - SLIDER.trackHeight / 4 + filled / 2;

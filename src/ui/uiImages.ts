@@ -26,6 +26,9 @@ const FILES = {
 
 /** Long side of an SVG drawn into a texture of its own (pixels). */
 const RASTER_SIZE = 256;
+/** The cream of every icon drawn in code, and the dark brown outline the tutorial markers keep (to read against the sky). */
+const ICON_FILL = '#f7e2b0';
+const ICON_OUTLINE = '#6d4b27';
 
 export type UiImageName = keyof typeof FILES;
 
@@ -191,7 +194,7 @@ export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reac
  * cream fill with a brown outline. Used on the faces of all poke buttons.
  */
 export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
-  if (icon === 'next') return arrowCanvas('right');
+  if (icon === 'next') return arrowCanvas('right', false);
   const key = `button|${icon}`;
   const cached = tinted.get(key);
   if (cached) return cached;
@@ -202,8 +205,9 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
   c.translate(s / 2, s / 2);
   c.lineJoin = 'round';
   c.lineCap = 'round';
-  c.strokeStyle = '#6d4b27';
-  c.fillStyle = '#f7e2b0';
+  // No dark outline (it looked ugly on the buttons): the outline is the fill's own cream, so it only makes the shape a little bolder.
+  c.strokeStyle = ICON_FILL;
+  c.fillStyle = ICON_FILL;
   if (icon === 'minus' || icon === 'plus') {
     // A fat bar, and for plus a second one across it.
     c.lineWidth = s * 0.06;
@@ -260,10 +264,12 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.closePath();
     c.fill();
     c.stroke();
+    // The hole is cut out, so the button's green shows through.
     c.beginPath();
     c.arc(0, 0, s * 0.11, 0, Math.PI * 2);
-    c.fillStyle = '#6d4b27';
+    c.globalCompositeOperation = 'destination-out';
     c.fill();
+    c.globalCompositeOperation = 'source-over';
   } else if (icon === 'back') {
     // Back: an arrow pointing left.
     c.lineWidth = s * 0.06;
@@ -345,11 +351,7 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     const end = Math.PI * 1.35;
     c.beginPath();
     c.arc(0, 0, r, start, end);
-    c.lineWidth = s * 0.17;
-    c.strokeStyle = '#6d4b27';
-    c.stroke();
-    c.lineWidth = s * 0.09;
-    c.strokeStyle = '#f7e2b0';
+    c.lineWidth = s * 0.12;
     c.stroke();
     // Arrowhead at the start of the ring, pointing along it (clockwise).
     const ax = Math.cos(start) * r;
@@ -366,7 +368,6 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.lineTo(ax - nx * head + tx * head * 0.2, ay - ny * head + ty * head * 0.2);
     c.closePath();
     c.lineWidth = s * 0.05;
-    c.strokeStyle = '#6d4b27';
     c.fill();
     c.stroke();
   }
@@ -378,8 +379,8 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
  * A crisp arrow drawn in code (256 px), in the Kenney look: cream fill with a
  * brown outline. `direction` is where it points.
  */
-export function arrowCanvas(direction: 'left' | 'right' | 'down'): HTMLCanvasElement {
-  const key = `arrow|${direction}`;
+export function arrowCanvas(direction: 'left' | 'right' | 'down', outline = true): HTMLCanvasElement {
+  const key = `arrow|${direction}|${outline}`;
   const cached = tinted.get(key);
   if (cached) return cached;
   const canvas = document.createElement('canvas');
@@ -400,8 +401,9 @@ export function arrowCanvas(direction: 'left' | 'right' | 'down'): HTMLCanvasEle
   c.closePath();
   c.lineJoin = 'round';
   c.lineWidth = s * 0.06;
-  c.strokeStyle = '#6d4b27';
-  c.fillStyle = '#f7e2b0';
+  // Outlined for the markers (they float against the sky); on a button no dark outline, it looked ugly there.
+  c.strokeStyle = outline ? ICON_OUTLINE : ICON_FILL;
+  c.fillStyle = ICON_FILL;
   c.fill();
   c.stroke();
   tinted.set(key, canvas);

@@ -67,7 +67,7 @@ The tutorial is a hand-written script in code (`src/director/tutorial.ts`), not 
 - Steps only call the normal game systems (spawn enemy, show tool, open road). Nothing tutorial-only lives inside those systems.
 - **Learn by doing, with text.** Each lesson shows one short instruction on the hint sign, a marker on the thing to use, and waits until the player does it. Then its box is ticked with a chime and the next one appears. No "OK" buttons.
   - **Hint sign:** past the goblins at the front wall (62 cm out, bottom edge 43 cm above the board, just below the eyes), so it covers only the far edge of the board. It rises with the board, never spins and never follows the head. Shows "Step 3 of 8" for lessons and "Wave 2 of 5" banners for waves. **While a wave is fought it is gone**, so it never covers the enemies. No goblin counter: the blue flag shows the progress.
-  - **Next button:** the sign is out of reach, so Next stands apart on a post straight in front, in the reach band (38.5 cm out, 15 cm up). It blinks while it waits. One click per push: after a click the finger must come back out about 2 cm and 0.6 s must pass, and a new step ignores it for 1 s.
+  - **Next button:** the sign is out of reach, so Next stands apart on a post straight in front, in the reach band (38.5 cm out, 15 cm up). It no longer blinks (it looked busy). One click per push: after a click the finger must come back out about 2 cm and 0.6 s must pass, and a new step ignores it for 1 s.
   - **Marker:** one bouncing down arrow over the target, drawn on top so the wall never hides it.
   - **Out of view:** a gold 3D pointer arrow in front of the face points at the lesson's target while it is at the edge of the view or out of it.
   - **Ghost hand:** a see-through 3D hand loops the gesture on the real target. It steps aside while the player's own hand is there. Demos are data in `src/ui/ghostDemos.ts`. The accuracy rules are in AGENTS.md ("Ghost hand demos"). Ghost aim dots show the arc from the pouch to the target in the slingshot and trigger lessons.
@@ -255,6 +255,49 @@ Not part of the MVP build order. Built on the branch `feat/day-night-cycle` (202
 - Run the stress test at night (`]` to night first): the rim, fade and lights add shader work ([performance.md](performance.md)).
 
 **Not yet:** fireflies; campfires in the goblin camps that stay bright at night (they fade with the terrain now, since they share materials with the other decor); night sounds.
+
+### More on the same branch: sound, UI and a livelier world
+
+Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-06), after the day and night work. **Not tested on the headset yet** (only the sound direction test was), **typecheck, build and tests not run yet**, nothing committed. Details live in the docs linked below; this is the overview.
+
+**Sound** ([audio.md](audio.md), `public/audio/README.md`)
+- **Real sounds** from Freesound in place of the chime: goblin growl (squeal), cackle (for the climber giggle later), eating, sneeze, war drums (camp rumble, cut at 3 s), boulder roll, balloon pop (new), war horn at each wave start (new), medieval fanfare on a win (new).
+- **Placed sounds work:** a direction test (one looping sound on the board, everything else muted, a mono and stereo switch on the debug page) showed left and right are clear; the test is removed again. Every placed sound is mixed to mono in code, sounds behind the head are muffled and a little quieter (front and back were confusing), loudness falls with distance.
+- **Soft ends:** sounds of 2 s or more fade out over their end.
+- **Music:** a calm ambient track on the welcome, end, pause and settings panels and during the reach check, a medieval loop (0 to 32 s) in battle, crossfading.
+- **Sound groups:** Music, Goblins, Battle, Tools, Voice and menus, each with its own volume, saved.
+
+**Menus and UI** ([controls-and-ui.md](controls-and-ui.md))
+- **Pause button in front** on a post, below the Next button's spot (was on the wrist).
+- **Settings page** from the pause panel and from the welcome panel (its bottom right corner): Back, Measure reach (moved here from the pause panel), and one long slider per sound group, all the way left is off.
+- **The slider:** touch and slide with the index finger (touching the track jumps the handle), snaps to off and full near the ends, a gold handle that turns grey at off.
+- **Menus right in front of the eyes** (`UI_ZONE`): never higher than 2 cm above the eyes or lower than 30 cm below; a test checks every panel.
+- **Button sizes** (`BUTTON_SIZE`): five sizes from 3.6 to 9.1 cm across, the dev build warns outside 3 to 9.1 cm.
+- **Clean icons:** no dark outline and no dark edge on the button icons. The Next button no longer blinks.
+- **Our own UI library** (`src/ui/kit/`): every panel, button, slider, label and on-top layer is built from it.
+
+**Tutorial**
+- **The red threat arrow** stays away while a lesson's yellow arrow points the way.
+- **Pepper:** peppered goblins sneeze for 10 s and do no castle damage meanwhile; the lesson ends only when a peppered goblin is eaten.
+- **Balloons:** taught in the slingshot wave after the trigger lessons and a few more knockouts, one balloon hovering in front until popped, no Next button.
+
+**World** (day and night section above, [placeholder-shapes.md](placeholder-shapes.md), [assets.md](assets.md))
+- **Camps** farther out and bigger, each different, no shake; the front one close enough to see.
+- **Story scenes**, **villagers**, **road torches** with pools of light, a warmer, golden noon without pink, brighter yellow-orange windows, weaker moonlight, small halos instead of big round glows.
+- **Pebble:** a lumpy low-poly ball that rolls on after a miss.
+- **No farm animals:** none of the downloaded Kenney packs has any (only fish).
+
+**Still open on this branch**
+- **Run typecheck, build and tests**, then fix what they find. Much was written without them.
+- **Headset checks:** everything above. Most of all: the settings page and slider feel (touch, drag, the gold handle, the rows' spacing), the menus' height, the pause button in front, the balloon and pepper lessons, road torch pools and the small halos at night, the new camps and scenes from the seat, villagers walking through the village square's stall or cart, story scenes floating or sinking on bumpy ground (they sit on the terrain, it is not flattened for them).
+- **Stress test** with the new load ([performance.md](performance.md)), by day and at night.
+- **Pacing:** with the camps farther out a grunt walks about 60 s to the wall (was about 33 s). Raise the goblin speeds if the waves drag.
+- **Music:** check the battle loop point (32 s, taken from the file's name), and the music layers idea ([audio.md](audio.md)).
+- **Sound licenses:** check each Freesound file's license on its page (CC BY needs a credit line). InspectorJ (the sneeze) usually uses CC BY.
+- **Sound files still to prepare:** the bell (AIFF does not play in the Quest browser, convert it), the sword hits (cut into single hits), the village ambience (20 MB, needs a short loop). Still missing: goblin chatter, burp, keg explosion, troop cheer, lose sound, ambience and night sounds.
+- **Debug keys:** safe to remove (the debug page does everything, the headset has no keyboard), not removed yet. The debug actions and their code stay for the page.
+- **Campfires at night:** the goblin camps' fires fade with the terrain; a small glow would help.
+- **Lighting the ground near torches** in the terrain shader, if night still looks flat (option 2 of the torch light ideas).
 
 ### Far future ideas
 

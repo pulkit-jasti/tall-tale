@@ -35,6 +35,7 @@ const matrix = new Matrix4();
 const at = new Vector3();
 const size = new Vector3();
 const still = new Quaternion();
+const UP = new Vector3(0, 1, 0);
 
 /** A glow that always faces the eye: a quad turned toward the view in its shader, its size from the instance's scale. */
 function facingGlowMaterial(): ShaderMaterial {
@@ -65,6 +66,12 @@ function facingGlowMaterial(): ShaderMaterial {
   });
 }
 
+/** A torch beside a road: its spot on the ground and the road's direction there (radians, around the vertical). */
+export interface RoadTorch {
+  at: Vector3;
+  yaw: number;
+}
+
 export class NightLights {
   private panes: InstancedMesh | null = null;
   private windowGlows: InstancedMesh | null = null;
@@ -79,6 +86,9 @@ export class NightLights {
   private sticks: InstancedMesh;
   private flames: InstancedMesh;
   private pools: InstancedMesh | null = null;
+  private poolSpots: { at: Vector3; turn: Quaternion }[] = [];
+  /** The first torches are the castle's (they have a halo), the rest stand by the roads. */
+  private castleTorches = CASTLE.towerCount;
   private poolMaterial = new MeshBasicMaterial({
     map: glowTexture(),
     fog: false,
@@ -98,7 +108,7 @@ export class NightLights {
    * `lanterns` are their placements there, `roadTorches` the ground spots
    * of the torches beside the roads.
    */
-  constructor(board: Object3D, windows: Matrix4[], lanterns: Matrix4[], lanternHeight: number, roadTorches: Vector3[] = []) {
+  constructor(board: Object3D, windows: Matrix4[], lanterns: Matrix4[], lanternHeight: number, roadTorches: RoadTorch[] = []) {
     // Windows: a warm pane just out of the wall, and a glow on the wall around it (a tile faces +x, its outside at 0.5).
     if (windows.length > 0) {
       const pane = new PlaneGeometry(L.paneSize[0], L.paneSize[1]).rotateY(Math.PI / 2).translate(L.paneOut, L.paneHeight, 0);
@@ -124,7 +134,7 @@ export class NightLights {
     }
     // Torches on tall posts beside the roads, out across the board, each with a pool of warm light on the
     // ground around it, so the goblins walking past show up against it at night.
-    for (const ground of roadTorches) {
+    for (const { at: ground } of roadTorches) {
       this.torches.push(new Vector3(ground.x, ground.y + L.roadTorchStick + L.torchFlame * 0.45, ground.z));
       stickLengths.push(L.roadTorchStick);
     }
@@ -143,28 +153,39 @@ export class NightLights {
     this.flames.frustumCulled = false;
     this.flames.visible = false;
     board.add(this.flames);
-    // Round glows: one per torch (they flicker with it), one per lantern (still).
+    // Small soft halos right at the flames of the castle torches (they flicker with them) and at each lantern (still).
+    // A big round glow read as a floating ball, not as light, so they stay small and the road torches have none.
     const quad = new PlaneGeometry(1, 1);
-    this.glows = new InstancedMesh(quad, this.glowMaterial, this.torches.length + lanterns.length);
+    this.glows = new InstancedMesh(quad, this.glowMaterial, this.castleTorches + lanterns.length);
     this.glows.frustumCulled = false;
     lanterns.forEach((m, i) => {
       at.set(0, lanternHeight * L.lanternLightAt, 0).applyMatrix4(m);
-      this.glows.setMatrixAt(this.torches.length + i, matrix.compose(at, still, size.setScalar(L.lanternGlowSize)));
+      this.glows.setMatrixAt(this.castleTorches + i, matrix.compose(at, still, size.setScalar(L.lanternGlowSize)));
     });
     this.glows.visible = false;
     board.add(this.glows);
-    // The pools of light on the ground under the road torches (flat, additive, a little above the ground).
+    // The pools of light on the ground around the road torches: flat soft ovals along the road, additive,
+    // a little above the ground, flickering with their flames. What reads as torch light at night.
     if (roadTorches.length > 0) {
-      const pool = new PlaneGeometry(L.roadPoolSize, L.roadPoolSize).rotateX(-Math.PI / 2);
+      const pool = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
       this.pools = new InstancedMesh(pool, this.poolMaterial, roadTorches.length);
-      roadTorches.forEach((g, i) => {
-        at.set(g.x, g.y + 0.4, g.z);
-        this.pools!.setMatrixAt(i, matrix.compose(at, still, size.set(1, 1, 1)));
-      });
-      this.pools.computeBoundingSphere();
+      this.pools.frustumCulled = false;
+      this.poolSpots = roadTorches.map((t) => ({ at: new Vector3(t.at.x, t.at.y + 0.4, t.at.z), turn: new Quaternion().setFromAxisAngle(UP, t.yaw) }));
+      this.placePools(1);
       this.pools.visible = false;
       board.add(this.pools);
     }
+  }
+
+  /** Each pool at its torch, stretched along the road, its size wobbling with the flame (`wobble` per torch, 1 = still). */
+  private placePools(wobbleAt: number | ((i: number) => number)): void {
+    if (!this.pools) return;
+    this.poolSpots.forEach((spot, i) => {
+      const w = typeof wobbleAt === 'number' ? wobbleAt : wobbleAt(this.castleTorches + i);
+      const s = L.roadPoolSize * (1 + L.roadPoolFlicker * (w - 1) / L.flicker);
+      this.pools!.setMatrixAt(i, matrix.compose(spot.at, spot.turn, size.set(s * L.roadPoolStretch, 1, s)));
+    });
+    this.pools.instanceMatrix.needsUpdate = true;
   }
 
   /** Every frame: `level` is how bright the lights are now (0 = off). The flames flicker while they show. */
@@ -181,14 +202,19 @@ export class NightLights {
     if (level <= 0.01) return;
     this.time += dt;
     this.torches.forEach((p, i) => {
-      // Two waves at their own pace per torch, so no two flicker alike.
-      const wobble = 1 + L.flicker * (0.6 * Math.sin(this.time * L.flickerSpeed + i * 1.7) + 0.4 * Math.sin(this.time * L.flickerSpeed * 2.3 + i));
-      const flame = L.torchFlame * wobble * Math.min(1, level * 1.5);
-      this.flames.setMatrixAt(i, matrix.compose(p, still, size.set(flame, flame * (1 + 0.3 * (wobble - 1)), flame)));
-      this.glows.setMatrixAt(i, matrix.compose(p, still, size.setScalar(L.torchGlowSize * (0.85 + 0.15 * wobble))));
+      const w = this.wobble(i);
+      const flame = L.torchFlame * w * Math.min(1, level * 1.5);
+      this.flames.setMatrixAt(i, matrix.compose(p, still, size.set(flame, flame * (1 + 0.3 * (w - 1)), flame)));
+      if (i < this.castleTorches) this.glows.setMatrixAt(i, matrix.compose(p, still, size.setScalar(L.torchGlowSize * (0.85 + 0.15 * w))));
     });
     this.flames.instanceMatrix.needsUpdate = true;
     this.glows.instanceMatrix.needsUpdate = true;
+    this.placePools((i) => this.wobble(i));
+  }
+
+  /** A torch's flicker now (1 = still): two waves at their own pace per torch, so no two flicker alike. */
+  private wobble(i: number): number {
+    return 1 + L.flicker * (0.6 * Math.sin(this.time * L.flickerSpeed + i * 1.7) + 0.4 * Math.sin(this.time * L.flickerSpeed * 2.3 + i));
   }
 }
 

@@ -4,7 +4,8 @@
 // part's own file. Sizes are cm in the rigs, layout pixels on canvases.
 //
 //   Controls:  PokeButton, Slider, StandButton, armControls, changeTouch
-//   Panels:    Panel (a parchment board with a canvas), LazyFollow (menus that follow the head), centerAbove
+//   Panels:    Panel (a parchment board with a canvas), LazyFollow (menus that follow the head), centerAbove,
+//              uiCenterY (every menu panel's height: in front of the eyes, inside UI_ZONE)
 //   Layout:    rowX, bottomRowY, panelMap, stepValue, clamp01, angleTo (no Three.js)
 //   Drawing:   drawTitleBanner, drawLine, drawOutlined, UI_COLORS, and the Kenney UI images
 //              (drawBanner, drawIcon, drawNineSlice, fitFont, wrapText, arrowCanvas, buttonIconCanvas)
@@ -19,6 +20,8 @@ export { angleTo, bottomRowY, clamp01, panelMap, rowX, stepValue, type PanelMap 
 export { drawLine, drawOutlined, drawTitleBanner, UI_COLORS } from './text.js';
 export { canvasPlane, canvasTexture } from './canvas.js';
 export { drawOnTop } from './onTop.js';
+// Where panels sit up and down: right in front of the eyes, inside UI_ZONE (config).
+export { fitsUiZone, uiCenterY } from '../../rules/reach.js';
 export {
   arrowCanvas,
   buttonIconCanvas,
