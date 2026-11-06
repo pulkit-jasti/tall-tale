@@ -102,17 +102,19 @@ All tests: grunts only, standing at the wall and hitting it, player sitting stil
 
 ---
 
-## 5. Next optimizations (before or with build step 5)
+## 5. Since the last measurement (step 1), and what to try next
 
-In order of expected gain:
+**Not measured since build step 1.** The next run is the stress test with troops (step 7). Everything added since then is listed below, so a drop can be traced.
 
-1. **Less memory churn:** remove per-frame allocations (for example the unit count builds a new list every call, plus temporary arrays and objects in loops). The most likely cause of the "nothing marked" drops.
+Already done: goblins and soldiers over 150 cm from the center update their animation every other frame (`TROOPS.farAnimFrom`), and grab and eat no longer makes a new Set every frame.
+
+Still to try if the frame rate drops, in order of expected gain:
+
+1. **Less memory churn:** remove per-frame allocations (temporary arrays and objects in loops). The most likely cause of the "nothing marked" drops.
 2. **Shared animation:** goblins doing the same thing share one animation update instead of one animation player each.
-3. **Cheaper far goblins:** update the animation of distant goblins less often.
-4. **Then re-run the stress test** and record the result in section 3.
-
-**Done in build step 5:** item 3 (goblins and soldiers over 150 cm from the center update their animation every other frame, `TROOPS.farAnimFrom`) and part of item 1 (grab and eat reuses its ready set instead of a new Set every frame). New load from step 5: up to 12 skinned soldiers (`TROOPS.max`, 4 for testing now), 3 triggers, a debris pool of 14 small models (drawn only while flying), dizzy stars, the sky (one instanced mesh for all 450 cloud puffs, about 36k triangles, and 3 draw calls for the sun) and the hills (5 draw calls). The stress test has not been run since step 2: run it now, then a full wave 5 with the FPS panel, and log both here.
 
 **New load after the step 5 reviews (not measured yet):** the sky dome (1 draw call), 22 high clouds (same mesh), about twice as many hills (still 4 draw calls), fog on the hills, a finer, hilly board mesh (about 12,000 points, flat shaded, still one draw call), and about 1,000 decor models merged into about a dozen meshes (about 80,000 triangles, about 6 MB of geometry). Ground height lookups (`Terrain.heightAt`) run for every unit on a road each frame: a few triangle tests each. Villages, fields, towers, the windmill and wrecks add about 15 draw calls (one per texture or material) and about 60,000 triangles (most of it the crops). The far places (goblin hamlets, burned village, lumber camps, quarry, landmarks) add about 5 more draw calls and about 35,000 triangles (the goblin cabins and cages are the heaviest, up to 2,000 each). Building the map at load takes about 40 ms more (road distances and planning). If the stress test drops, lower the `DECOR` counts first, then the crop spacing (`SETTLEMENTS.farms.cropGap` up), then raise the `TERRAIN.ringStep` values or lower `TERRAIN.segments`.
+
+**New load from build steps 7 and 8 (not measured yet):** up to 8 soldiers (was 4), each with its gear merged into its skinned mesh (no extra draw calls, about 150 to 450 more skinned vertices per unit), goblins with spears and helmets (the same way, every goblin carries both and hides what it does not wear), up to 6 balloons (one instanced mesh, one draw call) with 2 riders each (normal goblins), arrows (one instanced mesh), flying gear (2 instanced meshes) and the juice (3 instanced meshes and 6 sprites, only while something shows). The particle pool is unchanged (160), with a few more bursts (runner dust, pebble trails, camp dust). **The stress test now keeps 8 soldiers and 2 balloons with riders on the board from the baseline on** (`STRESS_TEST.troops`, `balloons`): run it and log the result in section 3. If it drops, lower `TROOPS.max` first, then turn off runner dust (`JUICE.runnerDustEvery` up) and pebble trails.
 
 If troops plus enemies still do not fit, use the code-made instanced goblins from [placeholder-shapes.md](placeholder-shapes.md).

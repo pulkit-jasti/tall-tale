@@ -13,6 +13,12 @@ import type { RunStats, StressStep, StressTestReport } from './debugKeys.js';
 export interface StressTestHooks {
   /** Removes every goblin and stops auto spawning. */
   clear(): void;
+  /**
+   * After clear, before the baseline: the units that stay on the board for the
+   * whole test (soldiers of every kind, balloons with riders, since build
+   * step 7). Returns how many units that is.
+   */
+  setup(): number;
   /** Queues `count` grunts and returns how long they take to all come out (seconds). */
   spawn(count: number): number;
   /** Starts a new measured run after the warm-up plus `extraWarmup` seconds. */
@@ -29,6 +35,9 @@ export class StressTest {
   private running = false;
   private steps: StressStep[] = [];
   private target = 0;
+  /** Units standing for the whole test (soldiers, balloon riders), counted in every step. */
+  private base = 0;
+  private baselineDone = false;
   private reportTimer = 0;
   private note = '';
   private page = '';
@@ -47,10 +56,12 @@ export class StressTest {
     this.hooks.hidePanel(true);
     this.running = true;
     this.steps = [];
-    this.target = 0;
-    // Baseline: the empty board.
+    this.base = this.hooks.setup();
+    this.target = this.base;
+    this.baselineDone = false;
+    // Baseline: the board with only the standing soldiers and balloons.
     this.hooks.resetRun(0);
-    this.note = 'Measuring the empty board (baseline)';
+    this.note = this.base > 0 ? `Measuring the baseline (${this.base} soldiers and riders)` : 'Measuring the empty board (baseline)';
     this.send('running');
   }
 
@@ -69,7 +80,7 @@ export class StressTest {
     if (s && s.seconds >= STRESS_TEST.measureSeconds) {
       const rule = this.rule();
       const step: StressStep = {
-        baseline: this.target === 0,
+        baseline: !this.baselineDone,
         units: s.units,
         avgFps: s.avgFps,
         lowFps: s.lowFps,
@@ -82,10 +93,11 @@ export class StressTest {
       };
       this.steps.push(step);
       if (step.baseline) {
+        this.baselineDone = true;
         this.nextStep();
       } else if (!step.pass) {
         this.finish(`${step.units} units failed: ${failReason(step, rule)}.`);
-      } else if (this.target >= STRESS_TEST.maxUnits || s.units < this.target) {
+      } else if (this.target >= STRESS_TEST.maxUnits || s.units < this.target - 1) {
         // Either the limit, or the unit cap stopped new goblins from coming.
         this.finish(`Still passing at ${step.units} units, the most the test adds.`);
       } else {
@@ -94,8 +106,8 @@ export class StressTest {
       return;
     }
     this.note = s
-      ? `Measuring ${this.target === 0 ? 'the empty board' : `${s.units} units`}: ${s.seconds.toFixed(0)} of ${STRESS_TEST.measureSeconds} s`
-      : this.target === 0
+      ? `Measuring ${!this.baselineDone ? 'the baseline' : `${s.units} units`}: ${s.seconds.toFixed(0)} of ${STRESS_TEST.measureSeconds} s`
+      : !this.baselineDone
         ? 'Warming up for the baseline'
         : `Adding grunts (to ${this.target}) and warming up`;
     this.reportTimer += dt;

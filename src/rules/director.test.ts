@@ -69,13 +69,31 @@ describe('director', () => {
 });
 
 /** A fake game: the player does nothing at all. */
-function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: string[]; ended: number; held: Record<string, boolean> } {
+function idleApi(): TutorialApi & {
+  cleared: number;
+  started: number[];
+  shown: string[];
+  ended: number;
+  held: Record<string, boolean>;
+  sentPast: number;
+  lessonKinds: string[];
+  released: number;
+  baited: string[];
+  baitReleased: number;
+  balloons: number;
+} {
   return {
     cleared: 0,
     started: [],
     shown: [],
     ended: 0,
     held: {},
+    sentPast: 0,
+    lessonKinds: [],
+    released: 0,
+    baited: [],
+    baitReleased: 0,
+    balloons: 0,
     startWave(index) {
       this.started.push(index);
     },
@@ -107,6 +125,30 @@ function idleApi(): TutorialApi & { cleared: number; started: number[]; shown: s
     eaten: () => 0,
     slingCount: () => 0,
     slingLoaded: () => false,
+    startTriggerLesson(kind) {
+      this.sentPast++;
+      this.lessonKinds.push(kind);
+    },
+    sendPastTrigger() {
+      this.sentPast++;
+    },
+    triggersSetOff: () => 0,
+    endTriggerLesson() {
+      this.released++;
+    },
+    baitMoving() {
+      this.baited.push('moving');
+    },
+    baitForTool() {
+      this.baited.push('wall');
+    },
+    releaseBait() {
+      this.baitReleased++;
+    },
+    pausedCount: () => 0,
+    balloonIntro() {
+      this.balloons++;
+    },
   };
 }
 
@@ -282,6 +324,112 @@ describe('tutorial director', () => {
     const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot'], TUTORIAL_WAVES, 0, true), api);
     run(director, 60);
     expect(director.current?.id).not.toBe('reach-check');
+  });
+
+  it('teaches each trigger in its own lesson in wave 2 right after the first shot: keg, boulder, tree', () => {
+    const api = idleApi();
+    const steps = buildTutorialSteps(['slingshot']);
+    const ids = steps.map((s) => s.id);
+    const shoot = ids.indexOf('learn-sling-shoot');
+    expect(ids.slice(shoot + 1, shoot + 4)).toEqual(['learn-keg', 'learn-boulder', 'learn-tree']);
+    expect(ids.indexOf('learn-tree')).toBeLessThan(ids.indexOf('wave-2-clear'));
+    // Ghost aim dots in all three, the ghost hand only in the first.
+    const hints = ['learn-keg', 'learn-boulder', 'learn-tree'].map((id) => steps.find((s) => s.id === id)!.hint!);
+    expect(hints.map((h) => !!h.aimDots)).toEqual([true, true, true]);
+    expect(hints.map((h) => !!h.demo)).toEqual([true, false, false]);
+    const director = new Director<TutorialApi>(steps, api);
+    while (director.current?.id !== 'learn-keg') director.skip();
+    expect(api.lessonKinds).toEqual(['keg']);
+    expect(director.spawnRate).toBe(0);
+    // The goblins wait as long as it takes: still on the keg lesson long after the old 60 s, with the group topped up at most twice.
+    run(director, 120);
+    expect(director.current?.id).toBe('learn-keg');
+    expect(api.sentPast).toBe(3);
+    // The player shoots the keg: the boulder lesson starts, then the tree lesson.
+    const setOff: Record<string, number> = { keg: 1, boulder: 0, tree: 0 };
+    api.triggersSetOff = (kind) => setOff[kind];
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-boulder');
+    setOff.boulder = 1;
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-tree');
+    setOff.tree = 1;
+    director.update(0.1);
+    expect(director.current?.id).toBe('wave-2-clear');
+    expect(api.lessonKinds).toEqual(['keg', 'boulder', 'tree']);
+    // Each lesson lets its waiting goblins go when it ends.
+    expect(api.released).toBe(3);
+  });
+
+  it('a trigger lesson still never gets stuck: it moves on after its long timeout when nothing is hit', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
+    while (director.current?.id !== 'learn-keg') director.skip();
+    run(director, 241);
+    expect(director.current?.id).toBe('learn-boulder');
+  });
+
+  it('teaches pausing first: done once the player paused and came back, and never stuck without hands', () => {
+    const steps = buildTutorialSteps(['slingshot']);
+    expect(steps[0].id).toBe('learn-pause');
+    expect(steps[0].hint?.demo).toBe('pauseShow');
+    const api = idleApi();
+    const director = new Director<TutorialApi>(steps, api);
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-pause');
+    api.pausedCount = () => 1;
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-spin');
+    const idle = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), idleApi());
+    run(idle, 50);
+    expect(idle.current?.id).not.toBe('learn-pause');
+  });
+
+  it('the first shot is at moving goblins brought for it: the wave waits, done on a hit, and they go on after', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), api);
+    while (director.current?.id !== 'learn-sling-shoot') director.skip();
+    expect(api.baited).toEqual(['moving']);
+    expect(director.spawnRate).toBe(0);
+    // The ghost aim dots show the way to it.
+    expect((director.current as TutorialStep).hint?.aimDots).toBe(true);
+    // A miss is not enough: it waits for a hit.
+    api.slingCount = () => 5;
+    run(director, 30);
+    expect(director.current?.id).toBe('learn-sling-shoot');
+    api.toolUses = (tool) => (tool === 'slingshot' ? 1 : 0);
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-keg');
+    expect(api.baitReleased).toBe(1);
+  });
+
+  it('a tool use lesson brings goblins to the wall to use it on, holds the wave, and lets them go after', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot', 'swatter']), api);
+    while (director.current?.id !== 'learn-swatter') director.skip();
+    expect(api.baited).toContain('wall');
+    expect(director.spawnRate).toBe(0);
+    api.toolUses = (tool) => (tool === 'swatter' ? 1 : 0);
+    director.update(0.1);
+    expect(director.current?.id).toBe('wave-3-clear');
+    expect(api.baitReleased).toBeGreaterThan(0);
+  });
+
+  it('shows the balloon banner once, in the first balloon wave after its tool lesson, and lets the balloons come', () => {
+    const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper', 'megaphone']);
+    const ids = steps.map((s) => s.id);
+    expect(ids.filter((id) => id === 'balloon-intro')).toHaveLength(1);
+    const first = TUTORIAL_WAVES.findIndex((w) => (w.balloons ?? 0) > 0);
+    expect(first).toBe(3);
+    expect(ids.indexOf('balloon-intro')).toBeGreaterThan(ids.indexOf('learn-pepper'));
+    expect(ids.indexOf('balloon-intro')).toBeLessThan(ids.indexOf('wave-4-clear'));
+    // An info step: it waits for Next, and its start sends the first balloon.
+    const api = idleApi();
+    api.waveCleared = () => true;
+    const director = new Director<TutorialApi>(steps, api);
+    runPokingNext(director, 60 * 40);
+    expect(director.finished).toBe(true);
+    expect(api.balloons).toBe(1);
   });
 
   it('numbers the lessons', () => {

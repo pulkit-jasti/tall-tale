@@ -46,7 +46,7 @@ import {
   type MeshStandardMaterial,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { AIM_ASSIST, BOARD, GOBLIN_SHOT, HOLD, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
+import { AIM_ASSIST, BOARD, GOBLIN_SHOT, HOLD, JUICE, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
@@ -104,6 +104,12 @@ interface Pebble {
   target: Target | null;
   /** Assist share for that target. */
   share: number;
+  /** Landed: it lies there this long (seconds) before it shrinks away. -1 while it flies. */
+  rest: number;
+  /** Its spin when it landed, so it lies still. */
+  restTurn: number;
+  /** Time to the next trail puff (seconds). */
+  trail: number;
 }
 
 interface TraceResult {
@@ -364,6 +370,9 @@ export class Slingshot {
         velocity: new Vector3(),
         target: null,
         share: 1,
+        rest: -1,
+        restTurn: 0,
+        trail: 0,
       });
     }
     // The pebble in the pouch, shown once one is loaded.
@@ -1025,6 +1034,14 @@ export class Slingshot {
           v.z = vz;
         }
       }
+      // Juice: a shot leaves a faint trail of puffs.
+      if (pebble.kind === 'shot' || pebble.kind === 'goblin') {
+        pebble.trail -= dt;
+        if (pebble.trail <= 0) {
+          pebble.trail = JUICE.pebbleTrailEvery;
+          this.particles.burst(this.stage.boardSpin.localToWorld(temp2.copy(p)), JUICE.pebbleTrailColors, 1, 0.01);
+        }
+      }
       temp.set(p.x + v.x * dt, p.y + v.y * dt - 0.5 * g * dt * dt, p.z + v.z * dt);
       v.y -= g * dt;
       const hit = pebble.kind === 'dropped' ? null : this.hitAlong(p, temp);
@@ -1134,9 +1151,15 @@ export class Slingshot {
     return false;
   }
 
-  private knockOut(goblin: Goblin): void {
+  /** `heavy` (a goblin shot) goes through a helmet. */
+  private knockOut(goblin: Goblin, heavy = false): void {
     this.goblins.worldPosition(goblin, temp2);
-    this.goblins.kill(goblin);
+    // A helmet takes the hit: it flies off and the goblin is knocked back (a hit for the lessons all the same).
+    if (!heavy && this.goblins.armor(goblin)) {
+      this.onHit(goblin);
+      return;
+    }
+    this.goblins.kill(goblin, true);
     this.particles.burst(temp2, HIT_COLORS, 10);
     this.audio.play('pebbleHit', temp2);
     this.audio.play('poof', temp2, 1, 0.05);
@@ -1156,7 +1179,7 @@ export class Slingshot {
    * any, knocks back the goblins around the impact, and poofs.
    */
   private splash(p: Vector3, hit: Goblin | null, shot: Goblin): void {
-    if (hit) this.knockOut(hit);
+    if (hit) this.knockOut(hit, true);
     const r = GOBLIN_SHOT.splashRadius;
     for (const g of this.goblins.list) {
       if (!this.goblins.isHittable(g)) continue;

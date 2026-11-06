@@ -26,6 +26,8 @@ export interface WavePlan {
   spawnTime: number;
   /** The tool that appears on its platform in the breather before this wave. */
   newTool?: ToolName;
+  /** Balloons with riders this wave (build step 7). The first wave with balloons shows a banner when they come. */
+  balloons?: number;
 }
 
 /**
@@ -60,12 +62,14 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     counts: { grunt: 14, runner: 8, climber: 4 },
     spawnTime: 60,
     newTool: 'pepper',
+    balloons: 3,
   },
   {
     intro: 'The final wave. Everything at once! Shoot the barrels, boulders and trees on the roads.',
     camps: ['campNorth', 'campEast', 'campSouth'],
     counts: { grunt: 18, runner: 16, climber: 4 },
     spawnTime: 70,
+    balloons: 4,
     // One new tool per wave: the megaphone (or the bell without a mic) has its own breather.
     newTool: 'megaphone',
   },
@@ -108,7 +112,15 @@ export type MarkerTarget =
   /** The stun tool that is out: the megaphone, or the bell without a mic. */
   | 'stunTool'
   | 'megaphoneHandle'
-  | 'bellHandle';
+  | 'bellHandle'
+  /** The keg, boulder or tree of the current trigger lesson. */
+  | 'lessonTrigger'
+  /** The pause button on the left palm, while it is out. */
+  | 'wristButton'
+  /** A goblin brought for the current lesson (the moving targets, the goblins on the wall). */
+  | 'baitGoblin'
+  /** The balloon the balloon banner is about (the nearest one in the air). */
+  | 'balloon';
 
 export type HintIcon = 'pinch' | 'grab' | 'spin' | 'up' | 'target' | 'warning' | 'info' | 'star' | 'trophy';
 
@@ -184,6 +196,28 @@ export interface TutorialApi {
   /** Slingshot steps done since it appeared, and whether something is in the pouch. */
   slingCount(event: 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot'): number;
   slingLoaded(): boolean;
+  /**
+   * A trigger lesson: brings that kind onto the roads (if it is not there
+   * yet), picks the one nearest the front, and sends a small group of goblins
+   * to wait right in what it does until the player sets it off.
+   */
+  startTriggerLesson(kind: TriggerKind): void;
+  /** Tops the waiting group up again if goblins went missing (the fallback), with a pulse of the marker. */
+  sendPastTrigger(): void;
+  /** The trigger lesson is over: the goblins still waiting walk on. */
+  endTriggerLesson(): void;
+  /** The shoot lesson: a few goblins walk back and forth on the road in front, a moving target (topped up when called again). */
+  baitMoving(): void;
+  /** A tool's use lesson: a few goblins wait still on the wall in front, harmless, until it is used (topped up when called again). */
+  baitForTool(): void;
+  /** The lesson is over: its goblins go on as usual. */
+  releaseBait(): void;
+  /** How many triggers of a kind were set off in this battle. */
+  triggersSetOff(kind: TriggerKind): number;
+  /** How often the player paused (and came back) in this battle. */
+  pausedCount(): number;
+  /** The first balloon wave's banner: one balloon floats in right in front, and the wave's balloons may come from now on. */
+  balloonIntro(): void;
 }
 
 const lesson = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Partial<Hint> = {}): Hint => ({
@@ -505,6 +539,26 @@ function toolLesson(tool: FoodTool): TutorialStep {
   );
 }
 
+/**
+ * The first balloon wave (build step 7): "Look up!" A balloon floats in right
+ * in front while the banner shows (Next). Its riders are dropped into the
+ * courtyard if nobody pops it, so it is taught by seeing it, then fighting it.
+ */
+function balloonStep(): TutorialStep {
+  return infoStep(
+    'balloon-intro',
+    banner('Look up! Balloon riders float over the wall and drop goblins inside. Pop the balloons with your slingshot.', 'warning', 'balloon', {
+      header: 'Balloons!',
+    }),
+    (api) => api.balloonIntro(),
+  );
+}
+
+/** The first wave with balloons (0 based), or -1. */
+export function firstBalloonWave(waves: WavePlan[] = TUTORIAL_WAVES): number {
+  return waves.findIndex((w) => (w.balloons ?? 0) > 0);
+}
+
 const TOOL_NAMES: Record<ToolName, string> = {
   slingshot: 'the slingshot',
   swatter: 'the fly swatter',
@@ -535,6 +589,7 @@ export function buildTutorialSteps(
   const waveTitle = (i: number): string => `Wave ${i + 1} of ${waves.length}`;
   // The food jar is taught right before the first food tool, where food starts to matter.
   let foodTaught = false;
+  const firstBalloon = firstBalloonWave(waves);
   waves.forEach((wave, i) => {
     if (i === 0) steps.push(...introLessons());
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(...slingshotLessons());
@@ -559,6 +614,8 @@ export function buildTutorialSteps(
     else steps.push(infoStep(`wave-${i + 1}-start`, banner(wave.intro, 'warning'), startWave));
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson());
     else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolLesson(wave.newTool));
+    // The first balloons: a short banner while one floats in right in front (the wave's balloons wait for it).
+    if (wave.balloons && i === firstBalloon) steps.push(balloonStep());
     // While the wave is fought the sign stays away, so it never covers the enemies.
     // It comes back when the wave is cleared (the breather) or for a lesson.
     steps.push({

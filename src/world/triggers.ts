@@ -380,6 +380,10 @@ class Tree extends Trigger {
 /** Every trigger on the map, the blasts between them, and the flying debris. */
 export class Triggers {
   readonly group = new Group();
+  /** Called whenever a trigger is set off (a shot, a blast, or debug), for the lessons. */
+  onSetOffKind: (kind: TriggerKind) => void = () => {};
+  /** A keg blew up at this world point (juice: a big ring, a star and a hit stop). */
+  onBlast: (world: Vector3) => void = () => {};
   private list: Trigger[] = [];
   private debrisPool: Debris[] = [];
   private nextDebris = 0;
@@ -471,6 +475,7 @@ export class Triggers {
     this.particles.burst(world, TRIGGERS.keg.fireColors, 26, 0.5);
     this.audio.play('kegBoom', world);
     this.audio.play('debris', world, 0.8);
+    this.onBlast(world);
     this.crush(at, radius);
     for (const t of this.list) {
       if (t === from || !t.hittable()) continue;
@@ -491,7 +496,7 @@ export class Triggers {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, POOF_COLORS, 6, 0.15);
       this.audio.play('poof', world, 0.8, 0.04);
-      this.goblins.kill(g);
+      this.goblins.kill(g, true);
     }
   }
 

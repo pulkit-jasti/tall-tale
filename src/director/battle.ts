@@ -15,6 +15,8 @@ import {
   GOBLIN_RULES,
   HANDLES,
   HINT_SIGN,
+  GOBLIN_GEAR,
+  BALLOONS,
   TOOL_SPOTS,
   TOOLS,
   WAVES,
@@ -31,7 +33,9 @@ import type { FoodToolName, HandTool } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
-import type { Triggers } from '../world/triggers.js';
+import type { Balloons } from '../units/balloons.js';
+import type { TriggerKind } from '../rules/blueprint.js';
+import type { Trigger, Triggers } from '../world/triggers.js';
 import type { EndPanel } from '../ui/endPanel.js';
 import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemos.js';
 import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
@@ -46,6 +50,7 @@ import type { FoodJar } from '../world/foodJar.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
+  firstBalloonWave,
   TUTORIAL_TIMING,
   TUTORIAL_WAVES,
   type HintIcon,
@@ -86,6 +91,8 @@ export interface BattleParts {
   troops: Troops;
   /** Keg, boulder and tree on the roads, reset at each wave. */
   triggers: Triggers;
+  /** Balloon riders (from wave 4). */
+  balloons: Balloons;
   /** The stun of the megaphone and the bell. */
   stun: StunWave;
   food: FoodJar;
@@ -101,6 +108,8 @@ export interface BattleParts {
   rng: Random;
   /** True while a hand holds this goblin. */
   isHeld: (goblin: Goblin) => boolean;
+  /** A wave was won (juice: confetti over the castle; `won`: the whole battle, with fireworks). */
+  celebrate: (won: boolean) => void;
 }
 
 export class Battle implements TutorialApi {
@@ -211,6 +220,7 @@ export class Battle implements TutorialApi {
   private clearBoard(): void {
     this.parts.troops.clear();
     this.parts.triggers.hideAll();
+    this.parts.balloons.clear();
   }
 
   /** The step the tutorial is on, for the debug page. */
@@ -481,6 +491,26 @@ export class Battle implements TutorialApi {
         return slingshot.partWorld('bowl', out);
       case 'pouch':
         return slingshot.partWorld('pouch', out);
+      case 'lessonTrigger': {
+        const t = this.lessonTrigger;
+        return t && t.standing ? this.parts.triggers.topWorld(t, out) : null;
+      }
+      case 'wristButton':
+        return this.parts.wristButton(out);
+      case 'balloon': {
+        const b = this.parts.balloons.nearest(stage.spin);
+        if (!b) return null;
+        b.center(out);
+        out.y += 8;
+        return stage.boardSpin.localToWorld(out);
+      }
+      case 'baitGoblin': {
+        const g = this.parts.bait.first();
+        if (!g || this.parts.isHeld(g)) return null;
+        goblins.centerWorld(g, out);
+        out.y += g.stats.height * 0.01 * this.parts.stage.boardScale;
+        return out;
+      }
       default:
         return null;
     }
@@ -550,6 +580,9 @@ export class Battle implements TutorialApi {
     this.inWave = true;
     this.sinceDamage = 0;
     const plan = TUTORIAL_WAVES[index];
+    // Helmets from their wave on. The first balloon wave holds its balloons until the balloon banner shows.
+    this.parts.goblins.helmetsOn = index + 1 >= GOBLIN_GEAR.helmetFromWave;
+    this.parts.spawner.balloonsHeld = index === firstBalloonWave(TUTORIAL_WAVES);
     this.parts.spawner.start(plan);
     // The army marches out toward the attacking camps, and the triggers of this wave stand ready.
     this.parts.troops.deploy(plan.camps);
@@ -575,6 +608,9 @@ export class Battle implements TutorialApi {
     this.parts.troops.recall();
     clearWave(this.state, CASTLE_HEALTH);
     if (this.state.phase === 'playing') this.parts.audio.play('cheer');
+    // The soldiers on the field cheer, and confetti flutters down over the castle.
+    this.parts.troops.cheerAll();
+    this.parts.celebrate(this.state.phase === 'won');
   }
 
   lessonClimber(onRampart: boolean): void {
@@ -733,5 +769,53 @@ export class Battle implements TutorialApi {
 
   slingLoaded(): boolean {
     return this.parts.slingshot.isLoaded;
+  }
+
+  startTriggerLesson(kind: TriggerKind): void {
+    const { triggers, stage } = this.parts;
+    // Its kind comes onto the roads now, if it was not there yet.
+    triggers.revealKind(kind);
+    // The one nearest the front of the board right now (the player may have spun it).
+    this.lessonTrigger = triggers.readyNearest(kind, stage.spin);
+    if (this.lessonTrigger) triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);
+  }
+
+  sendPastTrigger(): void {
+    const kind = this.lessonTrigger?.kind ?? 'keg';
+    if (!this.lessonTrigger?.standing) this.lessonTrigger = this.parts.triggers.readyNearest(kind, this.parts.stage.spin);
+    // Only the goblins that are gone (picked up, or knocked out another way) are replaced.
+    if (this.lessonTrigger) this.parts.triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);
+    this.parts.markers.pulse();
+  }
+
+  endTriggerLesson(): void {
+    this.parts.goblins.releaseWaiting();
+  }
+
+  baitMoving(): void {
+    this.parts.bait.patrol(this.parts.stage.spin);
+  }
+
+  baitForTool(): void {
+    this.parts.bait.onRampart(this.parts.stage.spin);
+  }
+
+  releaseBait(): void {
+    this.parts.bait.release();
+  }
+
+  triggersSetOff(kind: TriggerKind): number {
+    return this.triggerCount[kind];
+  }
+
+  balloonIntro(): void {
+    const { balloons, spawner, stage, rng } = this.parts;
+    spawner.balloonsHeld = false;
+    // One balloon right in front of the player (the board angle in front now), already on its way in.
+    balloons.spawn(stage.spin + degToRad(rng.range(-6, 6)), BALLOONS.introRadius);
+  }
+
+  pausedCount(): number {
+    return this.pauses;
   }
 }

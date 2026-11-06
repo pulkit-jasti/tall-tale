@@ -1316,13 +1316,18 @@ export const TRIGGERS = {
  */
 export const TROOPS = {
   /** Most soldiers on the board at once (they share the unit budget with the goblins). */
-  /** Lowered for testing (was 12, squads of 3 to 4 every 10 s): the soldiers won too much. */
-  max: 4,
+  /**
+   * Was 12 (squads of 3 to 4 every 10 s, the soldiers won too much), then 4
+   * in squads of 2 for testing. Step 7 balance: 8 in squads of 2 to 3, with
+   * the three kinds (archers shoot from range, helmets take an extra hit).
+   * Tune after the headset test and the stress test with troops.
+   */
+  max: 8,
   /** Soldiers per squad (from, to). */
   squadMin: 2,
-  squadMax: 2,
+  squadMax: 3,
   /** A new squad comes out this often while a wave runs, the first one this long after the wave starts. */
-  squadEvery: 16,
+  squadEvery: 14,
   firstSquadAt: 4,
   /** Gap between soldiers of one squad leaving (seconds). */
   leaveGap: 0.7,
@@ -1330,10 +1335,8 @@ export const TROOPS = {
   speed: 5.5,
   speedJitter: 0.1,
   laneJitter: 1.6,
-  /** Share of archers among the soldiers (same rules, another look). */
-  archerShare: 0.3,
-  /** A goblin this close is fought (cm). Runners rush past and are never fought. */
-  engageRange: 4,
+  /** A goblin this close is fought (cm). Runners rush past and are never fought. Raised from 4 with the bigger soldiers. */
+  engageRange: 5,
   /** Soldiers take this many hits, grunts take 1. */
   hitsToDown: 2,
   /** A soldier strikes this often, and a strike lands this often (share). */
@@ -1347,6 +1350,426 @@ export const TROOPS = {
   poofColors: [0xffffff, 0xc9d4e8, 0x8aa0c8],
   /** Units farther than this from the center (cm) update their animation every other frame. */
   farAnimFrom: 150,
+};
+
+/**
+ * Gear on the characters (build step 7, src/units/gear.ts). Every piece is
+ * merged into the character's own skinned mesh and bound to a small extra
+ * bone under a hand or the head, so it moves with the animation and costs no
+ * extra draw call. Hiding a piece scales its bone to almost nothing.
+ *
+ * Numbers are in the character model's own units (the Kenney rig is about
+ * 0.84 units tall, before it is sized to TROOPS.height or a goblin height).
+ * Each bone's frame is the rig's bind pose: the right arm points along -x,
+ * the left arm along +x, the head and torso up +y, and +z is the front.
+ * While walking the arms hang 45 degrees down, so for the arms "up" is about
+ * [0.7, 0.7, 0] (right) and [-0.7, 0.7, 0] (left), and "outward" is about
+ * [0.7, -0.7, 0] (right) and [0.7, 0.7, 0] (left). Tune these in the headset.
+ */
+export type GearBone = 'arm-right' | 'arm-left' | 'head' | 'torso';
+
+export interface GearPiece {
+  /** A glTF file in public/gltf/ (its colors are matched to the body's palette), or a shape made in code. */
+  model?: string;
+  shape?: 'helmet' | 'cap' | 'bow' | 'quiver' | 'plume';
+  bone: GearBone;
+  /** Where the anchor point goes, in the bone's frame. */
+  at: [number, number, number];
+  /** The model's point that sits at `at` (the grip), in the model's own units. */
+  anchor: [number, number, number];
+  /** The model's main axis (for example a sword's blade) and where it points in the bone's frame. */
+  axis: [number, number, number];
+  dir: [number, number, number];
+  /** A second model axis (for example a blade's flat side) and roughly where it points. */
+  axis2: [number, number, number];
+  dir2: [number, number, number];
+  scale: number;
+  /** Shape colors (code shapes only): main and trim. */
+  color?: number;
+  trim?: number;
+}
+
+/** A recolor of the body's own palette: texture spots in this box (u from, to, v from, to) take this color, keeping their shading. */
+export interface Recolor {
+  mesh: 'body' | 'head';
+  uv: [number, number, number, number];
+  color: [number, number, number];
+}
+
+const RIGHT_HAND: [number, number, number] = [-0.26, 0, 0.04];
+const LEFT_HAND: [number, number, number] = [0.26, 0, 0.04];
+/** Bone frame directions while the arms hang (see above). */
+const R_UP: [number, number, number] = [0.71, 0.71, 0];
+const R_OUT: [number, number, number] = [0.71, -0.71, 0];
+const L_UP: [number, number, number] = [-0.71, 0.71, 0];
+const L_OUT: [number, number, number] = [0.71, 0.71, 0];
+
+export const GEAR = {
+  /** The kingdom's colors, for troop recolors and shapes. */
+  kingdomBlue: [70, 115, 210] as [number, number, number],
+  kingdomGold: [255, 196, 70] as [number, number, number],
+  /** Hidden gear bones are scaled to this. */
+  hiddenScale: 0.0001,
+  pieces: {
+    sword: {
+      model: 'props/mini-arena/weapon-sword.glb',
+      bone: 'arm-right',
+      at: RIGHT_HAND,
+      anchor: [0, 0.05, 0],
+      // The blade (model -y) forward and a little up, its flat side outward.
+      axis: [0, -1, 0],
+      dir: [0.45, 0.35, 0.82],
+      axis2: [0, 0, 1],
+      dir2: R_OUT,
+      scale: 0.85,
+    },
+    spear: {
+      model: 'props/mini-arena/weapon-spear.glb',
+      bone: 'arm-right',
+      at: RIGHT_HAND,
+      anchor: [0, 0.24, 0],
+      // Mostly up, tipped forward.
+      axis: [0, 1, 0],
+      dir: [0.6, 0.6, 0.5],
+      axis2: [0, 0, 1],
+      dir2: R_OUT,
+      scale: 0.9,
+    },
+    goblinSpear: {
+      model: 'props/mini-arena/weapon-spear.glb',
+      bone: 'arm-right',
+      at: RIGHT_HAND,
+      anchor: [0, 0.22, 0],
+      axis: [0, 1, 0],
+      dir: [0.55, 0.55, 0.62],
+      axis2: [0, 0, 1],
+      dir2: R_OUT,
+      scale: 0.75,
+    },
+    roundShield: {
+      model: 'props/mini-dungeon/shield-round.glb',
+      bone: 'arm-left',
+      at: [0.2, 0.08, 0.02],
+      anchor: [0, 0, 0],
+      // Its face outward from the forearm, its top up.
+      axis: [0, 0, 1],
+      dir: L_OUT,
+      axis2: [0, 1, 0],
+      dir2: L_UP,
+      scale: 0.72,
+    },
+    rectShield: {
+      model: 'props/mini-dungeon/shield-rectangle.glb',
+      bone: 'arm-left',
+      at: [0.2, 0.08, 0.02],
+      anchor: [0, 0.15, 0],
+      axis: [0, 0, 1],
+      dir: L_OUT,
+      axis2: [0, 1, 0],
+      dir2: L_UP,
+      scale: 0.8,
+    },
+    bow: {
+      shape: 'bow',
+      bone: 'arm-left',
+      at: LEFT_HAND,
+      // The grip is the middle of the arc (shape units: radius 0.22).
+      anchor: [0.22, 0, 0],
+      // The string up, the arc bulging forward.
+      axis: [0, 1, 0],
+      dir: L_UP,
+      axis2: [1, 0, 0],
+      dir2: [0, 0, 1],
+      scale: 1,
+      color: 0x8a5a2b,
+      trim: 0xf3e6c4,
+    },
+    quiver: {
+      shape: 'quiver',
+      bone: 'torso',
+      at: [0.06, 0.1, -0.15],
+      anchor: [0, 0, 0],
+      axis: [0, 1, 0],
+      dir: [-0.35, 0.94, 0],
+      axis2: [0, 0, 1],
+      dir2: [0, 0, -1],
+      scale: 1,
+      color: 0x7a4a26,
+      trim: 0xf3e6c4,
+    },
+    goblinHelmet: {
+      shape: 'helmet',
+      bone: 'head',
+      at: [0, 0.27, -0.01],
+      anchor: [0, 0, 0],
+      axis: [0, 1, 0],
+      dir: [0, 1, 0],
+      axis2: [0, 0, 1],
+      dir2: [0, 0, 1],
+      scale: 1.05,
+      color: 0x9a9fb2,
+      trim: 0x5a5e70,
+    },
+    cap: {
+      shape: 'cap',
+      bone: 'head',
+      at: [0, 0.29, 0],
+      anchor: [0, 0, 0],
+      axis: [0, 1, 0],
+      dir: [0, 1, 0],
+      axis2: [0, 0, 1],
+      dir2: [0, 0, 1],
+      scale: 1,
+      color: 0xb4b9c8,
+      trim: 0xffc446,
+    },
+    plume: {
+      shape: 'plume',
+      bone: 'head',
+      at: [0, 0.5, -0.04],
+      anchor: [0, 0, 0],
+      axis: [0, 1, 0],
+      dir: [0, 0.94, -0.34],
+      axis2: [0, 0, 1],
+      dir2: [0, 0, 1],
+      scale: 1,
+      color: 0x4673d2,
+      trim: 0xffc446,
+    },
+  } satisfies Record<string, GearPiece>,
+};
+
+export type GearName = keyof typeof GEAR.pieces;
+
+/**
+ * The three troop kinds (build step 7): bodies from the Kenney packs we
+ * have, recolored to the kingdom's blue and gold, each with its own gear
+ * and proportions (width, height), so they read apart from the seat.
+ * Archers stop and shoot from range instead of fighting up close.
+ */
+export type TroopKind = 'sword' | 'spear' | 'archer';
+
+export interface TroopKindSpec {
+  body: string;
+  gear: GearName[];
+  recolor: Recolor[];
+  /** Width and height multipliers on TROOPS.height. */
+  width: number;
+  height: number;
+  /** Share of soldiers of this kind. */
+  share: number;
+  /** A goblin this close is fought or shot (cm). */
+  engageRange: number;
+  /** Walking speed multiplier. */
+  speed: number;
+}
+
+export const TROOP_KINDS: Record<TroopKind, TroopKindSpec> = {
+  sword: {
+    body: 'characters/mini-arena/character-soldier.glb',
+    gear: ['sword', 'roundShield'],
+    recolor: [
+      // The leather tunic to blue, the red plume and trim to gold.
+      { mesh: 'body', uv: [11 / 16, 12 / 16, 0.75, 1], color: GEAR.kingdomBlue },
+      { mesh: 'body', uv: [9 / 16, 10 / 16, 0.5, 0.75], color: GEAR.kingdomGold },
+      { mesh: 'head', uv: [9 / 16, 10 / 16, 0.5, 0.75], color: GEAR.kingdomGold },
+    ],
+    width: 1.08,
+    height: 0.97,
+    share: 0.4,
+    engageRange: 5,
+    speed: 1,
+  },
+  spear: {
+    body: 'characters/mini-dungeon/character-human.glb',
+    gear: ['spear', 'rectShield', 'cap'],
+    recolor: [
+      { mesh: 'body', uv: [3 / 16, 4 / 16, 0.5, 1], color: GEAR.kingdomBlue },
+      { mesh: 'body', uv: [13 / 16, 14 / 16, 0.5, 1], color: GEAR.kingdomGold },
+    ],
+    width: 0.94,
+    height: 1.06,
+    share: 0.3,
+    // The long spear reaches a little farther.
+    engageRange: 6.5,
+    speed: 0.95,
+  },
+  archer: {
+    body: 'characters/mini-forest/character-archer.glb',
+    gear: ['bow', 'quiver', 'plume'],
+    recolor: [
+      // The green hood and tunic to blue (the skin above v 0.75 stays).
+      { mesh: 'body', uv: [3 / 16, 4 / 16, 0.75, 1], color: GEAR.kingdomBlue },
+      { mesh: 'head', uv: [3 / 16, 4 / 16, 0.75, 1], color: GEAR.kingdomBlue },
+    ],
+    width: 0.95,
+    height: 0.96,
+    share: 0.3,
+    engageRange: 16,
+    speed: 1.05,
+  },
+};
+
+/** Archers: they stop and shoot arrows (one instanced pool) at goblins within their range. */
+export const ARCHERS = {
+  /** A shot this often (seconds), and the share that knocks the goblin out. */
+  shootEvery: 1.6,
+  hitChance: 0.55,
+  /** Arrow flight time (seconds) and arc height (cm). */
+  flightTime: 0.45,
+  arcHeight: 4,
+  /** Arrow size (cm). */
+  length: 2.2,
+  poolSize: 12,
+  shaftColor: 0x8a5a2b,
+  tipColor: 0xd8dbe6,
+  featherColor: 0xffffff,
+};
+
+/**
+ * Goblin gear (build step 7): some grunts carry a spear, some wear a helmet.
+ * A helmet is one extra hit from a slingshot pebble or a soldier: it flies
+ * off instead (big hits like the swatter, kegs and boulders go through).
+ * Peppered goblins drop their spear, which flies off. Runners and climbers
+ * stay bare handed (they need their hands to run and climb).
+ */
+export const GOBLIN_GEAR = {
+  spearShare: 0.6,
+  helmetShare: 0.35,
+  /** Helmets only from this wave (1 based), so the first lessons stay one hit. */
+  helmetFromWave: 3,
+  /** Gear knocked off: flies up and out (cm per second), spins, lands and shrinks away. */
+  flySpeed: 45,
+  flyUp: 70,
+  spin: 14,
+  restTime: 1.2,
+  poolSize: 10,
+};
+
+/**
+ * Balloon riders (docs/enemies.md, build step 7): the first flying enemy.
+ * A patched goblin balloon with goblins hanging under its basket floats in a
+ * straight line from a camp toward the castle at about head height (no
+ * roads), stops over the courtyard and drops its riders in (intruders, food
+ * in reach), then rises and drifts away. The slingshot pops it (a big still
+ * target, full aim assist) and the riders fall and poof. Riders can be
+ * pinched off or swatted when close, and the megaphone and bell stun them
+ * (a stunned balloon stops). Sizes in cm, times in seconds.
+ */
+export const BALLOONS = {
+  /** Most balloons at once (one instanced mesh for all). */
+  max: 6,
+  /** Envelope radius, and its height over the board (center). Riders hang under the basket. */
+  radius: 5.5,
+  height: 44,
+  /** Riders per balloon (grunts). */
+  riders: 2,
+  /** Where it comes in from (cm from the center) and how fast it floats (cm per second). */
+  startRadius: 175,
+  speed: 7.5,
+  /** The scripted first balloon (wave 4 banner) starts closer, right in front. */
+  introRadius: 120,
+  /** It stops over the courtyard here and drops one rider every dropGap. */
+  dropRadius: 43,
+  dropGap: 0.6,
+  /** Then it rises (cm per second) and drifts away outward, and is gone past this far or this high. */
+  leaveRise: 6,
+  leaveSpeed: 9,
+  goneRadius: 140,
+  goneHeight: 110,
+  /** A gentle bob and sway while it floats. */
+  bob: 1.2,
+  bobSpeed: 1.6,
+  sway: 0.08,
+  /** The wall under it flashes red this often while it is over or near the wall with riders (threat cue), within this far outside the wall. */
+  threatEvery: 0.35,
+  threatOut: 12,
+  /** A popped balloon bursts over this long. */
+  popTime: 0.18,
+  colors: [0xc0392b, 0xe9c46a, 0x7a9a3a, 0x8a5a2b] as number[],
+  basketColor: 0x7a5230,
+  ropeColor: 0x3b2a1a,
+  popColors: [0xc0392b, 0xe9c46a, 0xffffff, 0x7a9a3a],
+  /** The instance color while the slingshot aims at it (brighter). */
+  aimedBrightness: 1.7,
+};
+
+/**
+ * Juice (build step 8): small cheap effects that make every action feel
+ * good. All pooled and instanced, a few draw calls in total, no lights and
+ * no post processing (performance rules). Nothing moves the board or the
+ * view (comfort).
+ */
+export const JUICE = {
+  /** A goblin that is hit but not knocked out flashes white this long (seconds). */
+  hitFlashTime: 0.12,
+  hitFlashColor: 0xffffff,
+  hitFlashIntensity: 0.9,
+  /** A soldier cheers (arms up) this long after knocking a goblin out, and every soldier this long when a wave is won (seconds). */
+  troopCheerTime: 0.7,
+  waveCheerTime: 1.6,
+  /**
+   * Hit stop: on a big hit (a keg, a balloon pop, three knockouts at once)
+   * the units run at this share of speed for this long (seconds). The board,
+   * the view and the hands never slow down.
+   */
+  hitStopScale: 0.08,
+  hitStopTime: 0.07,
+  /** This many knockouts in one frame count as a big hit. */
+  multiKill: 3,
+  /** Shock rings (world meters at the default board size): pool, base time, color and opacity. */
+  ringPool: 24,
+  ringTime: 0.35,
+  ringColor: 0xfff1c8,
+  ringOpacity: 0.85,
+  knockoutRing: 0.05,
+  /** The swatter's slap on the ground. */
+  swatRing: 0.1,
+  /** Pow stars: pool, time, sizes (meters) and colors. */
+  starPool: 20,
+  starTime: 0.42,
+  knockoutStar: 0.028,
+  starColor: 0xffe14d,
+  starColors: [0xffe14d, 0xfff4b0, 0xffb84d] as number[],
+  /** Big blasts (keg, goblin shot, balloon pop, multi knockouts). */
+  blastRing: 0.16,
+  blastStar: 0.07,
+  blastColor: 0xffb03a,
+  /** "+1" food labels rising from the jar: pool, time, rise and width (meters). */
+  labelPool: 6,
+  labelTime: 1.1,
+  labelRise: 0.07,
+  labelSize: 0.06,
+  /** Confetti over the castle when a wave is won (more for the win), in a ring this far out (meters). */
+  confettiPool: 140,
+  confettiWave: 60,
+  confettiWin: 110,
+  confettiFrom: 0.2,
+  confettiTo: 0.55,
+  confettiSize: 0.012,
+  confettiColors: [0x2f6fd8, 0xffc446, 0xffffff, 0xd23c28, 0x5cc46a] as number[],
+  /** The fireworks after a win: bursts, ring and star sizes (meters). */
+  fireworkCount: 9,
+  fireworkRing: 0.14,
+  fireworkStar: 0.06,
+  /** Goblins pop in when they come out of a camp, and squash when they land (share and seconds). */
+  spawnPopTime: 0.3,
+  squashTime: 0.28,
+  squashAmount: 0.35,
+  /** Runners kick up dust this often (seconds) while running on a road near enough to see (cm). */
+  runnerDustEvery: 0.28,
+  runnerDustNear: 150,
+  dustColors: [0xd9c08a, 0xc9b79a, 0xe8dcc0] as number[],
+  /** Shot pebbles leave a faint trail: a puff this often (seconds). */
+  pebbleTrailEvery: 0.035,
+  pebbleTrailColors: [0xffffff, 0xf3ead8] as number[],
+  /** The camps shake while they rumble before a group comes out (tilt in radians, and speed). */
+  campWobble: 0.12,
+  campWobbleSpeed: 38,
+  /** The health flag jolts when the castle is hit (degrees, seconds), and the wave flag pops when it climbs. */
+  flagJoltDeg: 14,
+  flagJoltTime: 0.35,
+  flagPopTime: 0.5,
 };
 
 /**
@@ -1547,6 +1970,13 @@ export const STRESS_TEST = {
   maxMissedPct: 1,
   /** Stop here even if it still passes. */
   maxUnits: 120,
+  /**
+   * Standing for the whole test since build step 7: this many soldiers (all
+   * three kinds, walking on the spot) and balloons with riders (hovering),
+   * so the budget counts the army and the flying enemies too.
+   */
+  troops: 8,
+  balloons: 2,
 };
 
 /** Live frame rate panel for performance checks (debug). */

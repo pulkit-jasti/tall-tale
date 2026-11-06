@@ -45,7 +45,11 @@ export type DebugCommand =
   | 'spinLeft'
   | 'spinRight'
   | 'boardUp'
-  | 'boardDown';
+  | 'boardDown'
+  | 'balloonFront'
+  | 'popBalloons'
+  | 'helmetGrunts'
+  | 'celebrate';
 
 /** Sections of the laptop debug page, in page order. */
 export type DebugGroup = 'game' | 'castle' | 'goblins' | 'army' | 'slingshot' | 'food' | 'board' | 'performance';
@@ -94,6 +98,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   },
   { id: 'skipStep', group: 'game', icon: '⏭️', code: 'KeyS', label: 'Skip step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
   { id: 'skipWave', group: 'game', icon: '⏩', code: 'KeyW', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
+  { id: 'celebrate', group: 'castle', icon: '🎉', code: 'Semicolon', label: 'Celebrate', does: 'Show the wave cleared celebration now (confetti over the castle, soldiers cheer)' },
   { id: 'damageCastle', group: 'castle', icon: '💥', code: 'KeyD', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
   { id: 'loseCastle', group: 'castle', icon: '🏳️', code: 'KeyH', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
   { id: 'grunts', group: 'goblins', icon: '👹', code: 'KeyG', label: 'Grunts', does: 'Send a group of grunts' },
@@ -101,6 +106,9 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'climberFront', group: 'goblins', icon: '🧗', code: 'KeyC', label: 'Climber in front', does: 'A climber pops up right in front of you' },
   { id: 'climberRoad', group: 'goblins', icon: '🛤️', code: 'KeyV', label: 'Climber on a road', does: 'A climber walks in on a random road' },
   { id: 'eatFront', group: 'goblins', icon: '😋', code: 'KeyB', label: 'Eat front goblin', does: 'Eat the goblin nearest the front of the wall' },
+  { id: 'balloonFront', group: 'goblins', icon: '🎈', code: 'Comma', label: 'Balloon in front', does: 'A balloon with two riders floats in right in front of you (pop it with the slingshot, or it drops them into the courtyard)' },
+  { id: 'popBalloons', group: 'goblins', icon: '💥', code: 'Period', label: 'Pop balloons', does: 'Pop every balloon in the air: the riders fall and poof' },
+  { id: 'helmetGrunts', group: 'goblins', icon: '⛑️', code: 'Slash', label: 'Helmet grunts', does: 'Send a group of grunts that all wear helmets (one extra pebble or soldier hit, the helmet flies off)' },
   { id: 'auto', group: 'goblins', icon: '🔁', code: 'KeyT', label: 'Auto spawn on/off', does: 'Extra auto spawning on or off (on top of the waves)' },
   { id: 'clear', group: 'goblins', icon: '🧹', code: 'KeyK', label: 'Remove all', does: 'Remove all goblins' },
   { id: 'slingShot', group: 'slingshot', icon: '🎯', code: 'KeyL', label: 'Shoot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },
