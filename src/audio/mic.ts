@@ -14,9 +14,6 @@ const STORAGE_KEY = 'tallTale.micAsked';
 export class Mic {
   state: MicState = 'unknown';
   private analyser: AnalyserNode | null = null;
-  private stream: MediaStream | null = null;
-  /** A reopen of the mic that is under way, so it only happens once at a time. */
-  private reopening: Promise<void> | null = null;
   private samples: Float32Array<ArrayBuffer> | null = null;
   /** Loudness of the last read (RMS, 0 to 1). */
   level = 0;
@@ -64,49 +61,11 @@ export class Mic {
       return this.state;
     }
     this.state = 'asking';
-    this.state = (await this.open()) ? 'on' : 'denied';
-    try {
-      localStorage.setItem(STORAGE_KEY, '1');
-    } catch {
-      // No storage: asked again next visit.
-    }
-    console.info(`[mic] ${this.state}`);
-    return this.state;
-  }
-
-  /**
-   * Keeps the mic working while the megaphone is held. The shared audio
-   * context can be left suspended (after the Quest menu or the headset was
-   * off), and the browser can end or mute the mic track while the app is in
-   * the background: then the analyser only reads silence and screams do
-   * nothing. This wakes the context and reopens the mic (no prompt, the
-   * permission is already given). Cheap to call every frame.
-   */
-  ensureLive(): void {
-    if (this.state !== 'on') return;
-    const context = ThreeAudioContext.getContext();
-    if (context.state === 'suspended') void context.resume();
-    const track = this.stream?.getAudioTracks()[0];
-    if (!track || track.readyState === 'ended' || !track.enabled) {
-      if (this.reopening) return;
-      console.info('[mic] the mic track stopped: opening it again');
-      for (const t of this.stream?.getTracks() ?? []) t.stop();
-      // It stays 'on' meanwhile, so the megaphone never swaps for the bell in the middle of a battle.
-      this.reopening = this.open().then((ok) => {
-        this.reopening = null;
-        console.info(`[mic] reopened: ${ok ? 'on' : 'failed'}`);
-      });
-    }
-  }
-
-  /** Opens the mic stream into a silent analyser chain. False if the browser says no. */
-  private async open(): Promise<boolean> {
     try {
       // Raw loudness: no gain control or noise suppression evening out a scream.
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
-      this.stream = stream;
       const context = ThreeAudioContext.getContext();
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
@@ -119,11 +78,18 @@ export class Mic {
       silent.connect(context.destination);
       this.analyser = analyser;
       this.samples = new Float32Array(analyser.fftSize);
-      return true;
+      this.state = 'on';
     } catch (error) {
       console.info('[mic] not allowed: the bell comes instead of the megaphone', error);
-      return false;
+      this.state = 'denied';
     }
+    try {
+      localStorage.setItem(STORAGE_KEY, '1');
+    } catch {
+      // No storage: asked again next visit.
+    }
+    console.info(`[mic] ${this.state}`);
+    return this.state;
   }
 
   /** Reads the loudness now (RMS of the latest samples). 0 without a mic. */

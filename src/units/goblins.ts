@@ -250,8 +250,6 @@ const starMatrix = new Matrix4();
 const hiddenMatrix = new Matrix4().makeScale(0, 0, 0);
 /** Goblins that show dizzy stars at once (2 stars each). */
 const STAR_SLOTS = 40;
-/** Peppered goblins that show pepper flakes at once. */
-const SPECK_SLOTS = 30;
 
 export class Goblins {
   readonly list: Goblin[] = [];
@@ -263,10 +261,6 @@ export class Goblins {
   private baseColor = new Color(1, 1, 1);
   private camps: number[];
   private stars!: InstancedMesh;
-  /** Pepper flakes over peppered goblins (one instanced mesh, like the stars). */
-  private specks!: InstancedMesh;
-  /** For the sneeze puffs (set by the game). */
-  particles: Particles | null = null;
   private time = 0;
   private frame = 0;
 
@@ -304,15 +298,6 @@ export class Goblins {
     for (let i = 0; i < STAR_SLOTS * 2; i++) this.stars.setMatrixAt(i, hiddenMatrix);
     this.stars.visible = false;
     board.add(this.stars);
-    this.specks = new InstancedMesh(
-      new IcosahedronGeometry(PEPPER.flakeSize / 2, 0),
-      new MeshBasicMaterial({ color: PEPPER.flakeColor }),
-      SPECK_SLOTS * PEPPER.flakeCount,
-    );
-    this.specks.frustumCulled = false;
-    for (let i = 0; i < SPECK_SLOTS * PEPPER.flakeCount; i++) this.specks.setMatrixAt(i, hiddenMatrix);
-    this.specks.visible = false;
-    board.add(this.specks);
   }
 
   async load(): Promise<void> {
@@ -332,17 +317,6 @@ export class Goblins {
     let count = 0;
     for (const g of this.list) if (g.mode !== 'dead') count++;
     return count;
-  }
-
-  /** How far the goblin nearest the castle is from the center (cm), Infinity when there is none. */
-  closestRadius(): number {
-    let best = Infinity;
-    for (const g of this.list) {
-      if (g.mode === 'dead') continue;
-      const p = g.root.position;
-      best = Math.min(best, Math.hypot(p.x, p.z));
-    }
-    return best;
   }
 
   /**
@@ -448,16 +422,6 @@ export class Goblins {
     goblin.squash = 0;
     goblin.popTime = 0;
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
-    goblin.nextRoad = -1;
-    goblin.waitRoad = -1;
-    goblin.waiting = false;
-    goblin.bait = false;
-    goblin.patrolRoad = -1;
-    goblin.calm = false;
-    goblin.sneezing = 0;
-    goblin.dashPause = 0;
-    goblin.root.scale.setScalar(1);
-    goblin.body.rotation.x = 0;
     this.setTouch(goblin, 'idle');
     return goblin;
   }
@@ -607,13 +571,6 @@ export class Goblins {
   private arrive(g: Goblin): void {
     const graph = this.network.graph;
     const node = graph.endOf(g.step);
-    // A goblin sent onto a road takes it if it is open and starts here.
-    const forced = g.nextRoad;
-    g.nextRoad = -1;
-    if (forced >= 0 && graph.roads[forced].open && graph.nodes[node].roads.includes(forced)) {
-      this.setRoad(g, { road: forced, dir: graph.roads[forced].from === node ? 1 : -1 });
-      return;
-    }
     const next = graph.isWall(node) ? null : graph.next(node, this.rng);
     if (next) this.setRoad(g, next);
     else this.headToWall(g);
@@ -683,7 +640,6 @@ export class Goblins {
     goblin.mode = 'dead';
     goblin.root.visible = false;
     goblin.road = null;
-    goblin.stunned = 0;
   }
 
   killAll(): void {
@@ -862,7 +818,6 @@ export class Goblins {
     this.frame++;
     let star = 0;
     const far2 = TROOPS.farAnimFrom * TROOPS.farAnimFrom;
-    let speck = 0;
     for (let i = 0; i < this.list.length; i++) {
       const g = this.list[i];
       if (g.mode === 'dead') continue;
@@ -988,25 +943,7 @@ export class Goblins {
       case 'walking': {
         const road = g.road!;
         const dir = g.step.dir;
-        // A lesson goblin stops at its spot and waits there until released.
-        if (g.waitRoad === g.step.road) {
-          const next = g.distance + g.speed * dt * dir;
-          if (dir === 1 ? next >= g.waitAt : next <= g.waitAt) {
-            g.distance = g.waitAt;
-            road.pointAt(g.distance, g.offset * dir, p);
-            if (!g.waiting) {
-              g.waiting = true;
-              g.play('idle');
-            }
-            break;
-          }
-        }
         g.distance += g.speed * dt * dir;
-        // A patrolling lesson goblin turns round at the ends of its stretch.
-        if (g.patrolRoad === g.step.road) {
-          if (dir === 1 && g.distance > g.patrolTo) g.step.dir = -1;
-          else if (dir === -1 && g.distance < g.patrolFrom) g.step.dir = 1;
-        }
         // The lane offset flips with the direction, so a goblin keeps its side of the road.
         road.pointAt(g.distance, g.offset * dir, p);
         road.directionAt(g.distance, temp);
@@ -1040,15 +977,8 @@ export class Goblins {
         break;
       }
       case 'rampart': {
-        // A calm one (a lesson goblin) waits still and never jumps in until released.
-        if (g.calm) break;
         g.timer -= dt;
-        if (g.timer <= 0) {
-          this.jumpIntoCourtyard(g);
-          break;
-        }
-        // A tutorial climber with a long wait stands still to be picked up. The others run about.
-        if (g.rampartWait <= GOBLIN_RULES.rampartWait) this.runOnRampart(g, dt);
+        if (g.timer <= 0) this.jumpIntoCourtyard(g);
         break;
       }
       case 'intruder': {
@@ -1117,77 +1047,12 @@ export class Goblins {
   }
 
   /** The climber pops up on the rampart, in reach, facing the giant. */
-  /**
-   * Climbers on the rampart run about, causing chaos: short dashes back and
-   * forth along the wall top between the two towers, with quick stops, until
-   * they jump into the courtyard.
-   */
-  private runOnRampart(g: Goblin, dt: number): void {
-    const p = g.root.position;
-    const at = angleOf(p.x, p.z);
-    // Whatever stretch of wall it stands or runs on flashes red, like a wall hit (no damage).
-    g.markTimer -= dt;
-    if (g.markTimer <= 0) {
-      g.markTimer = GOBLIN_RULES.rampartMarkEvery;
-      this.onRampartStep(g);
-    }
-    if (g.dashPause > 0) {
-      g.dashPause -= dt;
-      if (g.dashPause <= 0) {
-        // The next dash: somewhere else along the wall top, between the same two towers.
-        const [lo, hi] = towerGap(at);
-        const a = at + degToRad(this.rng.range(-GOBLIN_RULES.rampartDashDeg, GOBLIN_RULES.rampartDashDeg));
-        g.dashTo = Math.min(hi, Math.max(lo, a));
-        g.hasTarget = true;
-        g.play('sprint', true, 1.4);
-      }
-      return;
-    }
-    if (!g.hasTarget) {
-      g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
-      return;
-    }
-    // Along the wall's own curve, never across it: always right on the rampart.
-    const step = ((g.speed * GOBLIN_RULES.rampartRunShare) / CASTLE.rampartRadius) * dt;
-    // The short way round (angles wrap at the back of the board).
-    let d = g.dashTo - at;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
-    const arrived = Math.abs(d) <= step;
-    const next = arrived ? at + d : at + Math.sign(d) * step;
-    p.set(polarX(CASTLE.rampartRadius, next), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, next));
-    // Facing along the wall, the way it runs.
-    const s = Math.sign(d) || 1;
-    g.face(Math.cos(next) * s, Math.sin(next) * s);
-    if (arrived) {
-      g.hasTarget = false;
-      g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
-      g.play('idle');
-      g.faceCenter();
-    }
-  }
-
-  /** Lets lesson goblins on the rampart and patrolling ones go on as usual. */
-  releaseLesson(): void {
-    for (const g of this.list) {
-      if (g.calm) {
-        g.calm = false;
-        g.rampartWait = GOBLIN_RULES.rampartWait;
-        if (g.mode === 'rampart') g.timer = GOBLIN_RULES.rampartWait;
-      }
-      g.patrolRoad = -1;
-    }
-  }
-
   private popUp(g: Goblin): void {
     const p = g.root.position;
     const a = angleOf(p.x, p.z);
     p.set(polarX(CASTLE.rampartRadius, a), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, a));
     g.mode = 'rampart';
     g.timer = g.rampartWait;
-    g.hasTarget = false;
-    // A breath after the jump up, then it starts running about.
-    g.dashPause = GOBLIN_RULES.rampartStop[1];
     g.faceCenter();
     g.play('jump', false);
   }
@@ -1275,9 +1140,6 @@ export class Goblins {
       case 'wallTop':
         g.mode = 'rampart';
         g.timer = g.rampartWait;
-        // A fresh dash target on the wall, never an old one from somewhere else.
-        g.hasTarget = false;
-        g.dashPause = GOBLIN_RULES.rampartStop[1];
         g.faceCenter();
         g.play('idle');
         break;

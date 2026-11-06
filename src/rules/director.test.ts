@@ -66,16 +66,6 @@ describe('director', () => {
     director.update(0.1);
     expect(director.spawnRate).toBe(1);
   });
-
-  it('holds the spawns completely while a step holds the wave', () => {
-    const ctx: Ctx = { goal: false, log: [] };
-    const director = new Director([step({ holdSpawns: true }), step({ id: 'plain' })], ctx);
-    director.update(0.1);
-    expect(director.spawnRate).toBe(0);
-    ctx.goal = true;
-    director.update(0.1);
-    expect(director.spawnRate).toBe(1);
-  });
 });
 
 /** A fake game: the player does nothing at all. */
@@ -177,8 +167,6 @@ function eagerApi(): ReturnType<typeof idleApi> {
     eaten: more,
     slingCount: more,
     slingLoaded: () => true,
-    triggersSetOff: more,
-    pausedCount: more,
   };
 }
 

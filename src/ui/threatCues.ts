@@ -9,12 +9,10 @@ import { BALLOONS, CASTLE, POINTER, THREAT } from '../config/game.js';
 import { PointerArrow } from './pointerArrow.js';
 import type { Particles } from '../fx/particles.js';
 import { angleOf, polarX, polarZ } from '../rules/boardMath.js';
-import type { Goblin, Goblins } from '../units/goblins.js';
+import type { Goblin } from '../units/goblins.js';
 import type { Stage } from '../world/stage.js';
 
 const temp = new Vector3();
-const toGoblin = new Vector3();
-const arrowAt = new Vector3();
 
 interface Flash {
   mesh: Mesh;
@@ -25,18 +23,11 @@ interface Flash {
 export class ThreatCues {
   private flashes: Flash[] = [];
   private nextFlash = 0;
-  private arrow: PointerArrow;
-  /** How long each goblin at the wall has been out of view (seconds). */
-  private unseen = new Map<Goblin, number>();
-  /** The goblin the red arrow points at, kept while it stays a threat out of view. */
-  private pointed: Goblin | null = null;
 
   constructor(
     private stage: Stage,
     private particles: Particles,
-    world: Object3D,
   ) {
-    this.arrow = new PointerArrow(world, POINTER.threat);
     // Wall top flashes, in boardSpin: they sit on the wall where it was hit.
     const depth = CASTLE.wallOut - CASTLE.wallIn;
     const geometry = new BoxGeometry(THREAT.flashWidth, 0.25, depth);
@@ -49,8 +40,8 @@ export class ThreatCues {
     }
   }
 
-  /** A goblin hit the wall: flash the wall top where it stands, and a dust puff. `dust` false: the flash only (a climber running on it). */
-  wallHit(goblin: Goblin, dust = true): void {
+  /** A goblin hit the wall: flash the wall top where it stands, and a dust puff. */
+  wallHit(goblin: Goblin): void {
     if (!THREAT.enabled) return;
     const p = goblin.root.position;
     const a = angleOf(p.x, p.z);
@@ -62,7 +53,6 @@ export class ThreatCues {
     flash.mesh.visible = true;
     flash.time = THREAT.flashTime;
     flash.material.opacity = THREAT.flashOpacity;
-    if (!dust) return;
     temp.set(polarX(CASTLE.wallOut, a), CASTLE.wallHeight, polarZ(CASTLE.wallOut, a));
     this.particles.burst(this.stage.boardSpin.localToWorld(temp), THREAT.dustColors, THREAT.dustCount, THREAT.dustSpeed);
   }

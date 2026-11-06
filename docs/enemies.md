@@ -74,7 +74,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Climbers
 
 - **Question:** "Are you paying attention?"
-- **Behavior:** the only enemy that climbs the wall. They climb unseen and suddenly pop up on the rampart, in reach. Up there they run about, causing chaos (since step 6): short dashes back and forth along the wall top between the two towers, with quick stops (`GOBLIN_RULES.rampartDash*`). If ignored for a few seconds, they jump down into the courtyard and become intruders. Tutorial climbers that wait for a lesson stand still.
+- **Behavior:** the only enemy that climbs the wall. They climb unseen and suddenly pop up on the rampart, in reach. If ignored for a few seconds, they jump down into the courtyard and become intruders.
 - **Toughness:** one hit.
 - **Best answer:** hands (grab and eat). They are also a main food source.
 - **Also works:** swatter, pepper (seasoned for eating), cauldron.

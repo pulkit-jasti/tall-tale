@@ -8,7 +8,7 @@ Status: first pass decided. Sample level mockup: `maps/castle-3d.html` (random l
 - These are the default sizes. The reach check at the start scales the whole board to the player's arms (0.85 to 1.45 times), see [controls-and-ui.md](controls-and-ui.md#reach-check-show-me-how-big-you-are-giant).
 - Castle wall from 46 to 52 cm, **about 6 cm high** (the mockup still shows 40 to 46 cm and 10 cm high). Moved out after the step 4 review, as far as the reach band allows: climbers on the rampart (49 cm) stay in reach ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)).
 - The courtyard (40 to 44 cm for intruders) is empty for now. Houses, stalls and workers come back once the main gameplay is done.
-- Soldiers and goblins both about 3.9 cm tall (goblins raised from 3.5 after a headset test, soldiers from 2.5 after the step 6 test).
+- Soldiers about 2.5 cm tall, goblins about 3.9 cm tall (raised from 3.5 after a headset test).
 
 ### No hidden strip outside the wall
 
@@ -112,7 +112,7 @@ Shot with the slingshot. Each one happens once and resets between waves. A trigg
 |---|---|---|---|
 | Powder keg | Barrel | Explodes and kills enemies in a small area | Puff and particles |
 | Boulder | Sphere on a hill beside a road | Rolls onto the road and down it, killing everything in its line | Follows the road curve and spins |
-| Leaning tree | Cylinder and cone | Falls across the road and blocks it for a few seconds. It hurts no one (since step 6): enemies on the road turn back and take another route. | One rotation, until its crown rests on the ground |
+| Leaning tree | Cylinder and cone | Falls across the road, squashes enemies under it, blocks the road for a few seconds. Enemies take another route. | One 90 degree rotation |
 | Bridge | Planks over a stream or gap | Collapses. Enemies on it fall. The road closes until goblin builders rebuild it (about 15 to 20 s). Your troops cannot cross either. | Planks drop with the debris system |
 
 **How it works (step 5, `src/world/triggers.ts`):** each blueprint trigger sits on the road nearest its spot: the keg just beside the road, the boulder on a rock hill 8 cm off it, the tree 5 cm off it, leaning over it. Each stands from its tutorial wave on and resets at the start of every wave. They register with the slingshot as `SlingTarget`s, so the aim assist and the target glow work for them, and they wobble while aimed at. Only a slingshot shot or a goblin shot sets them off (thrown pebbles never do). The tree closes its road for 12 s (`RoadGraph.setOpen`), then poofs away. Numbers in `TRIGGERS`. Debug keys 7 (reset all) and 8 (set off all).
@@ -121,8 +121,9 @@ Shot with the slingshot. Each one happens once and resets between waves. A trigg
 
 ### Chain reactions
 
-- **Off since step 6** (`TRIGGERS.keg.chainRadius` 0): each trigger only does its own thing, a keg never sets off a boulder or a tree. In the step 6 test a bug made one keg blow up every keg on the board, and players read even real chains as a bug. The code is kept: raise the radius to bring them back later.
-- The idea for later: explosions set off nearby triggers. A keg can knock over a tree or break a bridge. A Boom goblin explosion does the same (see [enemies.md](enemies.md)).
+- One rule: **explosions set off nearby triggers.**
+- A keg can knock over a tree or break a bridge. A Boom goblin explosion does the same (see [enemies.md](enemies.md)).
+- Simple rule, big surprising combos.
 
 ---
 

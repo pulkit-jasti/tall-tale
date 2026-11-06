@@ -23,7 +23,6 @@ import { RoadNetwork } from './roads.js';
 import { Meadow } from './grass.js';
 import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
 import { campDistance, RoadField, Terrain, type CampSpot } from './terrain.js';
-import { placeTriggers, triggerGround } from './triggers.js';
 import { flatMaterial } from './shapes.js';
 
 const yAxis = new Vector3(0, 1, 0);
@@ -47,9 +46,14 @@ function buildBoardMesh(terrain: Terrain, meadow: Meadow): Group {
   const material = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true });
   group.add(new Mesh(terrain.geometry((x, z, r, steepness, out) => meadow.faceColor(x, z, r, steepness, out)), material));
 
-  // Table skirt at the far outer edge. The hole in the middle is filled by the seat floor (src/world/giant.ts).
+  // Table skirts: the inner edge of the hole and the far outer edge.
   const skirtMaterial = flatMaterial(BOARD.skirtColor);
   skirtMaterial.side = DoubleSide;
+  const inner = new Mesh(
+    new CylinderGeometry(BOARD.holeRadius, BOARD.holeRadius, BOARD.skirtDepth, 48, 1, true),
+    skirtMaterial,
+  );
+  inner.position.y = -BOARD.skirtDepth / 2;
   const outerTop = boardHeight(BOARD.outerRadius);
   const outerHeight = outerTop + BOARD.skirtDepth;
   const outer = new Mesh(
@@ -57,7 +61,7 @@ function buildBoardMesh(terrain: Terrain, meadow: Meadow): Group {
     skirtMaterial,
   );
   outer.position.y = outerTop - outerHeight / 2;
-  group.add(outer);
+  group.add(inner, outer);
   return group;
 }
 
@@ -230,8 +234,6 @@ async function buildDecor(terrain: Terrain, camps: CampSpot[], built: Spot[], fo
 
 export interface BuiltBoard {
   network: RoadNetwork;
-  /** The windmill's sails, which turn (decor), or null without a windmill. */
-  sails: Object3D | null;
   /** Camp hills by camp id, so a camp can sink as its enemies come out. */
   hills: Map<string, Object3D>;
 }
@@ -248,12 +250,10 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   // Each part gets its own seeded stream, so loading order never changes the layout.
   // Where people live comes first (the villages sit by the roads, so this needs road distances far out).
   const roadField = new RoadField(network.roads, ROADS.width / 2 + SETTLEMENTS.villages.radius[1] + SETTLEMENTS.villages.roadGap[1] + 6);
-  // The triggers on the roads: flat ground under them and toward the castle (never hidden by a hill), and nothing built beside them.
-  const triggerSpots = triggerGround(placeTriggers(network, blueprint.triggers));
-  const plan = planSettlements(roadField, campSpots, createRandom(seed + 6), triggerSpots.clear);
-  // Then the terrain, flat under the camps, villages, fields and triggers: from here on groundAt() has its hills.
-  const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan), ...triggerSpots.flats], createRandom(seed));
-  placeLandmarks(plan, terrain, campSpots, createRandom(seed + 7), triggerSpots.clear);
+  const plan = planSettlements(roadField, campSpots, createRandom(seed + 6));
+  // Then the terrain, flat under the camps, villages and fields: from here on groundAt() has its hills.
+  const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan)], createRandom(seed));
+  placeLandmarks(plan, terrain, campSpots, createRandom(seed + 7));
   // The village squares are worn to dirt, like the camps.
   const plazas = plan.villages.map((v) => ({ ...v, size: v.size * 0.45 }));
   // So are the goblin hamlets and the lumber camps; the burned village is ash.
@@ -266,9 +266,9 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   const [castle, camps, decor, settlements] = await Promise.all([
     buildCastle(),
     buildCamps(campNodes, createRandom(seed + 2), hills),
-    buildDecor(terrain, campSpots, [...builtSpots(plan), ...triggerSpots.clear], plan.forests, createRandom(seed + 3)),
+    buildDecor(terrain, campSpots, builtSpots(plan), plan.forests, createRandom(seed + 3)),
     buildSettlements(plan, network.roads, createRandom(seed + 8)),
   ]);
   parent.add(castle, camps, decor, settlements);
-  return { network, hills, sails: (settlements.userData.sails as Object3D | undefined) ?? null };
+  return { network, hills };
 }
