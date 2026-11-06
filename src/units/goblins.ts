@@ -20,8 +20,9 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { CASTLE, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
+import { CASTLE, DAY_NIGHT, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
+import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
 import { popIn } from '../fx/ease.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
@@ -176,6 +177,8 @@ export class Goblin {
       const mesh = o as Mesh;
       if (mesh.isMesh) mesh.material = material;
     });
+    // A bright green edge at night, so it stands out from the ground.
+    addNightRim(material, DAY_NIGHT.rimGoblin);
     this.materials.push(material);
     this.body.add(model);
     this.root.add(this.body);

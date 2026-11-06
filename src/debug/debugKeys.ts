@@ -53,10 +53,12 @@ export type DebugCommand =
   | 'balloonFront'
   | 'popBalloons'
   | 'helmetGrunts'
-  | 'celebrate';
+  | 'celebrate'
+  | 'nextTime'
+  | 'timeOfDay';
 
 /** Sections of the laptop debug page, in page order. */
-export type DebugGroup = 'game' | 'castle' | 'goblins' | 'army' | 'slingshot' | 'food' | 'board' | 'performance';
+export type DebugGroup = 'game' | 'castle' | 'goblins' | 'army' | 'slingshot' | 'food' | 'board' | 'sky' | 'performance';
 
 export const DEBUG_GROUPS: { id: DebugGroup; title: string; icon: string }[] = [
   { id: 'game', title: 'Game and tutorial', icon: '🎮' },
@@ -66,6 +68,7 @@ export const DEBUG_GROUPS: { id: DebugGroup; title: string; icon: string }[] = [
   { id: 'slingshot', title: 'Slingshot', icon: '🪨' },
   { id: 'food', title: 'Food and food tools', icon: '🍗' },
   { id: 'board', title: 'Board', icon: '🧭' },
+  { id: 'sky', title: 'Day and night', icon: '🌗' },
   { id: 'performance', title: 'Performance', icon: '📈' },
 ];
 
@@ -153,6 +156,22 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'boardDown', group: 'board', icon: '⬇️', label: 'Board down', does: 'Lower the board one step' },
   { id: 'giantToggle', group: 'board', icon: '🧍', label: 'Giant body on/off', does: 'Show or hide the giant body under the head (the seat floor stays)' },
   { id: 'place', group: 'board', icon: '📍', code: 'KeyP', label: 'Place again', does: 'Place the board again in front of you' },
+  {
+    id: 'nextTime',
+    group: 'sky',
+    icon: '🌗',
+    code: 'BracketRight',
+    label: 'Next time of day',
+    does: 'Change to the next time of day (morning, day, sunset, night), the same 8 s change as between waves. Kept until the next battle starts',
+  },
+  {
+    id: 'timeOfDay',
+    group: 'sky',
+    icon: '🕰️',
+    label: 'Time of day',
+    does: 'Change to this time of day: 1 morning, 2 day, 3 sunset, 4 night (the same change as between waves). Kept until the next battle starts',
+    args: [1, 2, 3, 4],
+  },
   { id: 'fps', group: 'performance', icon: '🖥️', code: 'KeyF', label: 'FPS panel on/off', does: 'FPS panel on or off (hidden by default; add ?fps to the URL on the hosted build)' },
   { id: 'resetRun', group: 'performance', icon: '⏱️', code: 'KeyN', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },
   { id: 'stress', group: 'performance', icon: '🏋️', code: 'KeyM', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },

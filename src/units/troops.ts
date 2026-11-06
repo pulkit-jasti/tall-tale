@@ -32,6 +32,7 @@ import {
   LoopOnce,
   LoopRepeat,
   Matrix4,
+  type Mesh,
   MeshStandardMaterial,
   Object3D,
   Quaternion,
@@ -39,8 +40,9 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameAudio } from '../audio/sound.js';
-import { ARCHERS, CASTLE, GOBLIN_RULES, JUICE, TROOP_KINDS, TROOPS, type TroopKind } from '../config/game.js';
+import { ARCHERS, CASTLE, DAY_NIGHT, GOBLIN_RULES, JUICE, TROOP_KINDS, TROOPS, type TroopKind } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
+import { addNightRim } from '../fx/nightRim.js';
 import type { Particles } from '../fx/particles.js';
 import type { Random } from '../rules/random.js';
 import type { Step } from '../rules/roadGraph.js';
@@ -286,6 +288,14 @@ export class Troops {
         const spec = TROOP_KINDS[kind];
         const template = await loadTemplate(spec.body, { height: 1 }, true);
         await rigTemplate(template, spec.gear, spec.recolor);
+        // A bright gold edge at night. Every soldier of this kind shares the template's materials.
+        const materials = new Set<MeshStandardMaterial>();
+        template.object.traverse((o) => {
+          const mesh = o as Mesh;
+          if (!mesh.isMesh) return;
+          for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(m as MeshStandardMaterial);
+        });
+        for (const m of materials) addNightRim(m, DAY_NIGHT.rimTroop);
         this.templates.set(kind, template);
       }),
     );

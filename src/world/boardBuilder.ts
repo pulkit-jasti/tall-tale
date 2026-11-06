@@ -234,6 +234,10 @@ export interface BuiltBoard {
   sails: Object3D | null;
   /** Camp hills by camp id, so a camp can sink as its enemies come out. */
   hills: Map<string, Object3D>;
+  /** Every window tile and lantern on the board (their placements), for the night lights, and a lantern's height (cm). */
+  windows: Matrix4[];
+  lanterns: Matrix4[];
+  lanternHeight: number;
 }
 
 /** Builds everything in a map blueprint that turns with the board into `parent`. */
@@ -270,5 +274,13 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
     buildSettlements(plan, network.roads, createRandom(seed + 8)),
   ]);
   parent.add(castle, camps, decor, settlements);
-  return { network, hills, sails: (settlements.userData.sails as Object3D | undefined) ?? null };
+  return {
+    network,
+    hills,
+    sails: (settlements.userData.sails as Object3D | undefined) ?? null,
+    // For the night lights: every window tile and lantern (in the settlements' frame, the board's), and a lantern's height.
+    windows: settlements.userData.windows as Matrix4[],
+    lanterns: settlements.userData.lanterns as Matrix4[],
+    lanternHeight: settlements.userData.lanternHeight as number,
+  };
 }

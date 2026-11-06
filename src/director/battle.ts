@@ -134,6 +134,8 @@ export class Battle implements TutorialApi {
   private wave = -1;
   /** True from a wave's start until it is cleared or ended. */
   private inWave = false;
+  /** How many battles were started (the time of day jumps to the first wave's time on a new one). */
+  starts = 0;
   /**
    * The wave (0 based) the Play button starts at. 0 is the whole tutorial.
    * Set from the debug page's "Start at wave", so testing a later wave does
@@ -278,6 +280,7 @@ export class Battle implements TutorialApi {
     flags.show(1, this.state.wavesCleared / this.state.totalWaves, true);
     this.wave = from - 1;
     this.inWave = false;
+    this.starts++;
     this.endTimer = -1;
     this.eatenCount = this.pickedCount = this.slingHits = this.spun = this.moved = 0;
     this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
@@ -731,6 +734,15 @@ export class Battle implements TutorialApi {
 
   waveCleared(): boolean {
     return this.wave >= 0 && this.parts.spawner.allOut && this.parts.goblins.aliveCount === 0;
+  }
+
+  /**
+   * The wave whose time of day shows (0 based): the one being fought, or
+   * between waves the next one, so the time changes as soon as a wave is
+   * cleared. After the last wave it stays at the last wave's time.
+   */
+  get timeWave(): number {
+    return Math.max(0, Math.min(TUTORIAL_WAVES.length - 1, this.inWave ? this.wave : this.wave + 1));
   }
 
   endWave(): void {

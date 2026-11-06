@@ -19,7 +19,8 @@ export type PerfMark =
   | 'trigger'
   | 'balloon spawn'
   | 'gear'
-  | 'juice';
+  | 'juice'
+  | 'time of day';
 
 const marks = new Set<PerfMark>();
 

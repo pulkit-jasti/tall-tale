@@ -77,6 +77,16 @@ The see-through tutorial hands (`src/ui/ghostHand.ts`, demos in `src/ui/ghostDem
 - **Moves like the real thing:** a sideways ring pull follows the ring's curve (`arcDeg`), a slingshot pull goes straight back along the shot, moved distances match the lesson's goal (for example the spin goal in `TUTORIAL_TIMING`).
 - **Check it in the headset** from the seat, from more than one head angle, before calling a demo done, and note any change in docs/mvp.md.
 
+## Day and night (branch `feat/day-night-cycle`)
+
+Four times of day follow the waves (docs/mvp.md, "Day and night cycle"). Anything new must still look right and stay readable at night:
+
+- **Every look lives in `DAY_NIGHT.looks`** (`src/config/game.ts`). Something new that should change with the time of day gets a field in `DayLook`, a value in all four looks, and is blended in `src/world/dayNight.ts`. Never check the time of day in gameplay code: it is decor only.
+- **A new troop or enemy material gets the night rim** (`addNightRim` in `src/fx/nightRim.ts`, call it again after cloning a material), so it stands out at night.
+- **New terrain or decor gets the terrain fade** (`fadeAtNight` in `src/fx/nightFade.ts`). Anything built into the board before `fadeAtNight(this.stage.boardSpin)` in `src/game.ts` gets it; anything that glows or is interactive must be added after it, so it keeps its colors.
+- **Night lights are faked**, never real lights: bright unlit colors and additive glows (`src/world/nightLights.ts`). A new glowing thing goes there.
+- The time only changes between waves, so a change never costs frame time during a fight. Keep it that way.
+
 ## Development workflow
 
 - The developer works on a Mac and tests on a Quest 3S over Wi-Fi in the Quest browser.

@@ -191,7 +191,7 @@ To make these testable, game rules live in plain TypeScript functions with no Th
 |---|---|
 | Castle machines (including the arrow machine) | [castle-machines.md](castle-machines.md) |
 | Other enemy types: shield, Boom goblin, tinker (balloon riders moved into build step 7) | [enemies.md](enemies.md) |
-| Day and night cycle (far future) | [Far future ideas](#far-future-ideas) below |
+| Day and night cycle (started on its own branch, after the MVP) | [Day and night cycle](#day-and-night-cycle-started) below |
 | Stylized giant hands (far future, experimental) | [Far future ideas](#far-future-ideas) below |
 | Other map features: bridge, forest, mud, hill | [map.md](map.md) |
 | Daily Battle, Endless, Custom Game, menu board, trophy shelf, achievements, growing kingdom | [modes-and-progression.md](modes-and-progression.md) |
@@ -212,16 +212,46 @@ To make these testable, game rules live in plain TypeScript functions with no Th
 | Voice commands | README |
 | Gate mechanics | later |
 
+### Day and night cycle (started)
+
+Not part of the MVP build order. Built on the branch `feat/day-night-cycle` (2026-11-05), **not tested on the headset yet**, not merged.
+
+**When the time changes**
+- **Four times of day, any number of waves** (`timeOfWave` in `src/rules/dayNight.ts`): the first wave in the morning, the last at night, the one before the last at sunset, every other wave by day. The tutorial's 5 waves: morning, day, day, sunset, night. Works the same for later modes with other wave counts.
+- **Time follows the waves, not a clock.** As soon as a wave is cleared, it changes over 8 s (`DAY_NIGHT.changeSeconds`, eased) toward the next wave's time, while the board is quiet. During a wave it stays still. After the last wave it stays at night. A new battle (Play, Play again, Restart, "Start at wave") jumps straight to its first wave's time. It freezes while paused.
+- Only colors and the sky pieces move, nothing on the board, so it is fine for comfort.
+
+**The four looks** (`DAY_NIGHT.looks` in `src/config/game.ts`, one `DayLook` each)
+- **Morning:** the look tuned in the earlier headset tests. A low sun 35 degrees right of front with a warm sunrise glow.
+- **Day:** a high sun, white light, a deeper blue sky, almost no glow.
+- **Sunset:** the sun low on the left, deep orange, a warm horizon under a violet-blue top, orange clouds. The night lights start to come on, a light night rim and terrain fade.
+- **Night:** a dark navy sky, stars, the moon on the right and the ringed planet in front, weaker cool moonlight, dark grey-blue clouds, the terrain darker, full night rim and night lights.
+- Each look sets: the dome's three colors and its glow, where the sun and moon are and how much they show, the sun's tint, stars, the light's direction, color and strength, the sky fill (`scene.environmentIntensity`), the cloud tint, the night rim, the terrain fade, the planet's height and the night lights. The fog color is the dome's horizon color.
+
+**Night pieces** (shapes in [placeholder-shapes.md](placeholder-shapes.md))
+- **Stars:** 360 points that twinkle: now and then each one quickly dims and shrinks, at its own uneven pace (in the shader). The first soft slow pulse could not be seen, so it is stronger now.
+- **Moon:** a faceted low-poly moon with a cool glow, rising on the right.
+- **Ringed planet:** one soft lavender in shades, faded toward the night sky so it reads as far away (a background piece). High in the sky straight in front and far off: at first it sat on the horizon and looked like it was on the ground. Rises out of the horizon as night comes.
+- **Night lights** (`src/world/nightLights.ts`, `NIGHT_LIGHTS`): warm glowing village windows with a small glow on the wall, a flickering torch on the courtyard side of each castle tower, and a glow on each village lantern. No real lights: unlit colors and soft additive glows.
+
+**Readability first.** Goblins must always be easy to spot, the hardest part to get right. The first night (a bright moonlit blue) looked too bright, so the night is now dark, and readability comes from the units instead:
+- **Night rim** (`src/fx/nightRim.ts`): troops get a gold edge and goblins a green one, half at sunset, full at night. Added on top of the emissive color, so the Idle, Ready, Held and Locked glow and the hit flash still work.
+- **Terrain fade** (`src/fx/nightFade.ts`): the board, castle, roads, camps, villages, decor and hills turn darker, a little blue and a little less colorful (a multiply, never lighter). Units, triggers, tools and anything that glows keep their colors. A first version that faded toward grey-blue looked washed out.
+
+**Debug:** `]` changes to the next time of day. "Time of day" 1 to 4 on the debug page ("Day and night" section). Both use the real 8 s change and hold until the next battle starts.
+
+**Check on the headset**
+- Is the night still easy to read? Are goblins clear against the dark ground?
+- Do the stars twinkle visibly? Does the planet look far away and in the sky?
+- Do the window panes line up with the window openings (`NIGHT_LIGHTS.paneSize`, `paneHeight`, `paneOut`, worked out from the model, not seen)?
+- Do the torches on the towers get in the way when reaching for climbers (`NIGHT_LIGHTS.torchRadius`, `torchHeight`)?
+- Run the stress test at night (`]` to night first): the rim, fade and lights add shader work ([performance.md](performance.md)).
+
+**Not yet:** fireflies; campfires in the goblin camps that stay bright at night (they fade with the terrain now, since they share materials with the other decor); night sounds.
+
 ### Far future ideas
 
 Only after the MVP and its polish are done. Details agreed so far:
-
-**Day and night cycle**
-- **Time moves with the waves, not a clock:** wave 1 in the morning, the middle waves at noon and in the afternoon, wave 4 at sunset, the final wave at night. It shifts smoothly during the breathers, so the final battle at night is the dramatic high point.
-- **What changes:** the sun moves, sets and turns orange; the sky dome and fog colors shift; the sky fill dims to a moonlit blue; the clouds turn orange, then grey-blue; stars fade in (one cheap mesh of points) and a moon with a soft glow rises.
-- **Night lights:** torches on the castle wall and in the villages, glowing village windows, maybe fireflies. All faked with bright emissive flames and soft glow sprites, at most one or two real lights (many real lights hurt the Quest frame rate).
-- **Readability first:** the night stays a bright moonlit blue, never dark, so goblins are always easy to spot. This is the hardest part to get right.
-- Effort: medium to high. The sky dome, fog and sun setup from step 5 already do most of the groundwork.
 
 **Stylized giant hands (experimental)**
 - The see-through hands work well today, and a solid hand would cover the goblins at the most important moment (the pinch). So this is a test, not a plan.

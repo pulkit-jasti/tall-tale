@@ -13,7 +13,7 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 - **MVP build steps 1 to 6 are done and tested on the headset** (2026-11-03 to 2026-11-05): the board, castle and ring handle, grab and eat, the slingshot, 5 tutorial waves with a guided tutorial, both flags, the fly swatter, pepper shaker, food jar, triggers, troops, megaphone and bell, pause, and the giant's seat and body.
 - **Steps 7 and 8 are built, not tested on the headset yet** (2026-11-05): three troop kinds with gear (swordsmen, spearmen, archers), goblin spears and helmets, balloon riders from wave 4, the stress test with troops, and the juice pass (knockout stars, hit stop, food labels, confetti and more). Next: the headset test, the stress test result, then the missing sounds.
 - Details, open items and the build order are in [docs/mvp.md](docs/mvp.md). Frame rate results are in [docs/performance.md](docs/performance.md).
-- Day and night and stylized hands are far future ideas. The MVP has a hand-made tutorial map. The level generator comes later.
+- **Day and night is started** on the branch `feat/day-night-cycle` (2026-11-05, not tested on the headset yet, [docs/mvp.md](docs/mvp.md#day-and-night-cycle-started)): four times of day that follow the waves, a dark night with stars, a moon and a ringed planet, glowing windows, torches and lanterns, and a bright edge on the units so goblins stay easy to spot. Stylized hands are a far future idea. The MVP has a hand-made tutorial map. The level generator comes later.
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
 
 ---
@@ -311,6 +311,9 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 36. **One board size for everyone:** after the second step 4 test everything still felt too close. Now a reach check ("Show me how big you are, giant!") measures the player's stretched arm once and scales the whole board so the rampart sits a little inside that reach. The board is also placed lower (46 cm below the eyes), so the player towers over the kingdom.
 37. **Tools held at the grab angle:** a fist grab now snaps the tool into the hand the way it is held in real life, because some grabs needed an awkward wrist.
 38. **Visual threat cues off by default:** now on by default (wall hit flash). With the sound off, goblins at the wall were hard to find. An attack compass arc with red marks was tried too and dropped: the wall flash was enough.
+39. **Five times of day (morning, noon, afternoon, sunset, night), one per tutorial wave:** replaced by four looks that work for any number of waves (first morning, last night, the one before sunset, the rest day). Noon and afternoon looked almost the same in the cartoon style.
+40. **A bright moonlit night, so goblins stay visible:** replaced by a dark night where the units carry the readability: a bright edge on troops and goblins, and the terrain darker. A first terrain fade toward grey-blue looked washed out, so it now only darkens.
+41. **A ringed planet sitting on the horizon:** it looked like it was on the ground, so it moved high into the sky, farther away, in one faded color.
 
 ---
 

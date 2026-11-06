@@ -2110,40 +2110,17 @@ export const JUICE = {
  */
 export const SKY = {
   enabled: true,
-  /**
-   * Sun direction: compass angle from the player's first view (degrees,
-   * 0 = front, positive = right) and height above the horizon (low, a
-   * morning sun). A little right of front, so the sunrise glow is in view
-   * and clear of the hint sign.
-   */
-  sunAngleDeg: 35,
-  sunElevationDeg: 13,
+  /** The sun and the moon are this far away (meters). Where they are, and all the sky colors, change with the time of day (DAY_NIGHT). */
   sunDistance: 150,
-  /** The sunlight comes from the sun's side, but higher, so the board's tops stay bright (degrees above the horizon). */
-  lightElevationDeg: 40,
-  /**
-   * Sunlight strength. Raised from 1.6 while the soft sky fill (the scene
-   * file's IBLGradient intensity) went from 1 to 0.6, so slopes facing the sun
-   * are clearly lit and the ones facing away clearly shaded, live as the
-   * board spins.
-   */
-  lightIntensity: 2.2,
-  /** The sky dome (meters, inside the camera's 200 m far plane) and its colors: top, horizon (the fog color too), below the horizon. */
+  /** The sky dome (meters, inside the camera's 200 m far plane). */
   domeRadius: 175,
-  domeTopColor: 0x46a8ff,
-  domeHorizonColor: 0xb1e5fe,
-  domeBottomColor: 0xa2d1e1,
   /**
-   * The sunrise glow on the dome: a wide orange haze and a tight yellow one
-   * around the sun, strongest low on the horizon. Spread is how wide each one
-   * is (higher = tighter), strength how strong (0 to 1).
+   * The glow on the dome around the sun (or the moon at night): a wide haze
+   * and a tight one, strongest low on the horizon. Spread is how wide each
+   * one is (higher = tighter). Colors and strengths are in DAY_NIGHT.
    */
-  glowOrange: 0xff9a3c,
-  glowYellow: 0xffe08a,
   glowOrangeSpread: 3,
-  glowOrangeStrength: 0.85,
   glowYellowSpread: 18,
-  glowYellowStrength: 0.9,
   /** How much the glow keeps above the horizon (0 = only on the horizon, 1 = the same all the way up). */
   glowHighShare: 0.35,
   /**
@@ -2207,6 +2184,270 @@ export const SKY = {
   cloudShade: 0xcde6fe,
   /** The clouds are sorted far to near this often (seconds), so nearer ones paint over farther ones. */
   sortEvery: 0.5,
+  /** The moon (meters): a faceted ball, pale blue-white with a darker edge, and a soft cool glow behind (a share of its radius). */
+  moonRadius: 3.6,
+  moonColor: 0xeef3ff,
+  moonEdgeColor: 0xa9b8e0,
+  moonGlowColor: 0x9fb8ff,
+  moonGlowShare: 4,
+  /** Stars: one mesh of points on the upper sky (count, size in screen pixels, lowest height above the horizon in degrees). */
+  starCount: 360,
+  starSize: 5,
+  starMinElevationDeg: 8,
+  starColor: 0xf4f7ff,
+  /**
+   * Twinkle: now and then a star quickly dims and shrinks, each at its own
+   * pace. How much dimmer at its lowest (0 = never, 1 = out), how much smaller,
+   * and how fast (radians per second, from, to). Raised from 0.6 and 1.2 to 3.5
+   * after the first headset look: a slow soft pulse on tiny dots did not show.
+   */
+  starTwinkle: 0.9,
+  starTwinkleShrink: 0.5,
+  starTwinkleSpeed: [2.5, 7] as [number, number],
+  /**
+   * The ringed planet (night only): big, straight in front, high in the
+   * sky and far away (smaller and more faded than at first, when it looked
+   * like it sat on the ground). It rises from below the horizon as night
+   * comes (DayLook.planetAt; anything below the horizon is cut off). Meters:
+   * ball radius, distance (inside the 200 m far plane with its rings), the
+   * rings' inner and outer edge as a share of the radius. Tilted toward the
+   * player (degrees) so the rings read as rings, and rolled a little.
+   */
+  planetAngleDeg: 0,
+  planetRadius: 22,
+  planetDistance: 178,
+  planetRingInner: 1.35,
+  planetRingOuter: 2.35,
+  planetTiltDeg: 20,
+  planetRollDeg: -14,
+  /** Squashed front to back, so the far side of the rings stays inside the far plane. Seen from the front it looks the same. */
+  planetDepth: 0.3,
+  /**
+   * One color in different shades: the planet's color, the shade of each
+   * wavy band from the top down and of each ring band from the inside out
+   * (1 = the color, 0 = a gap in the rings). A background piece, so its
+   * colors are blended toward the night sky around it by `planetSkyBlend`
+   * (0 = its own color, 1 = the sky), and its light and dark sides stay soft.
+   */
+  planetColor: 0xb7a4e0,
+  planetBands: [1.06, 0.9, 1, 0.8, 0.95, 0.84, 1.02, 0.9],
+  planetRingBands: [1.08, 0.94, 0, 0.82, 1, 0.88],
+  planetSkyBlend: 0.55,
+};
+
+/** The four times of day, in order. */
+export const TIMES_OF_DAY = ['morning', 'day', 'sunset', 'night'] as const;
+export type TimeOfDay = (typeof TIMES_OF_DAY)[number];
+
+/** How the sky and the light look at one time of day. Angles: compass from the player's first view (0 = front, positive = right), and degrees above the horizon. */
+export interface DayLook {
+  /** Sky dome: top, horizon (the fog color too) and below the horizon. */
+  domeTop: number;
+  domeHorizon: number;
+  domeBottom: number;
+  /** The glow on the dome around the sun (or the moon when the sun is down): a wide haze and a tight one, each with a strength (0 to 1). */
+  glowWide: number;
+  glowTight: number;
+  glowWideStrength: number;
+  glowTightStrength: number;
+  /** Where the sun is, how big (0 = gone, 1 = full size) and its tint (white = its own colors). */
+  sunAt: [number, number];
+  sunShow: number;
+  sunTint: number;
+  /** Where the moon is and how much it shows (0 to 1). */
+  moonAt: [number, number];
+  moonShow: number;
+  /** How bright the stars are (0 to 1). */
+  stars: number;
+  /** The one real light (sun or moon): where it comes from (higher than the sun, so the board's tops stay lit), color, strength. */
+  lightAt: [number, number];
+  lightColor: number;
+  lightIntensity: number;
+  /** The soft sky fill on every lit thing (scene.environmentIntensity; the scene file's IBLGradient intensity by day). */
+  fill: number;
+  /** Clouds are tinted by this (white = their own colors). */
+  cloudTint: number;
+  /** The bright edge on troops and goblins (0 = off, 1 = full), so they stand out at night. */
+  rim: number;
+  /** The board, the castle and the hills turn darker and a little blue by this much (0 = their own colors), to match a dark sky. */
+  terrainFade: number;
+  /** Height of the ringed planet's middle above the horizon (degrees; below the horizon is cut off). Low enough and it is gone. */
+  planetAt: number;
+  /** How bright the night lights are: glowing windows, torches, lanterns (0 = off, 1 = full). */
+  lights: number;
+}
+
+/**
+ * Day and night (docs/mvp.md, "Day and night cycle"). Time follows the waves,
+ * not a clock: the first wave is in the morning, the last at night, the one
+ * before it at sunset, the rest by day (src/rules/dayNight.ts). It changes
+ * only between waves, while the board is quiet, and stays still during a
+ * wave, so it costs nothing while fighting. Only colors and the sky pieces
+ * move, nothing on the board, so it is fine for comfort.
+ *
+ * Readability first: the night stays a bright moonlit blue, never dark, and
+ * troops and goblins get a bright edge (the rim), so they are always easy to
+ * spot. All of these are starting values to tune in the headset.
+ */
+export const DAY_NIGHT = {
+  enabled: true,
+  /** How long one change takes (seconds), starting when a wave is cleared. Shorter reads as a flicker. */
+  changeSeconds: 8,
+  /** The rim: how thin it is (higher = thinner, only the very edge) and its color on each side. */
+  rimPower: 2.4,
+  rimGoblin: 0xc6ff6e,
+  rimTroop: 0xffd66b,
+  /**
+   * The terrain fade at full strength: its colors are multiplied by this cool
+   * dark tint (darker, a little blue, never lighter), and lose a little of
+   * their color (0 = none, 1 = grey). Anything that glows (emissive) is left out.
+   */
+  terrainTint: 0x9aa8d4,
+  terrainDesaturate: 0.3,
+  looks: {
+    // The first look, as tuned in the headset tests: a low sun a little right of front, so the
+    // sunrise glow is in view and clear of the hint sign. Sunlight 2.2 with the fill at 0.6,
+    // so slopes facing the sun are clearly lit and the ones facing away clearly shaded.
+    morning: {
+      domeTop: 0x46a8ff,
+      domeHorizon: 0xb1e5fe,
+      domeBottom: 0xa2d1e1,
+      glowWide: 0xff9a3c,
+      glowTight: 0xffe08a,
+      glowWideStrength: 0.85,
+      glowTightStrength: 0.9,
+      sunAt: [35, 13],
+      sunShow: 1,
+      sunTint: 0xffffff,
+      moonAt: [55, -15],
+      moonShow: 0,
+      stars: 0,
+      lightAt: [35, 40],
+      lightColor: 0xfff4e0,
+      lightIntensity: 2.2,
+      fill: 0.6,
+      cloudTint: 0xffffff,
+      rim: 0,
+      terrainFade: 0,
+      planetAt: -25,
+      lights: 0,
+    },
+    // High sun, white light, a deeper blue sky, almost no glow.
+    day: {
+      domeTop: 0x2f8cff,
+      domeHorizon: 0xa6dcff,
+      domeBottom: 0x98c9e0,
+      glowWide: 0xfff0c0,
+      glowTight: 0xfffbe6,
+      glowWideStrength: 0.15,
+      glowTightStrength: 0.6,
+      sunAt: [20, 42],
+      sunShow: 0.9,
+      sunTint: 0xffffff,
+      moonAt: [55, -15],
+      moonShow: 0,
+      stars: 0,
+      lightAt: [20, 62],
+      lightColor: 0xffffff,
+      lightIntensity: 2.4,
+      fill: 0.65,
+      cloudTint: 0xffffff,
+      rim: 0,
+      terrainFade: 0,
+      planetAt: -25,
+      lights: 0,
+    },
+    // The sun low on the left, deep orange, a warm horizon under a violet-blue top.
+    sunset: {
+      domeTop: 0x5b70d2,
+      domeHorizon: 0xffb27a,
+      domeBottom: 0xd99a80,
+      glowWide: 0xff6a2a,
+      glowTight: 0xffc060,
+      glowWideStrength: 1,
+      glowTightStrength: 0.9,
+      sunAt: [-40, 7],
+      sunShow: 1.1,
+      sunTint: 0xffa070,
+      moonAt: [55, -15],
+      moonShow: 0,
+      stars: 0,
+      lightAt: [-40, 30],
+      lightColor: 0xffb070,
+      lightIntensity: 2,
+      fill: 0.5,
+      cloudTint: 0xffc4a6,
+      rim: 0.35,
+      terrainFade: 0.15,
+      planetAt: -25,
+      lights: 0.35,
+    },
+    // A deep blue night with stars, the moon and the ringed planet rising in front. Darker
+    // after the first headset look (it was too bright). The units keep their bright rim and
+    // the terrain fades to grey-blue, so goblins still stand out.
+    night: {
+      domeTop: 0x040a22,
+      domeHorizon: 0x122246,
+      domeBottom: 0x0d1834,
+      glowWide: 0x6f8ad8,
+      glowTight: 0xc4d4ff,
+      glowWideStrength: 0.25,
+      glowTightStrength: 0.4,
+      sunAt: [-55, -12],
+      sunShow: 0,
+      sunTint: 0xff8050,
+      moonAt: [45, 24],
+      moonShow: 1,
+      stars: 1,
+      lightAt: [45, 50],
+      lightColor: 0xa9bfff,
+      lightIntensity: 0.95,
+      fill: 0.3,
+      cloudTint: 0x3a4670,
+      rim: 1,
+      terrainFade: 0.7,
+      planetAt: 26,
+      lights: 1,
+    },
+  } satisfies Record<TimeOfDay, DayLook>,
+};
+
+/**
+ * Night lights (decor only, src/world/nightLights.ts): warm glowing village
+ * windows, a torch on the courtyard side of each castle tower, and a glow on
+ * each village lantern. No real lights: bright unlit colors and soft additive
+ * glows, 5 draw calls, and only while they show (DayLook.lights). Board cm
+ * unless it says otherwise.
+ */
+export const NIGHT_LIGHTS = {
+  /** A window's warm pane as a share of one wall tile (wide, tall), its middle's height on the tile, and how far out (the wall's outside is at 0.5). */
+  paneSize: [0.3, 0.36] as [number, number],
+  paneHeight: 0.52,
+  paneOut: 0.515,
+  paneColor: 0xffc45a,
+  /** The small soft glow around each window, on the wall (share of a tile across), its color and strength. */
+  windowGlowSize: 1,
+  windowGlowColor: 0xffa63a,
+  windowGlowStrength: 0.9,
+  /** Torches: distance from the board's middle (just inside each tower), the flame's height above the board, the stick's length and the flame's size. */
+  torchRadius: 44.2,
+  torchHeight: 8.4,
+  torchStick: 3,
+  torchFlame: 1.4,
+  torchStickColor: 0x6b4a2b,
+  /** The flame from its base to its tip. */
+  flameBase: 0xff5a14,
+  flameTip: 0xfff0a0,
+  /** Flicker: how much a flame's size wobbles (share) and how fast. */
+  flicker: 0.2,
+  flickerSpeed: 9,
+  /** The round glows that always face the player, around each flame and each village lantern (cm across), their color and strength. */
+  torchGlowSize: 10,
+  lanternGlowSize: 7,
+  glowColor: 0xffa040,
+  glowStrength: 0.85,
+  /** Where the lantern model's light is (share of its height). */
+  lanternLightAt: 0.82,
 };
 
 /** One ring of hills around the board (board cm). */

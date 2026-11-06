@@ -6,7 +6,7 @@ import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TRIGGERS, XR } from './config/game.js';
+import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -34,6 +34,7 @@ import { GrabEat } from './player/grabEat.js';
 import { BoardHandles } from './player/handles.js';
 import { HandTracker } from './player/hands.js';
 import { angleOf, degToRad } from './rules/boardMath.js';
+import { timeOfWave } from './rules/dayNight.js';
 import { createRandom, type Random } from './rules/random.js';
 import { checkReach } from './rules/reach.js';
 import { Bell } from './tools/bell.js';
@@ -47,9 +48,12 @@ import { Goblins } from './units/goblins.js';
 import { Troops } from './units/troops.js';
 import { Balloons } from './units/balloons.js';
 import { GearDebris } from './fx/gearDebris.js';
+import { fadeAtNight } from './fx/nightFade.js';
 import { Juice } from './fx/juice.js';
 import { Hills } from './world/hills.js';
-import { Sky, skyDirection } from './world/sky.js';
+import { DayNight } from './world/dayNight.js';
+import { NightLights } from './world/nightLights.js';
+import { Sky } from './world/sky.js';
 import { Triggers } from './world/triggers.js';
 import { buildBoard } from './world/boardBuilder.js';
 import { FoodJar } from './world/foodJar.js';
@@ -96,6 +100,12 @@ export class GameSystem extends createSystem({}) {
   private triggers!: Triggers;
   private sky: Sky | null = null;
   private fog!: Fog;
+  private dayNight!: DayNight;
+  private nightLights!: NightLights;
+  /** A time of day picked on the debug page, until the next battle starts. */
+  private timeOverride: TimeOfDay | null = null;
+  /** Battle starts seen so far: a new battle jumps straight to its time of day. */
+  private battleStarts = -1;
   private particles!: Particles;
   private threat!: ThreatCues;
   private spawner!: ToySpawner;
@@ -128,18 +138,21 @@ export class GameSystem extends createSystem({}) {
     const seed = blueprint.seed;
 
     this.stage = new Stage(root);
-    // The sunlight comes from the sun's side. Like the sky, it never turns.
-    const sun = new DirectionalLight(0xfff4e0, SKY.lightIntensity);
-    skyDirection(SKY.sunAngleDeg, SKY.lightElevationDeg, sun.position).multiplyScalar(7);
+    // The sunlight (the moonlight at night) comes from the sun's (moon's) side. Like the sky, it never turns.
+    const sun = new DirectionalLight();
     root.add(sun, sun.target);
     // Haze in the dome's horizon color. It starts past the board and thickens
     // far out, so the last mountains fade into the sky. Grows with the board (update).
-    this.fog = new Fog(SKY.domeHorizonColor, SKY.fogNear, SKY.fogFar);
+    this.fog = new Fog(0xffffff, SKY.fogNear, SKY.fogFar);
     this.scene.fog = this.fog;
 
-    // Decor only: hills around the board, the sky dome, a sun and slow clouds. None of them turn (comfort rule).
-    new Hills(this.stage.boardLift, createRandom(seed + 710));
+    // Decor only: hills around the board, the sky dome, a sun, a moon, stars and slow clouds. None of them turn (comfort rule).
+    const hills = new Hills(this.stage.boardLift, createRandom(seed + 710));
+    // The terrain turns grey-blue at night, to match the dark sky.
+    fadeAtNight(hills.group);
     if (SKY.enabled) this.sky = new Sky(root, this.stage.boardLift, createRandom(seed + 700));
+    // The time of day sets the light, the fog color and the sky (it starts in the morning).
+    this.dayNight = new DayNight(this.sky, sun, this.fog, this.scene);
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
     this.particles = new Particles(root, createRandom(seed + 101));
     this.juice = new Juice(root, createRandom(seed + 102));
@@ -156,6 +169,10 @@ export class GameSystem extends createSystem({}) {
       loadUiImages(),
       ghost.load(root),
     ]);
+    // Only the board so far (ground, castle, roads, camps, villages, decor): units, triggers and tools come later and keep their colors.
+    fadeAtNight(this.stage.boardSpin);
+    // After the fade, so the lights keep their colors: glowing windows, torches on the towers, lantern glows.
+    this.nightLights = new NightLights(this.stage.boardSpin, built.windows, built.lanterns, built.lanternHeight);
     this.windmill = new Windmill(built.sails);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.goblins.particles = this.particles;
@@ -459,9 +476,25 @@ export class GameSystem extends createSystem({}) {
     this.particles.update(unitDt);
     this.juice.update(dt, headPosition);
     this.sky?.update(dt);
+    this.updateTimeOfDay(dt);
     this.windmill.update(dt);
     this.fog.near = SKY.fogNear * this.stage.boardScale;
     this.fog.far = SKY.fogFar * this.stage.boardScale;
+  }
+
+  /**
+   * The time of day follows the waves (src/rules/dayNight.ts). It changes as
+   * soon as a wave is cleared, toward the next wave's time, and a new battle
+   * jumps straight to its first wave's time.
+   */
+  private updateTimeOfDay(dt: number): void {
+    const starts = this.battle.starts;
+    const fresh = starts !== this.battleStarts;
+    this.battleStarts = starts;
+    if (fresh) this.timeOverride = null;
+    this.dayNight.show(this.timeOverride ?? timeOfWave(this.battle.timeWave, TUTORIAL_WAVES.length), fresh);
+    this.dayNight.update(dt);
+    this.nightLights.update(dt, this.dayNight.lights);
   }
 
   /**
@@ -749,6 +782,17 @@ export class GameSystem extends createSystem({}) {
       case 'boardDown':
         this.handles.nudge(0, id === 'boardUp' ? DEBUG.heightStepCm : -DEBUG.heightStepCm);
         break;
+      case 'nextTime': {
+        // The real change (not a jump), held until the next battle starts.
+        const now = TIMES_OF_DAY.indexOf(this.dayNight.time);
+        this.timeOverride = TIMES_OF_DAY[(now + 1) % TIMES_OF_DAY.length];
+        break;
+      }
+      case 'timeOfDay': {
+        const time = TIMES_OF_DAY[Math.round(arg ?? 1) - 1];
+        if (time) this.timeOverride = time;
+        break;
+      }
     }
   }
 }

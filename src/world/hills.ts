@@ -15,6 +15,7 @@ import {
   BufferGeometry,
   Color,
   Float32BufferAttribute,
+  Group,
   InstancedMesh,
   Matrix4,
   Mesh,
@@ -147,9 +148,13 @@ function groundRing(): Mesh {
 }
 
 export class Hills {
+  /** The ground ring and every hill (for the terrain fade at night). */
+  readonly group = new Group();
+
   constructor(boardLift: Object3D, rng: Random) {
-    boardLift.add(groundRing());
-    for (const layer of HILLS.layers) boardLift.add(this.layer(layer, rng));
+    boardLift.add(this.group);
+    this.group.add(groundRing());
+    for (const layer of HILLS.layers) this.group.add(this.layer(layer, rng));
   }
 
   /** One ring of hills: spread evenly around with a random shift, so there are no big gaps. */

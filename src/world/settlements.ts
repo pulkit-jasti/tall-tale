@@ -386,7 +386,14 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     ...['siege-catapult', 'siege-trebuchet', 'siege-ram', 'siege-ballista', 'siege-tower'].map((n) => load(`props/castle-kit/${n}-demolished`)),
   ]);
   const batch = new StaticBatch();
-  const add = (template: ModelTemplate, matrix: Matrix4): void => batch.add(template, matrix);
+  // Where every window tile and lantern goes, for the night lights (src/world/nightLights.ts).
+  const windows: Matrix4[] = [];
+  const lanterns: Matrix4[] = [];
+  const add = (template: ModelTemplate, matrix: Matrix4): void => {
+    batch.add(template, matrix);
+    if (template === wallWindow || template === woodWindow) windows.push(matrix.clone());
+    else if (template === lantern) lanterns.push(matrix.clone());
+  };
   const H = SETTLEMENTS.houses;
 
   /** A house: four wall tiles (the door toward the square), one or two floors, a roof, sometimes a chimney. */
@@ -475,6 +482,9 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
   await buildFarPlaces(plan, add, { walls: [wall, wallWindow, wood, woodWindow, wallDoor, woodDoor], roof: roofGable, cart, barrel, box, boxLarge }, rng);
   const group = batch.build();
   group.name = 'settlements';
+  group.userData.windows = windows;
+  group.userData.lanterns = lanterns;
+  group.userData.lanternHeight = lantern.size.y;
   if (sails) {
     group.add(sails);
     group.userData.sails = sails.userData.blades;
