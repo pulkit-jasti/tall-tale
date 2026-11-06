@@ -108,6 +108,7 @@ export class GameSystem extends createSystem({}) {
   private battleStarts = -1;
   private particles!: Particles;
   private threat!: ThreatCues;
+  private sign!: HintSign;
   private spawner!: ToySpawner;
   private battle!: Battle;
   private debugRng!: Random;
@@ -117,7 +118,7 @@ export class GameSystem extends createSystem({}) {
   private wasImmersive = false;
   /** The Quest menu is open, the headset is off or the page is hidden. */
   private hidden = false;
-  /** Paused from the wrist button (or auto-paused in VR): stays paused until Resume. */
+  /** Paused from the pause button (or auto-paused in VR): stays paused until Resume. */
   private menuPaused = false;
   /** "Measure reach" from the pause panel is running (the battle stays frozen). */
   private measuring = false;
@@ -172,8 +173,7 @@ export class GameSystem extends createSystem({}) {
     // Only the board so far (ground, castle, roads, camps, villages, decor): units, triggers and tools come later and keep their colors.
     fadeAtNight(this.stage.boardSpin);
     // After the fade, so the lights keep their colors: glowing windows, torches on the towers, lantern glows.
-    this.nightLights = new NightLights(this.stage.boardSpin, built.windows, built.lanterns, built.lanternHeight);
-    this.windmill = new Windmill(built.sails);
+    this.nightLights = new NightLights(this.stage.boardSpin, built.windows, built.lanterns, built.lanternHeight);    this.windmill = new Windmill(built.sails);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.goblins.particles = this.particles;
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
@@ -213,7 +213,7 @@ export class GameSystem extends createSystem({}) {
       }
     };
     this.threat = new ThreatCues(this.stage, this.particles, root);
-    this.pauseMenu = new PauseMenu(root, this.audio);
+    this.pauseMenu = new PauseMenu(root, this.stage.boardLift, this.audio);
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
@@ -227,6 +227,7 @@ export class GameSystem extends createSystem({}) {
     };
     // The threat cue: the wall under a carrying balloon flashes red.
     this.balloons.onThreat = (rider) => this.threat.wallHit(rider, false);
+    this.sign = new HintSign(this.stage.boardLift, this.audio);
     this.battle = new Battle({
       stage: this.stage,
       goblins: this.goblins,
@@ -240,13 +241,13 @@ export class GameSystem extends createSystem({}) {
       food: this.food,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
       panel: new EndPanel(this.stage.boardLift, this.audio),
-      sign: new HintSign(this.stage.boardLift, this.audio),
+      sign: this.sign,
       markers: new Markers(root),
       ghost,
       ghostAim: new GhostAim(root),
       pointer: new PointerArrow(root),
       bait: new LessonBait(this.goblins, built.network),
-      wristButton: (out) => this.pauseMenu.wristWorld(out),
+      pauseButton: (out) => this.pauseMenu.buttonWorld(out),
       audio: this.audio,
       particles: this.particles,
       threat: this.threat,
@@ -269,7 +270,10 @@ export class GameSystem extends createSystem({}) {
     };
     this.triggers.onBlast = (world) => this.juice.blast(world, this.stage.boardScale);
     this.swatter.onSplat = (world) => this.juice.ring(world, JUICE.swatRing * this.stage.boardScale);
-    this.balloons.onPop = (_balloon, world) => this.juice.blast(world, 0.7 * this.stage.boardScale);
+    this.balloons.onPop = (_balloon, world) => {
+      this.juice.blast(world, 0.7 * this.stage.boardScale);
+      this.audio.play('balloonPop', world);
+    };
     this.grabEat.onGrab = () => this.battle.notePicked();
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
@@ -420,6 +424,8 @@ export class GameSystem extends createSystem({}) {
     this.debugKeys(dt);
     // The giant's body stays under the head, also while paused.
     this.giant.update(dt, headPosition, headForward, this.stage.boardLift.position.y);
+    // Sounds behind the head are muffled, also while paused (the panel's clicks).
+    this.audio.update();
     if (this.measuring) {
       // The reach check on the frozen battle. The board grows or shrinks to the player when it is done.
       this.stage.update(dt);
@@ -436,7 +442,9 @@ export class GameSystem extends createSystem({}) {
       if (action) this.pauseAction(action);
       return;
     }
-    if (this.pauseMenu.updateWrist(dt, this.hands, headPosition, immersive && this.battle.canPause)) this.pause();
+    // The pause button steps aside while the Next button (on the same spot, higher) shows.
+    const pauseOn = immersive && this.battle.canPause && !this.sign.nextShown;
+    if (this.pauseMenu.updateButton(dt, this.hands.hands, pauseOn)) this.pause();
     if (this.menuPaused) return;
 
     if (this.placeTimer > 0) {
@@ -498,7 +506,7 @@ export class GameSystem extends createSystem({}) {
   }
 
   /**
-   * Pauses the battle (wrist button, auto-pause or debug): everything
+   * Pauses the battle (pause button, auto-pause or debug): everything
    * freezes, whatever the hands held is let go, and the pause panel comes
    * up on the next visible frame.
    */
@@ -508,7 +516,7 @@ export class GameSystem extends createSystem({}) {
     this.grabEat.releaseAll();
     this.battle.hideHints();
     this.threat.hideArrow();
-    this.pauseMenu.hideWrist();
+    this.pauseMenu.hideButton();
     this.audio.play('pauseOpen');
     console.info('[game] paused (pause panel)');
   }
@@ -792,8 +800,7 @@ export class GameSystem extends createSystem({}) {
         const time = TIMES_OF_DAY[Math.round(arg ?? 1) - 1];
         if (time) this.timeOverride = time;
         break;
-      }
-    }
+      }    }
   }
 }
 

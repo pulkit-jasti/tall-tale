@@ -113,8 +113,8 @@ export interface BattleParts {
   pointer: PointerArrow;
   /** Goblins brought just for a tool's use lesson. */
   bait: LessonBait;
-  /** The pause button on the left palm (world), while it is out, for the pause lesson's marker. */
-  wristButton: (out: Vector3) => Vector3 | null;
+  /** The pause button in front (world), while it shows, for the pause lesson's marker. */
+  pauseButton: (out: Vector3) => Vector3 | null;
   audio: GameAudio;
   particles: Particles;
   /** Wall hit flashes and the attack compass (seeing attacks without sound). */
@@ -344,7 +344,7 @@ export class Battle implements TutorialApi {
     this.parts.ghost.hide();
   }
 
-  /** True while a battle is being fought (the wrist button and auto-pause only work then). */
+  /** True while a battle is being fought (the pause button and auto-pause only work then). */
   get canPause(): boolean {
     return this.running && this.state.phase === 'playing';
   }
@@ -515,7 +515,6 @@ export class Battle implements TutorialApi {
     let text = !mic.on && hint.whenNoMic ? hint.whenNoMic : hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
-    if (hint.whenWrist && this.parts.wristButton(temp)) text = hint.whenWrist;
     // A food tool lesson without enough food says so (a climber comes to eat).
     if (hint.whenLocked && hint.tool && !this.canAfford(hint.tool)) text = hint.whenLocked;
     // The reach check counts down while the arm is out, so the player knows when to rest.
@@ -576,15 +575,6 @@ export class Battle implements TutorialApi {
         out.y -= CALIBRATION.demoDown;
         return out;
       }
-      case 'palmShow': {
-        // In front of the face, a little left and low: where the left palm shows the pause button.
-        temp.copy(this.forward).setY(0).normalize();
-        out.copy(this.head).addScaledVector(temp, GHOST_HAND.palmForward);
-        out.x += temp.z * GHOST_HAND.palmLeft;
-        out.z -= temp.x * GHOST_HAND.palmLeft;
-        out.y -= GHOST_HAND.palmDown;
-        return out;
-      }
       case 'lessonGoblin': {
         // Also while held, so the eat demo can start from it.
         const g = this.lessonGoblin;
@@ -635,8 +625,8 @@ export class Battle implements TutorialApi {
         const t = this.lessonTrigger;
         return t && t.standing ? this.parts.triggers.topWorld(t, out) : null;
       }
-      case 'wristButton':
-        return this.parts.wristButton(out);
+      case 'pauseButton':
+        return this.parts.pauseButton(out);
       case 'balloon': {
         const b = this.parts.balloons.nearest(stage.spin);
         if (!b) return null;
@@ -697,6 +687,7 @@ export class Battle implements TutorialApi {
     this.parts.slingshot.release();
     for (const tool of Object.values(this.parts.tools)) tool.release();
     this.parts.audio.play(this.state.phase === 'won' ? 'win' : 'lose');
+    if (this.state.phase === 'won') this.parts.audio.play('winFanfare');
     this.endTimer = END_PANEL.showDelay;
     console.info(`[battle] ${this.state.phase}, castle health ${this.state.health.toFixed(0)}`);
   }
@@ -728,6 +719,7 @@ export class Battle implements TutorialApi {
     this.parts.troops.deploy(plan.camps);
     this.parts.triggers.setWave(index + 1);
     const last = index === TUTORIAL_WAVES.length - 1;
+    this.parts.audio.play('waveHorn');
     this.parts.audio.play(last ? 'finalRound' : WAVE_VOICES[index] ?? 'finalRound');
     console.info(`[battle] wave ${index + 1} started`);
   }

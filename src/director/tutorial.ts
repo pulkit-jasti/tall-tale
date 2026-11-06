@@ -128,8 +128,8 @@ export type MarkerTarget =
   | 'bellHandle'
   /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
-  /** The pause button on the left palm, while it is out. */
-  | 'wristButton'
+  /** The pause button on its stand in front, while it shows. */
+  | 'pauseButton'
   /** A goblin brought for the current lesson (the moving targets, the goblins on the wall). */
   | 'baitGoblin'
   /** The balloon the balloon banner is about (the nearest one in the air). */
@@ -147,8 +147,6 @@ export interface Hint {
   marker?: MarkerTarget;
   /** Ghost aim dots: a see-through arc from the slingshot's pouch to the marker's target (the first trigger lesson). */
   aimDots?: boolean;
-  /** Shown instead while the pause button is out on the palm (the pause lesson). */
-  whenWrist?: string;
   /** Shown instead when the lesson goblin is on the board, not in the hand (dropped it). */
   whenDropped?: string;
   /** The food tool this lesson is about, and the text shown instead while it cannot be paid for. */
@@ -320,9 +318,7 @@ function introLessons(): TutorialStep[] {
     // How to pause comes first, so a player who pauses by accident later knows the way back.
     lessonStep(
       'learn-pause',
-      lesson('You can pause any time: turn your left palm toward your face, like this.', 'info', 'wristButton', {
-        demo: 'pauseShow',
-        whenWrist: 'There is the pause button! Poke it with your right finger, then poke Resume.',
+      lesson('You can pause any time: poke the pause button in front of you, then poke Resume.', 'info', 'pauseButton', {
         doneText: 'Now you know how to pause!',
       }),
       (api, since) => api.pausedCount() > since,

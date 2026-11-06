@@ -24,7 +24,7 @@ Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md), [Castle rul
 
 ### Interaction feedback (applies to everything you can touch)
 
-Every grabbable or pokeable thing (goblins, tools, handles, buttons, the wrist button, trophies) uses the same states, so the player learns them once. There are no haptics, so these are the main feedback.
+Every grabbable or pokeable thing (goblins, tools, handles, buttons, the pause button, trophies) uses the same states, so the player learns them once. There are no haptics, so these are the main feedback.
 
 | State | When | Look | Sound |
 |---|---|---|---|
@@ -99,7 +99,7 @@ Players who cannot hear, or play with the sound off, still need to know where go
 | **Pinch** | Thumb and index finger together | Small things: picking up goblins, pulling back the slingshot pouch, taking pebbles from the bowl, other small actions |
 | **Grab** | Close the whole hand into a fist | Big things: the slingshot handle, fly swatter, pepper shaker, megaphone, bell, the ring handle |
 
-- Buttons (Play, pause panel, wrist button) are poked with the index finger, not pinched or grabbed.
+- Buttons (Play, pause panel, pause button) are poked with the index finger, not pinched or grabbed.
 - Each object accepts only its own action, so a pinch never picks up the swatter and a fist never picks up a goblin.
 - Exception: the ring handle and the slingshot handle accept a pinch too. In the first headset test a fist with the back of the hand toward the headset tracked poorly, because the fingers are hidden.
 - A fist counts when 3 of 4 fingers are curled, so one badly tracked finger does not break it.
@@ -194,19 +194,19 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 ### What hand tracking games do
 
 - **Palm pinch is taken by the system.** On Quest, a pinch with the palm facing the player is reserved for the system on both hands. The right one opens the Quest menu. Meta's WebXR docs say the left one (the three bars icon) acts like the left controller's menu button, which leaves the WebXR session, but in our headset test it did nothing. Apps cannot use either one or turn them off, so the game never relies on them.
-- So the common pattern is a **wrist button**: a small button on the inside of one wrist that shows when the player turns that palm toward their face. The other hand's index finger pokes it. A poke with the other hand is deliberate, so it is rarely pressed by accident.
+- A common pattern is a **wrist button**: a small button on the inside of one wrist that shows when the player turns that palm toward their face. The other hand's index finger pokes it. We tried it, but the palm pose was hard to find and the button flickered, so ours is a fixed button in front.
 
 ### Our pause
 
-- **Wrist button on the left wrist** (right wrist once handedness exists). It fades in only when the left palm faces the player's face for about 0.3 seconds, and fades out when the hand turns away.
-- **Poke it with the right index finger** to pause. The button presses in, with a click sound.
+- **Pause button on a stand in front**, outside the ring, on the tutorial Next button's spot but lower, so it does not block the view ahead. It was a wrist button until the step 7 and 8 headset test (the palm pose was hard to find and the button flickered).
+- **Poke it with either index finger** to pause. The button presses in, with a click sound.
 - **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Reset table", "Restart battle".
 - **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". The FPS panel shows "paused" while it is.
 - Settings come later (not in the MVP).
 
 **Built in step 6** (`src/ui/pauseMenu.ts`, numbers in `PAUSE`):
-- The wrist button is the shared poke button with a pause icon, in the middle of the left palm, standing upright and facing the eyes (so the pause bars always read upright, whatever way the fingers point). It pops in once the left palm faces the eyes (within about 53 degrees) for 0.3 s, while the palm is within 60 cm of the eyes and the left hand holds nothing. It hides only once the palm clearly turned away (past about 75 degrees) for 0.6 s, never while the right index finger is near it. It does not follow every tracking wobble: it stands still in the world where the palm was when it came out, and only glides after the palm (filtered with a One Euro filter) once the palm moved 4.5 cm away, 6 cm while the right index finger is within 12 cm. It is drawn on top, 3 cm out from the palm, so the hand's own mesh never cuts into it. Only the right index finger pokes it, once it is fully out.
-- **Taught first:** the tutorial's first lesson (after the reach check) shows it with a ghost left hand turning its palm toward the eyes, then asks the player to poke it and Resume.
+- The pause button is the shared poke button with a pause icon, on a post like the Next button, straight in front (38.5 cm out, 9 cm above the board, face tilted 40 degrees toward the eyes, `PAUSE.button`). It rises with the board and never turns. About 53 cm from the eyes, a little past the sweet spot, fine for a button poked now and then. It shows while a battle runs (in VR), and steps aside while the Next button shows (same spot, higher). It ignores pokes for a moment after it comes back, so the finger that poked Next or Resume does not pause at once.
+- **Taught first:** the tutorial's first lesson (after the reach check) points the marker at it and asks the player to poke it and Resume (no ghost hand demo).
 - Pausing lets go of everything the hands hold (goblins drop, tools go back), freezes the battle and all sound, and hides the hint sign, marker and ghost hand.
 - The pause panel opens in front of the head, not on the board, at the same spot from the eyes as the end panel and sized with the board, so its buttons are always in the best reach band (about 47 to 49 cm from the eyes), even when the board ended up somewhere odd. It always draws on top of everything (no depth test), so the castle or the sign never hide it. It **follows the head lazily**, like the Quest's own menus: it stays still while the head turns a little, and swings back in front once the head turned more than 25 degrees (or moved 12 cm), so it is never behind the player. Four poke buttons: **Resume**, **Reset table** (auto placement again at the starting height, then play goes on), **Measure reach** (the reach check right away on the frozen battle, the board resizes, then play goes on, no restart) and **Restart** (the battle again). Its buttons ignore pokes for 1 s after it opens.
 - Sound stops only for the Quest menu, so the pause panel's clicks are heard.
@@ -247,7 +247,7 @@ Not raw joint positions (they change as the whole hand moves). Instead, a few si
 |---|---|---|
 | Finger curl | Fingertip distance to the palm (3 of 4 fingers) | Grab (fist) for big tools and the ring handle |
 | Pinch | Thumb tip to index tip distance | Pinch for goblins and the slingshot pouch |
-| Palm direction | Which way the palm faces | Palm toward the face shows the wrist pause button |
+| Palm direction | Which way the palm faces | Not used for input (a palm-facing pinch is the Quest menu) |
 | Speed | Hand movement over the last few frames | Shake (pepper, bell), swat |
 
 A gesture is a rule over these, for example "all fingers curled and palm down = fist".

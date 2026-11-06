@@ -93,6 +93,11 @@ export class HintSign {
     this.draw(content);
   }
 
+  /** The Next button is out (the pause button, on the same spot, steps aside). */
+  get nextShown(): boolean {
+    return this.panel.visible && this.nextStand.visible;
+  }
+
   /** True on the frame the "Next" button is poked (only while it shows). */
   pokedNext(hands: HandState[], dt: number): boolean {
     return this.panel.visible && this.nextStand.visible && this.next.update(hands, dt);

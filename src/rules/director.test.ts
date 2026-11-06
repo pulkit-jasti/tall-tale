@@ -384,7 +384,7 @@ describe('tutorial director', () => {
   it('teaches pausing first: done once the player paused and came back, and never stuck without hands', () => {
     const steps = buildTutorialSteps(['slingshot']);
     expect(steps[0].id).toBe('learn-pause');
-    expect(steps[0].hint?.demo).toBe('pauseShow');
+    expect(steps[0].hint?.marker).toBe('pauseButton');
     const api = idleApi();
     const director = new Director<TutorialApi>(steps, api);
     director.update(0.1);

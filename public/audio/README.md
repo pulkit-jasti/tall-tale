@@ -1,6 +1,6 @@
 # Sounds
 
-All CC0 from Kenney packs. Short `.ogg` files (the Quest browser plays them). Numbered files are variants: pick one at random so repeats do not sound robotic. Sound names in docs/audio.md map to these files in the sound config.
+Most are CC0 from Kenney packs (the Freesound files are listed below). Short `.ogg` files (the Quest browser plays them). Numbered files are variants: pick one at random so repeats do not sound robotic. Sound names in docs/audio.md map to these files in the sound config.
 
 | Sound (docs/audio.md) | Files |
 |---|---|
@@ -31,6 +31,29 @@ All CC0 from Kenney packs. Short `.ogg` files (the Quest browser plays them). Nu
 | Wave start | `voice/round_1` to `round_5`, `final_round`, `fight`, `begin`, `ready`, `prepare_yourself` |
 | Win, lose | `voice/you_win`, `winner`, `flawless_victory`, `you_lose`, `game_over` |
 
-## Still missing (not in these packs)
+## From Freesound (top folder)
 
-Goblin chatter, giggle and squeal, gulp and burp, sneeze, keg explosion, camp rumble, boulder roll, worker cheer, wave horn, win fanfare, lose trombone, ambient wind and birds. Keep `chime.mp3` as the placeholder for these.
+Check each file's license on its Freesound page (the number in the name is the sound's id). CC0 needs nothing; CC BY needs a credit line in the game.
+
+| Sound | File | Notes |
+|---|---|---|
+| Goblin voice (`goblinCackle`): not played yet, the climber giggle later | `202096__spookymodem__goblin-cackle.wav` | |
+| Squeal when grabbed or loaded (`squeal`) | `442817__qubodup__goblin-growl.wav` | |
+| Gulp after eating (`gulp`) | `646981__huw2k8__monster-eating-a-goblin.wav` | 5.5 s, may need a trim |
+| Sneeze (`sneeze`) | `368802__inspectorj__sneeze-single-d.wav` | |
+| Camp rumble (`campRumble`) | `173318__bliss__collab-2-war-drums-95-bpm.wav` | 17.7 s, cut at 3 s in code; 4.5 MB, should be trimmed |
+| Boulder roll (`boulderRoll`) | `807186__sound368__boulder-roll.wav` | |
+| Balloon pop (`balloonPop`) | `372182__supersound23__pop.mp3` | |
+| Wave horn (`waveHorn`) | `539956__adharca__war-horn.wav` | |
+| Win fanfare (`winFanfare`) | `99961__cgeffex__medieval-fanfare_neonaeon_tweaked-by-cgeffex.wav` | |
+
+Downloaded but not used yet:
+
+- `144497__wuola__medieval-bell-a3.aiff`: the Quest browser cannot play AIFF. Convert to `.ogg` first.
+- `276874__lucabia__sword-hits.wav`: 10 s of many hits. Cut into single hits for `swordClash`.
+- `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac`, `812170__giangallegos__ambient-music.mp3`: music ideas. No music player yet.
+- `875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.wav`: ambience idea. 20 MB, needs a shorter loop as `.ogg`.
+
+## Still missing
+
+Goblin chatter, burp, keg explosion, worker cheer, lose trombone, ambient wind and birds, night crickets, torch crackle. Keep `chime.mp3` as the placeholder for these.

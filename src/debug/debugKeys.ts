@@ -104,7 +104,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     does: 'Forget the saved reach (the board goes back to its normal size) and start the battle with the reach check ("Show me how big you are, giant!"), then the wave Play starts at',
   },
   { id: 'skipStep', group: 'game', icon: '⏭️', code: 'KeyS', label: 'Skip step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
-  { id: 'pause', group: 'game', icon: '⏸️', code: 'Space', label: 'Pause / resume', does: 'Pause the battle (like the wrist button) or resume it' },
+  { id: 'pause', group: 'game', icon: '⏸️', code: 'Space', label: 'Pause / resume', does: 'Pause the battle (like the pause button) or resume it' },
   {
     id: 'pauseAction',
     group: 'game',

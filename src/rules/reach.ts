@@ -43,6 +43,8 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'bell handle', radius: TOOL_SPOTS.rightSide.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
     { name: 'megaphone grip', radius: TOOL_SPOTS.rightSide.radius, y: top + (MEGAPHONE.gripFrom + MEGAPHONE.gripTo) / 2 },
     { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY },
+    // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.
+    { name: 'pause button', radius: PAUSE.button.at, y: PAUSE.button.y, rare: true },
     { name: 'end panel button', radius: endButtonRadius, y: endButtonY },
     { name: 'pause panel middle buttons', radius: Math.hypot(pauseOut, P.buttonGap / 2), y: pauseY },
     { name: 'pause panel outer buttons', radius: Math.hypot(pauseOut, pauseSide), y: pauseY },

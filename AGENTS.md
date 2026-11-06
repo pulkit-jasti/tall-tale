@@ -63,7 +63,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - Two hand actions: **pinch** (thumb and index) for small things like goblins, pebbles and the slingshot pouch, and **grab** (fist) for big things like the slingshot handle, swatter, pepper shaker, megaphone and bell. The ring handle and the slingshot handle accept both, because a fist with the back of the hand toward the headset tracks poorly. See "Pinch and grab" in docs/controls-and-ui.md.
 - Goblins are tiny (about 3.9 cm, runners 3.35). The pinch zone is about 5 to 6 cm and snaps to the nearest goblin. See docs/controls-and-ui.md.
 - Hand tracking gets unreliable very close to the headset. The "eat" action triggers when a held goblin stays within about 22 cm of the face for a moment. No letting go and no head tilt, because a pinch with the palm toward the headset opens the Quest menu. It must not require touching the mouth.
-- Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a wrist button poked with the other hand.
+- Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a button on a stand straight in front, outside the ring (below the Next button's spot).
 
 ## Ghost hand demos (tutorial)
 
@@ -73,7 +73,7 @@ The see-through tutorial hands (`src/ui/ghostHand.ts`, demos in `src/ui/ghostDem
 - **Exact contact point:** a fist closes around the bar's center line (the fist's hole is the model origin), a pinch puts the thumb and index tips on the object. Anchors are real points from the systems (the ring tube's center, the handle's axis, the top of the pebble pile), never a guessed offset from a nearby point.
 - **Never through an object:** approach and leave from the open side (from above for the ring, the bowl and goblins, from behind and the side for the slingshot handle, from the player's side for the pouch). If a straight line would cross something (the fork, a band, the bowl rim, the wall), add a key to go around it.
 - **Turned by named directions, not angles:** every key gives `rod` (the bar's direction toward the thumb) or `fingers`, plus `palm`, in the anchor's [right, up, forward] frame. The hand's own axes are measured from its joints, so there are no roll or pitch guesses.
-- **Natural and safe:** the pose a real person would use, never a palm facing the headset (the Quest menu gesture), wrist bends a real wrist can do. The one exception is the pause demo (`pauseShow`): an open left hand turning its palm toward the eyes to show the pause button, never pinching.
+- **Natural and safe:** the pose a real person would use, never a palm facing the headset (the Quest menu gesture), wrist bends a real wrist can do.
 - **Moves like the real thing:** a sideways ring pull follows the ring's curve (`arcDeg`), a slingshot pull goes straight back along the shot, moved distances match the lesson's goal (for example the spin goal in `TUTORIAL_TIMING`).
 - **Check it in the headset** from the seat, from more than one head angle, before calling a demo done, and note any change in docs/mvp.md.
 

@@ -154,7 +154,7 @@ Each step should be playable on its own.
 
 Decided, not forgotten. Everything else from steps 1 to 6 is done.
 
-- **Headset checks still open:** the giant's body and seat floor from more than one head angle, the megaphone after opening and closing the Quest menu (two possible causes were fixed, nothing confirmed), and the ghost hand demos `pauseShow` and `aimKeg`.
+- **Headset checks still open:** the giant's body and seat floor from more than one head angle, the megaphone after opening and closing the Quest menu (two possible causes were fixed, nothing confirmed), and the ghost hand demo `aimKeg`.
 - **Wave 5 trigger reminder:** its intro text ("Shoot the barrels, boulders and trees") is never shown, because wave 5 starts straight into the megaphone lesson. It could show as a short line after that lesson.
 - **Code cleanup:** the unused "loose" phase in `src/tools/handTool.ts` and its unused `tagToBack` option.
 - **Food jar look:** it still reads like another tool stand. Idea: a low "tribute tray" piled with drumsticks (needs a food model, a new asset pack needs the developer's OK, or a code-made drumstick). Polish.
@@ -162,7 +162,6 @@ Decided, not forgotten. Everything else from steps 1 to 6 is done.
 - **Locked tools and food costs in play:** tools are free in the tutorial, so the Locked look and paying food only matter once there is a battle after the tutorial (Endless or Daily Battle).
 - **Directions in the hints:** the compass letters on the ring could name where goblins come from ("Goblins from the east!").
 - **Chain reactions:** off (`TRIGGERS.keg.chainRadius` 0). They can come back if playtests want them.
-- **Pause button spot:** if the Quest's own left palm menu icon ever clashes with it, the fallback is the inside of the wrist.
 - **Controller grip:** the fist frame for controllers is a rough guess (controllers are low priority).
 
 If time runs short, cut from the end of this list.
@@ -223,7 +222,7 @@ Not part of the MVP build order. Built on the branch `feat/day-night-cycle` (202
 
 **The four looks** (`DAY_NIGHT.looks` in `src/config/game.ts`, one `DayLook` each)
 - **Morning:** the look tuned in the earlier headset tests. A low sun 35 degrees right of front with a warm sunrise glow.
-- **Day:** a high sun, white light, a deeper blue sky, almost no glow.
+- **Day:** super sunny. A high sun, warm golden light, a soft blue top over a warm peach haze (the fog too, so the air has an orange tint), a wide warm glow, cream clouds. A first cool blue day did not feel sunny.
 - **Sunset:** the sun low on the left, deep orange, a warm horizon under a violet-blue top, orange clouds. The night lights start to come on, a light night rim and terrain fade.
 - **Night:** a dark navy sky, stars, the moon on the right and the ringed planet in front, weaker cool moonlight, dark grey-blue clouds, the terrain darker, full night rim and night lights.
 - Each look sets: the dome's three colors and its glow, where the sun and moon are and how much they show, the sun's tint, stars, the light's direction, color and strength, the sky fill (`scene.environmentIntensity`), the cloud tint, the night rim, the terrain fade, the planet's height and the night lights. The fog color is the dome's horizon color.

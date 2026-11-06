@@ -64,3 +64,8 @@ Check each license before use.
 - Short compressed files. 25 sounds are about 1 to 3 MB in total. The browser caches them after the first load.
 - Sound can only start after a user tap (browser autoplay rule). The "Enter VR" tap unlocks it.
 - One sound emitter per enemy group, not per enemy (performance, see [core-loop.md](core-loop.md#performance)).
+- **Where sounds come from** (`SOUND_MIX` in `src/config/sounds.ts`, `src/audio/sound.ts`): positional sounds use the browser's head model (HRTF) on the listener at the head, so they turn with the board and the head. Left and right are clear (headset test after steps 7 and 8).
+  - **Mono:** every positional file is mixed down to mono in code before it is placed (the files stay as they are). A stereo file places each channel on its own, which smears the direction. In the test, mono and stereo sounded the same for the goblin cackle (its channels are nearly the same), but mono can only help.
+  - **Distance:** full volume up to 35 cm, then quieter (about 30% at 1 m, 15% at 2 m).
+  - **Behind muffle:** the head model hardly tells front from back (confusing in the test), so a sound behind the head is muffled (low pass down to 1800 Hz) and a little quieter (70%). It starts at the side and is strongest straight behind, and follows the head and the board as they turn. One low pass and one volume per positional voice (12), updated each frame only for playing sounds.
+  - A better head model (Google's Resonance Audio) was looked at and left out for now: a new dependency and more audio work on the Quest, and it still hardly tells front from back.

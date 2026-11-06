@@ -703,65 +703,26 @@ export const END_PANEL = {
 };
 
 /**
- * Pause (docs/controls-and-ui.md section 5): a wrist button on the left
- * wrist, poked with the right index finger, and a pause panel in front of
- * the player with Resume, Reset table, Measure reach and Restart. The
- * panel is placed from the head when it opens (not on the board), so it is
- * always in reach, even when the board ended up somewhere odd.
+ * Pause (docs/controls-and-ui.md section 5): a pause button on a stand
+ * straight in front, outside the ring, poked with either index finger, and
+ * a pause panel in front of the player with Resume, Reset table, Measure
+ * reach and Restart. The panel is placed from the head when it opens (not
+ * on the board), so it is always in reach, even when the board ended up
+ * somewhere odd.
  */
 export const PAUSE = {
-  wrist: {
-    /** The button shows while the left palm faces the eyes this well (cosine of the angle)... */
-    faceDot: 0.6,
-    /**
-     * ...for this long, and hides only once the palm clearly turned away
-     * (below hideDot) for hideHold (seconds). The wide gap and the long hide
-     * hold stop the flicker from tracking noise (headset test after step 6).
-     */
-    showHold: 0.3,
-    hideDot: 0.25,
-    hideHold: 0.6,
-    /** Only while the palm is this close to the eyes (meters): a hand on the lap does not count. */
-    maxDistance: 0.6,
-    /** It never hides while the right index fingertip is this close to it (meters): the player is poking it. */
-    keepNear: 0.1,
-    /**
-     * Button size (cm), out from the middle of the palm (meters). 3 cm out
-     * (was 1.8), clear of the hand's own mesh, which it flickered through.
-     */
-    radius: 1.8,
-    out: 0.03,
-    /**
-     * The palm is filtered with a One Euro filter before the button follows
-     * it (hand joints shake by a few mm every frame): `still` is the cutoff
-     * when the hand is still (Hz, lower is steadier), `follow` how quickly it
-     * catches up when the hand moves. The palm's direction gets its own.
-     */
-    filter: { still: 0.8, follow: 8, derivative: 1 },
-    normalFilter: { still: 0.6, follow: 1.5, derivative: 1 },
-    /**
-     * It stands still where the palm was when it came out, and only glides
-     * after the palm (over `glide` seconds, stopping within `settle`) once
-     * the palm moved `reanchor` away (meters). Standing still, it cannot
-     * shake (headset tests after step 6: following the palm, even filtered,
-     * still looked like it vibrated).
-     */
-    reanchor: 0.045,
-    glide: 0.08,
-    settle: 0.004,
-    /** It only turns to face the eyes again past this angle (degrees), and only while it glides. */
-    turnDeg: 10,
-    /**
-     * While the right index fingertip is within `lockNear` of it (meters),
-     * the button does not move at all, so it holds still to be poked, unless
-     * the palm moved more than `lockBreak` away (meters).
-     */
-    lockNear: 0.12,
-    lockBreak: 0.06,
-    /** Drawn after everything, without the depth test, so the hand never cuts into it. */
-    renderOrder: 45,
-    /** It pops in and out over this long (seconds). */
-    popTime: 0.15,
+  /**
+   * The button: on the Next button's spot (HINT_SIGN.nextAt), but lower, so
+   * it does not block the view ahead (boardLift, cm, degrees). It stays
+   * there while a battle runs, and steps aside while the Next button shows.
+   * Was on the left wrist until the step 7 and 8 test (the palm pose was
+   * hard to find and flickered).
+   */
+  button: {
+    radius: 2.4,
+    at: 38.5,
+    y: 9,
+    tiltDeg: 40,
   },
   /**
    * The panel follows the head lazily, like the Quest's own menus: it stays
@@ -882,10 +843,6 @@ export const GHOST_HAND = {
   /** The ghost's mouth point: in front of the face and a little down (meters). */
   mouthForward: 0.16,
   mouthDown: 0.07,
-  /** The pause demo: where the left palm shows the pause button, from the eyes (meters forward, left, down). */
-  palmForward: 0.3,
-  palmLeft: 0.07,
-  palmDown: 0.14,
   /** Ghost aim dots (the keg lesson): how many, their size (meters), how high the arc rises (share of its length), flow speed. */
   aimDots: 18,
   aimDotSize: 0.0045,
@@ -2332,15 +2289,17 @@ export const DAY_NIGHT = {
       planetAt: -25,
       lights: 0,
     },
-    // High sun, white light, a deeper blue sky, almost no glow.
+    // Super sunny: a high sun, warm golden light, a soft blue top over a warm peach haze (the fog
+    // too, so the air has an orange tint), a wide warm glow, cream clouds. Warmer after the
+    // first look: the cool blue day did not feel sunny.
     day: {
-      domeTop: 0x2f8cff,
-      domeHorizon: 0xa6dcff,
-      domeBottom: 0x98c9e0,
-      glowWide: 0xfff0c0,
-      glowTight: 0xfffbe6,
-      glowWideStrength: 0.15,
-      glowTightStrength: 0.6,
+      domeTop: 0x5aa8f0,
+      domeHorizon: 0xffd6a0,
+      domeBottom: 0xf0c49a,
+      glowWide: 0xffb860,
+      glowTight: 0xfff0c0,
+      glowWideStrength: 0.45,
+      glowTightStrength: 0.75,
       sunAt: [20, 42],
       sunShow: 0.9,
       sunTint: 0xffffff,
@@ -2348,10 +2307,10 @@ export const DAY_NIGHT = {
       moonShow: 0,
       stars: 0,
       lightAt: [20, 62],
-      lightColor: 0xffffff,
-      lightIntensity: 2.4,
-      fill: 0.65,
-      cloudTint: 0xffffff,
+      lightColor: 0xffe0aa,
+      lightIntensity: 2.6,
+      fill: 0.7,
+      cloudTint: 0xfff0dc,
       rim: 0,
       terrainFade: 0,
       planetAt: -25,
