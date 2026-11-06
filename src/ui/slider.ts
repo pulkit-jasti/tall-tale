@@ -19,9 +19,11 @@
 import { BoxGeometry, CylinderGeometry, Group, Mesh, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { POKE, SLIDER } from '../config/game.js';
-import { applyTouchState, type TouchState } from '../player/feedback.js';
+import type { TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { flatMaterial } from '../world/shapes.js';
+import { changeTouch, type Control } from './kit/controls.js';
+import { clamp01, stepValue } from './kit/layout.js';
 import { PokeButton } from './pokeButton.js';
 
 export interface SliderOptions {
@@ -34,7 +36,7 @@ export interface SliderOptions {
 
 const local = new Vector3();
 
-export class Slider {
+export class Slider implements Control {
   /** Place and turn this group. Its +z is the slider's face. */
   readonly group = new Group();
   onChange: (value: number, final: boolean) => void = () => {};
@@ -169,8 +171,7 @@ export class Slider {
   }
 
   private stepBy(step: number): void {
-    // Round to the step grid, so steps always land on the same values.
-    const next = clamp01(Math.round((this.value + step) * this.steps) / this.steps);
+    const next = stepValue(this.value, step, this.steps);
     if (next === this.value) return;
     this.value = next;
     this.show();
@@ -197,11 +198,6 @@ export class Slider {
   }
 
   private setTouch(state: TouchState): void {
-    if (state === this.touch) return;
-    if (state === 'ready' && this.touch === 'idle') this.audio.play('readyTick', undefined, 1, 0.1);
-    this.touch = state;
-    applyTouchState([this.handleMaterial], state);
+    this.touch = changeTouch(this.audio, [this.handleMaterial], this.touch, state);
   }
 }
-
-const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));

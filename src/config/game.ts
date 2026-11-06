@@ -750,6 +750,23 @@ export const END_PANEL = {
 };
 
 /**
+ * The draw order of everything drawn on top or in a fixed order (higher
+ * draws later, over the lower ones), all in one place so layers never
+ * fight: ghost hands and aim dots, tutorial markers, "+1" labels, the stun
+ * ring, the pointer arrows, then the pause panel above all. Used with
+ * drawOnTop (src/ui/kit/onTop.ts).
+ */
+export const RENDER_ORDER = {
+  ghost: 5,
+  ghostGlow: 6,
+  markers: 10,
+  labels: 20,
+  stunWave: 30,
+  pointer: 36,
+  pause: 40,
+};
+
+/**
  * Pause (docs/controls-and-ui.md section 5): a pause button on a stand
  * straight in front, outside the ring, poked with either index finger, and
  * a pause panel in front of the player with Resume, Reset table, Measure
@@ -796,7 +813,7 @@ export const PAUSE = {
     buttonGap: 8.8,
     buttonMargin: 1.2,
     /** Drawn after everything else (above the markers and ghost hands), never hidden by the castle or the sign. */
-    renderOrder: 40,
+    renderOrder: RENDER_ORDER.pause,
   },
   /**
    * The settings page (Settings on the pause panel): a bigger panel at the
@@ -977,7 +994,7 @@ export const POINTER = {
   showDeg: 38,
   hideDeg: 32,
   popTime: 0.2,
-  renderOrder: 36,
+  renderOrder: RENDER_ORDER.pointer,
   lesson: { color: 0xf2c14e, glow: 0xb07a10, below: 0.09, blinkMin: 0.25, blinkMax: 0.8, blinkSpeed: 0.8 },
   /** The red one blinks fast and strong, to catch the eye. */
   threat: { color: 0xe0342a, glow: 0xff2a10, below: 0.16, blinkMin: 0, blinkMax: 1.6, blinkSpeed: 3.5 },

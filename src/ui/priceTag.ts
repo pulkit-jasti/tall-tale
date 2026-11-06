@@ -3,11 +3,11 @@
 // a market stall. The number is cream when the jar has enough food, red when
 // it does not, and a tick shows while a paid use runs. A canvas texture,
 // redrawn only when that state changes.
-import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
+import { Group, type CanvasTexture } from 'three';
 import { FOOD_JAR, PRICE_TAG } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import { priceTagBoard } from '../world/shapes.js';
-import { drawIcon } from './uiImages.js';
+import { canvasPlane, canvasTexture, drawIcon, drawOutlined } from './kit/index.js';
 
 /** 'free' while tools cost nothing (the tutorial): the tag says "Free". */
 export type PriceState = 'ok' | 'short' | 'paid' | 'free';
@@ -25,13 +25,8 @@ export class PriceTag {
     const { width, height } = PRICE_TAG;
     this.canvas.width = CANVAS_WIDTH;
     this.canvas.height = Math.round((CANVAS_WIDTH * height) / width);
-    this.texture = new CanvasTexture(this.canvas);
-    this.texture.colorSpace = SRGBColorSpace;
-    this.texture.anisotropy = 4;
-    const face = new Mesh(
-      new PlaneGeometry(width * 0.92, height * 0.86),
-      new MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false }),
-    );
+    this.texture = canvasTexture(this.canvas, 4);
+    const face = canvasPlane(this.texture, width * 0.92, height * 0.86);
     face.position.z = 0.02;
     this.group.add(priceTagBoard(), face);
   }
@@ -49,14 +44,7 @@ export class PriceTag {
     const h = this.canvas.height;
     c.clearRect(0, 0, w, h);
     if (state === 'free') {
-      c.font = `bold ${Math.round(h * 0.62)}px sans-serif`;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.lineWidth = h * 0.08;
-      c.strokeStyle = '#3b2b1f';
-      c.strokeText('Free', w / 2, h / 2 + h * 0.03);
-      c.fillStyle = PRICE_TAG.paidColor;
-      c.fillText('Free', w / 2, h / 2 + h * 0.03);
+      drawOutlined(c, 'Free', w / 2, h / 2 + h * 0.03, h * 0.62, PRICE_TAG.paidColor, 0.08 / 0.62);
       this.texture.needsUpdate = true;
       return;
     }
@@ -82,14 +70,7 @@ export class PriceTag {
       const size = h * 0.7;
       drawIcon(c, 'check', x - size / 2, cy - size / 2, size, PRICE_TAG.paidColor);
     } else {
-      c.font = `bold ${Math.round(h * 0.78)}px sans-serif`;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.lineWidth = h * 0.08;
-      c.strokeStyle = '#3b2b1f';
-      c.strokeText(String(this.cost), x, cy + h * 0.04);
-      c.fillStyle = state === 'ok' ? PRICE_TAG.okColor : PRICE_TAG.shortColor;
-      c.fillText(String(this.cost), x, cy + h * 0.04);
+      drawOutlined(c, String(this.cost), x, cy + h * 0.04, h * 0.78, state === 'ok' ? PRICE_TAG.okColor : PRICE_TAG.shortColor, 0.08 / 0.78);
     }
     this.texture.needsUpdate = true;
   }

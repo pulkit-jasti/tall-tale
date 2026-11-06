@@ -9,9 +9,7 @@ import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { END_PANEL, POKE } from '../config/game.js';
 import type { HandState } from '../player/hands.js';
-import { Panel, PANEL_INK } from './panel.js';
-import { PokeButton } from './pokeButton.js';
-import { drawBanner, fitFont } from './uiImages.js';
+import { armControls, bottomRowY, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS } from './kit/index.js';
 
 export type EndKind = 'welcome' | 'won' | 'lost';
 
@@ -28,8 +26,6 @@ const TEXT: Record<EndKind, PanelText> = {
   lost: { title: 'Oh no!', subtitle: 'The castle has fallen', button: 'Poke the button to try again' },
 };
 
-/** A deep green (the button's color, darker) on the light panel, next to the shared dark ink. */
-const PANEL_ACCENT = '#2f5f22';
 /** Text keeps this far from the panel's sides (layout pixels). */
 const TEXT_MARGIN = 44;
 
@@ -45,10 +41,10 @@ export class EndPanel {
     this.button = new PokeButton(audio, { radius: buttonRadius, icon: 'play' });
     // The button sits at the bottom of the panel, tilting with it. Its rim is wider than its cap.
     const rim = buttonRadius * POKE.rimScale;
-    const buttonY = -height / 2 + rim + END_PANEL.buttonMargin;
+    const buttonY = bottomRowY(height, rim, END_PANEL.buttonMargin);
     this.button.group.position.set(0, buttonY, 0);
     // Where the rim's top edge is on the canvas (layout pixels from the top), so the text stays above it.
-    this.buttonTopPx = ((height / 2 - (buttonY + rim)) / height) * this.panel.layoutHeight;
+    this.buttonTopPx = panelMap(width, height, this.panel.layoutWidth, this.panel.layoutHeight).y(buttonY + rim);
     this.panel.root.add(this.button.group);
   }
 
@@ -61,9 +57,9 @@ export class EndPanel {
     // Play to start, restart to play again.
     this.button.setIcon(kind === 'welcome' ? 'play' : 'restart');
     this.panel.visible = true;
-    this.button.reset();
+    this.panel.popIn(0.25);
     // A finger still there from the last poke must not start the next battle at once.
-    this.button.lock(POKE.lockAfterChange);
+    armControls([this.button]);
   }
 
   hide(): void {
@@ -72,7 +68,9 @@ export class EndPanel {
 
   /** Returns true on the frame the button is poked. */
   update(hands: HandState[], dt: number): boolean {
-    return this.panel.visible && this.button.update(hands, dt);
+    if (!this.panel.visible) return false;
+    this.panel.update(dt);
+    return this.button.update(hands, dt);
   }
 
   private draw(text: PanelText): void {
@@ -84,20 +82,11 @@ export class EndPanel {
     // Title on a banner, the rest below it, all above the button. Every line shrinks to fit inside the panel.
     const bannerTop = 22;
     const bannerH = 86;
-    drawBanner(c, w * 0.1, bannerTop, w * 0.8, bannerH);
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillStyle = '#fff4dc';
-    fitFont(c, text.title, w * 0.8 - 40, 44);
-    c.fillText(text.title, w / 2, bannerTop + bannerH * 0.45);
+    drawTitleBanner(c, text.title, w * 0.1, bannerTop, w * 0.8, bannerH, 44);
     // The label sits just above the button's rim, the subtitle between it and the banner.
     const labelY = this.buttonTopPx - 26;
     const subtitleY = (bannerTop + bannerH + labelY - 20) / 2;
-    c.fillStyle = PANEL_INK;
-    fitFont(c, text.subtitle, textWidth, 40);
-    c.fillText(text.subtitle, w / 2, subtitleY);
-    c.fillStyle = PANEL_ACCENT;
-    fitFont(c, text.button, textWidth, 30);
-    c.fillText(text.button, w / 2, labelY);
+    drawLine(c, text.subtitle, w / 2, subtitleY, textWidth, 40, UI_COLORS.ink);
+    drawLine(c, text.button, w / 2, labelY, textWidth, 30, UI_COLORS.accent);
   }
 }

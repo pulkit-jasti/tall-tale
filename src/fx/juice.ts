@@ -17,7 +17,6 @@
 // material's shader. No lights, no post processing. World space (meters).
 import {
   AdditiveBlending,
-  CanvasTexture,
   Color,
   DoubleSide,
   InstancedBufferAttribute,
@@ -32,12 +31,13 @@ import {
   ShapeGeometry,
   Sprite,
   SpriteMaterial,
-  SRGBColorSpace,
   Vector3,
   type BufferGeometry,
+  type CanvasTexture,
 } from 'three';
-import { JUICE } from '../config/game.js';
+import { JUICE, RENDER_ORDER } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
+import { canvasTexture, drawOutlined } from '../ui/kit/index.js';
 import type { Random } from '../rules/random.js';
 import { popIn } from './ease.js';
 
@@ -180,19 +180,8 @@ function labelTexture(text: string, fill: string): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 128;
-  const c = canvas.getContext('2d')!;
-  c.font = 'bold 96px sans-serif';
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  c.lineJoin = 'round';
-  c.lineWidth = 14;
-  c.strokeStyle = '#4a2c14';
-  c.strokeText(text, 128, 68);
-  c.fillStyle = fill;
-  c.fillText(text, 128, 68);
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
+  drawOutlined(canvas.getContext('2d')!, text, 128, 68, 96, fill, 14 / 96, '#4a2c14');
+  return canvasTexture(canvas);
 }
 
 interface Label {
@@ -242,7 +231,7 @@ export class Juice {
     for (let i = 0; i < JUICE.labelPool; i++) {
       const sprite = new Sprite(new SpriteMaterial({ map: this.labelTextures.get('+1'), transparent: true, depthWrite: false, depthTest: false, fog: false }));
       sprite.visible = false;
-      sprite.renderOrder = 20;
+      sprite.renderOrder = RENDER_ORDER.labels;
       parent.add(sprite);
       this.labels.push({ sprite, age: -1, from: new Vector3() });
     }

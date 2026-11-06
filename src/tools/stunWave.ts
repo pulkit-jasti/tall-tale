@@ -5,7 +5,7 @@
 // cap. Both tools share this one stun.
 import { Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { STUN } from '../config/game.js';
+import { RENDER_ORDER, STUN } from '../config/game.js';
 import type { Particles } from '../fx/particles.js';
 import { boardHeight } from '../rules/boardMath.js';
 import type { Goblins } from '../units/goblins.js';
@@ -30,7 +30,7 @@ export class StunWave {
     // Drawn over everything, so the hills never hide the flat ring as it sweeps out.
     this.material = new MeshBasicMaterial({ color: STUN.ringColor, transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false });
     this.ring = new Mesh(new RingGeometry(0.92, 1, 48, 1), this.material);
-    this.ring.renderOrder = 30;
+    this.ring.renderOrder = RENDER_ORDER.stunWave;
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.visible = false;
     stage.boardSpin.add(this.ring);

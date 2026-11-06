@@ -5,8 +5,10 @@
 // spins and never follows the head. Each user draws its own content on it
 // (paint) and can add things to `root` that tilt with it, like a poke button.
 // The canvas is redrawn only when a user paints, never every frame.
-import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, type Object3D } from 'three';
+import { Group, type CanvasTexture, type Mesh, type Object3D } from 'three';
+import { popIn } from '../fx/ease.js';
 import { degToRad } from '../rules/boardMath.js';
+import { canvasPlane, canvasTexture } from './kit/canvas.js';
 import { drawNineSlice } from './uiImages.js';
 
 /** Dark brown ink for text on the light panel. */
@@ -50,13 +52,8 @@ export class Panel {
     this.canvas.height = Math.round(((layoutWidth * height) / width) * canvasScale);
     this.layoutWidth = layoutWidth;
     this.layoutHeight = this.canvas.height / canvasScale;
-    this.texture = new CanvasTexture(this.canvas);
-    this.texture.colorSpace = SRGBColorSpace;
-    this.texture.anisotropy = options.anisotropy ?? 1;
-    this.board = new Mesh(
-      new PlaneGeometry(width, height),
-      new MeshBasicMaterial({ map: this.texture, transparent: true, fog: false, toneMapped: false }),
-    );
+    this.texture = canvasTexture(this.canvas, options.anisotropy ?? 1);
+    this.board = canvasPlane(this.texture, width, height);
     this.root.add(this.board);
     // Its face (+z) toward the player, tilted back like a lectern.
     this.root.position.set(0, options.centerY, -options.radius);
@@ -98,10 +95,8 @@ export class Panel {
   update(dt: number): void {
     if (this.pop >= 1) return;
     this.pop = Math.min(1, this.pop + dt / this.popTime);
-    // Ease out with a small overshoot, then settle at full size.
-    const t = this.pop - 1;
-    const ease = 1 + 2.7 * t * t * t + 1.7 * t * t;
-    this.board.scale.setScalar(0.8 + 0.2 * ease);
+    // The shared pop: a small overshoot, then it settles at full size.
+    this.board.scale.setScalar(0.8 + 0.2 * popIn(this.pop));
   }
 }
 

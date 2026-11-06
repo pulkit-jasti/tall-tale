@@ -1,21 +1,16 @@
 // Tutorial marker: one bouncing down arrow above the thing to grab, pinch or
 // look at, always drawn on top so the wall never hides it. (A pointer toward
 // things out of view comes later.)
-import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Vector3, type Object3D } from 'three';
-import { MARKERS } from '../config/game.js';
-import { arrowCanvas } from './uiImages.js';
+import { Group, Sprite, SpriteMaterial, Vector3, type Object3D } from 'three';
+import { MARKERS, RENDER_ORDER } from '../config/game.js';
+import { arrowCanvas, canvasTexture } from './kit/index.js';
 
 /** A sprite drawn on top of everything, sized by its height and keeping the image's shape. */
 function sprite(source: HTMLCanvasElement | null, height: number): Sprite {
-  let map: CanvasTexture | null = null;
-  if (source) {
-    map = new CanvasTexture(source);
-    map.colorSpace = SRGBColorSpace;
-    map.anisotropy = 4;
-  }
+  const map = source ? canvasTexture(source, 4) : null;
   const material = new SpriteMaterial({ map, color: map ? 0xffffff : 0xf2c14e, depthTest: false, depthWrite: false, fog: false });
   const s = new Sprite(material);
-  s.renderOrder = 10;
+  s.renderOrder = RENDER_ORDER.markers;
   const aspect = source ? source.width / source.height : 1;
   s.scale.set(height * aspect, height, 1);
   return s;

@@ -21,7 +21,7 @@ import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { Markers } from './ui/markers.js';
 import { ThreatCues } from './ui/threatCues.js';
-import { loadUiImages } from './ui/uiImages.js';
+import { loadUiImages } from './ui/kit/index.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';

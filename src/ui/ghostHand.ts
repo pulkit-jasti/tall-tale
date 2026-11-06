@@ -27,7 +27,7 @@ import {
   Vector3,
 } from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { GHOST_HAND } from '../config/game.js';
+import { GHOST_HAND, RENDER_ORDER } from '../config/game.js';
 import { holdTilt, type HoldName } from '../player/hold.js';
 import { gltfUrl } from '../world/models.js';
 import { GHOST_DEMOS, type Dir, type GhostAnchor, type GhostDemo, type GhostDemoName, type GhostKey, type GhostPose } from './ghostDemos.js';
@@ -82,7 +82,7 @@ class GhostModel {
       if (mesh.isSkinnedMesh) {
         mesh.material = this.material;
         mesh.frustumCulled = false;
-        mesh.renderOrder = 5;
+        mesh.renderOrder = RENDER_ORDER.ghost;
       }
     });
     this.root.add(model);
@@ -119,7 +119,7 @@ class GhostModel {
     const tipGeometry = new SphereGeometry(GHOST_HAND.tipSize, 8, 6);
     for (const name of ['thumb-tip', 'index-finger-tip']) {
       const glow = new Mesh(tipGeometry, this.tipMaterial);
-      glow.renderOrder = 6;
+      glow.renderOrder = RENDER_ORDER.ghostGlow;
       model.getObjectByName(name)?.add(glow);
     }
     this.root.visible = false;

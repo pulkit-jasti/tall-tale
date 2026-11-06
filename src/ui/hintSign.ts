@@ -4,16 +4,14 @@
 // and never follows the head. A shared Panel with Kenney UI images, redrawn
 // only when its text changes. The sign is out of reach, so its Next button
 // stands apart, in front between the tool platforms (HINT_SIGN.nextAt).
-import { Group, type Object3D } from 'three';
+import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { HandState } from '../player/hands.js';
-import { degToRad } from '../rules/boardMath.js';
-import { post } from '../world/shapes.js';
-import { centerAbove, Panel, PANEL_INK as INK } from './panel.js';
-import { PokeButton } from './pokeButton.js';
-import { drawBanner, drawIcon, drawNineSlice, wrapText, type UiImageName } from './uiImages.js';
+import { centerAbove, drawIcon, drawLine, drawNineSlice, drawTitleBanner, Panel, StandButton, UI_COLORS, wrapText, type UiImageName } from './kit/index.js';
+
+const INK = UI_COLORS.ink;
 
 export interface SignContent {
   /** 'lesson' shows a checkbox, 'banner' a wave title. */
@@ -31,14 +29,13 @@ export interface SignContent {
   next?: boolean;
 }
 
-const SUB_INK = '#8a5a34';
+const SUB_INK = UI_COLORS.note;
 
 export class HintSign {
   private panel: Panel;
   private drawn = '';
-  private next: PokeButton;
-  /** The Next button's stand, in reach in front of the player. */
-  private nextStand = new Group();
+  /** The Next button on its stand, in reach in front of the player. */
+  private next: StandButton;
 
   constructor(parent: Object3D, audio: GameAudio) {
     const { width, height, radius, y, tiltDeg } = HINT_SIGN;
@@ -52,34 +49,26 @@ export class HintSign {
       canvasScale: 1.5,
       anisotropy: 4,
     });
-    // "Next" button straight in front, in reach, its face tilted up toward the eyes.
-    this.next = new PokeButton(audio, { radius: HINT_SIGN.nextRadius, icon: 'next' });
-    this.next.group.rotation.x = -degToRad(HINT_SIGN.nextTiltDeg);
-    // A post down to the board, so it stands like the tool platforms.
-    const stem = post(HINT_SIGN.nextY - HINT_SIGN.nextRadius);
-    stem.position.y -= HINT_SIGN.nextRadius;
-    this.nextStand.add(this.next.group, stem);
-    this.nextStand.position.set(0, HINT_SIGN.nextY, -HINT_SIGN.nextAt);
-    this.nextStand.visible = false;
-    parent.add(this.nextStand);
+    // "Next" button straight in front, in reach, its face tilted up toward the eyes. It blinks while it waits, so it catches the eye.
+    this.next = new StandButton(parent, audio, {
+      radius: HINT_SIGN.nextRadius,
+      icon: 'next',
+      at: HINT_SIGN.nextAt,
+      y: HINT_SIGN.nextY,
+      tiltDeg: HINT_SIGN.nextTiltDeg,
+      blink: { color: HINT_SIGN.nextBlinkColor, intensity: HINT_SIGN.nextBlinkIntensity, speed: HINT_SIGN.nextBlinkSpeed },
+    });
   }
 
   show(content: SignContent | null): void {
     if (!content) {
       this.panel.visible = false;
-      this.nextStand.visible = false;
+      this.next.show(false);
       this.drawn = '';
       return;
     }
     this.panel.visible = true;
-    if (!!content.next !== this.nextStand.visible) {
-      this.nextStand.visible = !!content.next;
-      this.next.reset();
-      // It blinks while it waits, so it catches the eye.
-      this.next.setBlink(
-        content.next ? { color: HINT_SIGN.nextBlinkColor, intensity: HINT_SIGN.nextBlinkIntensity, speed: HINT_SIGN.nextBlinkSpeed } : null,
-      );
-    }
+    this.next.show(!!content.next);
     const key = JSON.stringify(content);
     if (key === this.drawn) return;
     // A new instruction pops in. Ticking the box or a counter change does not.
@@ -95,12 +84,12 @@ export class HintSign {
 
   /** The Next button is out (the pause button, on the same spot, steps aside). */
   get nextShown(): boolean {
-    return this.panel.visible && this.nextStand.visible;
+    return this.panel.visible && this.next.visible;
   }
 
   /** True on the frame the "Next" button is poked (only while it shows). */
   pokedNext(hands: HandState[], dt: number): boolean {
-    return this.panel.visible && this.nextStand.visible && this.next.update(hands, dt);
+    return this.panel.visible && this.next.update(hands, dt);
   }
 
   update(dt: number): void {
@@ -116,20 +105,13 @@ export class HintSign {
     const pad = 18;
     // Header: a hanging banner for waves, a plain line with a checkbox for lessons.
     const headerH = 70;
-    c.textBaseline = 'middle';
     if (content.kind === 'banner') {
-      drawBanner(c, w * 0.2, pad, w * 0.6, headerH);
-      c.fillStyle = '#fff4dc';
-      c.textAlign = 'center';
-      c.font = 'bold 40px sans-serif';
-      c.fillText(content.header, w / 2, pad + headerH / 2);
+      drawTitleBanner(c, content.header, w * 0.2, pad, w * 0.6, headerH, 40);
     } else {
-      c.fillStyle = SUB_INK;
-      c.textAlign = 'left';
-      c.font = 'bold 34px sans-serif';
-      c.fillText(content.header, pad + 30, pad + headerH / 2);
+      drawLine(c, content.header, pad + 30, pad + headerH / 2, w - pad * 2 - 30 - 58 - 40, 34, SUB_INK, 'left');
       drawIcon(c, content.done ? 'checkOn' : 'checkOff', w - pad - 30 - 58, pad + 6, 58);
     }
+    c.textBaseline = 'middle';
     // Body: icon on the left, the instruction on the right.
     const bodyTop = pad + headerH + 6;
     const subH = content.sub ? 46 : 0;

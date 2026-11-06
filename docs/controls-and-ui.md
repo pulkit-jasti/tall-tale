@@ -217,6 +217,25 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 ---
 
+### UI library
+
+All UI is built from one shared library, `src/ui/kit/` (import everything from `src/ui/kit/index.js`), so every control looks, sounds and behaves the same, and nothing is written twice:
+
+| Part | What it is | Used by |
+|---|---|---|
+| `PokeButton` | The round button poked with the index finger (Idle, Ready, Held, a blink while it waits) | Every button |
+| `Slider` | Touch and slide, minus and plus buttons, ticks per step (SLIDER) | Sound settings |
+| `StandButton` | A `PokeButton` on a post straight in front, tilted toward the eyes, that starts fresh and locked when it comes out | Next, pause |
+| `Panel` | The parchment board with a canvas, its pop, and `root` for its controls | Hint sign, end, pause, settings |
+| `LazyFollow` | Keeps a menu in front of the head like the Quest's own menus | Pause panel |
+| `armControls`, `changeTouch`, `Control` | A page opened: reset and lock its controls; the shared touch look and ready tick | Every panel, button and slider |
+| `rowX`, `bottomRowY`, `panelMap`, `stepValue`, `clamp01`, `angleTo` | Layout math, no Three.js, tested (`layout.test.ts`) | Panels, slider, follow |
+| `drawTitleBanner`, `drawLine`, `drawOutlined`, `UI_COLORS` | Canvas text in one look and one set of colors | Panels, price tags, "+1" labels |
+| `canvasTexture`, `canvasPlane` | A canvas as a sharp sRGB texture, and the unlit picture made from it | Panels, button faces, markers, price tags, labels, FPS panel |
+| `drawOnTop` and `RENDER_ORDER` (config) | Never hidden behind anything, in one table of layer orders | Pause panel; markers, labels, stun ring, arrows and ghost hands use the table |
+
+The Kenney UI images and their helpers (`drawBanner`, `drawIcon`, `drawNineSlice`, `fitFont`, `wrapText`, the button icons) come through the same entry. Something new that two places need goes into the library first.
+
 ## 6. Accessibility options
 
 None of these are in the MVP. They come after the first playtest (see [mvp.md](mvp.md)).

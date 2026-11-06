@@ -6,12 +6,14 @@
 // the finger leaves, so a press can be seen and felt without haptics. Its
 // face points along the group's local +z. Sizes are in the parent's units
 // (cm in the rigs).
-import { CanvasTexture, CircleGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, SRGBColorSpace, Vector3, type MeshStandardMaterial } from 'three';
+import { CircleGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Vector3, type CanvasTexture, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { POKE } from '../config/game.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { flatMaterial } from '../world/shapes.js';
+import { canvasTexture } from './kit/canvas.js';
+import { changeTouch, type Control } from './kit/controls.js';
 import { buttonIconCanvas, type ButtonIcon } from './uiImages.js';
 
 export interface ButtonOptions {
@@ -24,7 +26,7 @@ export interface ButtonOptions {
 
 const local = new Vector3();
 
-export class PokeButton {
+export class PokeButton implements Control {
   /** Place and turn this group. Its +z is the button's face. */
   readonly group = new Group();
   private cap = new Group();
@@ -182,16 +184,10 @@ export class PokeButton {
   }
 
   private setTouch(state: TouchState): void {
-    if (state === this.touch) return;
-    if (state === 'ready' && this.touch === 'idle') this.audio.play('readyTick', undefined, 1, 0.1);
-    this.touch = state;
-    applyTouchState([this.material], state);
+    this.touch = changeTouch(this.audio, [this.material], this.touch, state);
   }
 }
 
 function iconTexture(icon: ButtonIcon): CanvasTexture {
-  const map = new CanvasTexture(buttonIconCanvas(icon));
-  map.colorSpace = SRGBColorSpace;
-  map.anisotropy = 4;
-  return map;
+  return canvasTexture(buttonIconCanvas(icon), 4);
 }

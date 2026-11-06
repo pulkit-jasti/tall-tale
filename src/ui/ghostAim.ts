@@ -3,7 +3,7 @@
 // hand's color, flowing slowly toward the target. It shows where a shot goes,
 // like the real aim dots while pulling. World space (meters), one instanced mesh.
 import { InstancedMesh, Matrix4, MeshBasicMaterial, SphereGeometry, Vector3, type Object3D } from 'three';
-import { GHOST_HAND } from '../config/game.js';
+import { GHOST_HAND, RENDER_ORDER } from '../config/game.js';
 
 const matrix = new Matrix4();
 const point = new Vector3();
@@ -17,7 +17,7 @@ export class GhostAim {
     const material = new MeshBasicMaterial({ color: GHOST_HAND.color, transparent: true, opacity: 0.7, depthWrite: false, fog: false });
     this.mesh = new InstancedMesh(new SphereGeometry(1, 8, 6), material, GHOST_HAND.aimDots);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 5;
+    this.mesh.renderOrder = RENDER_ORDER.ghost;
     this.mesh.visible = false;
     parent.add(this.mesh);
   }

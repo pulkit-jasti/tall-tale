@@ -46,7 +46,7 @@ import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
 import type { HintSign, SignContent } from '../ui/hintSign.js';
 import type { Markers } from '../ui/markers.js';
 import type { ThreatCues } from '../ui/threatCues.js';
-import type { UiImageName } from '../ui/uiImages.js';
+import type { UiImageName } from '../ui/kit/index.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import type { WaveSpawner } from '../units/waveSpawner.js';
 import type { Flags } from '../world/flags.js';
