@@ -29,8 +29,9 @@ export type DebugCommand =
   | 'slingGoblin'
   | 'bowlEmpty'
   | 'bowlFill'
-  | 'addFood'
-  | 'emptyFood'
+  | 'rechargeTools'
+  | 'drainTools'
+  | 'eatRefill'
   | 'showTools'
   | 'swat'
   | 'pepper'
@@ -66,7 +67,7 @@ export const DEBUG_GROUPS: { id: DebugGroup; title: string; icon: string }[] = [
   { id: 'goblins', title: 'Goblins', icon: '👺' },
   { id: 'army', title: 'Troops and triggers', icon: '⚔️' },
   { id: 'slingshot', title: 'Slingshot', icon: '🪨' },
-  { id: 'food', title: 'Food and food tools', icon: '🍗' },
+  { id: 'food', title: 'Hand tools', icon: '🧰' },
   { id: 'board', title: 'Board', icon: '🧭' },
   { id: 'sky', title: 'Day and night', icon: '🌗' },
   { id: 'performance', title: 'Performance', icon: '📈' },
@@ -93,7 +94,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     group: 'game',
     icon: '🚩',
     label: 'Start at wave',
-    does: 'Start the battle at this wave, with the earlier tools already out and a little more food. Play and Play again then start here too, until Restart game (kept across reloads in this tab)',
+    does: 'Start the battle at this wave, with the earlier tools already out. Play and Play again then start here too, until Restart game (kept across reloads in this tab)',
     args: TUTORIAL_WAVES.map((_, i) => i + 1),
   },
   {
@@ -132,13 +133,14 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'slingGoblin', group: 'slingshot', icon: '👺', code: 'KeyJ', label: 'Load goblin', does: 'Put the goblin nearest the castle in the slingshot pouch (then L shoots it)' },
   { id: 'bowlEmpty', group: 'slingshot', icon: '🥣', code: 'KeyU', label: 'Empty bowl', does: 'Empty the pebble bowl (the bowl shows Locked until it refills)' },
   { id: 'bowlFill', group: 'slingshot', icon: '🫙', code: 'KeyI', label: 'Fill bowl', does: 'Fill the pebble bowl' },
-  { id: 'addFood', group: 'food', icon: '➕', code: 'KeyY', label: 'Add food', does: 'Add 3 food to the jar (it stops at 10)' },
-  { id: 'emptyFood', group: 'food', icon: '➖', code: 'Digit0', label: 'Empty food', does: 'Empty the food jar (the swatter and pepper show Locked)' },
-  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show food tools', does: 'The fly swatter, pepper shaker and megaphone (the bell without a mic) pop onto their platforms now (normally in waves 3, 4 and 5)' },
-  { id: 'swat', group: 'food', icon: '🪰', code: 'Digit2', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (the first swat costs 4 food, then 10 s of swatting)' },
-  { id: 'pepper', group: 'food', icon: '🌶️', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (the first shake costs 3 food, then 8 s). Peppered goblins give 2 food' },
-  { id: 'megaphone', group: 'food', icon: '📣', code: 'Digit4', label: 'Megaphone scream', does: 'Megaphone: a scream without a mic, every goblin is stunned (costs 6 food, puts the megaphone out in place of the bell)' },
-  { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands, every goblin is stunned (costs 6 food, puts the bell out in place of the megaphone)' },
+  { id: 'rechargeTools', group: 'food', icon: '🔋', code: 'KeyY', label: 'Recharge tools', does: 'Every tool is ready at once (its recharge ring full)' },
+  { id: 'drainTools', group: 'food', icon: '🪫', code: 'Digit0', label: 'Drain tools', does: 'Every tool that is out ends its use and recharges from empty (dimmed, the ring on its platform filling)' },
+  { id: 'eatRefill', group: 'food', icon: '😋', code: 'KeyV', label: 'Eat refill', does: 'What eating one goblin does: every recharging ring jumps forward 10% of its full recharge' },
+  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show tools', does: 'The fly swatter, pepper shaker and megaphone (the bell without a mic) pop onto their platforms now (normally in waves 3, 4 and 5)' },
+  { id: 'swat', group: 'food', icon: '🪰', code: 'Digit2', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (starts its 10 s use, then a 20 s recharge)' },
+  { id: 'pepper', group: 'food', icon: '🌶️', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },
+  { id: 'megaphone', group: 'food', icon: '📣', code: 'Digit4', label: 'Megaphone scream', does: 'Megaphone: a scream without a mic, every goblin is stunned (puts the megaphone out in place of the bell)' },
+  { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (35 s recharge)' },
   { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send squad', does: 'A squad of soldiers marches out now toward a camp (normally every 10 s while a wave runs)' },
   { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, no squads come out and the ones out go home (Send squad turns them back on)' },
   {

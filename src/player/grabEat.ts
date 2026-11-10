@@ -170,7 +170,7 @@ export class GrabEat {
         const tool = target.tool;
         const viaPinch = !hand.fist.started;
         if (hand.fist.started || (TOOLS.acceptPinch && hand.pinch.started)) {
-          // Not enough food: a buzz and a wobble instead of a grab.
+          // Recharging (or tied down): a buzz and a wobble instead of a grab.
           if (!tool.usable) {
             tool.refuse();
           } else {

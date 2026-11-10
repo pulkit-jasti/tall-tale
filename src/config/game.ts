@@ -646,6 +646,8 @@ export const GOBLIN_RULES = {
   /** Knocked back by a thrown pebble or a goblin shot: sideways and upward speed of the hop (cm per second). */
   knockSpeed: 60,
   knockHop: 90,
+  /** Knocked off the rampart by the bell: outward speed (cm per second), the hop is half of knockHop. */
+  knockOffSpeed: 25,
   /** Gravity for dropped goblins (cm per second squared). */
   gravity: 980,
   /** Hand speed smoothing while held, so tracking jitter does not fling goblins (seconds). */
@@ -1436,82 +1438,42 @@ export const GOBLIN_SHOT = {
   spin: 14,
 };
 
-/** Food (docs/giant-tools.md section 3). Costs are in TOOLS below. */
-export const FOOD = {
-  start: 4,
-  max: 10,
-  eatBasic: 1,
-  /** A peppered goblin is seasoned. */
-  eatSeasoned: 2,
-};
-
 /**
- * The food jar: a pot between the two left tool platforms, like the pebble
- * bowl on the right. It rises with the board but never turns. The pot has a
- * narrow neck, so the food shows as a little heap of food balls on its
- * mouth, one ball per food: easy to read (cm, degrees).
+ * Shared rules for the hand tools (v2, docs/v2-plan.md 2.1 and 2.2, rules in
+ * src/rules/recharge.ts): free, with a use window that starts with the first
+ * use, then a recharge that fills while the tool is back on its platform.
+ * The slingshot has neither. Tune in playtests.
  */
-export const FOOD_JAR = {
-  angleDeg: -56,
-  radius: 33.5,
-  /** Pot height (the model is fitted to it). */
-  height: 7,
-  /** Pot bottom above the board. */
-  bottomY: 0,
-  /** Food balls on the mouth: size, and how far the heap sits below the pot top (cm). */
-  ballSize: 1.3,
-  heapSink: 0.4,
-  /** Balls per layer of the heap, bottom first (the last number repeats). */
-  layers: [6, 3, 1],
-  ballColors: [0xf2c14e, 0xc9772c, 0x8fb04a, 0xd23c28, 0xe8d8b0],
-  /** A ball pops in or out over this long (seconds). */
-  popTime: 0.25,
-  /** Crumbs that pop out of the jar when food goes in or out. */
-  popColors: [0xf2c14e, 0xc9772c, 0xffffff],
-};
-
-/**
- * Price tag on each food tool's platform: a small wooden board with a food
- * ball and the cost, on the front edge, tilted toward the eyes, beside the
- * tool so the hand never covers it. The number is cream when the jar has
- * enough, red when it does not, and a tick while a paid use runs (cm, degrees).
- */
-export const PRICE_TAG = {
-  width: 4.6,
-  height: 2.8,
-  thickness: 0.35,
-  /**
-   * It stands on the middle of the platform's front edge (toward the
-   * player), its bottom this far above the platform's top, and this far past
-   * the edge (cm, negative is just inside it), on every platform the same,
-   * so they sit symmetrically. Above the top, so the ring never hides it.
-   */
-  lift: 0.2,
-  out: -0.6,
-  /** Leaning back from upright, toward the eyes (degrees). */
-  tiltDeg: 25,
-  woodColor: 0x6b4a2e,
-  okColor: '#fff4dc',
-  shortColor: '#ff5a4e',
-  paidColor: '#9be27a',
-};
-
-/** Shared rules for the food tools (swatter, pepper; the megaphone and bell in step 5). */
 export const TOOLS = {
   /**
-   * Food tools cost nothing while the tutorial runs, so a player who used up
-   * the jar is never locked out of a tool they are about to learn. Their
-   * price tags say "Free". The costs below apply in later battles.
+   * How long one use lasts (seconds), from the first swat, shake or ring.
+   * The bell and the horn are one use each (one stun, one call): their
+   * window is only the short moment until the tool goes back.
    */
-  freeInTutorial: true,
-  /** Food each one costs on its first use (docs/giant-tools.md). */
-  cost: { swatter: 4, pepper: 3, megaphone: 6, bell: 6 },
+  use: { swatter: 10, pepper: 8, megaphone: 2.5, bell: 1.2, horn: 1.4 },
+  /** The recharge after a use, while the tool is back on its platform (seconds). */
+  recharge: { swatter: 20, pepper: 20, megaphone: 30, bell: 35, horn: 30 },
+  /** Each goblin eaten fills every recharging tool's ring by this share of its full recharge (a seasoned one by seasonedRefill). */
+  eatRefill: 0.1,
+  seasonedRefill: 0.2,
   /**
-   * How long one paid use lasts (seconds). The megaphone and the bell are one
-   * use each: this is the short window to keep screaming or ringing for a
-   * longer stun, then the tool goes back to its platform.
+   * The ring on the platform (readable with the sound off): while a use runs
+   * it drains (useColor), while recharging it fills (chargeColor) over a
+   * dark track. Hidden while ready. Flat on the platform top, around the
+   * tool's base (cm). One mesh per ring: the fill is a draw range.
    */
-  duration: { swatter: 10, pepper: 8, megaphone: 2.5, bell: 2.5 },
+  ring: {
+    inner: 3.1,
+    outer: 3.85,
+    segments: 40,
+    lift: 0.25,
+    trackColor: 0x2a2018,
+    useColor: 0xfff1b8,
+    chargeColor: 0x5ab0ff,
+    /** The ring flashes this bright for this long when eating fills it (seconds). */
+    flashColor: 0xffffff,
+    flashTime: 0.25,
+  },
   /** The hand must be open near the tool this long before closing it grabs (seconds). Same as the ring. */
   readyTime: 0.15,
   /** A held tool lets go only after the hand is open this long (seconds). */
@@ -1534,7 +1496,7 @@ export const TOOLS = {
   popTime: 0.25,
   /** It blinks in the last seconds of a use, so the end is no surprise. */
   warnTime: 2,
-  /** Locked (not enough food): the colors are dimmed to this share. */
+  /** Recharging (or tied down): the colors are dimmed to this share (the Locked look). */
   dimShare: 0.45,
   /** Locked wobble after a refused grab (seconds, degrees). */
   wobbleTime: 0.45,
@@ -1641,7 +1603,7 @@ export const SWATTER = {
   splatColors: [0x6a8f3a, 0x8fb04a, 0xffffff, 0xd23c28],
 };
 
-/** The pepper shaker (docs/giant-tools.md). Seasons goblins for more food. */
+/** The pepper shaker (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): a small area that disarms everything and seasons goblins. */
 export const PEPPER = {
   bodyHeight: 9,
   bodyRadius: 2.2,
@@ -1671,10 +1633,8 @@ export const PEPPER = {
   speckColors: [0x2a2018, 0x4a3a2a, 0x6b5a45],
   /** Shake sound at most this often (seconds). */
   soundGap: 0.22,
-  /** A peppered goblin sneezes: dazed this long (seconds), and a goblin outside the wall stumbles back (cm per second). */
+  /** A peppered goblin on the rampart or in the courtyard stops this long (seconds). No push back (v2). */
   sneezeTime: 1.2,
-  stumbleSpeed: 22,
-  stumbleHop: 45,
   /** A seasoned goblin's colors are multiplied by this (dusty brown). */
   seasonedTint: [0.85, 0.68, 0.55] as [number, number, number],
   /**
@@ -1685,11 +1645,13 @@ export const PEPPER = {
    */
   sneezeEvery: [1.4, 3.2] as [number, number],
   /**
-   * It sneezes for this long after the pepper (seconds), and does no castle
-   * damage meanwhile (no wall hits, an intruder does not count). Then it
-   * stops and can hurt the castle again; it stays seasoned (double food).
+   * It sneezes for this long after the pepper (seconds), and cannot attack
+   * meanwhile (no wall hits, no bashing, no attacks on the garrison, an
+   * intruder does not count). Then it can hurt the castle again; it stays
+   * seasoned (it fills the tool rings twice as much when eaten). v2: a few
+   * seconds (was 10): the power is the disarm.
    */
-  sneezeFor: 10,
+  sneezeFor: 5,
   sneezeJerkTime: 0.35,
   sneezeColors: [0xffffff, 0xf1e6d0, 0xd23c28],
   flakeCount: 3,
@@ -2940,10 +2902,6 @@ export const DEBUG = {
   stressMax: 120,
   /** Gap between stress test grunts leaving their camps (seconds). */
   stressGap: 0.25,
-  /** Food added per "Add food" press. */
-  foodAdd: 3,
-  /** "Start at wave": extra food per skipped wave, for the climbers that would have been eaten. */
-  startFoodPerWave: 1,
   /** Castle damage per "Damage castle" press (health is out of CASTLE_HEALTH.maxHealth). */
   castleDamage: 20,
   /** Board turn and height per debug page press (degrees, cm). */

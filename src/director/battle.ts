@@ -32,7 +32,7 @@ import { angleDelta, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { wallHitDamage } from '../rules/gear.js';
 import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
-import type { FoodToolName, HandTool } from '../tools/handTool.js';
+import type { HandToolName, HandTool } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
@@ -51,7 +51,6 @@ import type { UiImageName } from '../ui/kit/index.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import type { WaveSpawner } from '../units/waveSpawner.js';
 import type { Flags } from '../world/flags.js';
-import type { FoodJar } from '../world/foodJar.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
@@ -67,7 +66,7 @@ import {
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
 const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'megaphone'];
-const noTools = (): Record<FoodToolName, number> => ({ swatter: 0, pepper: 0, megaphone: 0, bell: 0 });
+const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, megaphone: 0, bell: 0 });
 const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0 });
 const ICONS: Record<HintIcon, UiImageName> = {
   pinch: 'target',
@@ -91,8 +90,8 @@ export interface BattleParts {
   goblins: Goblins;
   spawner: WaveSpawner;
   slingshot: Slingshot;
-  /** The food tools by name (the megaphone and the bell share a platform and a lesson). */
-  tools: Record<FoodToolName, HandTool>;
+  /** The hand tools by name (the megaphone and the bell share a platform and a lesson). */
+  tools: Record<HandToolName, HandTool>;
   /** The army: squads walk out while a wave is fought. */
   troops: Troops;
   /** Keg, boulder and tree on the roads, reset at each wave. */
@@ -101,7 +100,6 @@ export interface BattleParts {
   balloons: Balloons;
   /** The stun of the megaphone and the bell. */
   stun: StunWave;
-  food: FoodJar;
   flags: Flags;
   panel: EndPanel;
   sign: HintSign;
@@ -235,16 +233,11 @@ export class Battle implements TutorialApi {
     console.info('[reach] forgotten: the reach check runs again');
   }
 
-  /** Every food tool hidden (it waits for its wave), free while the tutorial runs, and the jar back to the starting food. */
+  /** Every hand tool hidden (it waits for its wave) and ready (hiding a tool makes it ready). */
   private resetTools(): void {
-    for (const tool of Object.values(this.parts.tools)) {
-      tool.setVisible(false);
-      // The only battle is the tutorial for now.
-      tool.free = TOOLS.freeInTutorial;
-    }
+    for (const tool of Object.values(this.parts.tools)) tool.setVisible(false);
     this.toolUseCount = noTools();
     this.toolGrabCount = noTools();
-    this.parts.food.reset();
     this.parts.stun.reset();
   }
 
@@ -263,11 +256,11 @@ export class Battle implements TutorialApi {
   /**
    * A new tutorial battle. From the first lesson, or (debug "Start at wave")
    * from the end of the wave before `fromWave` (0 based): the earlier
-   * lessons and waves are left out, their tools are already on their
-   * platforms, and the jar has a little more food, like a player who got there.
+   * lessons and waves are left out, and their tools are already on their
+   * platforms, like a player who got there.
    */
   start(fromWave = this.playFromWave): void {
-    const { goblins, spawner, slingshot, flags, panel, stage, food } = this.parts;
+    const { goblins, spawner, slingshot, flags, panel, stage } = this.parts;
     const from = Math.max(0, Math.min(fromWave, TUTORIAL_WAVES.length - 1));
     spawner.stop();
     goblins.killAll();
@@ -301,7 +294,6 @@ export class Battle implements TutorialApi {
       if (tool === 'slingshot') slingshot.setVisible(true);
       else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
     }
-    if (from > 0) food.add(from * DEBUG.startFoodPerWave);
     this.reach.stop();
     const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from, !this.reachKnown), this);
     director.onStepEnd = (id, how, time, fallbacks) => {
@@ -544,8 +536,8 @@ export class Battle implements TutorialApi {
     let text = usesBell() && hint.whenNoMic ? hint.whenNoMic : hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
-    // A food tool lesson without enough food says so (a climber comes to eat).
-    if (hint.whenLocked && hint.tool && !this.canAfford(hint.tool)) text = hint.whenLocked;
+    // A tool lesson while the tool recharges says so (watch the ring fill, or eat to speed it up).
+    if (hint.whenLocked && hint.tool && !this.toolReady(hint.tool)) text = hint.whenLocked;
     // The reach check counts down while the arm is out, so the player knows when to rest.
     if (hint.reachCheck && this.reach.phase === 'counting') text = `Great, hold it there... ${this.reach.secondsLeft}`;
     else if (hint.reachCheck && this.reach.phase === 'settling') text = 'Good! Now hold your hand still.';
@@ -636,8 +628,6 @@ export class Battle implements TutorialApi {
         return flags.clothWorld('health', out);
       case 'waveFlag':
         return flags.clothWorld('wave', out);
-      case 'foodJar':
-        return this.parts.food.topWorld(out);
       case 'swatterHandle':
         return this.parts.tools.swatter.handleWorld(out);
       case 'pepperHandle':
@@ -852,13 +842,17 @@ export class Battle implements TutorialApi {
     const tools = this.foodTools(tool);
     if (tools.length === 0) return;
     for (const t of tools) t.beckon = true;
-    // The easier way: enough food for one use, or a goblin in reach to use it on.
-    if (!this.canAfford(tool)) this.parts.food.add(tools[0].cost - this.parts.food.food);
+    // The easier way: a resting tool is ready at once, or a goblin in reach to use it on.
+    if (!this.toolReady(tool)) for (const t of tools) t.rechargeNow();
     else this.lessonClimber(true);
   }
 
+  /** Holds the use window while its lesson runs. A tool still recharging from an early use is made ready, so the lesson can start. */
   holdToolTimer(tool: ToolName, on: boolean): void {
-    for (const t of this.foodTools(tool)) t.timerHeld = on;
+    for (const t of this.foodTools(tool)) {
+      if (on && t.recharging) t.rechargeNow();
+      t.timerHeld = on;
+    }
   }
 
   startReachCheck(): void {
@@ -900,8 +894,8 @@ export class Battle implements TutorialApi {
     return count;
   }
 
-  /** True if the tool (for the megaphone: it or the bell) can be used now. */
-  canAfford(tool: ToolName): boolean {
+  /** True if the tool (for the megaphone: it or the bell) can be used now: not recharging. */
+  toolReady(tool: ToolName): boolean {
     if (tool === 'slingshot') return true;
     return this.foodTools(tool).some((t) => t.usable);
   }

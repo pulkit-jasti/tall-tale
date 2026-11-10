@@ -1,7 +1,7 @@
 // The fly swatter (docs/giant-tools.md): crowd clearing near the wall. Grab
 // it, then swat: the first swat (the head touching the ground or a goblin)
-// pays 4 food and gives about 10 seconds to swat as often as the player
-// wants. Each swat knocks out every goblin the head touches. A helmet or a
+// starts about 10 seconds to swat as often as the player wants, then it
+// recharges (v2, free tools). Each swat knocks out every goblin the head touches. A helmet or a
 // shield takes one swat each (v2, src/rules/gear.ts).
 //
 // Fast swings blur hand tracking, so hits are found along the whole path of
@@ -114,7 +114,7 @@ export class FlySwatter extends HandTool {
     this.hits.length = 0;
   }
 
-  /** Debug: swats the goblins at the front of the wall, without hands. Pays the food like a real swat. */
+  /** Debug: swats the goblins at the front of the wall, without hands (starts a use like a real swat). */
   debugSwat(): void {
     if (!this.debugStart()) return;
     // The goblins at the wall straight in front of the player (boardLift), on the board.

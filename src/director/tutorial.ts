@@ -6,7 +6,7 @@
 // The wave numbers and the step list live here together, so they are tuned
 // side by side. Steps only call the game systems through TutorialApi. Nothing
 // tutorial-only lives in those systems. No Three.js here, so it can be tested.
-import { TOOLS, type GoblinType } from '../config/game.js';
+import type { GoblinType } from '../config/game.js';
 import type { TriggerKind } from '../rules/blueprint.js';
 import type { DirectorStep } from '../rules/director.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
@@ -125,7 +125,6 @@ export type MarkerTarget =
   | 'lessonGoblin'
   | 'healthFlag'
   | 'waveFlag'
-  | 'foodJar'
   | 'slingHandle'
   | 'bowl'
   | 'pouch'
@@ -160,7 +159,7 @@ export interface Hint {
   signLow?: boolean;
   /** Shown instead when the lesson goblin is on the board, not in the hand (dropped it). */
   whenDropped?: string;
-  /** The food tool this lesson is about, and the text shown instead while it cannot be paid for. */
+  /** The hand tool this lesson is about, and the text shown instead while it rests (recharges). */
   tool?: ToolName;
   whenLocked?: string;
   /** Shown instead when there is no mic: the bell is out in place of the megaphone. */
@@ -211,8 +210,8 @@ export interface TutorialApi {
   toolUses(tool: ToolName): number;
   /** How often the tool was grabbed since it appeared. */
   toolGrabbed(tool: ToolName): number;
-  /** True if the tool can be used now: paid for already, or enough food in the jar. */
-  canAfford(tool: ToolName): boolean;
+  /** True if the tool can be used now: not resting (recharging). */
+  toolReady(tool: ToolName): boolean;
   /** Total board spin (degrees) and height change (cm) made by the player so far. */
   boardSpun(): number;
   boardMoved(): number;
@@ -516,12 +515,10 @@ function triggerLessons(): TutorialStep[] {
 
 type FoodTool = Exclude<ToolName, 'slingshot'>;
 
-const cost = (tool: FoodTool): number => TOOLS.cost[tool];
-const seconds = (tool: FoodTool): number => TOOLS.duration[tool];
-/** Tools cost nothing in the tutorial (TOOLS.freeInTutorial), so the texts do not ask for food. */
-const free = TOOLS.freeInTutorial;
+/** The line every resting tool shows (v2: free tools that recharge, eating speeds them up). */
+const RESTING = 'It is resting: watch the ring on its platform fill up. Eat goblins to fill it faster!';
 
-/** Each food tool: where its handle is, the ghost hand demo for grabbing it, and its use lesson. */
+/** Each hand tool: where its handle is, the ghost hand demo for grabbing it, and its use lesson. */
 interface FoodToolLesson {
   marker?: MarkerTarget;
   grabDemo?: GhostDemoName;
@@ -536,18 +533,14 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
   swatter: {
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
-    use: free
-      ? 'Goblins on your wall! Swat one: slap the swatter down so it touches the goblin.'
-      : `Goblins on your wall! Swat one. The first swat takes ${cost('swatter')} food from your jar, then swatting is free for ${seconds('swatter')} seconds.`,
-    locked: `Not enough food for the swatter (${cost('swatter')}). Eat a goblin to fill your jar.`,
+    use: 'Goblins on your wall! Swat one: slap the swatter down so it touches the goblin.',
+    locked: `The swatter is resting. ${RESTING}`,
   },
   pepper: {
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
-    use: free
-      ? 'Shake pepper over the goblins on your wall. They sneeze for a while and cannot hurt your castle. Then eat a sneezing one: double food!'
-      : `Shake pepper over the goblins on your wall (the first shake takes ${cost('pepper')} food). They sneeze for a while and cannot hurt your castle. Then eat a sneezing one: double food!`,
-    locked: `Not enough food for the pepper (${cost('pepper')}). Eat a goblin to fill your jar.`,
+    use: 'Shake pepper over the goblins on your wall. They drop their weapons and armor and sneeze. Then eat a sneezing one: it fills your tools twice as fast!',
+    locked: `The pepper is resting. ${RESTING}`,
   },
   megaphone: {
     marker: 'stunTool',
@@ -555,10 +548,10 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     useDemo: 'megaphoneShout',
     // The loudness bar and its red dot are what make the scream work, so this one text explains them too.
     use: 'The final wave! Hold the megaphone near your mouth and shout. Fill the bar on top up to the red dot to stun every goblin.',
-    locked: `Not enough food for it (${cost('megaphone')}). Eat a goblin to fill your jar.`,
+    locked: RESTING,
     noMic: {
       name: 'the bell',
-      use: 'The final wave! Shake the bell hard. Every goblin stops, dizzy, for a few seconds.',
+      use: 'The final wave! Shake the bell hard. Every goblin stops, dizzy, and the ones on your wall fall back down.',
       grabDemo: 'bellGrab',
       useDemo: 'bellRing',
     },
@@ -566,45 +559,15 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
 };
 
 /**
- * Before the first food tool: what the food jar is and how to fill it, by
- * doing. First the jar is shown (Next), then a climber pops up to eat, and
- * its food drops into the jar. The tool's price tag comes right after.
+ * In the breather before its wave: the new hand tool appears and the player
+ * grabs it. The first one also says how tools work now (v2): free, but they
+ * rest after a use while the ring on their platform fills, and eating fills
+ * it faster. (The real tutorial rebuild is run 2.)
  */
-function foodLessons(): TutorialStep[] {
-  return [
-    infoStep(
-      'food-jar',
-      banner('Wave cleared! This jar on your left holds your food. Every goblin you eat drops food into it.', 'info', 'foodJar', {
-        header: 'Your food',
-      }),
-    ),
-    lessonStep(
-      'learn-food',
-      lesson('A goblin climbed up! Eat it and watch your food jar fill up.', 'pinch', 'lessonGoblin', {
-        whenDropped: 'Dropped it? Pinch it again and bring it to your mouth.',
-        demo: 'pinchGoblin',
-      }),
-      (api, since) => api.eaten() > since,
-      (api) => api.eaten(),
-      {
-        start: (api) => api.lessonClimber(false),
-        fallbacks: [(api) => api.lessonClimber(false), (api) => api.lessonClimber(true)],
-        timeout: 45,
-      },
-    ),
-  ];
-}
-
-/**
- * In the breather before its wave: the new food tool appears and the player
- * grabs it. Grabbing is free, so it is never locked. The text points at its
- * price tag, so the player links food and tools (free while learning).
- */
-function toolGrabLesson(tool: FoodTool, afterFood: boolean): TutorialStep {
+function toolGrabLesson(tool: FoodTool, first: boolean): TutorialStep {
   const { marker, grabDemo, noMic } = FOOD_TOOL_LESSONS[tool];
-  const intro = afterFood ? 'Tools cost food, but they are free while you learn.' : 'Wave cleared!';
-  const price = free ? 'its price tag says Free for now' : `its price tag says ${cost(tool)} food`;
-  const say = (name: string): string => `${intro} Here is ${name}: ${price}. Grab it with your fist.`;
+  const how = first ? ' After each use it rests while the ring on its platform fills. Eating goblins fills it faster.' : '';
+  const say = (name: string): string => `Wave cleared! Here is ${name}.${how} Grab it with your fist.`;
   return lessonStep(
     `learn-${tool}-grab`,
     lesson(say(TOOL_NAMES[tool]), 'grab', marker, {
@@ -624,12 +587,12 @@ function toolGrabLesson(tool: FoodTool, afterFood: boolean): TutorialStep {
 }
 
 /**
- * In its wave: use the food tool on one goblin, anywhere. Done as soon as
- * one goblin is hit. While it runs, the tool's use timer is held: a player
- * who pays with an early swat before the goblins come keeps the tool until
- * they do. Without enough food the sign says so and a climber pops up in
- * front to eat. The easier fallback tops up the jar or brings a goblin in
- * reach. A wave cleared another way also ends it, so it never waits forever.
+ * In its wave: use the tool on one goblin, anywhere. Done as soon as one
+ * goblin is hit. While it runs, the tool's use window is held (and a tool
+ * still resting from an early use is made ready): a player who swats early
+ * before the goblins come keeps the tool until they do. The easier fallback
+ * brings a goblin in reach. A wave cleared another way also ends it, so it
+ * never waits forever.
  */
 function toolLesson(tool: FoodTool): TutorialStep {
   const text = FOOD_TOOL_LESSONS[tool];
@@ -652,7 +615,6 @@ function toolLesson(tool: FoodTool): TutorialStep {
         api.holdToolTimer(tool, true);
         // A few goblins come just for this lesson and wait on the wall in front, harmless, until the tool is used.
         api.baitForTool();
-        if (!api.canAfford(tool)) api.lessonClimber(true);
       },
       end: (api) => {
         api.holdToolTimer(tool, false);
@@ -738,16 +700,14 @@ export function buildTutorialSteps(
   const has = (tool?: ToolName): tool is ToolName => !!tool && tools.includes(tool);
   const steps: TutorialStep[] = [];
   const waveTitle = (i: number): string => `Wave ${i + 1} of ${waves.length}`;
-  // The food jar is taught right before the first food tool, where food starts to matter.
-  let foodTaught = false;
+  // The first hand tool also explains the recharge ring.
+  let rechargeTaught = false;
   waves.forEach((wave, i) => {
     if (i === 0) steps.push(...introLessons());
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(...slingshotLessons());
     else if (has(wave.newTool) && wave.newTool !== 'slingshot') {
-      const afterFood = !foodTaught;
-      if (afterFood) steps.push(...foodLessons());
-      foodTaught = true;
-      steps.push(toolGrabLesson(wave.newTool, afterFood));
+      steps.push(toolGrabLesson(wave.newTool, !rechargeTaught));
+      rechargeTaught = true;
     }
     // The two flags are explained before the first wave, while nothing attacks yet.
     if (i === 0) {

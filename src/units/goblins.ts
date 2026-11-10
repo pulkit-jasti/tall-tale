@@ -401,6 +401,62 @@ export class Goblins {
     return count;
   }
 
+  /**
+   * The bell (v2): every goblin on the rampart is knocked back down outside
+   * the wall, landing dazed (it walks back and climbs again later). Calm
+   * lesson goblins stay. Returns how many.
+   */
+  knockOffRampart(): number {
+    let count = 0;
+    for (const g of this.list) {
+      if (g.mode !== 'rampart' || g.calm) continue;
+      const p = g.root.position;
+      const a = angleOf(p.x, p.z);
+      const r = CASTLE.wallOut + 1;
+      p.set(polarX(r, a), CASTLE.wallHeight, polarZ(r, a));
+      // Outward, away from the castle, with a small hop.
+      g.vx = polarX(GOBLIN_RULES.knockOffSpeed, a);
+      g.vz = polarZ(GOBLIN_RULES.knockOffSpeed, a);
+      g.vy = GOBLIN_RULES.knockHop * 0.5;
+      g.mode = 'falling';
+      g.landAs = 'dazed';
+      g.hasTarget = false;
+      g.play('fall', true, 1);
+      this.flash(g);
+      count++;
+    }
+    if (count > 0) this.audio.play('squeal', undefined, 1, 0.1);
+    return count;
+  }
+
+  /** Pepper (v2): weapon, helmet and shield all fly off. Returns true if anything came off. */
+  disarm(goblin: Goblin): boolean {
+    const p = goblin.root.position;
+    let any = false;
+    if (goblin.weapon !== 'none') {
+      temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
+      this.debris?.throw(goblin.weapon === 'spear' ? 'goblinSpear' : 'goblinSword', temp2, p.x, p.z);
+      goblin.dropWeapon();
+      any = true;
+    }
+    if (goblin.helmet) {
+      goblin.helmet = false;
+      setGear(goblin.gear, 'goblinHelmet', false);
+      temp2.set(p.x, p.y + goblin.stats.height * 0.95, p.z);
+      this.debris?.throw('goblinHelmet', temp2, -p.z, p.x);
+      any = true;
+    }
+    if (goblin.shield) {
+      goblin.shield = false;
+      setGear(goblin.gear, 'goblinShield', false);
+      temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
+      this.debris?.throw('goblinShield', temp2, p.z, -p.x);
+      any = true;
+    }
+    if (any) this.particles?.burst(this.board.localToWorld(temp2), HELMET_SPARKS, 6, 0.2);
+    return any;
+  }
+
   /** A soldier engages this goblin: it stops and fights back (src/units/troops.ts). */
   startFight(g: Goblin, foe: object): void {
     if (g.mode !== 'fighting') {
@@ -862,10 +918,12 @@ export class Goblins {
   }
 
   /**
-   * Peppered (docs/giant-tools.md): it sneezes and is seasoned, worth more
-   * food when eaten. A goblin outside the wall stumbles back a little, one on
-   * the wall or in the courtyard sneezes where it stands. A climber keeps
-   * climbing. Returns false if it was seasoned already or cannot be peppered.
+   * Peppered (v2, docs/v2-plan.md 2.3): it is disarmed (weapon, helmet and
+   * shield fly off), sneezes for PEPPER.sneezeFor (harmless meanwhile) and is
+   * seasoned (eating it fills the tool rings twice as much). No push back:
+   * one on the rampart or in the courtyard stops a moment where it stands, a
+   * climber keeps climbing. Returns false if it was seasoned already or
+   * cannot be peppered.
    */
   pepper(goblin: Goblin): boolean {
     if (!this.isHittable(goblin) || goblin.seasoned) return false;
@@ -877,28 +935,13 @@ export class Goblins {
     goblin.sneezing = PEPPER.sneezeJerkTime;
     goblin.applyColor();
     this.audio.play('sneeze', this.worldPosition(goblin, temp), 1, 0.12);
-    // The sneeze shakes its weapon loose: it flies off.
-    if (goblin.weapon !== 'none') {
-      const p = goblin.root.position;
-      temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
-      this.debris?.throw(goblin.weapon === 'spear' ? 'goblinSpear' : 'goblinSword', temp2, p.x, p.z);
-      goblin.dropWeapon();
-    }
+    // v2: the sneeze disarms it: weapon, helmet and shield all fly off. A one-hit goblin now.
+    this.disarm(goblin);
+    // No push back and no throw (v2): it sneezes where it is. One at the wall stops bashing while it sneezes.
     switch (goblin.mode) {
-      case 'walking':
-      case 'toWall':
-      case 'atWall': {
-        // Back away from the castle: outward from the board center.
-        const p = goblin.root.position;
-        const d = Math.hypot(p.x, p.z) || 1;
-        goblin.vx = (p.x / d) * PEPPER.stumbleSpeed;
-        goblin.vz = (p.z / d) * PEPPER.stumbleSpeed;
-        goblin.vy = PEPPER.stumbleHop;
-        goblin.mode = 'falling';
-        goblin.landAs = 'dazed';
+      case 'atWall':
         goblin.play('emote-no', false);
         break;
-      }
       case 'rampart':
       case 'intruder':
       case 'dazed':

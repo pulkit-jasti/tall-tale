@@ -19,7 +19,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { BELL, FOOD_JAR, HANDLES, MEGAPHONE, PEBBLE_BOWL, PEPPER, PRICE_TAG, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { BELL, HANDLES, MEGAPHONE, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -303,22 +303,9 @@ export function pepperShaker(): { group: Group; materials: MeshStandardMaterial[
   return { group, materials: [bodyMaterial, capMaterial], top: bodyHeight + bodyRadius };
 }
 
-/** The wooden board of a price tag, centered, its face toward +z (cm). The text goes on a plane in front of it. */
-export function priceTagBoard(): Mesh {
-  const { width, height, thickness, woodColor } = PRICE_TAG;
-  const board = new Mesh(new BoxGeometry(width, height, thickness), flatMaterial(woodColor));
-  board.position.z = -thickness / 2;
-  return board;
-}
-
 /** The little rope that ties a locked tool down: a thin ring around it. */
 export function toolRope(radius: number): Mesh {
   return new Mesh(new TorusGeometry(radius, 0.35, 5, 14), flatMaterial(TOOLS.ropeColor));
-}
-
-/** One food ball for the jar's heap (shared geometry for an instanced heap). */
-export function foodBallGeometry(): IcosahedronGeometry {
-  return new IcosahedronGeometry(FOOD_JAR.ballSize / 2, 0);
 }
 
 /**

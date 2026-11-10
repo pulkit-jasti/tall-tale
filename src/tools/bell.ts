@@ -1,9 +1,11 @@
-// The bell (docs/giant-tools.md): the megaphone's hands-only twin, on the same
-// platform. Grab it and shake it: every goblin on the board is stunned, and
-// harder shaking stuns longer. Like the pepper, a shake is found from the
-// bell's own movement (a quick move that turns back on the one before is one
-// stroke, two strokes close together a shake), so no hand pose is needed.
-// It is one use (6 food, free in the tutorial), then it goes back.
+// The bell (docs/giant-tools.md, reworked in docs/v2-plan.md 2.3): the only
+// stun. Grab it and shake it: every goblin on the board is stunned (harder
+// shaking stuns a little longer), and every goblin on the rampart is knocked
+// back down outside the wall (it climbs again later). It does not disarm.
+// Like the pepper, a shake is found from the bell's own movement (a quick
+// move that turns back on the one before is one stroke, two strokes close
+// together a shake), so no hand pose is needed. One stun per use, then it
+// goes back and recharges (TOOLS.recharge, the longest).
 import { Vector3 } from 'three';
 import { BELL, STUN, TOOL_SPOTS } from '../config/game.js';
 import { handBell } from '../world/shapes.js';
@@ -86,22 +88,25 @@ export class Bell extends HandTool {
     const shake = this.time - this.lastStroke < BELL.ringWindow;
     this.lastStroke = this.time;
     if (!shake) return;
-    if (this.active && this.stunWave.active) {
-      // Ringing on while the stun runs: it lasts longer.
-      this.stunWave.extend(STUN.extraPerSecond * (0.25 + 0.25 * hard));
-      return;
-    }
-    // A new stun. Also while the use is still on but the last stun ran out (the tutorial holds the use
-    // open): extending a finished stun did nothing, so goblins that came after it were never stunned.
+    // One stun per use (v2): ringing on in the short use window adds nothing.
+    // While the tutorial holds the window open, a ring after the stun ran out stuns again.
+    if (this.active && (this.stunWave.active || !this.timerHeld)) return;
     if (!this.tryUse()) return;
-    this.onUse(this.stunWave.stun(STUN.baseSeconds + STUN.hardExtra * hard, world));
+    this.ring(STUN.baseSeconds + STUN.hardExtra * hard);
   }
 
-  /** Debug: a hard ring without hands. Pays the food like a real one. */
+  /** The stun: every goblin on the board, and every goblin on the rampart is knocked back down outside the wall. */
+  private ring(seconds: number): void {
+    const stunned = this.stunWave.stun(seconds, world);
+    const knocked = this.goblins.knockOffRampart();
+    this.onUse(stunned + knocked);
+  }
+
+  /** Debug: a hard ring without hands (a recharging bell is made ready first). Ends its use like a real ring would. */
   debugRing(): void {
     if (!this.debugStart()) return;
     this.bodyToWorld(this.middleLocal, world);
     this.audio.play('bell', world);
-    this.onUse(this.stunWave.stun(STUN.baseSeconds + STUN.hardExtra, world));
+    this.ring(STUN.baseSeconds + STUN.hardExtra);
   }
 }

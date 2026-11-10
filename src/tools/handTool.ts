@@ -1,43 +1,42 @@
-// What every food tool shares (docs/giant-tools.md sections 4 and 7): the fly
-// swatter, the pepper shaker, the megaphone and the bell (the last two share
-// one platform and one price tag).
+// What every hand tool shares (docs/giant-tools.md sections 4 and 7, v2 in
+// docs/v2-plan.md 2.1): the fly swatter, the pepper shaker, the megaphone
+// and the bell (the last two share one platform), and the horn.
 //
-//   - It rests on its platform, with its cost on a price tag at the front edge.
+//   - Tools are free (v2). It rests on its platform with a ring around its base.
 //   - Grab it with a fist (TOOLS.acceptPinch also allows a pinch). It snaps
-//     into the fist the way it is held in real life (HOLD) and follows the hand. Grabbing is free: the first use (first swat, first shake) pays
-//     the food and starts the timer. Accidental grabs never waste food.
-//   - Not enough food: dimmed and tied down with a little rope. A hand near it
-//     shows Locked, and closing the hand buzzes and wobbles it instead of grabbing.
-//     `tiedDown` does the same whatever the food (the megaphone if it is ever out without a mic).
-//   - Let go, before, during or after a use: it glides back to its platform
-//     (it used to float up in front of the face mid-use, which hid the board).
-//     A running timer keeps running, and it can be grabbed again there.
+//     into the fist the way it is held in real life (HOLD) and follows the
+//     hand. Grabbing is free: the first use (first swat, first shake) starts
+//     the use window (TOOLS.use). Accidental grabs never waste it.
 //   - Use over: it blinks for the last seconds, then shrinks, poofs and pops
-//     back onto its platform.
-//   - The tutorial can hold the use timer (`timerHeld`) while it teaches the
-//     tool, so a tool paid for early never runs out before the goblins come.
+//     back onto its platform. Then it recharges (TOOLS.recharge, src/rules/recharge.ts):
+//     dimmed (the Locked look), and the ring on its platform fills up. A hand
+//     near it shows Locked, and closing the hand buzzes and wobbles it.
+//     Eating a goblin makes the ring jump forward. `tiedDown` is locked
+//     whatever the ring (the megaphone if it is ever out without a mic), with a rope.
+//   - Let go, before, during or after a use: it glides back to its platform.
+//     A running use window keeps running, and it can be grabbed again there.
+//   - The tutorial can hold the use window (`timerHeld`) while it teaches the
+//     tool, so a tool used early never runs out before the goblins come.
 //
 // The platform and the tool live in boardLift (cm, rises with the board,
 // never turns). A subclass builds the tool's body and decides what counts as
 // a use while it is held.
-import { Color, Group, Matrix4, Mesh, Quaternion, Vector3, type MeshStandardMaterial } from 'three';
+import { Color, Group, Matrix4, Mesh, MeshBasicMaterial, Quaternion, RingGeometry, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { HOLD, PRICE_TAG, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { HOLD, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { popIn, shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { holdMatrix } from '../player/hold.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
-import { createToolUse, stopToolUse, tickToolUse, toolUsable, useTool } from '../rules/food.js';
+import { chargeUsable, createCharge, endUse, readyNow, refillCharge, tickCharge, useCharge } from '../rules/recharge.js';
 import type { Goblins } from '../units/goblins.js';
-import type { FoodJar } from '../world/foodJar.js';
-import { PriceTag } from '../ui/priceTag.js';
 import { cloneStatic, loadTemplate } from '../world/models.js';
 import { post, toolRope } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
-export type FoodToolName = 'swatter' | 'pepper' | 'megaphone' | 'bell';
+export type HandToolName = 'swatter' | 'pepper' | 'megaphone' | 'bell';
 
 /** What a hand near the tool shows. Held is managed by the tool. */
 export type ToolReady = 'idle' | 'ready' | 'locked';
@@ -48,7 +47,6 @@ type Phase = 'resting' | 'held' | 'loose' | 'shrinking' | 'popping';
 export interface ToolParts {
   stage: Stage;
   goblins: Goblins;
-  food: FoodJar;
   audio: GameAudio;
   particles: Particles;
 }
@@ -66,13 +64,11 @@ export interface ToolGrip {
   radius: number;
 }
 
-/** Where the platform and price tag go, when not simply under the tool. */
+/** Where the platform goes, when not simply under the tool. */
 export interface ToolOptions {
-  /** The platform (and price tag) spot. null: no platform, the tool rests on another tool's one. */
+  /** The platform spot. null: no platform, the tool rests on another tool's one. */
   platform?: ToolSpot | null;
   platformWidth?: number;
-  /** The price tag goes toward the back of the platform instead of the front. */
-  tagToBack?: boolean;
   /** The tool's origin rests this far above the platform top (cm), for a tool that hangs below its handle. */
   restLift?: number;
 }
@@ -109,7 +105,7 @@ export abstract class HandTool {
   private phase: Phase = 'resting';
   private phaseTime = 0;
   private holder: Holder | null = null;
-  protected readonly use = createToolUse();
+  protected readonly use = createCharge();
   private restPosition = new Vector3();
   private restQuaternion = new Quaternion();
   private hoverPosition = new Vector3();
@@ -121,7 +117,10 @@ export abstract class HandTool {
   private ready: ToolReady = 'idle';
   private wobble = 0;
   private dimmed = false;
-  private priceTag: PriceTag | null = null;
+  /** The use and recharge ring on the platform (null for a tool without a platform of its own). */
+  private ring: Mesh | null = null;
+  private ringMaterial: MeshBasicMaterial | null = null;
+  private ringFlash = 0;
   private rope!: Mesh;
   private timerHold = false;
   protected time = 0;
@@ -135,12 +134,11 @@ export abstract class HandTool {
 
   protected stage: Stage;
   protected goblins: Goblins;
-  protected food: FoodJar;
   protected audio: GameAudio;
   protected particles: Particles;
 
   constructor(
-    readonly name: FoodToolName,
+    readonly name: HandToolName,
     parts: ToolParts,
     private spot: ToolSpot,
     private grip: ToolGrip,
@@ -152,7 +150,6 @@ export abstract class HandTool {
   ) {
     this.stage = parts.stage;
     this.goblins = parts.goblins;
-    this.food = parts.food;
     this.audio = parts.audio;
     this.particles = parts.particles;
   }
@@ -166,46 +163,66 @@ export abstract class HandTool {
   /** The hand let go or the tool was taken away: forget the motion tracking. */
   protected abstract resetMotion(): void;
 
-  get cost(): number {
-    return TOOLS.cost[this.name];
+  /** The use window (seconds) and the full recharge (seconds). */
+  get useSeconds(): number {
+    return TOOLS.use[this.name];
+  }
+  get rechargeSeconds(): number {
+    return TOOLS.recharge[this.name];
   }
 
   /**
-   * Free of cost (the tutorial, TOOLS.freeInTutorial): never locked, a use
-   * takes no food. The price tag says "Free".
-   */
-  free = false;
-
-  /** What a use takes from the jar right now. */
-  private get price(): number {
-    return this.free ? 0 : this.cost;
-  }
-
-  /**
-   * Tied down whatever the food (the megaphone without a mic): dimmed, the
+   * Tied down whatever the ring (the megaphone without a mic): dimmed, the
    * rope on, and a grab buzzes. The bell beside it still works.
    */
   tiedDown = false;
 
-  /** True when the tool can be used right now: free, paid for already, or affordable. */
+  /** True when the tool can be used right now: ready, or its use window is open. */
   get usable(): boolean {
-    return !this.tiedDown && toolUsable(this.food.state, this.use, this.price);
+    return !this.tiedDown && chargeUsable(this.use);
   }
 
+  /** True while its use window is open. */
   get active(): boolean {
-    return this.use.active;
+    return this.use.phase === 'using';
+  }
+
+  /** True while it recharges (dimmed, the ring filling). */
+  get recharging(): boolean {
+    return this.use.phase === 'recharging';
   }
 
   /**
-   * True while the tutorial holds the use timer (its use lesson): a paid use
+   * True while the tutorial holds the use window (its use lesson): a use
    * never runs out. Releasing the hold gives a running use its full time again.
    */
   get timerHeld(): boolean {
     return this.timerHold;
   }
   set timerHeld(on: boolean) {
-    if (!on && this.timerHold && this.use.active) this.use.timeLeft = TOOLS.duration[this.name];
+    if (!on && this.timerHold && this.active) this.use.useLeft = this.useSeconds;
     this.timerHold = on;
+  }
+
+  /**
+   * A goblin was eaten (v2, docs/v2-plan.md 2.2): a recharging ring jumps
+   * forward by `share` of the full recharge, with a flash. Returns true if it moved.
+   */
+  refill(share: number): boolean {
+    if (!this.root.visible || !refillCharge(this.use, share)) return false;
+    this.ringFlash = TOOLS.ring.flashTime;
+    return true;
+  }
+
+  /** Ready at once, ring full (a new battle, the tutorial's help, debug). */
+  rechargeNow(): void {
+    readyNow(this.use);
+  }
+
+  /** Debug: the use is over and the recharge starts from empty. */
+  drain(): void {
+    if (this.active) this.startShrink();
+    endUse(this.use);
   }
 
   get visible(): boolean {
@@ -230,8 +247,9 @@ export abstract class HandTool {
       const stem = post(top - platform.size.y);
       stem.position.set(px, stem.position.y + top - platform.size.y, pz);
       this.root.add(stand, stem);
-      this.buildPriceTag(spot, pa);
     }
+    // The use and recharge ring, flat around the tool's base (it rests on its own spot, or on the shared platform).
+    this.buildRing(x, z);
     this.build();
     this.baseColors = this.materials.map((m) => m.color.clone());
     // Rest pose: on the platform, its face toward the player, leaning back
@@ -257,25 +275,45 @@ export abstract class HandTool {
   }
 
   /**
-   * The price tag stands on the front edge of the platform, in the middle,
-   * facing the player, like a price label on a market stall. The same spot on
-   * every platform, so the tags sit symmetrically left and right. It stands
-   * on top of the edge, not below it, so the ring never hides it from the seat.
+   * The ring on the platform top (TOOLS.ring): a dark track with a colored
+   * fill on top of it. The fill is one ring mesh whose draw range shows only
+   * part of it (each segment is 6 indices), so changing it costs nothing.
+   * Unlit, so it reads at night too.
    */
-  private buildPriceTag(spot: ToolSpot, a: number): void {
-    const { tiltDeg, height, lift, out } = PRICE_TAG;
-    const priceTag = new PriceTag(this.cost);
-    this.priceTag = priceTag;
-    const holder = new Group();
-    // Platform frame: z toward the player (the seat), so the tag faces them.
-    holder.rotation.y = -a;
-    holder.position.set(polarX(spot.radius, a), TOOL_SPOTS.platformTop, polarZ(spot.radius, a));
-    const tilt = degToRad(tiltDeg);
-    priceTag.group.rotation.x = -tilt;
-    const front = (this.options.platformWidth ?? TOOL_SPOTS.platformWidth) / 2;
-    priceTag.group.position.set(0, lift + (height / 2) * Math.cos(tilt), front + out);
-    holder.add(priceTag.group);
-    this.root.add(holder);
+  private buildRing(x: number, z: number): void {
+    const R = TOOLS.ring;
+    const track = new Mesh(
+      new RingGeometry(R.inner - 0.15, R.outer + 0.15, R.segments, 1),
+      new MeshBasicMaterial({ color: R.trackColor, transparent: true, opacity: 0.8, depthWrite: false }),
+    );
+    const fill = new Mesh(new RingGeometry(R.inner, R.outer, R.segments, 1), new MeshBasicMaterial({ color: R.chargeColor }));
+    // Flat, facing up. The fill sits a hair above the track (its local +z is up).
+    track.rotation.x = -Math.PI / 2;
+    track.position.set(x, TOOL_SPOTS.platformTop + R.lift, z);
+    fill.position.set(0, 0, 0.08);
+    track.add(fill);
+    track.visible = false;
+    this.root.add(track);
+    this.ring = fill;
+    this.ringMaterial = fill.material as MeshBasicMaterial;
+  }
+
+  /** The ring shows how much is left of a use, or how full the recharge is. Hidden while ready. */
+  private updateRing(dt: number): void {
+    const fill = this.ring;
+    const material = this.ringMaterial;
+    if (!fill || !material) return;
+    const track = fill.parent!;
+    const R = TOOLS.ring;
+    const using = this.active;
+    const show = !this.tiedDown && (using || this.recharging);
+    track.visible = show;
+    if (!show) return;
+    const share = using ? this.use.useLeft / this.useSeconds : this.use.charge;
+    const segments = Math.max(0, Math.min(R.segments, Math.ceil(share * R.segments)));
+    fill.geometry.setDrawRange(0, segments * 6);
+    this.ringFlash = Math.max(0, this.ringFlash - dt);
+    material.color.setHex(this.ringFlash > 0 ? R.flashColor : using ? R.useColor : R.chargeColor);
   }
 
   // ---- Hands (called from GrabEat, which picks one target per hand) ----
@@ -323,7 +361,7 @@ export abstract class HandTool {
   setVisible(visible: boolean): void {
     if (!visible) {
       this.holder = null;
-      stopToolUse(this.use);
+      readyNow(this.use);
       this.beckon = false;
       this.timerHold = false;
       this.placeAtRest();
@@ -351,26 +389,34 @@ export abstract class HandTool {
   // ---- Use ----
 
   /**
-   * The player swatted or shook: true if it may work. The first use pays the
-   * food and starts the timer. Without enough food it buzzes and does nothing.
+   * The player swatted or shook: true if it may work. The first use starts
+   * the use window. While recharging it buzzes and does nothing.
    */
   protected tryUse(): boolean {
-    const price = this.price;
-    const result = useTool(this.food.state, this.use, price, TOOLS.duration[this.name]);
-    if (result === 'locked') {
+    if (this.tiedDown) {
       this.refuse();
       return false;
     }
-    if (result === 'started') {
-      if (price > 0) this.food.spent();
-      console.info(`[tools] ${this.name} used: ${price} food, ${TOOLS.duration[this.name]} s`);
+    const result = useCharge(this.use, this.useSeconds);
+    if (result === 'resting') {
+      this.refuse();
+      return false;
     }
+    if (result === 'started') console.info(`[tools] ${this.name} used: ${this.useSeconds} s, then ${this.rechargeSeconds} s recharge`);
     return true;
   }
 
-  /** Debug: starts a use without hands (pays the food like a real use). */
+  /** A one-use tool (the bell, the horn) did its thing: the use ends now and it goes back to recharge. */
+  protected finishUse(): void {
+    if (!this.active) return;
+    endUse(this.use);
+    this.startShrink();
+  }
+
+  /** Debug: starts a use without hands (a recharging tool is made ready first). */
   protected debugStart(): boolean {
     if (!this.root.visible) this.appear();
+    if (this.recharging) this.rechargeNow();
     return this.tryUse();
   }
 
@@ -380,7 +426,9 @@ export abstract class HandTool {
     if (!this.root.visible) return;
     this.time += dt;
     this.phaseTime += dt;
-    if (!this.timerHold && tickToolUse(this.use, dt)) this.startShrink();
+    // The use window runs down (unless the tutorial holds it), the recharge fills only on the platform.
+    const onPlatform = this.phase === 'resting' && this.returnLeft <= 0 && !this.holder;
+    if (tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold, onPlatform) === 'ended') this.startShrink();
     switch (this.phase) {
       case 'held':
         this.updateHeld(dt);
@@ -399,6 +447,7 @@ export abstract class HandTool {
     }
     this.body.updateMatrixWorld(true);
     this.updateLook(dt);
+    this.updateRing(dt);
   }
 
   private updateHeld(dt: number): void {
@@ -499,7 +548,7 @@ export abstract class HandTool {
     if (t >= 1) this.setPhase('resting');
   }
 
-  /** Touch state, dimming, rope, beckon pulse, end-of-use blink and price tag. */
+  /** Touch state, dimming, rope, beckon pulse and end-of-use blink. */
   private updateLook(dt: number): void {
     const usable = this.usable;
     const dim = !usable;
@@ -510,18 +559,18 @@ export abstract class HandTool {
         if (dim) m.color.multiplyScalar(TOOLS.dimShare);
       });
     }
-    this.rope.visible = dim && this.phase === 'resting' && this.returnLeft <= 0;
+    // The rope only when tied down (the megaphone without a mic); recharging shows the ring instead.
+    this.rope.visible = this.tiedDown && this.phase === 'resting' && this.returnLeft <= 0;
     let state: TouchState = this.holder ? 'held' : this.ready;
     if (this.ready === 'locked' && usable) state = 'ready';
     // The last seconds of a use: blink, so the end is no surprise.
-    if (this.use.active && this.use.timeLeft < TOOLS.warnTime && Math.sin(this.time * 18) > 0) state = 'idle';
+    if (this.active && this.use.useLeft < TOOLS.warnTime && this.useSeconds > TOOLS.warnTime && Math.sin(this.time * 18) > 0) state = 'idle';
     // A new tool glows until grabbed. A hand near it shows Ready instead.
     if (this.beckon && state === 'idle' && Math.sin(this.time * 6) > 0) state = 'ready';
     if (state !== this.touch) {
       this.touch = state;
       applyTouchState(this.materials, state);
     }
-    this.priceTag?.set(this.free ? 'free' : this.use.active ? 'paid' : usable ? 'ok' : 'short');
   }
 
   // ---- Helpers ----

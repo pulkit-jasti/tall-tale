@@ -7,7 +7,8 @@ import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { usesBell } from './player/accessSettings.js';
 import { GameAudio } from './audio/sound.js';
-import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
+import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TOOLS, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
+import { eatShare } from './rules/recharge.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -57,7 +58,6 @@ import { NightLights } from './world/nightLights.js';
 import { Sky } from './world/sky.js';
 import { Triggers } from './world/triggers.js';
 import { buildBoard } from './world/boardBuilder.js';
-import { FoodJar } from './world/foodJar.js';
 import { buildSeatFloor, GiantBody } from './world/giant.js';
 import { Windmill } from './world/settlements.js';
 import { Stage } from './world/stage.js';
@@ -87,7 +87,6 @@ export class GameSystem extends createSystem({}) {
   private goblins!: Goblins;
   private grabEat!: GrabEat;
   private slingshot!: Slingshot;
-  private food!: FoodJar;
   private swatter!: FlySwatter;
   private pepper!: PepperShaker;
   private megaphone!: Megaphone;
@@ -185,8 +184,7 @@ export class GameSystem extends createSystem({}) {
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.goblins.particles = this.particles;
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
-    this.food = new FoodJar(this.stage, this.audio, this.particles);
-    const toolParts = { stage: this.stage, goblins: this.goblins, food: this.food, audio: this.audio, particles: this.particles };
+    const toolParts = { stage: this.stage, goblins: this.goblins, audio: this.audio, particles: this.particles };
     this.swatter = new FlySwatter(toolParts);
     this.pepper = new PepperShaker(toolParts);
     this.stun = new StunWave(this.stage, this.goblins, this.audio, this.particles);
@@ -204,7 +202,6 @@ export class GameSystem extends createSystem({}) {
     await Promise.all([
       this.villagers.load(),
       this.slingshot.load(),
-      this.food.load(),
       this.troops.load(),
       this.triggers.load(blueprint.triggers),
       this.goblins
@@ -258,7 +255,6 @@ export class GameSystem extends createSystem({}) {
       triggers: this.triggers,
       balloons: this.balloons,
       stun: this.stun,
-      food: this.food,
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
       panel: this.endPanel,
       sign: this.sign,
@@ -275,11 +271,12 @@ export class GameSystem extends createSystem({}) {
       celebrate: (won) => this.juice.celebrate(won, this.boardCenter(), this.stage.boardScale),
     });
     this.grabEat.onEat = (goblin) => {
-      const added = this.food.eat(goblin.seasoned);
       this.battle.noteEaten(goblin.seasoned);
-      // "+1" (or "+2" for a seasoned one) rises from the jar, "Full!" when it is full.
-      const label = added <= 0 ? 'full' : added >= 3 ? '+3' : added === 2 ? '+2' : '+1';
-      this.juice.label(label, this.food.topWorld(labelAt), this.stage.boardScale);
+      // v2 (docs/v2-plan.md 2.2): every recharging tool's ring jumps forward together, with a flash and a chime.
+      const share = eatShare(goblin.seasoned, TOOLS.eatRefill, TOOLS.seasonedRefill);
+      let filled = false;
+      for (const tool of this.tools) if (tool.refill(share)) filled = true;
+      if (filled) this.audio.play('foodAdded', undefined, 0.8, 0.1);
     };
     // Juice hooks: a star and a ring on every knockout, a big hit for blasts and pops.
     this.goblins.onKnockOut = (_goblin, world) => this.juice.knockout(world, this.stage.boardScale);
@@ -525,7 +522,6 @@ export class GameSystem extends createSystem({}) {
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
     this.stun.update(dt);
-    this.food.update(dt);
     this.threat.update(dt);
     // The red arrow only while a battle is fought, and not while a lesson's yellow arrow points the way.
     if (this.battle.canPause && !this.battle.lessonPointing) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
@@ -736,13 +732,17 @@ export class GameSystem extends createSystem({}) {
       case 'bowlFill':
         this.slingshot.debugBowl(true);
         break;
-      case 'addFood':
-        this.food.add(DEBUG.foodAdd);
-        console.info(`[debug] food ${this.food.food}`);
+      case 'rechargeTools':
+        for (const tool of this.tools) tool.rechargeNow();
+        console.info('[debug] every tool ready');
         break;
-      case 'emptyFood':
-        this.food.spend(this.food.food);
-        console.info('[debug] food 0: the food tools show Locked');
+      case 'drainTools':
+        for (const tool of this.tools) if (tool.visible) tool.drain();
+        console.info('[debug] every tool out recharges from empty');
+        break;
+      case 'eatRefill':
+        // What eating one goblin does to the rings, without a goblin.
+        for (const tool of this.tools) tool.refill(TOOLS.eatRefill);
         break;
       case 'showTools':
         // Only one stun tool is ever out: the megaphone with a mic, the bell without (or when chosen).
