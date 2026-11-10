@@ -1247,11 +1247,10 @@ export const FEEDBACK = {
  */
 export const TOOL_SPOTS = {
   slingshot: { angleDeg: 30, radius: 33.5 },
-  /**
-   * The megaphone, or the bell when there is no mic. Only one of them is
-   * ever out, so they use the same spot.
-   */
+  /** The horn (v2, the megaphone's old spot). */
   rightSide: { angleDeg: 82, radius: 33.5 },
+  /** The bell (v2: its own platform, where the food jar was). */
+  leftMiddle: { angleDeg: -56, radius: 33.5 },
   /** Pepper shaker. */
   leftFront: { angleDeg: -30, radius: 33.5 },
   /** Fly swatter. */
@@ -1450,9 +1449,9 @@ export const TOOLS = {
    * The bell and the horn are one use each (one stun, one call): their
    * window is only the short moment until the tool goes back.
    */
-  use: { swatter: 10, pepper: 8, megaphone: 2.5, bell: 1.2, horn: 1.4 },
+  use: { swatter: 10, pepper: 8, bell: 1.2, horn: 1.4 },
   /** The recharge after a use, while the tool is back on its platform (seconds). */
-  recharge: { swatter: 20, pepper: 20, megaphone: 30, bell: 35, horn: 30 },
+  recharge: { swatter: 20, pepper: 20, bell: 35, horn: 30 },
   /** Each goblin eaten fills every recharging tool's ring by this share of its full recharge (a seasoned one by seasonedRefill). */
   eatRefill: 0.1,
   seasonedRefill: 0.2,
@@ -1535,11 +1534,11 @@ export const HOLD = {
     swatter: { at: 3.5, face: 'back', tiltDeg: 45 },
     pepper: { at: 4.5, face: 'palm' },
     slingshot: { at: 3.5, face: 'back' },
-    // A pistol grip: the cone points the way the knuckles point, so it is in front of the mouth when the fist is.
-    megaphone: { at: 3, face: 'back', tiltDeg: 15 },
+    // Held like the megaphone was: the bell end points the way the knuckles point, the mouthpiece toward the wrist, so it is at the mouth when the fist is just below it.
+    horn: { at: 3, face: 'back', tiltDeg: 15 },
     // The handle on top of the bell, thumb up, the bell hanging below the fist.
     bell: { at: 2, face: 'palm' },
-  } as Record<'swatter' | 'pepper' | 'slingshot' | 'megaphone' | 'bell', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
+  } as Record<'swatter' | 'pepper' | 'slingshot' | 'horn' | 'bell', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
 };
 
 /**
@@ -1662,57 +1661,57 @@ export const PEPPER = {
 };
 
 /**
- * The megaphone (docs/giant-tools.md): hold it and scream. The mic loudness
- * (Web Audio, src/audio/mic.ts) passing `screamLevel` for `screamHold` is a
- * scream. It stuns every goblin, and a longer scream stuns longer.
+ * The war horn (v2, docs/v2-plan.md 2.3, replaces the megaphone): calls the
+ * field knights. Held like the megaphone was (a short grip, the horn on top
+ * of it, mouthpiece toward the face). Two ways to blow it: hold the
+ * mouthpiece within `mouthDistance` of the head for `holdTime` (no mic, like
+ * eating), or blow into the mic while it is at the mouth: the loudness over
+ * `blowLevel` for `blowHold` sounds it at once and louder, so talking or room
+ * noise does not trigger it. Sizes in cm, times in seconds.
  */
-export const MEGAPHONE = {
-  /** Cone (open wide end) along the tool's -z on top of a short grip (cm). */
+export const HORN = {
+  /** The horn along the tool's -z (bell end) on top of a short grip. */
   gripLength: 6,
   gripRadius: 0.9,
-  coneLength: 13,
-  coneMouth: 1.1,
-  coneEnd: 3.6,
-  /** The cone starts this far behind the grip (toward the face, cm). */
-  coneBack: 3,
-  bodyColor: 0xe8e2d0,
-  bandColor: 0xd23c28,
-  gripColor: 0x3b2b1f,
+  hornLength: 15,
+  mouthRadius: 0.7,
+  bellRadius: 3,
+  /** The mouthpiece is this far behind the grip (toward the face). */
+  hornBack: 3,
+  bodyColor: 0xeadfc4,
+  bandColor: 0xc9952e,
+  gripColor: 0x5a3a22,
   gripFrom: 0,
   gripTo: 6,
   grabRadius: 0.06,
+  /** The mouthpiece counts as at the mouth this close to the head (meters, like EAT.mouthDistance). */
+  mouthDistance: 0.2,
+  /** Held at the mouth this long, it blows (seconds). */
+  holdTime: 1,
+  /** Mic loudness (RMS, 0 to 1) that counts as blowing, and how long it must stay over it (seconds). */
+  blowLevel: 0.025,
+  blowHold: 0.3,
+  /** The loudness is smoothed this much (seconds). */
+  levelSmoothing: 0.05,
+  /** The horn sound's volume when held to blow, and when blown into the mic (louder). */
+  heldVolume: 0.8,
+  blownVolume: 1,
   /**
-   * Mic loudness (RMS of the samples, 0 to 1) that counts as a scream, and
-   * how long it must last (seconds). Lowered from 0.12 after the first
-   * headset test (it did not trigger). The debug page's mic column shows the
-   * loudest level while the megaphone is held, to tune it.
-   */
-  screamLevel: 0.04,
-  screamHold: 0.1,
-  /**
-   * The loudness meter on top of the cone, shown while it is held: a thin
-   * bar that fills as the player gets louder, and a pulsing red dot at
-   * `targetShare` of its length, where the scream level is. Filling past the
-   * dot stuns (cm, seconds).
+   * The breath meter on top of the horn, shown while it is at the mouth: a
+   * thin bar that fills over holdTime (at once with a blow), so it reads
+   * without sound. The same build as the megaphone's loudness meter was.
    */
   meterWidth: 0.5,
   meterLift: 0.35,
-  targetShare: 0.8,
-  /** The bar drops back this slowly, so a shout is easy to read. */
-  meterFall: 0.18,
   meterTrackColor: 0x2a2018,
-  meterLowColor: 0x5ad15a,
-  meterHighColor: 0xffd23f,
-  meterFullColor: 0xff4a2a,
-  targetColor: 0xff2a2a,
-  /** The loudness is smoothed this much (seconds). */
-  levelSmoothing: 0.05,
-  /** Sound waves out of the cone while screaming: this often (seconds). */
-  waveEvery: 0.12,
-  waveColors: [0xffffff, 0xfff1b8, 0xcfe8ff],
+  meterLowColor: 0xfff1b8,
+  meterFullColor: 0xffd23f,
+  /** Little puffs out of the bell while it fills: this often (seconds). */
+  puffEvery: 0.15,
+  waveColors: [0xffffff, 0xfff1b8, 0xffd23f],
 };
 
-/** The bell (docs/giant-tools.md): the hands-only twin of the megaphone. Shake it to stun every goblin. */
+/** The bell (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): the only stun. Shake it to stun every goblin and knock the climbers down. */
 export const BELL = {
   /** Wooden handle on top along +y from the fist (cm), the brass bell hanging below it. */
   handleLength: 4,
@@ -1733,7 +1732,7 @@ export const BELL = {
   hardSpeed: 140,
 };
 
-/** The stun of the megaphone and the bell: every goblin on the board stops, dizzy. */
+/** The stun of the bell: every goblin on the board stops, dizzy. */
 export const STUN = {
   /** The first scream or ring stuns this long (seconds)... */
   baseSeconds: 3.5,

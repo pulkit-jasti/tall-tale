@@ -17,7 +17,7 @@ import { mic } from '../audio/mic.js';
 import { BOARD, PAUSE, POKE, SLIDER, SWITCH, UI_SPACING } from '../config/game.js';
 import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
-import { access, usesBell } from '../player/accessSettings.js';
+import { access, hornHearsMic } from '../player/accessSettings.js';
 import type { HandState } from '../player/hands.js';
 import { settingsTabRowY } from '../rules/reach.js';
 import {
@@ -142,14 +142,14 @@ export class PauseMenu {
       this.tabButtons.push(button);
       this.settings.root.add(this.tabGroups[tab.id]);
     }
-    // Accessibility: measure the reach again, and the bell in place of the megaphone (an on and off switch).
+    // Accessibility: measure the reach again, and a quiet horn (it never listens to the mic: hold it at the mouth), an on and off switch.
     const controlLeft = S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius;
     this.reach = new PokeButton(audio, { radius: S.reachRadius, icon: 'reach' });
     add(this.reach.group, controlLeft + S.reachRadius * POKE.rimScale, S.firstRowY, this.tabGroups.access);
-    this.bellSwitch = new Switch(audio, { on: usesBell() });
+    this.bellSwitch = new Switch(audio, { on: !hornHearsMic() });
     add(this.bellSwitch.group, controlLeft + SWITCH.width / 2, S.firstRowY - S.accessRowGap, this.tabGroups.access);
     this.bellSwitch.onChange = (on) => {
-      access.setBell(on);
+      access.setQuietHorn(on);
       this.repaintSettings();
     };
     SOUND_CATEGORIES.forEach((c, i) => {
@@ -232,8 +232,8 @@ export class PauseMenu {
       this.tabGroups[t.id].visible = t.id === tab;
       this.tabButtons[i].setColor(t.id === tab ? POKE.color : PAUSE.settings.tabOffColor);
     });
-    // Without a mic the bell is the only choice: the switch shows On, locked.
-    this.bellSwitch.set(usesBell());
+    // Without a mic the quiet horn is the only choice: the switch shows On, locked.
+    this.bellSwitch.set(!hornHearsMic());
     this.bellSwitch.setLocked(!mic.on);
     armControls([this.back, ...this.tabButtons, ...this.tabControls()]);
     this.repaintSettings();
@@ -339,7 +339,7 @@ export class PauseMenu {
       return;
     }
     name('Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
-    name('Bell', S.firstRowY - S.accessRowGap, mic.on ? 'In place of the megaphone' : 'No mic: always the bell', mic.on ? UI_COLORS.note : UI_COLORS.warn);
+    name('Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {

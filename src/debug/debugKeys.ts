@@ -35,7 +35,7 @@ export type DebugCommand =
   | 'showTools'
   | 'swat'
   | 'pepper'
-  | 'megaphone'
+  | 'horn'
   | 'bell'
   | 'troops'
   | 'troopsToggle'
@@ -136,10 +136,10 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'rechargeTools', group: 'food', icon: '🔋', code: 'KeyY', label: 'Recharge tools', does: 'Every tool is ready at once (its recharge ring full)' },
   { id: 'drainTools', group: 'food', icon: '🪫', code: 'Digit0', label: 'Drain tools', does: 'Every tool that is out ends its use and recharges from empty (dimmed, the ring on its platform filling)' },
   { id: 'eatRefill', group: 'food', icon: '😋', code: 'KeyV', label: 'Eat refill', does: 'What eating one goblin does: every recharging ring jumps forward 10% of its full recharge' },
-  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show tools', does: 'The fly swatter, pepper shaker and megaphone (the bell without a mic) pop onto their platforms now (normally in waves 3, 4 and 5)' },
+  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show tools', does: 'The horn, fly swatter, pepper shaker and bell pop onto their platforms now (normally in waves 1, 3, 4 and 5)' },
   { id: 'swat', group: 'food', icon: '🪰', code: 'Digit2', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (starts its 10 s use, then a 20 s recharge)' },
   { id: 'pepper', group: 'food', icon: '🌶️', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },
-  { id: 'megaphone', group: 'food', icon: '📣', code: 'Digit4', label: 'Megaphone scream', does: 'Megaphone: a scream without a mic, every goblin is stunned (puts the megaphone out in place of the bell)' },
+  { id: 'horn', group: 'food', icon: '📯', code: 'Digit4', label: 'Blow horn', does: 'Horn: it sounds without hands or a mic and the field knights charge down the road in front of you (30 s recharge)' },
   { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (35 s recharge)' },
   { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send squad', does: 'A squad of soldiers marches out now toward a camp (normally every 10 s while a wave runs)' },
   { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, no squads come out and the ones out go home (Send squad turns them back on)' },

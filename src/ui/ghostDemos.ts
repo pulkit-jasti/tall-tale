@@ -30,7 +30,7 @@ export type GhostAnchor =
   | 'pouch'
   | 'swatterHandle'
   | 'pepperHandle'
-  | 'megaphoneHandle'
+  | 'hornHandle'
   | 'bellHandle';
 
 export type Dir = [number, number, number];
@@ -80,18 +80,24 @@ const SWATTER_GRIP = {
   palm: [Math.cos(lean), Math.sin(lean), 0] as Dir,
 };
 /**
- * Right fist holding the megaphone up in front of the mouth: thumb up along
- * the grip, palm facing in (left), so the cone points straight ahead. The
- * palm never faces the headset (Quest menu).
+ * Right fist holding the horn up at the mouth: thumb up along the grip, palm
+ * facing in (left), so the horn points straight ahead and its mouthpiece is
+ * at the lips. The palm never faces the headset (Quest menu).
  */
-const SHOUT_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0] as Dir };
+const BLOW_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0] as Dir };
 /**
- * Right hand around the upright bell handle on the right side platform,
- * reaching out to the right like a handshake: thumb up along the handle,
- * palm toward the player's front (left in this frame, where forward points
- * right) and a little forward.
+ * Right hand around the upright horn grip on the right side platform,
+ * reaching out to the right like a handshake: thumb up along the grip, palm
+ * toward the player's front (left in this frame, where forward points right)
+ * and a little forward.
  */
-const BELL_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.2] as Dir };
+const SIDE_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.2] as Dir };
+/**
+ * Left hand around the upright bell handle on the left platform (v2: its own
+ * spot): the mirror of SIDE_GRIP, thumb up, palm toward the player's front
+ * (right in this frame, where forward points left) and a little forward.
+ */
+const BELL_GRIP = { rod: [0, 1, 0] as Dir, palm: [1, 0, 0.2] as Dir };
 /** Pinch from above: fingers down and forward, palm down and toward the player. */
 const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Dir };
 /** Throwing a pinched goblin: fingers forward and a little up, palm down and a little forward (never toward the headset). */
@@ -223,9 +229,9 @@ export const GHOST_DEMOS = {
       key(2.0, 'pepperHandle', [0, 6, -4], 'fist', LEFT_HANDLE_GRIP),
     ],
   },
-  /** Right hand from the player's side, a little high (clear of the bell below), closes the fist around the handle, lifts it. */
+  /** Left hand from the player's side, a little high (clear of the bell below), closes the fist around the handle, lifts it. */
   bellGrab: {
-    hand: 'right',
+    hand: 'left',
     keys: [
       key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
       key(0.8, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
@@ -233,31 +239,35 @@ export const GHOST_DEMOS = {
       key(2.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
     ],
   },
-  /** Right hand from the player's side, a little high, closes the fist around the upright megaphone grip, lifts it. */
-  megaphoneGrab: {
+  /** Right hand from the player's side, a little high, closes the fist around the upright horn grip, lifts it. */
+  hornGrab: {
     hand: 'right',
     keys: [
-      key(0, 'megaphoneHandle', [0, 2, -8], 'open', BELL_GRIP),
-      key(0.8, 'megaphoneHandle', [0, 0, 0], 'open', BELL_GRIP),
-      key(1.1, 'megaphoneHandle', [0, 0, 0], 'fist', BELL_GRIP),
-      key(2.0, 'megaphoneHandle', [0, 5, -4], 'fist', BELL_GRIP),
+      key(0, 'hornHandle', [0, 2, -8], 'open', SIDE_GRIP),
+      key(0.8, 'hornHandle', [0, 0, 0], 'open', SIDE_GRIP),
+      key(1.1, 'hornHandle', [0, 0, 0], 'fist', SIDE_GRIP),
+      key(2.0, 'hornHandle', [0, 5, -4], 'fist', SIDE_GRIP),
     ],
   },
-  /** Grab the megaphone, bring it up in front of the mouth (the fist a little below and to the right), hold it there while shouting. */
-  megaphoneShout: {
+  /**
+   * Grab the horn, bring it up to the mouth (the fist a little below and to
+   * the right, so the mouthpiece behind the fist is at the lips), hold it
+   * there until it sounds (HORN.holdTime, 1 s).
+   */
+  hornBlow: {
     hand: 'right',
     keys: [
-      key(0, 'megaphoneHandle', [0, 2, -8], 'open', BELL_GRIP),
-      key(0.6, 'megaphoneHandle', [0, 0, 0], 'open', BELL_GRIP),
-      key(0.9, 'megaphoneHandle', [0, 0, 0], 'fist', BELL_GRIP),
-      key(1.4, 'megaphoneHandle', [0, 6, -4], 'fist', BELL_GRIP),
-      key(2.4, 'mouth', [3, -7, 4], 'fist', SHOUT_GRIP),
-      key(3.6, 'mouth', [3, -7, 4], 'fist', SHOUT_GRIP),
+      key(0, 'hornHandle', [0, 2, -8], 'open', SIDE_GRIP),
+      key(0.6, 'hornHandle', [0, 0, 0], 'open', SIDE_GRIP),
+      key(0.9, 'hornHandle', [0, 0, 0], 'fist', SIDE_GRIP),
+      key(1.4, 'hornHandle', [0, 6, -4], 'fist', SIDE_GRIP),
+      key(2.4, 'mouth', [3, -7, 4], 'fist', BLOW_GRIP),
+      key(3.8, 'mouth', [3, -7, 4], 'fist', BLOW_GRIP),
     ],
   },
-  /** Grab the bell, lift it, shake it hard side to side a few times (each turn back is one ring). */
+  /** Grab the bell with the left hand, lift it, shake it hard side to side a few times (each turn back is one ring). */
   bellRing: {
-    hand: 'right',
+    hand: 'left',
     keys: [
       key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
       key(0.6, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),

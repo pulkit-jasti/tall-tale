@@ -1,6 +1,6 @@
 // What every hand tool shares (docs/giant-tools.md sections 4 and 7, v2 in
-// docs/v2-plan.md 2.1): the fly swatter, the pepper shaker, the megaphone
-// and the bell (the last two share one platform), and the horn.
+// docs/v2-plan.md 2.1): the fly swatter, the pepper shaker, the bell and the
+// war horn, each on its own platform.
 //
 //   - Tools are free (v2). It rests on its platform with a ring around its base.
 //   - Grab it with a fist (TOOLS.acceptPinch also allows a pinch). It snaps
@@ -12,7 +12,7 @@
 //     dimmed (the Locked look), and the ring on its platform fills up. A hand
 //     near it shows Locked, and closing the hand buzzes and wobbles it.
 //     Eating a goblin makes the ring jump forward. `tiedDown` is locked
-//     whatever the ring (the megaphone if it is ever out without a mic), with a rope.
+//     whatever the ring (a tool the game ties down), with a rope.
 //   - Let go, before, during or after a use: it glides back to its platform.
 //     A running use window keeps running, and it can be grabbed again there.
 //   - The tutorial can hold the use window (`timerHeld`) while it teaches the
@@ -36,7 +36,7 @@ import { cloneStatic, loadTemplate } from '../world/models.js';
 import { post, toolRope } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
-export type HandToolName = 'swatter' | 'pepper' | 'megaphone' | 'bell';
+export type HandToolName = 'swatter' | 'pepper' | 'bell' | 'horn';
 
 /** What a hand near the tool shows. Held is managed by the tool. */
 export type ToolReady = 'idle' | 'ready' | 'locked';
@@ -172,8 +172,8 @@ export abstract class HandTool {
   }
 
   /**
-   * Tied down whatever the ring (the megaphone without a mic): dimmed, the
-   * rope on, and a grab buzzes. The bell beside it still works.
+   * Tied down whatever the ring: dimmed, the rope on, and a grab buzzes.
+   * Nothing ties a tool down for now (it was the megaphone without a mic).
    */
   tiedDown = false;
 
@@ -559,7 +559,7 @@ export abstract class HandTool {
         if (dim) m.color.multiplyScalar(TOOLS.dimShare);
       });
     }
-    // The rope only when tied down (the megaphone without a mic); recharging shows the ring instead.
+    // The rope only when tied down; recharging shows the ring instead.
     this.rope.visible = this.tiedDown && this.phase === 'resting' && this.returnLeft <= 0;
     let state: TouchState = this.holder ? 'held' : this.ready;
     if (this.ready === 'locked' && usable) state = 'ready';

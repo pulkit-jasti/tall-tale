@@ -10,7 +10,7 @@ import {
   END_PANEL,
   HANDLES,
   HINT_SIGN,
-  MEGAPHONE,
+  HORN,
   PAUSE,
   PEBBLE_BOWL,
   PEPPER,
@@ -94,8 +94,8 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pebble bowl', radius: PEBBLE_BOWL.radius, y: PEBBLE_BOWL.rimY },
     { name: 'swatter grip', radius: TOOL_SPOTS.leftSide.radius, y: top + (SWATTER.gripFrom + SWATTER.gripTo) / 2 },
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
-    { name: 'bell handle', radius: TOOL_SPOTS.rightSide.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
-    { name: 'megaphone grip', radius: TOOL_SPOTS.rightSide.radius, y: top + (MEGAPHONE.gripFrom + MEGAPHONE.gripTo) / 2 },
+    { name: 'bell handle', radius: TOOL_SPOTS.leftMiddle.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
+    { name: 'horn grip', radius: TOOL_SPOTS.rightSide.radius, y: top + (HORN.gripFrom + HORN.gripTo) / 2 },
     // At the pause button's height, so like it a little past the sweet spot.
     { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY, rare: true },
     // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.

@@ -4,7 +4,7 @@
 // triggers, slingshot, food tools, food jar), and it counts what the player
 // does for the lessons. Nothing tutorial-only lives in those systems.
 import { Vector3 } from 'three';
-import { usesBell } from '../player/accessSettings.js';
+import { hornHearsMic } from '../player/accessSettings.js';
 import type { GameAudio } from '../audio/sound.js';
 import {
   CALIBRATION,
@@ -65,8 +65,8 @@ import {
 
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
-const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'megaphone'];
-const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, megaphone: 0, bell: 0 });
+const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'bell'];
+const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, bell: 0, horn: 0 });
 const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0 });
 const ICONS: Record<HintIcon, UiImageName> = {
   pinch: 'target',
@@ -90,7 +90,7 @@ export interface BattleParts {
   goblins: Goblins;
   spawner: WaveSpawner;
   slingshot: Slingshot;
-  /** The hand tools by name (the megaphone and the bell share a platform and a lesson). */
+  /** The hand tools by name. */
   tools: Record<HandToolName, HandTool>;
   /** The army: squads walk out while a wave is fought. */
   troops: Troops;
@@ -98,7 +98,7 @@ export interface BattleParts {
   triggers: Triggers;
   /** Balloon riders (from wave 4). */
   balloons: Balloons;
-  /** The stun of the megaphone and the bell. */
+  /** The stun of the bell. */
   stun: StunWave;
   flags: Flags;
   panel: EndPanel;
@@ -526,14 +526,14 @@ export class Battle implements TutorialApi {
       return;
     }
     const target = this.markerPosition(hint.marker, markerAt);
-    this.updateGhost(dt, usesBell() && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
+    this.updateGhost(dt, !hornHearsMic() && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
     // The 3D arrow: in front of the face while the target is out of view, right over it once in view.
     this.parts.pointer.update(dt, head, this.forward, target);
     this.lessonPointing = target !== null;
     // The first trigger lesson: ghost aim dots from the pouch to the keg.
     this.parts.ghostAim.update(dt, hint.aimDots && target ? this.parts.slingshot.partWorld('pouch', pouchAt) : null, target);
-    // The bell is out in place of the megaphone (no mic, or the player chose it), with its own words and demo.
-    let text = usesBell() && hint.whenNoMic ? hint.whenNoMic : hint.text;
+    // A quiet horn (no mic, or the player chose it) has its own words: hold it, no blowing.
+    let text = !hornHearsMic() && hint.whenNoMic ? hint.whenNoMic : hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
     // A tool lesson while the tool recharges says so (watch the ring fill, or eat to speed it up).
@@ -634,10 +634,8 @@ export class Battle implements TutorialApi {
         return this.parts.tools.pepper.handleWorld(out);
       case 'bellHandle':
         return this.parts.tools.bell.handleWorld(out);
-      case 'megaphoneHandle':
-        return this.parts.tools.megaphone.handleWorld(out);
-      case 'stunTool':
-        return this.stunTool().handleWorld(out);
+      case 'hornHandle':
+        return this.parts.tools.horn.handleWorld(out);
       case 'slingHandle':
         return slingshot.partWorld('handle', out);
       case 'bowl':
@@ -806,7 +804,6 @@ export class Battle implements TutorialApi {
       return;
     }
     if (tool !== 'slingshot') {
-      // The megaphone and the bell come together.
       for (const t of this.foodTools(tool)) {
         // The lessons count what the player does with it from now on.
         this.toolUseCount[t.name] = 0;
@@ -894,41 +891,15 @@ export class Battle implements TutorialApi {
     return count;
   }
 
-  /** True if the tool (for the megaphone: it or the bell) can be used now: not recharging. */
+  /** True if the tool can be used now: not recharging. */
   toolReady(tool: ToolName): boolean {
     if (tool === 'slingshot') return true;
     return this.foodTools(tool).some((t) => t.usable);
   }
 
-  /** The food tools of a tutorial tool name: the megaphone lessons are about the stun tool that is out. */
+  /** The hand tool of a tutorial tool name (none for the slingshot). */
   private foodTools(tool: ToolName): HandTool[] {
-    const { tools } = this.parts;
-    if (tool === 'swatter' || tool === 'pepper') return [tools[tool]];
-    if (tool === 'megaphone') return [this.stunTool()];
-    return [];
-  }
-
-  /**
-   * The stun tool for this player: the megaphone when the mic is on, the
-   * bell when it is not or when the player chose the bell (settings,
-   * Accessibility). Only one of them is ever out.
-   */
-  private stunTool(): HandTool {
-    return usesBell() ? this.parts.tools.bell : this.parts.tools.megaphone;
-  }
-
-  /**
-   * The player switched between the megaphone and the bell (settings): if
-   * one is out on its platform, it goes and the other comes in its place.
-   */
-  swapStunTool(): void {
-    const { megaphone, bell } = this.parts.tools;
-    const now = this.stunTool();
-    const other = now === bell ? megaphone : bell;
-    if (!other.visible) return;
-    other.release();
-    other.setVisible(false);
-    now.setVisible(true);
+    return tool === 'slingshot' ? [] : [this.parts.tools[tool]];
   }
 
   boardSpun(): number {

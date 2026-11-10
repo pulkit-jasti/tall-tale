@@ -11,11 +11,8 @@ import type { TriggerKind } from '../rules/blueprint.js';
 import type { DirectorStep } from '../rules/director.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
-/**
- * 'megaphone' is the stun tool: the megaphone when the mic is on, the bell
- * when it is not. Only one of them is ever out (the game picks it).
- */
-export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'megaphone';
+/** v2: the horn replaces the megaphone, and the bell is its own tool (docs/v2-plan.md 2.3). */
+export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'horn' | 'bell';
 
 export interface WavePlan {
   /** Shown on the wave banner when the wave starts. */
@@ -38,11 +35,13 @@ export interface WavePlan {
  */
 export const TUTORIAL_WAVES: WavePlan[] = [
   {
-    intro: 'Goblins are coming! Your soldiers march out to fight them. Help them: grab and eat goblins before they break your wall.',
+    intro: 'Goblins are coming! Blow your horn to send your knights down a road. Grab and eat goblins that climb your wall.',
     camps: ['campNorth'],
     // v2: no climber type, every goblin climbs. The old climbers are grunts now.
     counts: { grunt: 9, runner: 0 },
     spawnTime: 40,
+    // v2: the field knights only come when the horn calls them, so the horn comes first (run 1: before wave 1).
+    newTool: 'horn',
   },
   {
     intro: 'Two camps now. Shoot goblins far away before they reach the wall.',
@@ -72,8 +71,8 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     counts: { grunt: 22, runner: 16 },
     spawnTime: 70,
     balloons: 4,
-    // One new tool per wave: the megaphone (or the bell without a mic) has its own breather.
-    newTool: 'megaphone',
+    // One new tool per wave: the bell (v2: the only stun).
+    newTool: 'bell',
   },
 ];
 
@@ -130,9 +129,7 @@ export type MarkerTarget =
   | 'pouch'
   | 'swatterHandle'
   | 'pepperHandle'
-  /** The stun tool that is out: the megaphone, or the bell without a mic. */
-  | 'stunTool'
-  | 'megaphoneHandle'
+  | 'hornHandle'
   | 'bellHandle'
   /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
@@ -162,9 +159,9 @@ export interface Hint {
   /** The hand tool this lesson is about, and the text shown instead while it rests (recharges). */
   tool?: ToolName;
   whenLocked?: string;
-  /** Shown instead when there is no mic: the bell is out in place of the megaphone. */
+  /** Shown instead when the horn does not listen to the mic (no mic, or the quiet horn setting). */
   whenNoMic?: string;
-  /** The ghost hand demo instead when there is no mic. */
+  /** The ghost hand demo instead then. */
   demoNoMic?: GhostDemoName;
   /** A ghost hand loops this demonstration next to the target. */
   demo?: GhostDemoName;
@@ -525,8 +522,10 @@ interface FoodToolLesson {
   useDemo?: GhostDemoName;
   use: string;
   locked: string;
-  /** The bell in place of the megaphone (no mic): its texts and demos. */
-  noMic?: { name: string; use: string; grabDemo: GhostDemoName; useDemo: GhostDemoName };
+  /** The horn when it does not listen to the mic (no mic, or the quiet horn setting): its use text. */
+  noMic?: { use: string };
+  /** The use lesson brings goblins to wait on the wall in front (not for the horn: it sends knights down a road). */
+  bait?: boolean;
 }
 
 const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
@@ -535,26 +534,31 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     grabDemo: 'swatterGrab',
     use: 'Goblins on your wall! Swat one: slap the swatter down so it touches the goblin.',
     locked: `The swatter is resting. ${RESTING}`,
+    bait: true,
   },
   pepper: {
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
     use: 'Shake pepper over the goblins on your wall. They drop their weapons and armor and sneeze. Then eat a sneezing one: it fills your tools twice as fast!',
     locked: `The pepper is resting. ${RESTING}`,
+    bait: true,
   },
-  megaphone: {
-    marker: 'stunTool',
-    grabDemo: 'megaphoneGrab',
-    useDemo: 'megaphoneShout',
-    // The loudness bar and its red dot are what make the scream work, so this one text explains them too.
-    use: 'The final wave! Hold the megaphone near your mouth and shout. Fill the bar on top up to the red dot to stun every goblin.',
-    locked: RESTING,
-    noMic: {
-      name: 'the bell',
-      use: 'The final wave! Shake the bell hard. Every goblin stops, dizzy, and the ones on your wall fall back down.',
-      grabDemo: 'bellGrab',
-      useDemo: 'bellRing',
-    },
+  horn: {
+    marker: 'hornHandle',
+    grabDemo: 'hornGrab',
+    useDemo: 'hornBlow',
+    // The breath bar on top is what shows it working, so the text names it.
+    use: 'Hold the horn to your mouth until the bar on top fills, or blow into it! Your knights charge down the road in front of you.',
+    locked: `The horn is resting. ${RESTING}`,
+    noMic: { use: 'Hold the horn to your mouth until the bar on top fills. Your knights charge down the road in front of you.' },
+  },
+  bell: {
+    marker: 'bellHandle',
+    grabDemo: 'bellGrab',
+    useDemo: 'bellRing',
+    use: 'The final wave! Shake the bell hard. Every goblin stops, dizzy, and the ones on your wall fall back down.',
+    locked: `The bell is resting. ${RESTING}`,
+    bait: true,
   },
 };
 
@@ -564,17 +568,14 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
  * rest after a use while the ring on their platform fills, and eating fills
  * it faster. (The real tutorial rebuild is run 2.)
  */
-function toolGrabLesson(tool: FoodTool, first: boolean): TutorialStep {
-  const { marker, grabDemo, noMic } = FOOD_TOOL_LESSONS[tool];
+function toolGrabLesson(tool: FoodTool, first: boolean, beforeFirstWave: boolean): TutorialStep {
+  const { marker, grabDemo } = FOOD_TOOL_LESSONS[tool];
   const how = first ? ' After each use it rests while the ring on its platform fills. Eating goblins fills it faster.' : '';
-  const say = (name: string): string => `Wave cleared! Here is ${name}.${how} Grab it with your fist.`;
+  const intro = beforeFirstWave ? 'A tool for you, giant!' : 'Wave cleared!';
+  const say = (name: string): string => `${intro} Here is ${name}.${how} Grab it with your fist.`;
   return lessonStep(
     `learn-${tool}-grab`,
-    lesson(say(TOOL_NAMES[tool]), 'grab', marker, {
-      demo: grabDemo,
-      whenNoMic: noMic && say(noMic.name),
-      demoNoMic: noMic?.grabDemo,
-    }),
+    lesson(say(TOOL_NAMES[tool]), 'grab', marker, { demo: grabDemo }),
     (api, since) => api.toolGrabbed(tool) > since,
     // Counts from when the tool appeared, like the slingshot lessons.
     fromToolShown,
@@ -600,13 +601,12 @@ function toolLesson(tool: FoodTool): TutorialStep {
   const pepper = tool === 'pepper';
   return lessonStep(
     `learn-${tool}`,
-    // The marker points at the waiting goblins, or for the stun tool at the tool itself (its demo is at the mouth).
+    // The marker points at the waiting goblins, or for the horn and bell at the tool itself (their demo is in the hand).
     lesson(text.use, 'target', text.useDemo ? text.marker : 'baitGoblin', {
       tool,
       whenLocked: text.locked,
       demo: text.useDemo,
       whenNoMic: text.noMic?.use,
-      demoNoMic: text.noMic?.useDemo,
     }),
     pepper ? (api, since) => api.pepperedEaten() > since || api.waveCleared() : (api, since) => api.toolUses(tool) > since || api.waveCleared(),
     pepper ? (api) => api.pepperedEaten() : fromToolShown,
@@ -614,13 +614,13 @@ function toolLesson(tool: FoodTool): TutorialStep {
       start: (api) => {
         api.holdToolTimer(tool, true);
         // A few goblins come just for this lesson and wait on the wall in front, harmless, until the tool is used.
-        api.baitForTool();
+        if (text.bait) api.baitForTool();
       },
       end: (api) => {
         api.holdToolTimer(tool, false);
         api.releaseBait();
       },
-      fallbacks: [(api) => api.hintTool(tool), (api) => api.baitForTool()],
+      fallbacks: [(api) => api.hintTool(tool), (api) => (text.bait ? api.baitForTool() : api.hintTool(tool))],
       timeout: TUTORIAL_TIMING.toolUseTimeout,
       // The wave waits while the player learns: only the lesson's goblins are out.
       holdSpawns: true,
@@ -676,7 +676,8 @@ const TOOL_NAMES: Record<ToolName, string> = {
   slingshot: 'the slingshot',
   swatter: 'the fly swatter',
   pepper: 'the pepper shaker',
-  megaphone: 'the megaphone',
+  horn: 'your war horn',
+  bell: 'the bell',
 };
 
 /**
@@ -706,7 +707,7 @@ export function buildTutorialSteps(
     if (i === 0) steps.push(...introLessons());
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(...slingshotLessons());
     else if (has(wave.newTool) && wave.newTool !== 'slingshot') {
-      steps.push(toolGrabLesson(wave.newTool, !rechargeTaught));
+      steps.push(toolGrabLesson(wave.newTool, !rechargeTaught, i === 0));
       rechargeTaught = true;
     }
     // The two flags are explained before the first wave, while nothing attacks yet.

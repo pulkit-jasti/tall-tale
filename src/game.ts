@@ -5,7 +5,6 @@
 import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
-import { usesBell } from './player/accessSettings.js';
 import { GameAudio } from './audio/sound.js';
 import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TOOLS, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
 import { eatShare } from './rules/recharge.js';
@@ -41,7 +40,7 @@ import { checkReach } from './rules/reach.js';
 import { Bell } from './tools/bell.js';
 import { FlySwatter } from './tools/flySwatter.js';
 import type { HandTool } from './tools/handTool.js';
-import { Megaphone } from './tools/megaphone.js';
+import { Horn } from './tools/horn.js';
 import { PepperShaker } from './tools/pepperShaker.js';
 import { Slingshot } from './tools/slingshot.js';
 import { StunWave } from './tools/stunWave.js';
@@ -89,7 +88,7 @@ export class GameSystem extends createSystem({}) {
   private slingshot!: Slingshot;
   private swatter!: FlySwatter;
   private pepper!: PepperShaker;
-  private megaphone!: Megaphone;
+  private horn!: Horn;
   private bell!: Bell;
   private stun!: StunWave;
   private tools: HandTool[] = [];
@@ -113,8 +112,6 @@ export class GameSystem extends createSystem({}) {
   private endPanel!: EndPanel;
   /** The settings page is open from the welcome panel, and the reach check was started from it. */
   private titleSettings = false;
-  /** Which stun tool was in use last frame, to swap it when the setting changes. */
-  private usedBell = usesBell();
   private titleMeasure = false;
   private spawner!: ToySpawner;
   private battle!: Battle;
@@ -188,9 +185,9 @@ export class GameSystem extends createSystem({}) {
     this.swatter = new FlySwatter(toolParts);
     this.pepper = new PepperShaker(toolParts);
     this.stun = new StunWave(this.stage, this.goblins, this.audio, this.particles);
-    this.megaphone = new Megaphone(toolParts, this.stun);
+    this.horn = new Horn(toolParts);
     this.bell = new Bell(toolParts, this.stun);
-    this.tools = [this.swatter, this.pepper, this.megaphone, this.bell];
+    this.tools = [this.swatter, this.pepper, this.bell, this.horn];
     this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
     this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
@@ -250,7 +247,7 @@ export class GameSystem extends createSystem({}) {
       goblins: this.goblins,
       spawner: waves,
       slingshot: this.slingshot,
-      tools: { swatter: this.swatter, pepper: this.pepper, megaphone: this.megaphone, bell: this.bell },
+      tools: { swatter: this.swatter, pepper: this.pepper, bell: this.bell, horn: this.horn },
       troops: this.troops,
       triggers: this.triggers,
       balloons: this.balloons,
@@ -290,6 +287,8 @@ export class GameSystem extends createSystem({}) {
       this.juice.blast(world, 0.7 * this.stage.boardScale);
       this.audio.play('balloonPop', world);
     };
+    // The horn calls the field knights (v2).
+    this.horn.onCall = () => this.troops.sendSquad();
     this.grabEat.onGrab = () => this.battle.notePicked();
     this.grabEat.onToss = (_goblin, speed) => this.battle.noteTossed(speed);
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
@@ -510,14 +509,8 @@ export class GameSystem extends createSystem({}) {
     this.balloons.update(unitDt);
     this.gearDebris.update(unitDt);
     this.triggers.update(unitDt);
-    // The bell is out instead of the megaphone (no mic, or chosen in settings): it swaps live, and a
-    // megaphone that is ever out anyway (debug) is tied down.
-    const bell = usesBell();
-    if (bell !== this.usedBell) {
-      this.usedBell = bell;
-      this.battle.swapStunTool();
-    }
-    this.megaphone.tiedDown = bell;
+    // The horn blows when its mouthpiece is at the head.
+    this.horn.head.copy(headPosition);
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
@@ -745,11 +738,7 @@ export class GameSystem extends createSystem({}) {
         for (const tool of this.tools) tool.refill(TOOLS.eatRefill);
         break;
       case 'showTools':
-        // Only one stun tool is ever out: the megaphone with a mic, the bell without (or when chosen).
-        for (const tool of this.tools) {
-          if (tool === (usesBell() ? this.megaphone : this.bell)) continue;
-          if (!tool.visible) tool.appear();
-        }
+        for (const tool of this.tools) if (!tool.visible) tool.appear();
         break;
       case 'swat':
         this.swatter.debugSwat();
@@ -757,13 +746,10 @@ export class GameSystem extends createSystem({}) {
       case 'pepper':
         this.pepper.debugShake();
         break;
-      case 'megaphone':
-        // They share a spot: the other one goes away first.
-        this.bell.setVisible(false);
-        this.megaphone.debugScream();
+      case 'horn':
+        this.horn.debugBlow();
         break;
       case 'bell':
-        this.megaphone.setVisible(false);
         this.bell.debugRing();
         break;
       case 'troops':

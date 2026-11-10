@@ -35,7 +35,7 @@ export class Bell extends HandTool {
     super(
       'bell',
       parts,
-      TOOL_SPOTS.rightSide,
+      TOOL_SPOTS.leftMiddle,
       { from: BELL.gripFrom, to: BELL.gripTo, radius: BELL.grabRadius },
       0,
       BELL.bellMouth + 0.5,

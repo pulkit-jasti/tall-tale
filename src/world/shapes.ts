@@ -19,7 +19,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { BELL, HANDLES, MEGAPHONE, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { BELL, HANDLES, HORN, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -309,72 +309,78 @@ export function toolRope(radius: number): Mesh {
 }
 
 /**
- * Megaphone: a short pistol grip along +y from y = 0 (the end the hand
- * holds) and an open cone on top of it, lying along -z: the small mouthpiece
- * toward +z (the face), the wide open end toward -z (the way the knuckles
- * point when it is held). Returns the group, its materials and the middle of
- * the wide end (cm).
+ * War horn (v2): a short leather grip along +y from y = 0 (the end the hand
+ * holds) and an ivory horn on top of it, lying along -z: the brass
+ * mouthpiece toward +z (the face), the open bell end toward -z (the way the
+ * knuckles point when it is held), a little raised, with brass bands.
+ * Returns the group, its materials, the mouthpiece and the bell's middle (cm).
  */
-export function megaphone(): { group: Group; materials: MeshStandardMaterial[]; mouth: Vector3 } {
-  const { gripLength, gripRadius, coneLength, coneMouth, coneEnd, coneBack } = MEGAPHONE;
-  const bodyMaterial = flatMaterial(MEGAPHONE.bodyColor);
+export function warHorn(): { group: Group; materials: MeshStandardMaterial[]; mouthpiece: Vector3; bell: Vector3 } {
+  const { gripLength, gripRadius, hornLength, mouthRadius, bellRadius, hornBack } = HORN;
+  const bodyMaterial = flatMaterial(HORN.bodyColor);
   bodyMaterial.side = DoubleSide;
-  const bandMaterial = flatMaterial(MEGAPHONE.bandColor);
-  const gripMaterial = flatMaterial(MEGAPHONE.gripColor);
+  const bandMaterial = flatMaterial(HORN.bandColor);
+  const gripMaterial = flatMaterial(HORN.gripColor);
   const group = new Group();
   const grip = new Mesh(new CylinderGeometry(gripRadius, gripRadius * 1.1, gripLength, 8), gripMaterial);
   grip.position.y = gripLength / 2;
-  // The cone's axis is its y: turned to lie along z, its top (the wide end) toward -z.
-  const coneY = gripLength + coneMouth * 0.6;
-  const coneZ = coneBack - coneLength / 2;
-  const cone = new Mesh(new CylinderGeometry(coneEnd, coneMouth, coneLength, 12, 1, true), bodyMaterial);
-  cone.rotation.x = -Math.PI / 2;
-  cone.position.set(0, coneY, coneZ);
-  const band = new Mesh(new TorusGeometry(coneEnd, 0.35, 5, 14), bandMaterial);
-  band.position.set(0, coneY, coneBack - coneLength);
-  const mouthpiece = new Mesh(new CylinderGeometry(coneMouth * 0.9, coneMouth * 0.9, 1.6, 8), bandMaterial);
+  // The horn's axis is its y: turned to lie along z, its top (the bell) toward -z.
+  const hornY = gripLength + mouthRadius * 0.8;
+  const horn = new Mesh(new CylinderGeometry(bellRadius, mouthRadius, hornLength, 12, 3, true), bodyMaterial);
+  horn.rotation.x = -Math.PI / 2;
+  horn.position.set(0, hornY, hornBack - hornLength / 2);
+  // A gentle curve: the bell half bends up a little (the segment rows lifted along the length).
+  // Turned as it is, the cylinder's own +z is the world's up.
+  const position = horn.geometry.getAttribute('position');
+  for (let i = 0; i < position.count; i++) {
+    const t = (position.getY(i) + hornLength / 2) / hornLength;
+    position.setZ(i, position.getZ(i) + t * t * bellRadius * 0.8);
+  }
+  position.needsUpdate = true;
+  horn.geometry.computeVertexNormals();
+  const bellZ = hornBack - hornLength;
+  const bellY = hornY + bellRadius * 0.8;
+  const rim = new Mesh(new TorusGeometry(bellRadius, 0.35, 5, 14), bandMaterial);
+  rim.position.set(0, bellY, bellZ);
+  const band = new Mesh(new TorusGeometry(mouthRadius + (bellRadius - mouthRadius) * 0.45, 0.25, 5, 12), bandMaterial);
+  band.position.set(0, hornY + bellRadius * 0.16, hornBack - hornLength * 0.45);
+  const mouthpiece = new Mesh(new CylinderGeometry(mouthRadius * 1.1, mouthRadius * 0.8, 1.6, 8), bandMaterial);
   mouthpiece.rotation.x = Math.PI / 2;
-  mouthpiece.position.set(0, coneY, coneBack + 0.6);
-  group.add(grip, cone, band, mouthpiece);
-  return { group, materials: [bodyMaterial, bandMaterial, gripMaterial], mouth: new Vector3(0, coneY, coneBack - coneLength) };
+  mouthpiece.position.set(0, hornY, hornBack + 0.6);
+  group.add(grip, horn, rim, band, mouthpiece);
+  return {
+    group,
+    materials: [bodyMaterial, bandMaterial, gripMaterial],
+    mouthpiece: new Vector3(0, hornY, hornBack + 1.4),
+    bell: new Vector3(0, bellY, bellZ),
+  };
 }
 
 /**
- * The megaphone's loudness meter, lying on top of its cone from the
- * mouthpiece toward the wide end: a dark track, a fill bar that grows along
- * it (scale its z from 0 to 1), and a red target dot at MEGAPHONE.targetShare
- * of its length. Unlit, so it reads in any light. Returns the parts (cm).
+ * The horn's breath meter, lying on top of it from the mouthpiece toward the
+ * bell: a dark track and a fill bar that grows along it (scale its z from 0
+ * to 1). Unlit, so it reads in any light. Returns the parts (cm).
  */
-export function megaphoneMeter(): {
-  group: Group;
-  fill: Mesh<BoxGeometry, MeshBasicMaterial>;
-  target: Mesh;
-} {
-  const { coneLength, coneMouth, coneEnd, coneBack, gripLength, meterWidth, meterLift, targetShare } = MEGAPHONE;
-  const coneY = gripLength + coneMouth * 0.6;
-  const radiusAt = (z: number): number => coneMouth + ((coneEnd - coneMouth) * (coneBack - z)) / coneLength;
-  const z1 = coneBack - 1.5;
-  const z2 = coneBack - coneLength + 1.5;
-  const rise = radiusAt(z2) - radiusAt(z1);
-  const length = Math.hypot(z1 - z2, rise);
+export function hornMeter(): { group: Group; fill: Mesh<BoxGeometry, MeshBasicMaterial> } {
+  const { hornLength, mouthRadius, bellRadius, hornBack, gripLength, meterWidth, meterLift } = HORN;
+  const hornY = gripLength + mouthRadius * 0.8;
+  const z1 = hornBack - 1.5;
+  const length = hornLength * 0.55;
   const group = new Group();
-  group.position.set(0, coneY + radiusAt(z1) + meterLift, z1);
-  // Its length runs along local -z, tilted up with the cone's top line.
-  group.rotation.x = Math.atan2(rise, z1 - z2);
-  const track = new Mesh(new BoxGeometry(meterWidth + 0.2, 0.2, length + 0.2), new MeshBasicMaterial({ color: MEGAPHONE.meterTrackColor }));
+  group.position.set(0, hornY + mouthRadius + meterLift, z1);
+  // Its length runs along local -z, tilted up with the horn's top line.
+  const rise = (bellRadius - mouthRadius) * 0.55;
+  group.rotation.x = Math.atan2(rise, length);
+  const track = new Mesh(new BoxGeometry(meterWidth + 0.2, 0.2, length + 0.2), new MeshBasicMaterial({ color: HORN.meterTrackColor }));
   track.position.z = -length / 2;
   const fillGeometry = new BoxGeometry(meterWidth, 0.3, 1);
   fillGeometry.translate(0, 0.05, -0.5);
-  const fill = new Mesh(fillGeometry, new MeshBasicMaterial({ color: MEGAPHONE.meterLowColor }));
+  const fill = new Mesh(fillGeometry, new MeshBasicMaterial({ color: HORN.meterLowColor }));
   fill.scale.z = 0.001;
   // The fill grows from the start to the full length.
   fill.userData.length = length;
-  const target = new Mesh(new SphereGeometry(0.42, 10, 8), new MeshBasicMaterial({ color: MEGAPHONE.targetColor }));
-  target.position.set(0, 0.45, -length * targetShare);
-  const notch = new Mesh(new BoxGeometry(meterWidth + 0.6, 0.36, 0.22), new MeshBasicMaterial({ color: MEGAPHONE.targetColor }));
-  notch.position.set(0, 0.05, -length * targetShare);
-  group.add(track, fill, notch, target);
-  return { group, fill, target };
+  group.add(track, fill);
+  return { group, fill };
 }
 
 /**
