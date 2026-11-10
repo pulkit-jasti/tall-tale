@@ -22,6 +22,7 @@ Top level overview and index. Each topic gets its own file once its design is lo
 
 | Topic | File | Status |
 |---|---|---|
+| **v2 plan: new design and the three build runs (wins over every other doc)** | [v2-plan.md](v2-plan.md) | Decided, not built |
 | **MVP scope (first build), tutorial director and waves, build order** | [mvp.md](mvp.md) | Decided |
 | Game modes, menu, progression, kingdom, achievements | [modes-and-progression.md](modes-and-progression.md) | Decided. Scoring and Endless difficulty to discuss. |
 | Core loop, pacing, troops, sound cues | [core-loop.md](core-loop.md) | Decided as a starting point |

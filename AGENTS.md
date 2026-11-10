@@ -9,6 +9,8 @@ You are a giant sitting in the middle of a round castle. A tiny battle happens a
 
 Read README.md and docs/GDD.md for the full design before making gameplay decisions. docs/mvp.md defines the first playable build, the tutorial director and waves, and the build order. When docs disagree, the files in docs/ win.
 
+**v2 (branch `feat/v2`): read docs/v2-plan.md first.** It holds the new design (free tools with recharge, all goblins climb, the horn and the wall garrison, the campaign) and the three build runs. Where it disagrees with any other doc, docs/v2-plan.md wins.
+
 ## Hard rules (never break these)
 
 1. **Hands only.** The entire game must be playable with hand tracking. No controller is ever required. Controller support is optional and low priority.
@@ -112,7 +114,7 @@ When the developer starts a cloud session to build the MVP, these rules replace 
 - Do not use iwsdk-runtime, browser screenshots, the emulator or the metavr device and performance tools. There is no headset or GPU in the cloud.
 - IWSDK skills (for example `iwsdk-dev`) ask for runtime checks and screenshots. Skip those parts and check with typecheck, build and tests instead.
 - End each step's commit message with a "Headset check:" list: what to test on the headset and the debug keys for it.
-- Stop after step 1 and tell the developer it is ready for a headset test.
+- Stop after step 1 and tell the developer it is ready for a headset test. (MVP build only. For the v2 runs, follow docs/v2-plan.md section 3: commit after every step, stop only at the end of the run.)
 - If anything in docs/ conflicts with these rules, these rules win.
 
 ## Developer preferences
