@@ -686,9 +686,6 @@ export class GameSystem extends createSystem({}) {
       case 'runners':
         this.spawner.sendGroup('runner');
         break;
-      case 'climberRoad':
-        this.spawner.sendGroup('climber');
-        break;
       case 'climberFront':
         // The board angle that is in front of the player right now.
         this.goblins.spawnClimberAt(this.stage.spin + degToRad(this.debugRng.range(-10, 10)));

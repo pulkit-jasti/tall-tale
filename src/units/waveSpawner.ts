@@ -68,11 +68,11 @@ export class WaveSpawner {
     });
     for (const camp of campNodes) this.camps.set(camp, { planned: 0, out: 0 });
     // Split the counts into groups, then shuffle them with the seeded random.
-    const sizes: Record<GoblinType, number> = { grunt: WAVES.gruntGroup, runner: WAVES.runnerGroup, climber: 1 };
+    const sizes: Record<GoblinType, number> = { grunt: WAVES.gruntGroup, runner: WAVES.runnerGroup };
     for (let k = 0; k < (plan.balloons ?? 0); k++) {
       this.groups.push({ type: 'balloon', camp: this.pickCamp(campNodes), count: 1, at: 0, rumbled: false, out: 0, wait: 0 });
     }
-    for (const type of ['grunt', 'runner', 'climber'] as GoblinType[]) {
+    for (const type of ['grunt', 'runner'] as GoblinType[]) {
       let left = plan.counts[type];
       while (left > 0) {
         const count = Math.min(sizes[type], left);

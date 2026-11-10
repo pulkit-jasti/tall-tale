@@ -581,13 +581,16 @@ export const EAT = {
   burstDown: 0.06,
 };
 
-export type GoblinType = 'grunt' | 'runner' | 'climber';
+/** v2: there is no climber type any more, every goblin climbs (docs/v2-plan.md 2.6). */
+export type GoblinType = 'grunt' | 'runner';
 
 export interface GoblinStats {
   /** Height (cm). */
   height: number;
   /** Walking speed (cm per second). */
   speed: number;
+  /** Climbing speed up the wall (cm per second). A helmet slows it to GOBLIN_RULES.helmetClimbSpeed. */
+  climbSpeed: number;
   /** Multiplies the model colors. */
   tint: [number, number, number];
   moveClip: string;
@@ -597,9 +600,9 @@ export interface GoblinStats {
 
 export const GOBLINS: Record<GoblinType, GoblinStats> = {
   // Heights raised about 11% (from 3.5, 3 and 3.5) after a headset test, so they read better on the hills.
-  grunt: { height: 3.9, speed: 6, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.3 },
-  runner: { height: 3.35, speed: 13, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.4 },
-  climber: { height: 3.9, speed: 5.5, tint: [0.85, 0.6, 1.15], moveClip: 'walk', moveClipSpeed: 1.2 },
+  // v2: faster (grunts 6 to 7.5, runners 13 to 15), so waves do not drag now that the camps are far out.
+  grunt: { height: 3.9, speed: 7.5, climbSpeed: 2, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.55 },
+  runner: { height: 3.35, speed: 15, climbSpeed: 4, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.55 },
 };
 
 export const GOBLIN_RULES = {
@@ -623,10 +626,21 @@ export const GOBLIN_RULES = {
   wallHitInterval: 1.6,
   /** Shortest gap between two wall hit sounds from all goblins (seconds). */
   wallHitSoundGap: 0.25,
-  /** Climbing speed up the wall (cm per second). */
-  climbSpeed: 2,
-  /** How long a climber waits on the rampart before jumping into the courtyard (seconds). */
+  /**
+   * v2, every goblin climbs (docs/v2-plan.md 2.6), in four steps: it bashes
+   * the wall for about bashTime (seconds, jittered by bashJitter), standing
+   * bashStandOff cm outside it, then climbs (GoblinStats.climbSpeed, a
+   * helmet slows it to helmetClimbSpeed), runs about on the rampart for
+   * rampartWait, then jumps into the courtyard.
+   */
+  bashTime: 5,
+  bashJitter: 0.2,
+  bashStandOff: 1.2,
+  helmetClimbSpeed: 1.5,
+  /** How long a goblin runs about on the rampart before jumping into the courtyard (seconds). */
   rampartWait: 8,
+  /** The giggle when a goblin reaches the rampart: at most this often for all goblins (seconds). */
+  cackleGap: 0.6,
   /** Dazed time after being dropped (seconds). */
   dazedTime: 1.4,
   /** Knocked back by a thrown pebble or a goblin shot: sideways and upward speed of the hop (cm per second). */
@@ -1204,8 +1218,6 @@ export const DEBUG_SPAWN = {
   runnerGroup: 4,
   /** Gap between goblins in a group (seconds). */
   groupGap: 0.8,
-  /** Every Nth auto group also sends a climber. */
-  climberEvery: 2,
   /** Every Nth auto group is runners instead of grunts. */
   runnerEvery: 4,
 };
@@ -1376,7 +1388,7 @@ export const AIM_ASSIST = {
   /** Overall assist strength (0 = off, 1 = normal). An accessibility option later. */
   strength: 1,
   /** Assist share per enemy type. Weak on runners: the slingshot is meant to be weak against them. */
-  typeShare: { grunt: 1, runner: 0.3, climber: 1 } as Record<GoblinType, number>,
+  typeShare: { grunt: 1, runner: 0.3 } as Record<GoblinType, number>,
   /** 5. Hit area around the pebble's center, bigger than it looks (cm). Raised from 3.5. */
   hitRadius: 4,
 };

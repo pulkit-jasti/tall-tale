@@ -25,7 +25,7 @@ export class ToySpawner {
 
   /** Queues a small group walking in from one camp. */
   sendGroup(type: GoblinType, road = this.rng.int(this.roadCount)): void {
-    const size = type === 'runner' ? TOY_SPAWN.runnerGroup : type === 'grunt' ? TOY_SPAWN.gruntGroup : 1;
+    const size = type === 'runner' ? TOY_SPAWN.runnerGroup : TOY_SPAWN.gruntGroup;
     for (let i = 0; i < size; i++) this.queue.push({ type, road, wait: TOY_SPAWN.groupGap });
   }
 
@@ -41,7 +41,6 @@ export class ToySpawner {
         this.timer = TOY_SPAWN.trickleInterval;
         this.groups++;
         this.sendGroup(this.groups % TOY_SPAWN.runnerEvery === 0 ? 'runner' : 'grunt');
-        if (this.groups % TOY_SPAWN.climberEvery === 0) this.sendGroup('climber');
       }
     }
     // Goblins in the queue come out one by one.

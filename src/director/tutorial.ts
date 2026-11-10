@@ -40,27 +40,28 @@ export const TUTORIAL_WAVES: WavePlan[] = [
   {
     intro: 'Goblins are coming! Your soldiers march out to fight them. Help them: grab and eat goblins before they break your wall.',
     camps: ['campNorth'],
-    counts: { grunt: 6, runner: 0, climber: 3 },
+    // v2: no climber type, every goblin climbs. The old climbers are grunts now.
+    counts: { grunt: 9, runner: 0 },
     spawnTime: 40,
   },
   {
     intro: 'Two camps now. Shoot goblins far away before they reach the wall.',
     camps: ['campNorth', 'campEast'],
-    counts: { grunt: 10, runner: 0, climber: 2 },
+    counts: { grunt: 12, runner: 0 },
     spawnTime: 50,
     newTool: 'slingshot',
   },
   {
     intro: 'Runners! They are small and fast and rush straight to the wall.',
     camps: ['campNorth', 'campWest'],
-    counts: { grunt: 8, runner: 12, climber: 3 },
+    counts: { grunt: 11, runner: 12 },
     spawnTime: 55,
     newTool: 'swatter',
   },
   {
     intro: 'Three camps attack. Spin the board to keep watch all around you.',
     camps: ['campEast', 'campSouth', 'campWest'],
-    counts: { grunt: 14, runner: 8, climber: 4 },
+    counts: { grunt: 18, runner: 8 },
     spawnTime: 60,
     newTool: 'pepper',
     balloons: 3,
@@ -68,7 +69,7 @@ export const TUTORIAL_WAVES: WavePlan[] = [
   {
     intro: 'The final wave. Everything at once! Shoot the barrels, boulders and trees on the roads.',
     camps: ['campNorth', 'campEast', 'campSouth'],
-    counts: { grunt: 18, runner: 16, climber: 4 },
+    counts: { grunt: 22, runner: 16 },
     spawnTime: 70,
     balloons: 4,
     // One new tool per wave: the megaphone (or the bell without a mic) has its own breather.

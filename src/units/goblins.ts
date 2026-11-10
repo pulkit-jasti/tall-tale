@@ -25,6 +25,7 @@ import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
 import { armorHit, rollGear, type GoblinWeapon } from '../rules/gear.js';
+import { bashSeconds, climbSpeed } from '../rules/climb.js';
 import { popIn } from '../fx/ease.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
 import { angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
@@ -163,6 +164,8 @@ export class Goblin {
   shield = false;
   /** Armor just took a hit: no more hits for this long (seconds, GOBLIN_GEAR.hitGrace). */
   hitGrace = 0;
+  /** Bashing the wall: time left before it starts to climb (seconds, src/rules/climb.ts). */
+  bashLeft = 0;
   /** A hit flash is showing for this long (seconds). */
   flashTime = 0;
   /** Juice: time left of the landing squash, of the pop-in from its camp, and to its next dust puff (seconds). */
@@ -604,12 +607,14 @@ export class Goblins {
   }
 
   /**
-   * Spawns a climber at the wall at a board angle (radians), climbing, or
-   * already up on the rampart (`onRampart`, in reach right away).
+   * Spawns a bare handed grunt at the wall at a board angle (radians),
+   * climbing, or already up on the rampart (`onRampart`, in reach right
+   * away). The tutorial's lesson goblin and the debug "goblin in front".
    */
   spawnClimberAt(angle: number, onRampart = false, rampartWait: number = GOBLIN_RULES.rampartWait): Goblin | null {
-    const goblin = this.obtain('climber');
+    const goblin = this.obtain('grunt');
     if (!goblin) return null;
+    goblin.setGear('none', false, false);
     goblin.rampartWait = rampartWait;
     angle = clearOfTowers(angle);
     const r = CASTLE.wallOut + 0.6;
@@ -1073,10 +1078,7 @@ export class Goblins {
         break;
       }
       case 'toWall': {
-        if (this.moveToward(g, g.target, g.speed, dt)) {
-          if (g.type === 'climber') this.startClimbing(g);
-          else this.startAttacking(g);
-        }
+        if (this.moveToward(g, g.target, g.speed, dt)) this.startAttacking(g);
         // Off the road (after a toss): it walks over the bumps.
         p.y = groundAt(p.x, p.z);
         break;
@@ -1084,6 +1086,12 @@ export class Goblins {
       case 'atWall': {
         // A sneezing goblin is too busy to hit the wall.
         if (g.sneezeLeft > 0) break;
+        // Step 1, bash: after a few seconds it starts to climb (src/rules/climb.ts).
+        g.bashLeft -= dt;
+        if (g.bashLeft <= 0) {
+          this.startClimbing(g);
+          break;
+        }
         g.timer -= dt;
         if (g.timer <= 0) {
           g.timer = GOBLIN_RULES.wallHitInterval * this.rng.range(0.85, 1.15);
@@ -1095,7 +1103,7 @@ export class Goblins {
         break;
       }
       case 'climbing': {
-        p.y += GOBLIN_RULES.climbSpeed * dt;
+        p.y += climbSpeed(g.stats.climbSpeed, g.helmet, GOBLIN_RULES.helmetClimbSpeed) * dt;
         if (p.y >= CASTLE.wallHeight) this.popUp(g);
         break;
       }
@@ -1155,22 +1163,29 @@ export class Goblins {
 
   private headToWall(g: Goblin): void {
     const p = g.root.position;
-    // Climbers climb between towers, never up the side of one.
-    const a = g.type === 'climber' ? clearOfTowers(angleOf(p.x, p.z)) : angleOf(p.x, p.z);
-    const r = g.type === 'climber' ? CASTLE.wallOut + 0.6 : CASTLE.wallOut + CASTLE.wallStandOff;
+    // Every goblin climbs after bashing, so it goes to a stretch between towers, never the side of one.
+    const a = clearOfTowers(angleOf(p.x, p.z));
+    const r = CASTLE.wallOut + GOBLIN_RULES.bashStandOff;
     g.target.set(polarX(r, a), 0, polarZ(r, a));
     g.mode = 'toWall';
     g.play(g.stats.moveClip, true, g.stats.moveClipSpeed);
   }
 
+  /** Step 1: bashes the wall for a few seconds, then climbs. */
   private startAttacking(g: Goblin): void {
     g.mode = 'atWall';
     g.timer = this.rng.range(0.1, 0.8);
+    g.bashLeft = bashSeconds(GOBLIN_RULES.bashTime, GOBLIN_RULES.bashJitter, this.rng.next());
     g.faceCenter();
     g.play('idle');
   }
 
+  /** Step 2: climbs, right against the wall. */
   private startClimbing(g: Goblin): void {
+    const p = g.root.position;
+    const a = clearOfTowers(angleOf(p.x, p.z));
+    p.x = polarX(CASTLE.wallOut + 0.6, a);
+    p.z = polarZ(CASTLE.wallOut + 0.6, a);
     g.mode = 'climbing';
     g.faceCenter();
     g.play('interact-right', true, 1.4);
@@ -1250,6 +1265,8 @@ export class Goblins {
     g.dashPause = GOBLIN_RULES.rampartStop[1];
     g.faceCenter();
     g.play('jump', false);
+    // Step 3: a giggle where it pops up, a sound cue for where to look.
+    this.audio.play('goblinCackle', this.worldPosition(g, temp), 0.8, GOBLIN_RULES.cackleGap);
   }
 
   private jumpIntoCourtyard(g: Goblin): void {

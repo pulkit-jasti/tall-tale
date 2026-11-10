@@ -20,7 +20,6 @@ export type DebugCommand =
   | 'grunts'
   | 'runners'
   | 'climberFront'
-  | 'climberRoad'
   | 'auto'
   | 'clear'
   | 'eatFront'
@@ -120,8 +119,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'loseCastle', group: 'castle', icon: '🏳️', code: 'KeyH', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
   { id: 'grunts', group: 'goblins', icon: '👹', code: 'KeyG', label: 'Grunts', does: 'Send a group of grunts' },
   { id: 'runners', group: 'goblins', icon: '💨', code: 'KeyR', label: 'Runners', does: 'Send a group of runners' },
-  { id: 'climberFront', group: 'goblins', icon: '🧗', code: 'KeyC', label: 'Climber in front', does: 'A climber pops up right in front of you' },
-  { id: 'climberRoad', group: 'goblins', icon: '🛤️', code: 'KeyV', label: 'Climber on a road', does: 'A climber walks in on a random road' },
+  { id: 'climberFront', group: 'goblins', icon: '🧗', code: 'KeyC', label: 'Climber in front', does: 'A bare handed grunt climbs the wall right in front of you (every goblin climbs now: bash, climb, rampart, courtyard)' },
   { id: 'eatFront', group: 'goblins', icon: '😋', code: 'KeyB', label: 'Eat front goblin', does: 'Eat the goblin nearest the front of the wall' },
   { id: 'balloonFront', group: 'goblins', icon: '🎈', code: 'Comma', label: 'Balloon in front', does: 'A balloon with two riders floats in right in front of you (pop it with the slingshot, or it drops them into the courtyard)' },
   { id: 'popBalloons', group: 'goblins', icon: '💥', code: 'Period', label: 'Pop balloons', does: 'Pop every balloon in the air: the riders fall and poof' },
