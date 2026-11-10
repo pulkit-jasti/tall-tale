@@ -199,7 +199,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 ### Our pause
 
-- **Pause button on a stand in front**, outside the ring, on the tutorial Next button's spot but lower, so it does not block the view ahead. It was a wrist button until the step 7 and 8 headset test (the palm pose was hard to find and the button flickered).
+- **Pause button on a stand in front**, outside the ring, low (9 cm up) so it does not block the view ahead, on the tutorial Next button's spot (Next was lowered to the same height, so the two line up). It was a wrist button until the step 7 and 8 headset test (the palm pose was hard to find and the button flickered).
 - **Poke it with either index finger** to pause. The button presses in, with a click sound.
 - **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Reset table", "Restart battle".
 - **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". The FPS panel shows "paused" while it is.

@@ -64,7 +64,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - Two hand actions: **pinch** (thumb and index) for small things like goblins, pebbles and the slingshot pouch, and **grab** (fist) for big things like the slingshot handle, swatter, pepper shaker, megaphone and bell. The ring handle and the slingshot handle accept both, because a fist with the back of the hand toward the headset tracks poorly. See "Pinch and grab" in docs/controls-and-ui.md.
 - Goblins are tiny (about 3.9 cm, runners 3.35). The pinch zone is about 5 to 6 cm and snaps to the nearest goblin. See docs/controls-and-ui.md.
 - Hand tracking gets unreliable very close to the headset. The "eat" action triggers when a held goblin stays within about 22 cm of the face for a moment. No letting go and no head tilt, because a pinch with the palm toward the headset opens the Quest menu. It must not require touching the mouth.
-- Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a button on a stand straight in front, outside the ring (below the Next button's spot).
+- Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a button on a stand straight in front, outside the ring (on the Next button's spot, at the same height).
 
 ## Ghost hand demos (tutorial)
 
