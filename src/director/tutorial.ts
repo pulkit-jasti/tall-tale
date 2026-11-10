@@ -386,7 +386,7 @@ function introLessons(): TutorialStep[] {
     lessonStep(
       'learn-toss',
       lesson('You can also throw goblins away! Pinch one, swing your hand and let go. It lands far off, dizzy.', 'pinch', 'lessonGoblin', {
-        demo: 'pinchGoblin',
+        demo: 'toss',
       }),
       (api, since) => api.tossed() > since,
       (api) => api.tossed(),

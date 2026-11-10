@@ -94,6 +94,8 @@ const SHOUT_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0] as Dir };
 const BELL_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.2] as Dir };
 /** Pinch from above: fingers down and forward, palm down and toward the player. */
 const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Dir };
+/** Throwing a pinched goblin: fingers forward and a little up, palm down and a little forward (never toward the headset). */
+const TOSS_GRIP = { fingers: [0, 0.3, 1] as Dir, palm: [0, -1, 0.3] as Dir };
 /** Left hand pinching the pouch from behind, like a bow string: fingers along the shot, palm facing in (right). */
 const PULL_GRIP = { fingers: [0, 0, 1] as Dir, palm: [1, 0, 0] as Dir };
 /** Bringing food to the mouth: fingers toward the face, thumb up, palm facing in. Never toward the headset (Quest menu). */
@@ -170,6 +172,25 @@ export const GHOST_DEMOS = {
       key(0, 'lessonGoblin', [0, 0, 0], 'pinch', PINCH_DOWN),
       key(1.4, 'mouth', [0, 0, 0], 'pinch', MOUTH_GRIP),
       key(2.6, 'mouth', [0, 0, 0], 'pinch', MOUTH_GRIP),
+    ],
+  },
+  /**
+   * Throw: come down over the goblin, pinch it, lift it and draw the hand
+   * back toward the body, then flick it forward and up (about 15 cm in
+   * 0.2 s, faster than GOBLIN_RULES.tossLessonSpeed), open the pinch
+   * mid-swing and follow through. Always well above the goblin, so the hand
+   * never passes through the wall.
+   */
+  toss: {
+    hand: 'right',
+    keys: [
+      key(0, 'lessonGoblin', [0, 9, -5], 'open', PINCH_DOWN),
+      key(0.8, 'lessonGoblin', [0, 0, 0], 'open', PINCH_DOWN),
+      key(1.1, 'lessonGoblin', [0, 0, 0], 'pinch', PINCH_DOWN),
+      key(1.8, 'lessonGoblin', [0, 12, -10], 'pinch', TOSS_GRIP),
+      key(2.0, 'lessonGoblin', [0, 16, 4], 'pinch', TOSS_GRIP),
+      key(2.05, 'lessonGoblin', [0, 16.5, 5.5], 'open', TOSS_GRIP),
+      key(2.4, 'lessonGoblin', [0, 14, 8], 'open', TOSS_GRIP),
     ],
   },
   /** Come in from the right and behind, close the fist around the handle, lift the slingshot. */

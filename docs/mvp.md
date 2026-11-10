@@ -287,7 +287,7 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-10), after the day an
 
 **Tutorial**
 - **One 3D arrow is the only marker:** the 2D bouncing arrows are gone. The gold arrow waits in the middle of the view while the target is out of view, then flies over and hovers just above it once it is in view.
-- **Throw lesson** right after the eat lesson: a new climber comes, and the lesson waits for a real throw (`GOBLIN_RULES.tossLessonSpeed`). It reuses the pinch ghost demo (no throw demo yet).
+- **Throw lesson** right after the eat lesson: a new climber comes, and the lesson waits for a real throw (`GOBLIN_RULES.tossLessonSpeed`). Its own ghost demo (`toss`): pinch from above, lift and draw back, flick forward and up, let go mid-swing, follow through. Not checked on the headset yet.
 - **The red threat arrow** stays away while a lesson's yellow arrow points the way. It points at one threat at a time: the nearest to where the player looks, and it stays on that one until it is handled, then the next (it used to jump between goblins).
 - **Breathers between steps:** a lesson the player just did shows a green tick for 3.5 s, and the next step waits that long, so they can finish (try the height a few times) and take it in (`HINT_SIGN.doneTime`, was 1.2 s). Any other step leaves a 0.8 s quiet gap (`stepGap`). The pause comes from the director (`Director.waitBeforeNext`), so the next step's goblins and tools also wait.
 - **The sign hangs in front of the eyes** while no wave is fought (the first lessons, the breathers), 4 cm below eye level, and glides back up during a wave, out of the enemies' way (`HINT_SIGN.calmBelowEyes`).
@@ -303,7 +303,7 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-10), after the day an
 
 **Still open on this branch**
 - **Run typecheck, build and tests**, then fix what they find. Much was written without them.
-- **Ghost demo for the throw lesson:** it reuses the pinch demo; a demo with the swing and let go would teach it better.
+- **Ghost demo for the throw lesson:** built (`toss` in `src/ui/ghostDemos.ts`), check it on the headset from the seat.
 - **Stress test** with the new load ([performance.md](performance.md)), by day and at night.
 - **Pacing:** with the camps farther out a grunt walks about 60 s to the wall (was about 33 s). Raise the goblin speeds if the waves drag.
 - **Music:** check the battle loop point (32 s, taken from the file's name), and the music layers idea ([audio.md](audio.md)).

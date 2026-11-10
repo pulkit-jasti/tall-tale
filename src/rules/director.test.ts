@@ -378,7 +378,8 @@ describe('tutorial director', () => {
     expect(director.current?.id).toBe('learn-tree');
     setOff.tree = 1;
     director.update(0.1);
-    expect(director.current?.id).toBe('wave-2-clear');
+    // The balloon lessons come next, still in wave 2 (a few more knockouts first, then one balloon).
+    expect(director.current?.id).toBe('sling-practice');
     expect(api.lessonKinds).toEqual(['keg', 'boulder', 'tree']);
     // Each lesson lets its waiting goblins go when it ends.
     expect(api.released).toBe(3);

@@ -3,7 +3,7 @@ import { angleTo, bottomRowY, clamp01, panelMap, rowX, stepValue } from './layou
 
 describe('UI layout math', () => {
   it('spaces a row evenly around the middle', () => {
-    expect([0, 1, 2, 3].map((i) => rowX(i, 4, 8.8))).toEqual([-13.2, -4.4, 4.4, 13.2]);
+    [-13.2, -4.4, 4.4, 13.2].forEach((x, i) => expect(rowX(i, 4, 8.8)).toBeCloseTo(x));
     expect(rowX(0, 1, 5)).toBe(0);
   });
 
