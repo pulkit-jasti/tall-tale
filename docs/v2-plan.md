@@ -178,11 +178,11 @@ Build 1 or 2 in run 3, for the tool rack and the video:
 
 ## 3. Build plan: three runs
 
-Each run is one long coding agent session. Inside a run, **commit after every step** (no push unless the developer says so), each commit passing `npm run typecheck`, `npm run build` and `npm test`. **Do not stop for headset tests inside a run.** Tick the checklist below and add a short note per step (what changed, anything decided along the way), so the next session or a summarized context has the facts. At the end of a run, stop and give the developer one headset check list for the whole run, with the debug actions for it.
+Each run is one long coding agent session. Inside a run, **commit after every step** (no push unless the developer says so). **No typecheck and no tests for now:** the focus is building. Only `npm run build` must pass before each commit, so the game still loads. **Do not stop for headset tests inside a run.** Tick the checklist below and add a short note per step (what changed, anything decided along the way), so the next session or a summarized context has the facts. At the end of a run, stop and give the developer one headset check list for the whole run, with the debug actions for it.
 
 The "Cloud build run" rule "Stop after step 1" in AGENTS.md does not apply to these runs.
 
-Every new rule (cooldowns, refund, gear hits, climb steps, garrison refill, unlocks, stars, riddle hint counts) goes in plain TypeScript in `src/rules/` with a Vitest test, like the existing rules. Every new interactive thing goes in `reachSpots()`. Every new tool gets a `HOLD.poses` entry, a ghost demo that follows the AGENTS.md ghost rules, and debug actions in `DEBUG_ACTIONS`. Every new material on units gets the night rim.
+Every new rule (cooldowns, refund, gear hits, climb steps, garrison refill, unlocks, stars, riddle hint counts) goes in plain TypeScript in `src/rules/`, like the existing rules (no new tests for now; existing tests may break and can be fixed later). Every new interactive thing goes in `reachSpots()`. Every new tool gets a `HOLD.poses` entry, a ghost demo that follows the AGENTS.md ghost rules, and debug actions in `DEBUG_ACTIONS`. Every new material on units gets the night rim.
 
 **Before run 1 (developer):** run the stress test on the headset and log the result in [performance.md](performance.md), so the unit budget is known before archers and climbers are added.
 
@@ -190,7 +190,9 @@ Every new rule (cooldowns, refund, gear hits, climb steps, garrison refill, unlo
 
 The mechanics the tutorial will show. The tutorial must stay playable after this run (adjust its lessons and texts only as much as needed; the real rebuild is run 2).
 
-- [ ] **1.1 Gear effects** (2.5): helmet and shield as separate extra hits for every hit including the swatter, spear double wall damage, sword faster kills on troops, goblin shields and swords, same rules for troop shields.
+- [x] **1.1 Gear effects** (2.5): helmet and shield as separate extra hits for every hit including the swatter, spear double wall damage, sword faster kills on troops, goblin shields and swords, same rules for troop shields.
+  - Done: rules in `src/rules/gear.ts`. Goblins carry `weapon` (none, spear, sword), `helmet`, `shield` (new gear pieces `goblinSword`, `goblinShield`, Kenney models). `Goblins.armor()` takes the helmet, then the shield, for every hit: pebble, arrow, soldier, swatter and goblin shot (the goblin shot no longer goes through). After armor takes a hit the goblin shrugs off hits for `GOBLIN_GEAR.hitGrace` (0.35 s), so one swatter swing over several frames takes one piece. Spear: `spearWallDamage` 2x. Sword: goblin strike gap x `swordStrikeScale` 0.6. Troop swordsmen and spearmen lose their shield on the first goblin blow (it flies off), then take `TROOPS.hitsToDown` (2) more; archers 2.
+  - Decided: **triggers ignore armor** (the proposal in section 5). Gear mix: grunts spear 40%, sword 25%, helmets 35% from wave 3, shields 30% from wave 4; runners bare. Debug: "Armored grunts" (key `\`).
 - [ ] **1.2 All goblins climb** (2.6): remove the climber type (wave counts become grunts and runners), the four steps, rampart goblins attack the garrison, the giggle cue, faster goblins.
 - [ ] **1.3 Tools** (2.1 to 2.3): use windows and recharge rings, eating fills the rings, remove food cost, the food jar and the price tags, pepper rework, bell rework.
 - [ ] **1.4 Horn** (2.3): replaces the megaphone, its own platform, hold at the mouth or blow into the mic, its ghost demo.

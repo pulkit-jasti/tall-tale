@@ -198,6 +198,7 @@ export class GameSystem extends createSystem({}) {
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
     this.gearDebris = new GearDebris(this.stage.boardSpin, createRandom(seed + 960));
     this.goblins.debris = this.gearDebris;
+    this.troops.debris = this.gearDebris;
     // Villagers going about their day in the village squares (decor, their own random stream).
     this.villagers = new Villagers(this.stage.boardSpin, built.villages, createRandom(seed + 970));
     await Promise.all([
@@ -206,7 +207,9 @@ export class GameSystem extends createSystem({}) {
       this.food.load(),
       this.troops.load(),
       this.triggers.load(blueprint.triggers),
-      this.goblins.load().then(() => this.gearDebris.load(['goblinSpear', 'goblinHelmet'], this.goblins.unitScale)),
+      this.goblins
+        .load()
+        .then(() => this.gearDebris.load(['goblinSpear', 'goblinSword', 'goblinHelmet', 'goblinShield', 'roundShield', 'rectShield'], this.goblins.unitScale)),
       ...this.tools.map((t) => t.load()),
     ]);
     // Every trigger can be shot: the aim assist bends toward it and it glows while aimed at.
@@ -826,6 +829,10 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'helmetGrunts':
         this.goblins.helmetNext += 3;
+        this.spawner.sendGroup('grunt');
+        break;
+      case 'armoredGrunts':
+        this.goblins.armoredNext += 3;
         this.spawner.sendGroup('grunt');
         break;
       case 'celebrate':

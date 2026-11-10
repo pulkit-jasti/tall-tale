@@ -24,6 +24,7 @@ import { CASTLE, DAY_NIGHT, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, PEPPER, R
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
+import { armorHit, rollGear, type GoblinWeapon } from '../rules/gear.js';
 import { popIn } from '../fx/ease.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
 import { angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
@@ -155,10 +156,13 @@ export class Goblin {
   dashPause = 0;
   dashTo = 0;
   markTimer = 0;
-  /** Gear (build step 7): its gear bones, and what it carries now. A helmet is one extra hit. */
+  /** Gear (v2, src/rules/gear.ts): its gear bones, and what it carries now. Helmet and shield are each one extra hit. */
   readonly gear: Map<GearName, Object3D>;
+  weapon: GoblinWeapon = 'none';
   helmet = false;
-  armed = false;
+  shield = false;
+  /** Armor just took a hit: no more hits for this long (seconds, GOBLIN_GEAR.hitGrace). */
+  hitGrace = 0;
   /** A hit flash is showing for this long (seconds). */
   flashTime = 0;
   /** Juice: time left of the landing squash, of the pop-in from its camp, and to its next dust puff (seconds). */
@@ -189,12 +193,22 @@ export class Goblin {
     this.gear = findGearBones(model);
   }
 
-  /** Shows its spear and helmet (or not). */
-  setGear(armed: boolean, helmet: boolean): void {
-    this.armed = armed;
+  /** Shows its weapon, helmet and shield (or not). */
+  setGear(weapon: GoblinWeapon, helmet: boolean, shield: boolean): void {
+    this.weapon = weapon;
     this.helmet = helmet;
-    setGear(this.gear, 'goblinSpear', armed);
+    this.shield = shield;
+    setGear(this.gear, 'goblinSpear', weapon === 'spear');
+    setGear(this.gear, 'goblinSword', weapon === 'sword');
     setGear(this.gear, 'goblinHelmet', helmet);
+    setGear(this.gear, 'goblinShield', shield);
+  }
+
+  /** The weapon flies off (pepper, or knocked out). */
+  dropWeapon(): void {
+    this.weapon = 'none';
+    setGear(this.gear, 'goblinSpear', false);
+    setGear(this.gear, 'goblinSword', false);
   }
 
   setType(type: GoblinType): void {
@@ -277,10 +291,13 @@ export class Goblins {
 
   /** Gear that flies off (set by the game). */
   debris: GearDebris | null = null;
-  /** Helmets are handed out from GOBLIN_GEAR.helmetFromWave (set by the battle per wave). */
+  /** Helmets and shields are handed out from their wave on (GOBLIN_GEAR, set by the battle per wave). */
   helmetsOn = false;
+  shieldsOn = false;
   /** Debug: this many next grunts wear a helmet whatever the wave. */
   helmetNext = 0;
+  /** Debug: this many next grunts wear a helmet, carry a shield and a sword (3 hits). */
+  armoredNext = 0;
   /** Gear is picked with its own seeded random, so the battle's spawns stay as they were. */
   private gearRng = createRandom(0x9e3779b1);
 
@@ -288,7 +305,7 @@ export class Goblins {
   onWallHit: (goblin: Goblin) => void = () => {};
   /** A goblin knocked out by a hit (tool, trigger, soldier, fall), with the world position of its middle (juice). */
   onKnockOut: (goblin: Goblin, world: Vector3) => void = () => {};
-  /** A helmet took a hit and flew off, at this world point (juice). */
+  /** A helmet or shield took a hit and flew off, at this world point (juice). */
   onArmor: (goblin: Goblin, world: Vector3) => void = () => {};
   /** Called now and then while a climber runs about on the rampart (a wall flash, no damage). */
   onRampartStep: (goblin: Goblin) => void = () => {};
@@ -323,7 +340,7 @@ export class Goblins {
   async load(): Promise<void> {
     this.template = await loadTemplate('characters/mini-dungeon/character-orc.glb', { height: 1 }, true);
     // Every goblin carries every gear option, each shown or hidden on its own (src/units/gear.ts).
-    await rigTemplate(this.template, ['goblinSpear', 'goblinHelmet']);
+    await rigTemplate(this.template, ['goblinSpear', 'goblinSword', 'goblinHelmet', 'goblinShield']);
     const material = findMaterial(this.template.object);
     if (material) this.baseColor.copy(material.color);
   }
@@ -437,11 +454,20 @@ export class Goblins {
     goblin.serial++;
     goblin.seasoned = false;
     goblin.setType(type);
-    // Runners and climbers need their hands. Some grunts carry a spear, some wear a helmet.
-    const grunt = type === 'grunt';
-    const helmet = grunt && ((this.helmetsOn && this.gearRng.next() < GOBLIN_GEAR.helmetShare) || this.helmetNext > 0);
-    if (helmet && this.helmetNext > 0) this.helmetNext--;
-    goblin.setGear(grunt && this.gearRng.next() < GOBLIN_GEAR.spearShare, helmet);
+    // Runners need their hands. Grunts carry a spear, a sword or nothing, some wear a helmet or carry a shield.
+    if (type === 'grunt') {
+      const roll = rollGear(GOBLIN_GEAR, this.helmetsOn, this.shieldsOn, this.gearRng.next(), this.gearRng.next(), this.gearRng.next());
+      if (this.armoredNext > 0) {
+        this.armoredNext--;
+        roll.weapon = 'sword';
+        roll.helmet = roll.shield = true;
+      } else if (this.helmetNext > 0) {
+        this.helmetNext--;
+        roll.helmet = true;
+      }
+      goblin.setGear(roll.weapon, roll.helmet, roll.shield);
+    } else goblin.setGear('none', false, false);
+    goblin.hitGrace = 0;
     goblin.speed = goblin.stats.speed * (1 + this.rng.range(-GOBLIN_RULES.speedJitter, GOBLIN_RULES.speedJitter));
     goblin.root.visible = true;
     goblin.root.rotation.set(0, 0, 0);
@@ -626,15 +652,19 @@ export class Goblins {
   }
 
   /**
-   * A hit that would knock the goblin out (a slingshot pebble, a soldier).
-   * With a helmet on, the helmet flies off instead and the goblin is knocked
-   * back, dazed: returns true (it took the hit). Without one, false: the
-   * caller knocks it out.
+   * A hit that would knock the goblin out (a pebble, an arrow, a soldier,
+   * the swatter, a goblin shot). Armor takes it first (src/rules/gear.ts):
+   * the helmet, then the shield flies off instead, the goblin is knocked
+   * back, dazed, and returns true (it took the hit). Right after armor took
+   * a hit (GOBLIN_GEAR.hitGrace) further hits are shrugged off (true too).
+   * No armor left: false, the caller knocks it out.
    */
   armor(goblin: Goblin, fromX = 0, fromZ = 0): boolean {
-    if (!goblin.helmet || !this.isHittable(goblin)) return false;
-    goblin.helmet = false;
-    setGear(goblin.gear, 'goblinHelmet', false);
+    if (!this.isHittable(goblin)) return false;
+    if (goblin.hitGrace > 0) return true;
+    const piece = armorHit(goblin);
+    if (!piece) return false;
+    goblin.hitGrace = GOBLIN_GEAR.hitGrace;
     const p = goblin.root.position;
     let dx = p.x - fromX;
     let dz = p.z - fromZ;
@@ -642,8 +672,17 @@ export class Goblins {
       dx = p.x;
       dz = p.z;
     }
-    temp2.set(p.x, p.y + goblin.stats.height * 0.95, p.z);
-    this.debris?.throw('goblinHelmet', temp2, dx, dz);
+    if (piece === 'helmet') {
+      goblin.helmet = false;
+      setGear(goblin.gear, 'goblinHelmet', false);
+      temp2.set(p.x, p.y + goblin.stats.height * 0.95, p.z);
+      this.debris?.throw('goblinHelmet', temp2, dx, dz);
+    } else {
+      goblin.shield = false;
+      setGear(goblin.gear, 'goblinShield', false);
+      temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
+      this.debris?.throw('goblinShield', temp2, dx, dz);
+    }
     this.particles?.burst(this.board.localToWorld(temp2), HELMET_SPARKS, 6, 0.2);
     this.audio.play('pebbleHit', temp2, 0.8, 0.05);
     this.onArmor(goblin, temp2);
@@ -660,13 +699,17 @@ export class Goblins {
   private scatterGear(goblin: Goblin): void {
     if (!this.debris || !goblin.root.visible) return;
     const p = goblin.root.position;
-    if (goblin.armed) {
+    if (goblin.weapon !== 'none') {
       temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
-      this.debris.throw('goblinSpear', temp2, p.x, p.z);
+      this.debris.throw(goblin.weapon === 'spear' ? 'goblinSpear' : 'goblinSword', temp2, p.x, p.z);
     }
     if (goblin.helmet) {
       temp2.set(p.x, p.y + goblin.stats.height * 0.95, p.z);
       this.debris.throw('goblinHelmet', temp2, -p.z, p.x);
+    }
+    if (goblin.shield) {
+      temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
+      this.debris.throw('goblinShield', temp2, p.z, -p.x);
     }
   }
 
@@ -829,13 +872,12 @@ export class Goblins {
     goblin.sneezing = PEPPER.sneezeJerkTime;
     goblin.applyColor();
     this.audio.play('sneeze', this.worldPosition(goblin, temp), 1, 0.12);
-    // The sneeze shakes its spear loose: it flies off.
-    if (goblin.armed) {
-      goblin.armed = false;
-      setGear(goblin.gear, 'goblinSpear', false);
+    // The sneeze shakes its weapon loose: it flies off.
+    if (goblin.weapon !== 'none') {
       const p = goblin.root.position;
       temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
-      this.debris?.throw('goblinSpear', temp2, p.x, p.z);
+      this.debris?.throw(goblin.weapon === 'spear' ? 'goblinSpear' : 'goblinSword', temp2, p.x, p.z);
+      goblin.dropWeapon();
     }
     switch (goblin.mode) {
       case 'walking':
@@ -875,6 +917,7 @@ export class Goblins {
       const g = this.list[i];
       if (g.mode === 'dead') continue;
       this.step(g, dt);
+      if (g.hitGrace > 0) g.hitGrace -= dt;
       if (g.flashTime > 0) {
         g.flashTime -= dt;
         if (g.flashTime <= 0) this.applyLook(g);

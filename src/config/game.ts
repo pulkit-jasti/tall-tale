@@ -2056,6 +2056,30 @@ export const GEAR = {
       dir2: R_OUT,
       scale: 0.75,
     },
+    /** v2: goblins carry swords too (the soldiers' Kenney sword, a little smaller). */
+    goblinSword: {
+      model: 'props/mini-arena/weapon-sword.glb',
+      bone: 'arm-right',
+      at: RIGHT_HAND,
+      anchor: [0, 0.05, 0],
+      axis: [0, -1, 0],
+      dir: [0.45, 0.35, 0.82],
+      axis2: [0, 0, 1],
+      dir2: R_OUT,
+      scale: 0.75,
+    },
+    /** v2: goblin shields (the soldiers' round shield, a little smaller). */
+    goblinShield: {
+      model: 'props/mini-dungeon/shield-round.glb',
+      bone: 'arm-left',
+      at: [0.2, 0.08, 0.02],
+      anchor: [0, 0, 0],
+      axis: [0, 0, 1],
+      dir: L_OUT,
+      axis2: [0, 1, 0],
+      dir2: L_UP,
+      scale: 0.62,
+    },
     roundShield: {
       model: 'props/mini-dungeon/shield-round.glb',
       bone: 'arm-left',
@@ -2280,17 +2304,32 @@ export const ARCHERS = {
 };
 
 /**
- * Goblin gear (build step 7): some grunts carry a spear, some wear a helmet.
- * A helmet is one extra hit from a slingshot pebble or a soldier: it flies
- * off instead (big hits like the swatter, kegs and boulders go through).
- * Peppered goblins drop their spear, which flies off. Runners and climbers
- * stay bare handed (they need their hands to run and climb).
+ * Goblin gear (v2, docs/v2-plan.md 2.5, rules in src/rules/gear.ts): grunts
+ * carry a spear or a sword (or nothing), some wear a helmet, some carry a
+ * shield. Helmet and shield are each one extra hit, for every hit (pebble,
+ * arrow, soldier, swatter, goblin shot): it flies off instead and the goblin
+ * reels back. Triggers (keg, boulder, tree) ignore armor. A spear doubles
+ * wall damage, a sword strikes soldiers faster. Runners stay bare handed.
  */
 export const GOBLIN_GEAR = {
-  spearShare: 0.6,
+  spearShare: 0.4,
+  swordShare: 0.25,
   helmetShare: 0.35,
+  shieldShare: 0.3,
   /** Helmets only from this wave (1 based), so the first lessons stay one hit. */
   helmetFromWave: 3,
+  /** Shields from this wave (1 based). */
+  shieldFromWave: 4,
+  /** A spear's wall hit does this many times the damage. */
+  spearWallDamage: 2,
+  /** A sword strikes at soldiers this much more often (its strike gap is multiplied by this). */
+  swordStrikeScale: 0.6,
+  /**
+   * After armor takes a hit, the goblin cannot be hit again for this long
+   * (seconds): one swatter swing over several frames, or two pebbles at once,
+   * take one piece, not all of them.
+   */
+  hitGrace: 0.35,
   /** Gear knocked off: flies up and out (cm per second), spins, lands and shrinks away. */
   flySpeed: 45,
   flyUp: 70,

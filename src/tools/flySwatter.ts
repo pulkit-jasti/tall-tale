@@ -1,8 +1,8 @@
 // The fly swatter (docs/giant-tools.md): crowd clearing near the wall. Grab
 // it, then swat: the first swat (the head touching the ground or a goblin)
 // pays 4 food and gives about 10 seconds to swat as often as the player
-// wants. Each swat knocks out every goblin the head touches. It cannot break
-// shields or armor (no gear in the MVP yet).
+// wants. Each swat knocks out every goblin the head touches. A helmet or a
+// shield takes one swat each (v2, src/rules/gear.ts).
 //
 // Fast swings blur hand tracking, so hits are found along the whole path of
 // the head since the last frame, with a generous hit area, and slow slams
@@ -102,6 +102,9 @@ export class FlySwatter extends HandTool {
     this.particles.burst(at, SWATTER.splatColors, 6, 0.15);
     this.onSplat(at);
     for (const g of this.hits) {
+      // Armor takes the swat too (v2): a helmet or shield flies off and the goblin reels back, away from the head.
+      this.stage.boardSpin.worldToLocal(front.copy(at));
+      if (this.goblins.armor(g, front.x, front.z)) continue;
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, SWATTER.splatColors, 10);
       this.audio.play('poof', world, 1, 0.05);

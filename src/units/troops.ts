@@ -40,7 +40,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameAudio } from '../audio/sound.js';
-import { ARCHERS, CASTLE, DAY_NIGHT, GOBLIN_RULES, JUICE, TROOP_KINDS, TROOPS, type TroopKind } from '../config/game.js';
+import { ARCHERS, CASTLE, DAY_NIGHT, GOBLIN_GEAR, GOBLIN_RULES, JUICE, TROOP_KINDS, TROOPS, type GearName, type TroopKind } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import { addNightRim } from '../fx/nightRim.js';
 import type { Particles } from '../fx/particles.js';
@@ -48,7 +48,9 @@ import type { Random } from '../rules/random.js';
 import type { Step } from '../rules/roadGraph.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
 import type { RoadNetwork } from '../world/roads.js';
-import { rigTemplate } from './gear.js';
+import type { GearDebris } from '../fx/gearDebris.js';
+import { strikeEvery, troopHitsToDown } from '../rules/gear.js';
+import { findGearBones, rigTemplate, setGear } from './gear.js';
 import type { Goblin, GoblinMode, Goblins } from './goblins.js';
 
 type TroopMode = 'dead' | 'walking' | 'fighting' | 'shooting' | 'cheering' | 'standing';
@@ -82,6 +84,11 @@ class Troop {
   animDt = 0;
   /** Cheering after a knockout, or shooting: time left (seconds). */
   timer = 0;
+  /** Its gear bones, and whether it still carries its shield (one extra hit, v2, src/rules/gear.ts). */
+  readonly gear: Map<GearName, Object3D>;
+  /** The shield this kind carries (none for archers). */
+  readonly shieldName: GearName | null;
+  shield = false;
 
   constructor(
     readonly kind: TroopKind,
@@ -95,6 +102,14 @@ class Troop {
     this.root.add(model);
     this.root.visible = false;
     this.mixer = new AnimationMixer(model);
+    this.gear = findGearBones(model);
+    this.shieldName = spec.gear.find((g) => g === 'roundShield' || g === 'rectShield') ?? null;
+  }
+
+  /** Fresh out of the castle: its shield back on. */
+  rearm(): void {
+    this.shield = this.shieldName !== null;
+    if (this.shieldName) setGear(this.gear, this.shieldName, true);
   }
 
   play(name: string, loop = true, timeScale = 1): void {
@@ -270,6 +285,8 @@ export class Troops {
 
   /** Called with each goblin a soldier knocks out. */
   onKill: (goblin: Goblin) => void = () => {};
+  /** Shields that fly off (set by the game). */
+  debris: GearDebris | null = null;
 
   constructor(
     private board: Object3D,
@@ -474,6 +491,7 @@ export class Troops {
     troop.mode = 'walking';
     troop.foe = null;
     troop.hits = 0;
+    troop.rearm();
     troop.animDt = 0;
     troop.offset = this.rng.range(-TROOPS.laneJitter, TROOPS.laneJitter);
     troop.speed = TROOPS.speed * TROOP_KINDS[kind].speed * (1 + this.rng.range(-TROOPS.speedJitter, TROOPS.speedJitter));
@@ -648,13 +666,11 @@ export class Troops {
       g.face(p.x - q.x, p.z - q.z);
       g.strikeTimer -= dt;
       if (g.strikeTimer <= 0) {
-        g.strikeTimer = TROOPS.goblinStrikeEvery * this.rng.range(0.85, 1.15);
+        // A sword strikes faster (v2, src/rules/gear.ts).
+        g.strikeTimer = strikeEvery(TROOPS.goblinStrikeEvery, g.weapon, GOBLIN_GEAR.swordStrikeScale) * this.rng.range(0.85, 1.15);
         this.goblins.strike(g);
         this.clash(q);
-        if (this.rng.next() < TROOPS.goblinStrikeChance && ++t.hits >= TROOPS.hitsToDown) {
-          this.remove(t, true);
-          return;
-        }
+        if (this.rng.next() < TROOPS.goblinStrikeChance && this.hurt(t, q.x, q.z)) return;
       }
     }
     t.strikeTimer -= dt;
@@ -676,6 +692,29 @@ export class Troops {
     this.goblins.kill(g, true);
     this.onKill(g);
     this.cheer(t, JUICE.troopCheerTime);
+  }
+
+  /**
+   * A goblin's blow lands on a soldier (from board point fromX, fromZ): its
+   * shield takes it first and flies off, then each blow counts toward
+   * TROOPS.hitsToDown. Returns true when the soldier went down.
+   */
+  hurt(t: Troop, fromX: number, fromZ: number): boolean {
+    const p = t.root.position;
+    if (t.shield && t.shieldName) {
+      t.shield = false;
+      setGear(t.gear, t.shieldName, false);
+      temp2.set(p.x, p.y + TROOPS.height * 0.5, p.z);
+      this.debris?.throw(t.shieldName, temp2, p.x - fromX, p.z - fromZ);
+      this.audio.play('pebbleHit', this.board.localToWorld(temp.copy(temp2)), 0.7, 0.05);
+      return false;
+    }
+    // The shield is already counted above, so the base number of hits is left.
+    if (++t.hits >= troopHitsToDown(TROOPS.hitsToDown, false)) {
+      this.remove(t, true);
+      return true;
+    }
+    return false;
   }
 
   private clash(at: Vector3): void {

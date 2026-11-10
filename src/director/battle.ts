@@ -29,6 +29,7 @@ import type { HandState } from '../player/hands.js';
 import { ReachCheck } from '../player/reachCheck.js';
 import { clearWave, createBattle, damageCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
 import { angleDelta, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import { wallHitDamage } from '../rules/gear.js';
 import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
 import type { FoodToolName, HandTool } from '../tools/handTool.js';
@@ -187,7 +188,8 @@ export class Battle implements TutorialApi {
     parts.goblins.onWallHit = (goblin) => {
       parts.threat.wallHit(goblin);
       if (!this.running) return;
-      damageCastle(this.state, CASTLE_HEALTH.wallHitDamage);
+      // A spear hits the wall twice as hard (v2, src/rules/gear.ts).
+      damageCastle(this.state, wallHitDamage(CASTLE_HEALTH.wallHitDamage, goblin.weapon, GOBLIN_GEAR.spearWallDamage));
       this.sinceDamage = 0;
     };
     // A climber running on the rampart: the wall under it flashes red like a hit (no damage).
@@ -744,6 +746,7 @@ export class Battle implements TutorialApi {
     const plan = TUTORIAL_WAVES[index];
     // Helmets from their wave on. The first balloon wave holds its balloons until the balloon banner shows.
     this.parts.goblins.helmetsOn = index + 1 >= GOBLIN_GEAR.helmetFromWave;
+    this.parts.goblins.shieldsOn = index + 1 >= GOBLIN_GEAR.shieldFromWave;
     // Balloons are taught in the slingshot wave now, so a wave's own balloons never wait for a banner.
     this.parts.spawner.balloonsHeld = false;
     this.parts.spawner.start(plan);

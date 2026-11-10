@@ -1252,11 +1252,11 @@ export class Slingshot {
     return false;
   }
 
-  /** `heavy` (a goblin shot) goes through a helmet. */
-  private knockOut(goblin: Goblin, heavy = false): void {
+  /** Every hit counts against armor (v2), a goblin shot too. */
+  private knockOut(goblin: Goblin): void {
     this.goblins.worldPosition(goblin, temp2);
-    // A helmet takes the hit: it flies off and the goblin is knocked back (a hit for the lessons all the same).
-    if (!heavy && this.goblins.armor(goblin)) {
+    // A helmet or shield takes the hit: it flies off and the goblin is knocked back (a hit for the lessons all the same).
+    if (this.goblins.armor(goblin)) {
       this.onHit(goblin);
       return;
     }
@@ -1280,7 +1280,7 @@ export class Slingshot {
    * any, knocks back the goblins around the impact, and poofs.
    */
   private splash(p: Vector3, hit: Goblin | null, shot: Goblin): void {
-    if (hit) this.knockOut(hit, true);
+    if (hit) this.knockOut(hit);
     const r = GOBLIN_SHOT.splashRadius;
     for (const g of this.goblins.list) {
       if (!this.goblins.isHittable(g)) continue;

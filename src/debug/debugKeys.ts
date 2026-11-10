@@ -53,6 +53,7 @@ export type DebugCommand =
   | 'balloonFront'
   | 'popBalloons'
   | 'helmetGrunts'
+  | 'armoredGrunts'
   | 'celebrate'
   | 'nextTime'
   | 'timeOfDay';
@@ -124,7 +125,8 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'eatFront', group: 'goblins', icon: '😋', code: 'KeyB', label: 'Eat front goblin', does: 'Eat the goblin nearest the front of the wall' },
   { id: 'balloonFront', group: 'goblins', icon: '🎈', code: 'Comma', label: 'Balloon in front', does: 'A balloon with two riders floats in right in front of you (pop it with the slingshot, or it drops them into the courtyard)' },
   { id: 'popBalloons', group: 'goblins', icon: '💥', code: 'Period', label: 'Pop balloons', does: 'Pop every balloon in the air: the riders fall and poof' },
-  { id: 'helmetGrunts', group: 'goblins', icon: '⛑️', code: 'Slash', label: 'Helmet grunts', does: 'Send a group of grunts that all wear helmets (one extra pebble or soldier hit, the helmet flies off)' },
+  { id: 'helmetGrunts', group: 'goblins', icon: '⛑️', code: 'Slash', label: 'Helmet grunts', does: 'Send a group of grunts that all wear helmets (one extra hit from anything but a trigger, the helmet flies off)' },
+  { id: 'armoredGrunts', group: 'goblins', icon: '🛡️', code: 'Backslash', label: 'Armored grunts', does: 'Send a group of grunts with helmet, shield and sword (3 hits each: helmet off, then shield off, then out)' },
   { id: 'auto', group: 'goblins', icon: '🔁', code: 'KeyT', label: 'Auto spawn on/off', does: 'Extra auto spawning on or off (on top of the waves)' },
   { id: 'clear', group: 'goblins', icon: '🧹', code: 'KeyK', label: 'Remove all', does: 'Remove all goblins' },
   { id: 'slingShot', group: 'slingshot', icon: '🎯', code: 'KeyL', label: 'Shoot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },
