@@ -36,6 +36,7 @@ import {
   LoopRepeat,
   Matrix4,
   type Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Quaternion,
@@ -202,12 +203,15 @@ interface Arrow {
 }
 
 /**
- * Arrows from the archers: one instanced mesh (shaft, steel tip, white
- * feathers in vertex colors), flying in a small arc. Pooled.
+ * Arrows from the garrison's archers (v2, ARCHERS): one instanced mesh
+ * (shaft, steel tip, big white feathers in vertex colors) and one for the
+ * light streaks behind them (see-through, unlit), flying in a high arc.
+ * Pooled.
  */
 export class Arrows {
   readonly list: Arrow[] = [];
   private mesh: InstancedMesh;
+  private streaks: InstancedMesh;
   private matrix = new Matrix4();
   private quaternion = new Quaternion();
   private hidden = new Matrix4().makeScale(0, 0, 0);
@@ -226,10 +230,11 @@ export class Arrows {
       g.setAttribute('color', new Float32BufferAttribute(c, 3));
       return g.index ? g.toNonIndexed() : g;
     };
-    const shaft = new CylinderGeometry(0.06, 0.06, L, 4).rotateX(Math.PI / 2);
-    const tip = new ConeGeometry(0.16, 0.4, 4).rotateX(Math.PI / 2).translate(0, 0, L / 2 + 0.15);
-    const feather = new BoxGeometry(0.02, 0.32, 0.5).translate(0, 0, -L / 2 + 0.25);
-    const feather2 = new BoxGeometry(0.32, 0.02, 0.5).translate(0, 0, -L / 2 + 0.25);
+    // Thicker than a real arrow at this length, so it reads from the seat.
+    const shaft = new CylinderGeometry(0.12, 0.12, L, 4).rotateX(Math.PI / 2);
+    const tip = new ConeGeometry(0.3, 0.8, 4).rotateX(Math.PI / 2).translate(0, 0, L / 2 + 0.3);
+    const feather = new BoxGeometry(0.04, 0.8, 1.4).translate(0, 0, -L / 2 + 0.7);
+    const feather2 = new BoxGeometry(0.8, 0.04, 1.4).translate(0, 0, -L / 2 + 0.7);
     const geometry = mergeGeometries([
       part(shaft, ARCHERS.shaftColor),
       part(tip, ARCHERS.tipColor),
@@ -239,11 +244,21 @@ export class Arrows {
     this.mesh = new InstancedMesh(geometry, new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }), ARCHERS.poolSize);
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
+    // The streak: a thin bright trail behind the feathers, narrowing to nothing.
+    const streak = new ConeGeometry(0.22, ARCHERS.streakLength, 4, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -L / 2 - ARCHERS.streakLength / 2);
+    this.streaks = new InstancedMesh(
+      streak,
+      new MeshBasicMaterial({ color: ARCHERS.streakColor, transparent: true, opacity: ARCHERS.streakOpacity, depthWrite: false }),
+      ARCHERS.poolSize,
+    );
+    this.streaks.frustumCulled = false;
+    this.streaks.visible = false;
     for (let i = 0; i < ARCHERS.poolSize; i++) {
       this.mesh.setMatrixAt(i, this.hidden);
+      this.streaks.setMatrixAt(i, this.hidden);
       this.list.push({ alive: false, age: 0, from: new Vector3(), to: new Vector3(), target: null, serial: 0 });
     }
-    parent.add(this.mesh);
+    parent.add(this.mesh, this.streaks);
   }
 
   fire(from: Vector3, to: Vector3, target: Goblin): boolean {
@@ -256,6 +271,7 @@ export class Arrows {
     arrow.target = target;
     arrow.serial = target.serial;
     this.mesh.visible = true;
+    this.streaks.visible = true;
     return true;
   }
 
@@ -268,7 +284,7 @@ export class Arrows {
       any = true;
       a.age += dt;
       const t = Math.min(1, a.age / ARCHERS.flightTime);
-      // A small arc: straight from bow to goblin, lifted in the middle.
+      // A high arc: straight from bow to goblin, lifted in the middle, so it rises against the sky.
       const lift = ARCHERS.arcHeight * 4 * t * (1 - t);
       temp.lerpVectors(a.from, a.to, t);
       temp.y += lift;
@@ -278,17 +294,22 @@ export class Arrows {
       this.quaternion.setFromUnitVectors(this.forward, temp2.normalize());
       this.matrix.makeRotationFromQuaternion(this.quaternion).setPosition(temp);
       this.mesh.setMatrixAt(i, this.matrix);
+      this.streaks.setMatrixAt(i, this.matrix);
       this.dirty = true;
       if (t >= 1) {
         a.alive = false;
         this.mesh.setMatrixAt(i, this.hidden);
+        this.streaks.setMatrixAt(i, this.hidden);
         land(a);
         a.target = null;
       }
     }
-    if (this.dirty) this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.dirty) {
+      this.mesh.instanceMatrix.needsUpdate = true;
+      this.streaks.instanceMatrix.needsUpdate = true;
+    }
     this.dirty = any;
-    if (!any) this.mesh.visible = false;
+    if (!any) this.mesh.visible = this.streaks.visible = false;
   }
 
   clear(): void {
@@ -296,9 +317,11 @@ export class Arrows {
       this.list[i].alive = false;
       this.list[i].target = null;
       this.mesh.setMatrixAt(i, this.hidden);
+      this.streaks.setMatrixAt(i, this.hidden);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
-    this.mesh.visible = false;
+    this.streaks.instanceMatrix.needsUpdate = true;
+    this.mesh.visible = this.streaks.visible = false;
   }
 }
 
@@ -314,6 +337,8 @@ export class Troops {
   private on = true;
   /** Kept for the battle (lessons set it). v2: no squads come out on their own, so it does nothing now. */
   held = false;
+  /** Called when a battle starts: the wall garrison mans the rampart (src/units/garrison.ts). */
+  onMan: () => void = () => {};
   /** Called on a squad's crash into the goblins, with the world point (juice: a hit stop and a ring). */
   onCrash: (world: Vector3) => void = () => {};
   /** Called every frame after the field troops moved (the wall garrison, src/units/garrison.ts). */
@@ -391,11 +416,20 @@ export class Troops {
     }
   }
 
-  /** Everyone gone at once (a new battle, the stress test). */
+  /** Everyone gone at once (a new battle, the stress test). The garrison stops refilling until manWalls(). */
   clear(): void {
     this.waiting.length = 0;
     for (const t of this.list) if (t.mode !== 'dead') this.remove(t, false);
     this.arrows.clear();
+    this.onClear();
+  }
+
+  /** Called when every soldier was cleared away (the garrison stops). */
+  onClear: () => void = () => {};
+
+  /** A battle starts: the wall garrison stands on the rampart (full). */
+  manWalls(): void {
+    if (this.on) this.onMan();
   }
 
   /** Field knights on the board now (and waiting at the gate). */
@@ -838,7 +872,8 @@ export class Troops {
     const g = arrow.target;
     const at = arrow.to;
     const alive = g && g.serial === arrow.serial && FIGHTABLE.has(g.mode);
-    const near = alive && g.root.position.distanceToSquared(at) < 16;
+    // Near where it was aimed (the goblin may have walked on during the long flight).
+    const near = alive && g.root.position.distanceToSquared(at) < 36;
     this.board.localToWorld(temp.copy(at));
     if (!alive || !near || this.rng.next() >= ARCHERS.hitChance) {
       this.particles.burst(temp, ARCHER_DUST, 3, 0.08);

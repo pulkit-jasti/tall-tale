@@ -39,6 +39,7 @@ export type DebugCommand =
   | 'bell'
   | 'troops'
   | 'troopsToggle'
+  | 'thinGarrison'
   | 'triggersReset'
   | 'triggersFire'
   | 'fps'
@@ -142,7 +143,8 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'horn', group: 'food', icon: '📯', code: 'Digit4', label: 'Blow horn', does: 'Horn: it sounds without hands or a mic and the field knights charge down the road in front of you (30 s recharge)' },
   { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (35 s recharge)' },
   { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send knights', does: 'What the horn does: a squad of 4 to 5 knights charges down the road in front of you and holds its first junction (spin the board to pick the road)' },
-  { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, no squads come out and the ones out go home (Send squad turns them back on)' },
+  { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, every soldier (knights and the wall garrison) is gone; on, the garrison is back on the walls' },
+  { id: 'thinGarrison', group: 'army', icon: '🏹', code: 'Minus', label: 'Thin garrison', does: 'Two soldiers of the wall garrison go down (archers first): one new one climbs up from the courtyard every 15 s' },
   {
     id: 'triggerLesson',
     group: 'army',

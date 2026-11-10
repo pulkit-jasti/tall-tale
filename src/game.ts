@@ -46,6 +46,7 @@ import { Slingshot } from './tools/slingshot.js';
 import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
 import { Troops } from './units/troops.js';
+import { Garrison } from './units/garrison.js';
 import { Villagers } from './units/villagers.js';
 import { Balloons } from './units/balloons.js';
 import { GearDebris } from './fx/gearDebris.js';
@@ -93,6 +94,7 @@ export class GameSystem extends createSystem({}) {
   private stun!: StunWave;
   private tools: HandTool[] = [];
   private troops!: Troops;
+  private garrison!: Garrison;
   private villagers!: Villagers;
   private balloons!: Balloons;
   private gearDebris!: GearDebris;
@@ -189,6 +191,12 @@ export class GameSystem extends createSystem({}) {
     this.bell = new Bell(toolParts, this.stun);
     this.tools = [this.swatter, this.pepper, this.bell, this.horn];
     this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
+    // The wall garrison (v2): archers and guards on the rampart, run with the troops.
+    const garrison = new Garrison(this.stage.boardSpin, this.troops, this.goblins, this.audio, this.particles, createRandom(seed + 810));
+    this.garrison = garrison;
+    this.troops.onUpdate = (dt) => garrison.update(dt);
+    this.troops.onMan = () => garrison.fill();
+    this.troops.onClear = () => garrison.stop();
     this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
     this.gearDebris = new GearDebris(this.stage.boardSpin, createRandom(seed + 960));
@@ -764,7 +772,12 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'troopsToggle':
         this.troops.enabled = !this.troops.enabled;
+        // Back on: the garrison mans the walls again at once.
+        if (this.troops.enabled) this.troops.manWalls();
         console.info(`[debug] troops ${this.troops.enabled ? 'on' : 'off'}`);
+        break;
+      case 'thinGarrison':
+        this.garrison.thin(2);
         break;
       case 'triggersReset':
         this.triggers.setWave(TUTORIAL_WAVES.length);

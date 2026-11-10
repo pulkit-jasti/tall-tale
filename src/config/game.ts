@@ -2295,20 +2295,66 @@ export const TROOP_KINDS: Record<TroopKind, TroopKindSpec> = {
   },
 };
 
-/** Archers: they stop and shoot arrows (one instanced pool) at goblins within their range. */
+/**
+ * Arrows of the wall garrison's archers (v2, docs/v2-plan.md 2.7): easy to
+ * see. 3 to 4 times longer than before, white feathers, a short light streak
+ * behind, a high arc so they rise against the sky, and the archers fire
+ * together as a volley (GARRISON.volleyEvery). Damage is decided in code
+ * (random hits, a miss lands with a puff), arrows have no hitboxes. One
+ * instanced mesh for the arrows and one for the streaks, a small pool.
+ */
 export const ARCHERS = {
-  /** A shot this often (seconds), and the share that knocks the goblin out. */
-  shootEvery: 1.6,
+  /** The share of arrows that hit (the goblin is knocked out, or loses its helmet or shield). */
   hitChance: 0.55,
   /** Arrow flight time (seconds) and arc height (cm). */
-  flightTime: 0.45,
-  arcHeight: 4,
-  /** Arrow size (cm). */
-  length: 2.2,
-  poolSize: 12,
+  flightTime: 0.9,
+  arcHeight: 22,
+  /** Arrow size (cm). Was 2.2. */
+  length: 7.5,
+  /** The light streak behind it (cm long) and its look. */
+  streakLength: 7,
+  streakColor: 0xfff6d8,
+  streakOpacity: 0.45,
+  poolSize: 16,
   shaftColor: 0x8a5a2b,
   tipColor: 0xd8dbe6,
   featherColor: 0xffffff,
+};
+
+/**
+ * The wall garrison (v2, docs/v2-plan.md 2.7, src/units/garrison.ts): on the
+ * rampart, at most 4 archers and 2 guards (swordsmen), one per stretch of
+ * wall between two towers, each with its home stretch. When there are fewer,
+ * one new one climbs up from the courtyard every refillEvery until all are
+ * back. They walk along the rampart (one angle on a ring, cheap) toward the
+ * nearest threat on their stretch. Archers shoot outward at goblins walking
+ * in (range), together as a volley, and back away from goblins on the
+ * rampart. Guards fight goblins on the rampart up close. Goblins on the
+ * rampart attack them (an archer goes down in 2 hits). Sizes in cm, times in
+ * seconds, angles in degrees.
+ */
+export const GARRISON = {
+  archers: 4,
+  guards: 2,
+  /** Home stretches (degrees, the middles between towers): guards first, then archers. */
+  homesDeg: [0, 180, 60, 120, 240, 300],
+  /** Where they stand on the wall top (cm from the center), a little inside the goblins' path. */
+  radius: 47.8,
+  refillEvery: 15,
+  /** Climbing up from the courtyard takes this long. */
+  climbTime: 2.2,
+  /** Walking speed along the rampart (cm per second). */
+  walkSpeed: 4,
+  /** Archers shoot goblins this far from them (cm, flat), all together this often, a little staggered. */
+  archerRange: 100,
+  volleyEvery: 2.2,
+  volleyStagger: 0.07,
+  /** Archers back away from a goblin on the rampart this close (cm along the wall). */
+  backAway: 9,
+  /** Guards walk to a goblin on their stretch, and fight it this close (cm along the wall). */
+  guardReach: 3,
+  /** A goblin on the rampart attacks a garrison soldier this close (cm along the wall). */
+  goblinReach: 3,
 };
 
 /**

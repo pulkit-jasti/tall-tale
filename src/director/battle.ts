@@ -270,6 +270,8 @@ export class Battle implements TutorialApi {
     slingshot.setVisible(false);
     slingshot.beckon = false;
     this.resetTools();
+    // The wall garrison stands on the rampart from the start (v2).
+    this.parts.troops.manWalls();
     this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
     // The flag starts one notch below: the first step clears the wave before `from`.
     this.state.wavesCleared = Math.max(0, from - 1);
