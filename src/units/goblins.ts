@@ -20,7 +20,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { CASTLE, DAY_NIGHT, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
+import { CASTLE, DAY_NIGHT, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
@@ -166,6 +166,8 @@ export class Goblin {
   hitGrace = 0;
   /** Bashing the wall: time left before it starts to climb (seconds, src/rules/climb.ts). */
   bashLeft = 0;
+  /** A runner hopping past a knight: time left of the hop (seconds, KNIGHTS.hopTime). */
+  hopLeft = 0;
   /** A hit flash is showing for this long (seconds). */
   flashTime = 0;
   /** Juice: time left of the landing squash, of the pop-in from its camp, and to its next dust puff (seconds). */
@@ -403,13 +405,14 @@ export class Goblins {
 
   /**
    * The bell (v2): every goblin on the rampart is knocked back down outside
-   * the wall, landing dazed (it walks back and climbs again later). Calm
-   * lesson goblins stay. Returns how many.
+   * the wall, landing dazed (it walks back and climbs again later). Returns how many.
    */
   knockOffRampart(): number {
     let count = 0;
     for (const g of this.list) {
-      if (g.mode !== 'rampart' || g.calm) continue;
+      // Calm lesson goblins too: the bell lesson shows them falling. They are no longer calm then.
+      if (g.mode !== 'rampart') continue;
+      g.calm = false;
       const p = g.root.position;
       const a = angleOf(p.x, p.z);
       const r = CASTLE.wallOut + 1;
@@ -427,6 +430,21 @@ export class Goblins {
     }
     if (count > 0) this.audio.play('squeal', undefined, 1, 0.1);
     return count;
+  }
+
+  /** A runner dodges past a knight with a quick hop (v2). Only while walking, one hop at a time. */
+  hop(goblin: Goblin): void {
+    if (goblin.mode !== 'walking' || goblin.hopLeft > 0 || goblin.stunned > 0) return;
+    goblin.hopLeft = KNIGHTS.hopTime;
+  }
+
+  /**
+   * A goblin the tutorial brought for a lesson (waiting at a trigger, walking
+   * back and forth, calm on the rampart, the lesson goblin that waits to be
+   * eaten): the army leaves it alone, so the lesson is the player's.
+   */
+  isLesson(goblin: Goblin): boolean {
+    return goblin.calm || goblin.bait || goblin.waitRoad >= 0 || goblin.patrolRoad >= 0 || goblin.rampartWait > GOBLIN_RULES.rampartWait;
   }
 
   /** Pepper (v2): weapon, helmet and shield all fly off. Returns true if anything came off. */
@@ -527,6 +545,7 @@ export class Goblins {
       goblin.setGear(roll.weapon, roll.helmet, roll.shield);
     } else goblin.setGear('none', false, false);
     goblin.hitGrace = 0;
+    goblin.hopLeft = 0;
     goblin.speed = goblin.stats.speed * (1 + this.rng.range(-GOBLIN_RULES.speedJitter, GOBLIN_RULES.speedJitter));
     goblin.root.visible = true;
     goblin.root.rotation.set(0, 0, 0);
@@ -1115,6 +1134,11 @@ export class Goblins {
         }
         // The lane offset flips with the direction, so a goblin keeps its side of the road.
         road.pointAt(g.distance, g.offset * dir, p);
+        // A runner hopping past a knight (v2): a quick jump on the way.
+        if (g.hopLeft > 0) {
+          g.hopLeft = Math.max(0, g.hopLeft - dt);
+          p.y += Math.sin(Math.PI * (1 - g.hopLeft / KNIGHTS.hopTime)) * KNIGHTS.hopHeight;
+        }
         road.directionAt(g.distance, temp);
         g.face(temp.x * dir, temp.z * dir);
         if (dir === 1 ? g.distance >= road.length : g.distance <= 0) this.arrive(g);

@@ -287,8 +287,14 @@ export class GameSystem extends createSystem({}) {
       this.juice.blast(world, 0.7 * this.stage.boardScale);
       this.audio.play('balloonPop', world);
     };
-    // The horn calls the field knights (v2).
-    this.horn.onCall = () => this.troops.sendSquad();
+    // The horn calls the field knights (v2): they charge down the road in front of the player.
+    this.horn.onCall = () => this.troops.charge(this.stage.spin);
+    // Their crash into the goblins: a hit stop, a ring and a pow star.
+    this.troops.onCrash = (world) => {
+      this.juice.hitStop();
+      this.juice.ring(world, JUICE.blastRing * 0.6 * this.stage.boardScale);
+      this.juice.pow(world, JUICE.blastStar * 0.6 * this.stage.boardScale);
+    };
     this.grabEat.onGrab = () => this.battle.notePicked();
     this.grabEat.onToss = (_goblin, speed) => this.battle.noteTossed(speed);
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
@@ -753,7 +759,8 @@ export class GameSystem extends createSystem({}) {
         this.bell.debugRing();
         break;
       case 'troops':
-        this.troops.sendSquad();
+        // What the horn does, without the horn: a squad charges down the road in front.
+        this.troops.charge(this.stage.spin);
         break;
       case 'troopsToggle':
         this.troops.enabled = !this.troops.enabled;

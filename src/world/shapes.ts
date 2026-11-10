@@ -19,7 +19,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { BELL, HANDLES, HORN, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { BELL, HANDLES, HORN, KNIGHTS, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -306,6 +306,27 @@ export function pepperShaker(): { group: Group; materials: MeshStandardMaterial[
 /** The little rope that ties a locked tool down: a thin ring around it. */
 export function toolRope(radius: number): Mesh {
   return new Mesh(new TorusGeometry(radius, 0.35, 5, 14), flatMaterial(TOOLS.ropeColor));
+}
+
+/**
+ * A field knight squad's banner (v2, KNIGHTS): a thin wooden pole from the
+ * ground up, with a blue cloth and a gold stripe at its top, the cloth
+ * hanging toward -z (behind the knight as it runs). Unlit cloth, so it reads
+ * at night. Board cm, its foot at the origin.
+ */
+export function knightBanner(): Group {
+  const { bannerHeight: h, bannerWidth: w, bannerLength: l } = KNIGHTS;
+  const group = new Group();
+  const pole = new Mesh(new CylinderGeometry(0.12, 0.14, h, 5), flatMaterial(KNIGHTS.poleColor));
+  pole.position.y = h / 2;
+  const cloth = new Mesh(new BoxGeometry(0.08, l, w), new MeshBasicMaterial({ color: KNIGHTS.bannerColor }));
+  cloth.position.set(0, h - l / 2 - 0.2, -w / 2);
+  const stripe = new Mesh(new BoxGeometry(0.1, l * 0.22, w), new MeshBasicMaterial({ color: KNIGHTS.bannerTrim }));
+  stripe.position.set(0, h - l * 0.45, -w / 2);
+  const tip = new Mesh(new SphereGeometry(0.28, 6, 4), new MeshBasicMaterial({ color: KNIGHTS.bannerTrim }));
+  tip.position.y = h + 0.2;
+  group.add(pole, cloth, stripe, tip);
+  return group;
 }
 
 /**

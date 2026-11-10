@@ -1890,29 +1890,19 @@ export const TRIGGERS = {
 };
 
 /**
- * Troops (docs/core-loop.md section 2): squads of soldiers come out of the
- * castle while a wave is fought, walk the roads outward toward an attacking
- * camp, and fight the goblins they meet with simple timed hits. On their own
- * they lose slowly, so the player is always needed. They go back home when
- * they reach the camp or when the wave ends. Sizes in cm, times in seconds.
+ * Troops (v2, docs/v2-plan.md 2.7): two jobs. Field knights (KNIGHTS) come
+ * only when the horn calls them and hold a junction; the wall garrison
+ * (GARRISON) stands on the rampart. Both fight with simple timed hits. On
+ * their own they lose slowly, so the player is always needed. Sizes in cm,
+ * times in seconds.
  */
 export const TROOPS = {
-  /** Most soldiers on the board at once (they share the unit budget with the goblins). */
   /**
-   * Was 12 (squads of 3 to 4 every 10 s, the soldiers won too much), then 4
-   * in squads of 2 for testing. Step 7 balance: 8 in squads of 2 to 3, with
-   * the three kinds (archers shoot from range, helmets take an extra hit).
-   * Tune after the headset test and the stress test with troops.
+   * Most soldiers on the board at once (they share the unit budget with the
+   * goblins). Tune after the headset test and the stress test with troops.
    */
-  max: 8,
-  /** Soldiers per squad (from, to). */
-  squadMin: 2,
-  squadMax: 3,
-  /** A new squad comes out this often while a wave runs, the first one this long after the wave starts. */
-  squadEvery: 14,
-  firstSquadAt: 4,
-  /** Gap between soldiers of one squad leaving (seconds). */
-  leaveGap: 0.7,
+  /** v2: field knights (KNIGHTS.maxField) plus the wall garrison (GARRISON.size). */
+  max: 16,
   /** The same size as the goblins (grunts 3.9 cm), raised from 2.5 after the step 6 test. */
   height: 3.9,
   speed: 5.5,
@@ -1933,6 +1923,51 @@ export const TROOPS = {
   poofColors: [0xffffff, 0xc9d4e8, 0x8aa0c8],
   /** Units farther than this from the center (cm) update their animation every other frame. */
   farAnimFrom: 150,
+};
+
+/**
+ * Field knights (v2, docs/v2-plan.md 2.7): they only come when the horn calls
+ * them. A squad of swordsmen and spearmen bursts out of the wall entry in
+ * front of the player and sprints down that road with a banner, crashes into
+ * the first goblins it meets (several are knocked over, with a hit stop),
+ * then holds the first junction at least holdMinRadius out and fights
+ * everything that comes down the road, until it falls or the wave ends (then
+ * it marches home). Runners dodge past with a quick hop. Sizes in cm, times
+ * in seconds.
+ */
+export const KNIGHTS = {
+  squadMin: 4,
+  squadMax: 5,
+  /** Most field knights at once (squads add up when the horn is blown again). */
+  maxField: 10,
+  /** Gap between knights bursting out of the gate. */
+  leaveGap: 0.3,
+  /** Sprint speed as a multiple of TROOPS.speed, and the sprint clip's speed. */
+  sprintScale: 2.5,
+  sprintClipSpeed: 1.5,
+  /** They hold the first junction on the road at least this far from the center. */
+  holdMinRadius: 120,
+  /** Their spots at the junction: this far apart sideways, and the second row this far behind. */
+  holdSpread: 3.5,
+  holdBack: 3,
+  /** At the junction they fight any goblin this close to them. */
+  holdRange: 10,
+  /** Walking back to their spot after a fight (multiple of TROOPS.speed). */
+  postSpeedScale: 1.6,
+  /** The crash: goblins this close to the first goblin met are knocked over (at most crashMax). */
+  crashRadius: 12,
+  crashMax: 6,
+  /** A runner this close to a holding knight hops past it. */
+  dodgeRange: 7,
+  hopTime: 0.35,
+  hopHeight: 3,
+  /** The squad's banner, carried by its first knight (cm). */
+  bannerHeight: 8,
+  bannerWidth: 2.6,
+  bannerLength: 1.8,
+  bannerColor: 0x4673d2,
+  bannerTrim: 0xffc446,
+  poleColor: 0x5a4330,
 };
 
 /**
