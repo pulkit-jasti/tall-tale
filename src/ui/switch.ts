@@ -7,13 +7,16 @@
 //   - Color: the track is the buttons' green when on, a plain grey when off.
 //   - Text: the word "On" or "Off" is written on the track, beside the knob.
 //
-// Poke it anywhere with the index finger to flip it (it has to come from the
-// front; a quick poke counts too, like the buttons). One flip per poke: the
-// finger must pull back before the next. The knob glides over. Same Idle,
-// Ready, Held and Locked looks as every other touchable thing (emissive
-// only), a click on each flip. Locked (a choice that is not open now) it
-// ignores pokes. Its face points along the group's local +z; sizes in the
-// parent's units (cm in the rigs).
+// Slide it, like the slider: touch the knob with the tip of the index finger
+// (from the front) and slide it along; it follows 1:1. Let go (pull the
+// finger back) past the middle and it snaps to the other side and flips;
+// short of the middle it springs back where it was, with a little bounce
+// (an elastic feel). A tick when the knob crosses the middle, a click when
+// it flips. Only one slider or switch moves at a time. Same Idle, Ready,
+// Held and Locked looks as every other touchable thing (emissive only).
+// Locked (a choice that is not open now) it ignores touches. Its face
+// points along the group's local +z; sizes in the parent's units (cm in the
+// rigs).
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3, type CanvasTexture, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { POKE, SWITCH } from '../config/game.js';
@@ -21,7 +24,7 @@ import type { TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { flatMaterial } from '../world/shapes.js';
 import { canvasTexture } from './kit/canvas.js';
-import { changeTouch, type Control } from './kit/controls.js';
+import { canDrag, changeTouch, endDrag, takeDrag, type Control } from './kit/controls.js';
 import { drawOutlined } from './kit/text.js';
 
 export interface SwitchOptions {
@@ -42,12 +45,16 @@ export class Switch implements Control {
   private labelCanvas = document.createElement('canvas');
   private labelTexture: CanvasTexture;
   private label: Mesh;
-  /** Where the knob is now, from 0 (left, off) to 1 (right, on): it glides. */
+  /** Where the knob is now, from 0 (left, off) to 1 (right, on): it follows the finger, or springs to its side. */
   private knobAt: number;
+  /** The spring's speed (knob widths per second). */
+  private knobSpeed = 0;
   private touch: TouchState = 'idle';
   private armed = false;
-  /** Flipped by this push: no new flip until the finger pulls back. */
-  private flipped = false;
+  /** The hand sliding the knob. */
+  private held: HandState | null = null;
+  /** Knob spot minus the fingertip's when grabbed, so the knob does not jump. */
+  private grabOffset = 0;
   private cooldown = 0;
   private lastZ = new Map<HandState, number>();
 
@@ -102,9 +109,10 @@ export class Switch implements Control {
     this.show(false);
   }
 
-  /** A choice that is not open now (for example the megaphone without a mic): it shows Locked and ignores pokes. */
+  /** A choice that is not open now (for example the megaphone without a mic): it shows Locked and ignores touches. */
   setLocked(locked: boolean): void {
     this.locked = locked;
+    if (locked) this.letGo();
     this.setTouch(locked ? 'locked' : 'idle');
   }
 
@@ -113,8 +121,8 @@ export class Switch implements Control {
   }
 
   reset(): void {
+    this.letGo();
     this.armed = false;
-    this.flipped = false;
     this.lastZ.clear();
     this.setTouch(this.locked ? 'locked' : 'idle');
   }
@@ -123,56 +131,99 @@ export class Switch implements Control {
   update(hands: HandState[], dt: number): void {
     const S = SWITCH;
     this.cooldown = Math.max(0, this.cooldown - dt);
-    // The knob glides to its side.
+    this.group.updateWorldMatrix(true, false);
+    const travel = S.width / 2 - S.height / 2;
+    // Sliding: the knob follows the finger along the track until the finger pulls back off the face.
+    if (this.held) {
+      const hand = this.held;
+      this.group.worldToLocal(local.copy(hand.indexTip));
+      if (!hand.tracked || local.z > S.releaseOut || Math.abs(local.y) > S.height * 1.2) {
+        this.release();
+        return;
+      }
+      takeDrag(this);
+      const before = this.knobAt;
+      const x = Math.min(travel, Math.max(-travel, local.x + this.grabOffset));
+      this.knobAt = (x + travel) / (2 * travel);
+      // A tick as it crosses the middle: let go now and it goes the other way.
+      if (before < 0.5 !== this.knobAt < 0.5) this.audio.play('readyTick', undefined, 1, 0.05);
+      this.knobSpeed = 0;
+      this.placeKnob();
+      return;
+    }
+    // Not held: the knob springs to its side, overshooting a little (elastic).
     const goal = this.on ? 1 : 0;
-    if (this.knobAt !== goal) {
-      const step = dt / S.slideTime;
-      this.knobAt = goal > this.knobAt ? Math.min(goal, this.knobAt + step) : Math.max(goal, this.knobAt - step);
+    if (this.knobAt !== goal || this.knobSpeed !== 0) {
+      this.knobSpeed += (S.springStiffness * (goal - this.knobAt) - S.springDamping * this.knobSpeed) * dt;
+      this.knobAt += this.knobSpeed * dt;
+      if (Math.abs(goal - this.knobAt) < 0.002 && Math.abs(this.knobSpeed) < 0.05) {
+        this.knobAt = goal;
+        this.knobSpeed = 0;
+      }
       this.placeKnob();
     }
     if (this.locked) return;
+    // Ready while a fingertip is over the knob, in front of it; grabbed when it touches it.
+    const knobX = this.knobX();
+    const reach = S.knobRadius + S.grabMargin;
     let ready = false;
-    let touching = false;
-    let quick = false;
-    let front = false;
-    this.group.updateWorldMatrix(true, false);
     for (const hand of hands) {
       if (!hand.tracked) {
         this.lastZ.delete(hand);
         continue;
       }
       this.group.worldToLocal(local.copy(hand.indexTip));
-      // A generous zone over the whole switch, and not from far behind it.
-      if (Math.abs(local.x) > S.width / 2 + S.zoneOut || Math.abs(local.y) > S.height / 2 + S.zoneOut || local.z < -S.zoneBehind) {
+      const dx = local.x - knobX;
+      if (dx * dx + local.y * local.y > reach * reach || local.z < -S.zoneBehind) {
         this.lastZ.delete(hand);
         continue;
       }
+      // A quick touch: in front last frame and on it now grabs at once, even if no frame caught the way in.
       const before = this.lastZ.get(hand);
       this.lastZ.set(hand, local.z);
+      const quick = before !== undefined && before > S.touchAt + 0.3;
       if (local.z > S.readyDistance) continue;
       ready = true;
-      if (local.z > S.touchAt + 0.3) front = true;
-      if (local.z <= S.touchAt) {
-        touching = true;
-        if (before !== undefined && before > S.touchAt + 0.3) quick = true;
+      if (local.z > S.touchAt + 0.3) this.armed = true;
+      if (local.z <= S.touchAt && (this.armed || quick) && this.cooldown <= 0 && canDrag(this)) {
+        this.held = hand;
+        this.grabOffset = knobX - local.x;
+        this.knobSpeed = 0;
+        takeDrag(this);
+        this.setTouch('held');
+        return;
       }
     }
-    if (front) this.armed = true;
+    // A finger that arrived from behind or below cannot grab: it has to come from the front.
     if (!ready) this.armed = false;
-    // Pulled back off the face: the next poke may flip it again.
-    if (!touching) this.flipped = false;
-    if (touching && (this.armed || quick) && !this.flipped && this.cooldown <= 0) {
-      this.flipped = true;
-      this.armed = false;
-      this.on = !this.on;
+    this.setTouch(ready ? 'ready' : 'idle');
+  }
+
+  /** Let go: past the middle it flips to the other side, short of it it springs back. */
+  private release(): void {
+    const on = this.knobAt >= 0.5;
+    this.letGo();
+    this.setTouch('idle');
+    if (on !== this.on) {
+      this.on = on;
       this.show(false);
       this.audio.play('buttonClick');
       this.onChange(this.on);
     }
-    this.setTouch(touching && this.flipped ? 'held' : ready ? 'ready' : 'idle');
   }
 
-  /** The color, the word, and the knob (at once when `snap`, else it glides). */
+  private letGo(): void {
+    this.held = null;
+    this.armed = false;
+    endDrag(this);
+  }
+
+  private knobX(): number {
+    const travel = SWITCH.width / 2 - SWITCH.height / 2;
+    return -travel + this.knobAt * travel * 2;
+  }
+
+  /** The color, the word, and the knob (at once when `snap`, else it springs over). */
   private show(snap: boolean): void {
     const S = SWITCH;
     this.trackMaterial.color.setHex(this.on ? S.onColor : S.offColor);
@@ -182,16 +233,18 @@ export class Switch implements Control {
     this.labelTexture.needsUpdate = true;
     // The word sits on the side away from the knob.
     this.label.position.x = (this.on ? -1 : 1) * (S.width / 2 - S.height * 0.95);
-    if (snap) this.knobAt = this.on ? 1 : 0;
+    if (snap) {
+      this.knobAt = this.on ? 1 : 0;
+      this.knobSpeed = 0;
+    }
     this.placeKnob();
   }
 
   private placeKnob(): void {
-    const S = SWITCH;
-    const travel = S.width / 2 - S.height / 2;
-    // Eased, so it settles softly at each end.
-    const t = this.knobAt * this.knobAt * (3 - 2 * this.knobAt);
-    this.knob.position.x = -travel + t * travel * 2;
+    // The bounce may carry it a little past an end, never far.
+    const travel = SWITCH.width / 2 - SWITCH.height / 2;
+    const at = Math.min(1 + SWITCH.overshoot, Math.max(-SWITCH.overshoot, this.knobAt));
+    this.knob.position.x = -travel + at * travel * 2;
   }
 
   private setTouch(state: TouchState): void {

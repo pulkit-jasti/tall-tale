@@ -11,6 +11,11 @@ export interface SoundDef {
   positional: boolean;
   /** Cut a long file after this many seconds. */
   maxSeconds?: number;
+  /**
+   * Plays to its end, once: asked again while it still plays, nothing
+   * happens (no restart, no second copy), and no other sound takes its voice.
+   */
+  once?: boolean;
 }
 
 export const SOUNDS = {
@@ -51,8 +56,12 @@ export const SOUNDS = {
     positional: true,
   },
   pepperShake: { files: ['rpg/handleCoins.ogg', 'rpg/handleCoins2.ogg'], volume: 0.6, positional: true },
-  /** A real medieval hand bell (Freesound, converted to mono WAV). The 10 s ring is cut at 4 s and fades out, so shakes never pile up. */
-  bell: { files: ['144497__wuola__medieval-bell-a3.wav'], volume: 0.8, positional: true, maxSeconds: 4 },
+  /**
+   * A real medieval hand bell (Freesound, converted to mono WAV). The whole
+   * 10 s ring plays, once: shaking on while it rings adds nothing (was cut
+   * at 4 s and rung again on every stroke).
+   */
+  bell: { files: ['144497__wuola__medieval-bell-a3.wav'], volume: 0.8, positional: true, once: true },
   stunned: { files: ['interface/glass_001.ogg', 'interface/glass_002.ogg'], volume: 0.7, positional: false },
   swordClash: {
     files: ['impact/impactMetal_light_000.ogg', 'impact/impactMetal_light_001.ogg', 'impact/impactMetal_medium_000.ogg'],

@@ -417,7 +417,7 @@ export class Goblins {
         g.play('interact-right', true, 1.4);
         break;
       case 'riding':
-        g.play('fall', true, 0.5);
+        g.play('idle');
         break;
       default:
         g.play('idle');
@@ -527,13 +527,13 @@ export class Goblins {
     return goblin;
   }
 
-  /** A balloon rider (src/units/balloons.ts places it under its basket every frame). Null at the unit cap. */
+  /** A balloon rider (src/units/balloons.ts stands it in its basket every frame). Null at the unit cap. */
   spawnRider(): Goblin | null {
     const goblin = this.obtain('grunt');
     if (!goblin) return null;
     goblin.mode = 'riding';
-    // Hanging on with both hands up, kicking slowly.
-    goblin.play('fall', true, 0.5);
+    // Standing in the basket, looking out over the rim.
+    goblin.play('idle');
     return goblin;
   }
 
@@ -778,8 +778,8 @@ export class Goblins {
     goblin.face(temp2.x - temp.x, temp2.z - temp.z);
   }
 
-  /** Lets go anywhere but the mouth: the goblin flies with the hand's speed, then lands. */
-  drop(goblin: Goblin): void {
+  /** Lets go anywhere but the mouth: the goblin flies with the hand's speed, then lands. Returns that speed (cm per second). */
+  drop(goblin: Goblin): number {
     goblin.vx *= GOBLIN_RULES.throwScale;
     goblin.vy *= GOBLIN_RULES.throwScale;
     goblin.vz *= GOBLIN_RULES.throwScale;
@@ -793,6 +793,7 @@ export class Goblins {
     goblin.mode = 'falling';
     goblin.landAs = 'dazed';
     goblin.play('fall', true, 1);
+    return Math.min(speed, GOBLIN_RULES.maxThrowSpeed);
   }
 
   /**

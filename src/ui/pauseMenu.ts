@@ -19,6 +19,7 @@ import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/
 import { mark } from '../debug/perfMarks.js';
 import { access, usesBell } from '../player/accessSettings.js';
 import type { HandState } from '../player/hands.js';
+import { settingsTabRowY } from '../rules/reach.js';
 import {
   Switch,
   type Control,
@@ -130,21 +131,23 @@ export class PauseMenu {
       o.position.set(x, y, 0);
       parent.add(o);
     };
-    this.back = new PokeButton(audio, { radius: S.buttonRadius, icon: 'back' });
+    // Back at the top left, beside the title.
+    this.back = new PokeButton(audio, { radius: S.backRadius, icon: 'back' });
     add(this.back.group, S.backAt[0], S.backAt[1]);
-    // The tabs on the right of the top row: one category of settings at a time, the chosen one green.
+    // The tabs, below everything: one category of settings at a time, the chosen one green.
+    const tabY = settingsTabRowY();
     for (const [i, tab] of SETTINGS_TABS.entries()) {
-      const button = new PokeButton(audio, { radius: S.buttonRadius, icon: tab.icon });
-      add(button.group, S.tabX[i], S.backAt[1]);
+      const button = new PokeButton(audio, { radius: S.tabRadius, icon: tab.icon });
+      add(button.group, S.tabX[i], tabY);
       this.tabButtons.push(button);
       this.settings.root.add(this.tabGroups[tab.id]);
     }
     // Accessibility: measure the reach again, and the bell in place of the megaphone (an on and off switch).
     const controlLeft = S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius;
-    this.reach = new PokeButton(audio, { radius: S.buttonRadius, icon: 'reach' });
-    add(this.reach.group, controlLeft + S.buttonRadius * POKE.rimScale, S.firstRowY, this.tabGroups.access);
+    this.reach = new PokeButton(audio, { radius: S.reachRadius, icon: 'reach' });
+    add(this.reach.group, controlLeft + S.reachRadius * POKE.rimScale, S.firstRowY, this.tabGroups.access);
     this.bellSwitch = new Switch(audio, { on: usesBell() });
-    add(this.bellSwitch.group, controlLeft + SWITCH.width / 2, S.firstRowY - S.rowGap, this.tabGroups.access);
+    add(this.bellSwitch.group, controlLeft + SWITCH.width / 2, S.firstRowY - S.accessRowGap, this.tabGroups.access);
     this.bellSwitch.onChange = (on) => {
       access.setBell(on);
       this.repaintSettings();
@@ -297,26 +300,28 @@ export class PauseMenu {
   }
 
   /**
-   * The settings page: Back, the title and the tabs along the top (the
-   * chosen tab's label bold green and underlined, the others light), then
-   * the chosen tab's rows, each with its name on the left.
+   * The settings page: Back and the title at the top, the chosen tab's
+   * rows, each with its name on the left, then below everything the tabs,
+   * each name beside its button (the chosen one bold green and
+   * underlined, the others light).
    */
   private drawSettings(c: CanvasRenderingContext2D, w: number, h: number): void {
     const S = PAUSE.settings;
     const at = panelMap(S.width, S.height, w, h);
     const left = at.x(S.labelX);
-    const title = at.x(S.titleX);
-    drawTitleBanner(c, 'Settings', title - (S.titleWidth / 2) * at.px, UI_SPACING.top * at.px, S.titleWidth * at.px, 56, 34);
-    // Small labels under the top row's buttons, a little gap below their rims.
-    const under = at.y(S.backAt[1] - S.buttonRadius * POKE.rimScale) + UI_SPACING.labelGap * at.px + 9;
+    drawTitleBanner(c, 'Settings', at.x(S.titleX) - (S.titleWidth / 2) * at.px, UI_SPACING.top * at.px, S.titleWidth * at.px, 56, 34);
+    // Back's label under it, a little gap below its rim.
+    const under = at.y(S.backAt[1] - S.backRadius * POKE.rimScale) + UI_SPACING.labelGap * at.px + 9;
     drawLine(c, 'Back', at.x(S.backAt[0]), under, 110, 18, UI_COLORS.accent);
+    // Each tab's name to the right of its button (the chosen one underlined).
+    const tabY = at.y(settingsTabRowY());
     SETTINGS_TABS.forEach((t, i) => {
       const chosen = t.id === this.tab;
-      const x = at.x(S.tabX[i]);
-      drawLine(c, t.label, x, under, 120, chosen ? 20 : 18, chosen ? UI_COLORS.accent : UI_COLORS.note);
+      const x = at.x(S.tabX[i] + S.tabRadius * POKE.rimScale + UI_SPACING.labelGap);
+      drawLine(c, t.label, x, tabY, 5 * at.px, chosen ? 24 : 21, chosen ? UI_COLORS.accent : UI_COLORS.note, 'left');
       if (chosen) {
         c.fillStyle = UI_COLORS.accent;
-        c.fillRect(x - 32, under + 13, 64, 4);
+        c.fillRect(x, tabY + 14, 64, 3);
       }
     });
     // Each row's name on the left, clear of its control.
@@ -334,7 +339,7 @@ export class PauseMenu {
       return;
     }
     name('Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
-    name('Bell', S.firstRowY - S.rowGap, mic.on ? 'In place of the megaphone' : 'No mic: always the bell', mic.on ? UI_COLORS.note : UI_COLORS.warn);
+    name('Bell', S.firstRowY - S.accessRowGap, mic.on ? 'In place of the megaphone' : 'No mic: always the bell', mic.on ? UI_COLORS.note : UI_COLORS.warn);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {

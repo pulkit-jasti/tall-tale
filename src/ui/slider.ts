@@ -6,11 +6,12 @@
 //     The handle is the buttons' green over a warm parchment fill (no dark
 //     ring around it, that looked odd), and turns grey at 0 (off), so the
 //     state shows in color.
-//   - Touch it with the index finger, on the handle or anywhere on the track
-//     (the handle jumps there, so it works without dragging too), then slide
-//     the finger along: the handle follows 1:1. It lets go once the finger
-//     pulls back off the face, so there is nothing to pinch or hold. Near
-//     the ends it snaps to 0 and to 1, so off and full are easy to hit.
+//   - Touch the handle itself with the tip of the index finger, then slide
+//     the finger along: the handle follows 1:1 (it does not jump to the
+//     finger). Touching the track does nothing (that moved two rows at once).
+//     It lets go once the finger pulls back off the face, so there is
+//     nothing to pinch or hold. Only one slider (or switch) moves at a time.
+//     Near the ends it snaps to 0 and to 1, so off and full are easy to hit.
 //   - The same Idle, Ready and Held looks as every other touchable thing
 //     (emissive only), a tick at every step while it moves and a click when
 //     it is let go, since there are no haptics.
@@ -24,7 +25,7 @@ import { POKE, SLIDER } from '../config/game.js';
 import type { TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { flatMaterial } from '../world/shapes.js';
-import { changeTouch, type Control } from './kit/controls.js';
+import { canDrag, changeTouch, endDrag, takeDrag, type Control } from './kit/controls.js';
 import { clamp01 } from './kit/layout.js';
 
 export interface SliderOptions {
@@ -51,6 +52,8 @@ export class Slider implements Control {
   /** The finger came from the front (it was over the face), so touching the face grabs it. */
   private armed = false;
   private held: HandState | null = null;
+  /** Handle spot minus the fingertip's, along the track, when grabbed: the handle keeps that offset (no jump). */
+  private grabOffset = 0;
   /** Each hand's fingertip depth last frame (while over the track), to catch quick touches. */
   private lastZ = new Map<HandState, number>();
   /** No grab until this runs out (seconds), after a panel opens. */
@@ -100,6 +103,7 @@ export class Slider implements Control {
 
   reset(): void {
     this.held = null;
+    endDrag(this);
     this.armed = false;
     this.lastZ.clear();
     this.setTouch('idle');
@@ -117,16 +121,20 @@ export class Slider implements Control {
       const off = !hand.tracked || local.z > S.releaseOut || Math.abs(local.y) > S.zoneHeight * 1.6;
       if (off) {
         this.held = null;
+        endDrag(this);
         this.setTouch('idle');
         this.audio.play('buttonClick');
         this.onChange(this.value, true);
         return;
       }
-      this.moveTo(local.x, false);
+      takeDrag(this);
+      this.moveTo(local.x + this.grabOffset, false);
       return;
     }
-    // Ready while a finger is over the track, in front of it; grabbed when it touches the face.
+    // Ready while a fingertip is over the handle, in front of it; grabbed when it touches it.
     let ready = false;
+    const handleX = (this.value - 0.5) * this.length;
+    const reach = S.handleRadius + S.handleMargin;
     for (const hand of hands) {
       if (!hand.tracked) {
         this.lastZ.delete(hand);
@@ -134,8 +142,8 @@ export class Slider implements Control {
       }
       this.group.updateWorldMatrix(true, false);
       this.group.worldToLocal(local.copy(hand.indexTip));
-      const along = Math.abs(local.x) <= this.length / 2 + S.handleRadius;
-      if (!along || Math.abs(local.y) > S.zoneHeight || local.z < -S.zoneBehind) {
+      const dx = local.x - handleX;
+      if (dx * dx + local.y * local.y > reach * reach || local.z < -S.zoneBehind) {
         this.lastZ.delete(hand);
         continue;
       }
@@ -145,10 +153,11 @@ export class Slider implements Control {
       const quick = before !== undefined && before > S.touchAt + 0.3;
       if (local.z > S.readyDistance) continue;
       ready = true;
-      if (local.z <= S.touchAt && (this.armed || quick) && this.cooldown <= 0) {
+      if (local.z <= S.touchAt && (this.armed || quick) && this.cooldown <= 0 && canDrag(this)) {
         this.held = hand;
+        this.grabOffset = handleX - local.x;
+        takeDrag(this);
         this.setTouch('held');
-        this.moveTo(local.x, false);
         return;
       }
     }
@@ -157,12 +166,15 @@ export class Slider implements Control {
     this.setTouch(ready ? 'ready' : 'idle');
   }
 
-  /** True if some finger is in front of the face (past where a touch starts). */
+  /** True if some finger is over the handle, in front of its face (past where a touch starts). */
   private frontOf(hands: HandState[]): boolean {
+    const handleX = (this.value - 0.5) * this.length;
+    const reach = SLIDER.handleRadius + SLIDER.handleMargin;
     for (const hand of hands) {
       if (!hand.tracked) continue;
       this.group.worldToLocal(local.copy(hand.indexTip));
-      if (local.z > SLIDER.touchAt + 0.3) return true;
+      const dx = local.x - handleX;
+      if (dx * dx + local.y * local.y <= reach * reach && local.z > SLIDER.touchAt + 0.3) return true;
     }
     return false;
   }

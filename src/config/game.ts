@@ -640,6 +640,8 @@ export const GOBLIN_RULES = {
   throwScale: 1,
   /** Fastest throw, so a tracking glitch cannot launch a goblin off the map (cm per second). */
   maxThrowSpeed: 350,
+  /** The toss lesson counts a goblin let go at least this fast (cm per second): a real throw, not just dropped. */
+  tossLessonSpeed: 60,
   /** Landing faster than this bounces once more (cm per second, downward). */
   bounceSpeed: 120,
   /** Share of the downward speed kept on a bounce. */
@@ -768,23 +770,21 @@ export const FLAGS = {
 /** Win and lose panels, and the poke buttons on them (docs/castle-rules.md section 4). */
 /**
  * Button sizes: every PokeButton uses one of these (cap radius, cm; the rim
- * makes it 1.3 times wider). Across the rim: small 3.6 cm (buttons close
- * together, the settings page), medium 4.9 cm (a secondary button beside a
- * big one), standard 6.2 cm (Next, pause), large 7.5 cm (the pause panel),
- * primary 9.1 cm (Play). Never below min (3 cm across, over Meta's 22 mm
- * minimum target) or above max; PokeButton warns in the dev build. Keep
- * at least 1.2 cm between any two targets.
+ * makes it 1.3 times wider). Across the rim: medium 4.9 cm (a secondary
+ * button beside a big one, Measure reach), standard 6.2 cm (Next, pause,
+ * the settings tabs and Back), large 7.5 cm (the pause panel), primary
+ * 9.1 cm (Play). PokeButton never makes one smaller than min (4.9 cm
+ * across; small, 3.6 cm, is gone: the tabs felt too small) and warns in
+ * the dev build above max. Keep at least 1.2 cm between any two targets.
  */
 export const BUTTON_SIZE = {
-  small: 1.4,
   medium: 1.9,
   standard: 2.4,
   large: 2.9,
   primary: 3.5,
-  min: 1.15,
+  min: 1.9,
   max: 3.5,
 };
-
 /**
  * Breathing room in every menu panel (cm), so nothing feels cramped (it did
  * after the text was cut): no button, slider or line of text comes closer
@@ -804,12 +804,14 @@ export const UI_SPACING = {
  * centerBelowEyes below the eyes, right in front, and no part of it reaches
  * higher than highestAboveEyes or lower than lowestBelowEyes (the panel is
  * moved to fit; the dev server warns about one too tall to fit at all).
- * Added after the settings page's low rows were hard to touch.
+ * Added after the settings page's low rows were hard to touch. Grown a
+ * little (2 and 30 before) for the settings page's tab row: its top
+ * (title, Back) reaches about eye level, its tabs about 29 cm below.
  */
 export const UI_ZONE = {
   centerBelowEyes: 15,
-  highestAboveEyes: 2,
-  lowestBelowEyes: 30,
+  highestAboveEyes: 4,
+  lowestBelowEyes: 34,
 };
 
 export const END_PANEL = {
@@ -833,14 +835,13 @@ export const END_PANEL = {
 /**
  * The draw order of everything drawn on top or in a fixed order (higher
  * draws later, over the lower ones), all in one place so layers never
- * fight: ghost hands and aim dots, tutorial markers, "+1" labels, the stun
+ * fight: ghost hands and aim dots, "+1" labels, the stun
  * ring, the pointer arrows, then the pause panel above all. Used with
  * drawOnTop (src/ui/kit/onTop.ts).
  */
 export const RENDER_ORDER = {
   ghost: 5,
   ghostGlow: 6,
-  markers: 10,
   labels: 20,
   stunWave: 30,
   pointer: 36,
@@ -905,35 +906,48 @@ export const PAUSE = {
   /**
    * The settings page (Settings on the pause panel or the welcome panel): a
    * bigger panel at the same spot, laid out in cm from its middle (x right,
-   * y up). Back at the top left, Measure reach at the top right, then one
-   * row per sound group: its name and level on the left, a slider (SLIDER).
-   * Rows rowGap apart, so the targets keep over 12 mm between them (Meta's
-   * hands guidelines), and everything keeps UI_SPACING from the edges.
+   * y up). Back at the top left (its label under it) beside the title,
+   * then the chosen tab's rows: each its name and level on the left, a
+   * slider (SLIDER) or switch on the right. Below everything, the tabs, each
+   * with its name beside it. Rows rowGap apart, so the targets keep 12 mm
+   * between them (Meta's hands guidelines), and everything keeps UI_SPACING
+   * from the edges.
    */
   // Made shorter (38 to 32 cm) after its low rows were hard to touch: Back and Measure reach share the
   // top row beside the title. Then just one long slider per row (no mute, no minus and plus), the
   // buttons small (BUTTON_SIZE, 3.6 cm across) and the slider handle 3.2 cm. Then no help line, and
   // then more room around and between everything (it felt cramped): 52 by 33, rows 4.8 cm apart.
+  // Then the buttons got bigger (Back 4.9 cm, the tabs 6.2 cm across: the tabs felt too small) and
+  // the tabs moved below everything (floating them out of the panel's top was tried: it looked bad).
+  // The tab row made it taller (39.8 cm), so UI_ZONE grew a little and the rows are 4.4 cm apart.
   settings: {
     width: 52,
-    height: 33,
+    height: 39.8,
     pxPerCm: 15,
-    buttonRadius: BUTTON_SIZE.small,
-    backAt: [-22, 13.2] as [number, number],
+    /** Back, top left. */
+    backRadius: BUTTON_SIZE.min,
+    backAt: [-21.3, 16] as [number, number],
+    /** The tabs, in the bottom row (its y: bottomRowY, UI_SPACING.edge from the bottom edge). */
+    tabRadius: BUTTON_SIZE.standard,
+    /** Measure reach, in the Access tab (smaller, so the bell switch below keeps its gap). */
+    reachRadius: BUTTON_SIZE.min,
     /**
-     * The tabs (Sound, Access) on the right of the top row, beside the title
-     * (its middle and width): the chosen one's cap green with its label bold
-     * and underlined, the others' caps this grey (color, text and a line,
-     * so it reads without relying on color alone). Measure reach moved into
-     * the Access tab, with the bell switch.
+     * The tabs (Sound, Access), below everything, each name to the right of
+     * its button: the chosen one's cap green with its name bold and
+     * underlined, the others' caps this grey (color, text and a line, so it
+     * reads without relying on color alone). Measure reach moved into the
+     * Access tab, with the bell switch.
      */
-    tabX: [12.5, 21] as number[],
+    tabX: [1, 14] as number[],
     tabOffColor: 0x9a948a,
+    /** The title banner, at the top beside Back (its middle and width). */
     titleX: -6,
     titleWidth: 16,
     labelX: -23.8,
-    firstRowY: 6.4,
-    rowGap: 4.8,
+    firstRowY: 9,
+    rowGap: 4.4,
+    /** The Access tab's rows (Measure reach, then the bell switch): farther apart, the button is round. */
+    accessRowGap: 6,
     sliderX: 8.6,
     sliderLength: 27,
   },
@@ -951,17 +965,22 @@ export const PAUSE = {
  * once the finger is back past releaseOut. Ready (hover) within
  * readyDistance in front, within zoneHeight above or below its middle (less
  * than half the settings rows' gap, so two rows never both answer).
- * No minus and plus buttons any more: touching the track jumps the handle.
+ * No minus and plus buttons. Only the handle itself grabs (handleMargin),
+ * not the track (touching the track moved two rows at once), and only one
+ * slider moves at a time.
  */
 /**
  * The on and off switch (src/ui/switch.ts): a 7 by 3 cm rounded track (the
  * whole of it is the target, well over 22 mm), its knob on the right and the
  * track green when on, on the left and grey when off, with the word On or
  * Off written beside the knob, so position, color and text all say the same.
- * Poked like a button (cm in its own frame, face toward +z): a finger within
- * touchAt of its back flips it once, it has to come from the front (within
- * readyDistance), and the zone reaches zoneOut past its edges. The knob
- * glides over in slideTime (seconds).
+ * Slid like the slider (cm in its own frame, face toward +z): a fingertip
+ * within the knob's radius plus grabMargin and within touchAt of its back
+ * grabs the knob (it has to come from the front, within readyDistance),
+ * and it lets go once the finger is back past releaseOut. Let go past the
+ * middle it flips, else it springs back (a tap no longer flips it). The
+ * spring (stiffness, damping, per second) bounces a little, at most
+ * overshoot (a share of the travel) past an end.
  */
 export const SWITCH = {
   width: 7,
@@ -972,11 +991,14 @@ export const SWITCH = {
   onColor: 0x6fae4a,
   offColor: 0x8a847a,
   knobColor: 0xf7e2b0,
-  zoneOut: 0.6,
+  grabMargin: 0.8,
   zoneBehind: 2.5,
   readyDistance: 6,
   touchAt: 2.1,
-  slideTime: 0.18,
+  releaseOut: 4,
+  springStiffness: 260,
+  springDamping: 18,
+  overshoot: 0.08,
 };
 
 export const SLIDER = {
@@ -990,6 +1012,8 @@ export const SLIDER = {
   offColor: 0x9a948a,
   fillColor: 0xe2c48a,
   zoneHeight: 2.2,
+  /** Only the handle grabs: the fingertip within its radius plus this (cm). Touching the track does nothing. */
+  handleMargin: 0.5,
   zoneBehind: 2.5,
   readyDistance: 6,
   touchAt: 2.1,
@@ -1071,11 +1095,17 @@ export const HINT_SIGN = {
   calmBelowEyes: 4,
   moveTime: 0.6,
   /**
+   * A lesson whose target is in the air (the balloon, hint `signLow`): the
+   * bottom edge this high above the board instead (cm), so the sign is
+   * under the balloon and the shot's path to it (up at y, it hid both).
+   */
+  lowY: 18,
+  /**
    * Info steps wait for the player's Next. If Next is not poked within
    * nextBlinkAfter (seconds), it starts to blink (an emissive pulse, per
-   * second) until it is.
+   * second) until it is. Was 5: it blinked while the player was still reading.
    */
-  nextBlinkAfter: 5,
+  nextBlinkAfter: 15,
   nextBlinkColor: 0xfff1a8,
   nextBlinkIntensity: 0.75,
   nextBlinkSpeed: 2.2,
@@ -1088,7 +1118,8 @@ export const HINT_SIGN = {
    */
   nextRadius: BUTTON_SIZE.standard,
   nextAt: 38.5,
-  nextY: 15,
+  /** Same height as the pause button (was 15: the two did not line up). */
+  nextY: PAUSE.button.y,
   nextTiltDeg: 40,
 };
 
@@ -1122,24 +1153,11 @@ export const GHOST_HAND = {
   aimFlow: 0.5,
 };
 
-/** Tutorial markers (src/ui/markers.ts). */
-export const MARKERS = {
-  /** Down arrow size (meters, world). */
-  size: 0.03,
-  /** Above the target (meters) and the bounce height. */
-  lift: 0.02,
-  bob: 0.012,
-  bobSpeed: 4,
-  /** A fallback pulse: the arrow grows this much more for this long (seconds). */
-  pulseScale: 0.8,
-  pulseTime: 2.5,
-};
-
 /**
- * The 3D pointer arrows (src/ui/pointerArrow.ts): in front of the face, a
- * little low, pointing at something only while it is at the very edge of the
- * headset's view or out of it (the Quest 3S sees about 96 by 90 degrees, so
- * about 45 degrees from the middle is the edge). Each blinks (glow between
+ * The 3D pointer arrows (src/ui/pointerArrow.ts): in front of the face,
+ * pointing at something while it is at the very edge of the headset's view
+ * or out of it (the Quest 3S sees about 96 by 90 degrees, so about 45
+ * degrees from the middle is the edge). Each blinks (glow between
  * blinkMin and blinkMax, blinkSpeed times a second). `lesson`:
  * gold, softly, at the lesson's target. `threat`: red, fast, at a goblin
  * hitting the wall, climbing it or running on it out of view, a little
@@ -1154,9 +1172,24 @@ export const POINTER = {
   hideDeg: 32,
   popTime: 0.2,
   renderOrder: RENDER_ORDER.pointer,
-  lesson: { color: 0xf2c14e, glow: 0xb07a10, below: 0.09, blinkMin: 0.25, blinkMax: 0.8, blinkSpeed: 0.8 },
+  /**
+   * The lesson's yellow arrow is the only tutorial marker (the 2D bouncing
+   * arrows are gone): out of view it waits in the middle of the view,
+   * pointing the way; once the target is in view it flies over to it in
+   * flyTime (seconds) and hovers just above it, tip down, bobbing (meters).
+   * The red threat arrow never flies: it just hides once its goblin is in view.
+   */
+  lesson: { color: 0xf2c14e, glow: 0xb07a10, below: 0.03, blinkMin: 0.25, blinkMax: 0.8, blinkSpeed: 0.8, flies: true },
   /** The red one blinks fast and strong, to catch the eye. */
-  threat: { color: 0xe0342a, glow: 0xff2a10, below: 0.16, blinkMin: 0, blinkMax: 1.6, blinkSpeed: 3.5 },
+  threat: { color: 0xe0342a, glow: 0xff2a10, below: 0.16, blinkMin: 0, blinkMax: 1.6, blinkSpeed: 3.5, flies: false },
+  flyTime: 0.45,
+  /** Gap from the tip to the target's top, and the bob. */
+  hoverLift: 0.012,
+  bob: 0.012,
+  bobSpeed: 4,
+  /** A fallback pulse (the lesson calls the eye again): it grows this much more for this long (seconds). */
+  pulseScale: 0.8,
+  pulseTime: 2.5,
   /** The red arrow: only for a goblin hitting the wall that has been out of view this long (seconds), so a glance away does not show it. */
   threatAfter: 1.5,
 };
@@ -1724,8 +1757,6 @@ export const BELL = {
   ringWindow: 0.7,
   /** Harder shaking means a longer stun: the shake speed from ringSpeed up to this gives the full extra stun. */
   hardSpeed: 140,
-  /** Ring sound at most this often (seconds). */
-  soundGap: 0.16,
 };
 
 /** The stun of the megaphone and the bell: every goblin on the board stops, dizzy. */
@@ -2281,9 +2312,16 @@ export const GOBLIN_GEAR = {
 export const BALLOONS = {
   /** Most balloons at once (one instanced mesh for all). */
   max: 6,
-  /** Envelope radius, and its height over the board (center). Riders hang under the basket. */
+  /** Envelope radius, and its height over the board (center). */
   radius: 5.5,
   height: 44,
+  /**
+   * The basket (cm): wide enough for both riders side by side, standing in
+   * it, heads and shoulders over the rim (they used to hang under it).
+   */
+  basketRadius: 2.5,
+  basketHeight: 2.4,
+  riderGap: 1.8,
   /** Riders per balloon (grunts). */
   riders: 2,
   /** Where it comes in from (cm from the center) and how fast it floats (cm per second). */

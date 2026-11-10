@@ -155,6 +155,8 @@ export interface Hint {
   marker?: MarkerTarget;
   /** Ghost aim dots: a see-through arc from the slingshot's pouch to the marker's target (the first trigger lesson). */
   aimDots?: boolean;
+  /** The target is in the air (the balloon): the sign hangs low (HINT_SIGN.lowY), out of the way of it and the shot. */
+  signLow?: boolean;
   /** Shown instead when the lesson goblin is on the board, not in the hand (dropped it). */
   whenDropped?: string;
   /** The food tool this lesson is about, and the text shown instead while it cannot be paid for. */
@@ -216,6 +218,8 @@ export interface TutorialApi {
   /** Goblins picked up and eaten in this battle. */
   picked(): number;
   eaten(): number;
+  /** Goblins thrown away (let go fast enough, away from the mouth) in this battle. */
+  tossed(): number;
   /** Goblins eaten while seasoned (peppered). */
   pepperedEaten(): number;
   /** Slingshot steps done since it appeared, and whether something is in the pouch. */
@@ -377,6 +381,20 @@ function introLessons(): TutorialStep[] {
       (api) => api.eaten() > eatenBefore,
       () => 0,
       { fallbacks: [(api) => api.lessonClimber(true)], timeout: 45 },
+    ),
+    // Right after eating: goblins can also be thrown away. A new climber comes; the lesson waits for a throw.
+    lessonStep(
+      'learn-toss',
+      lesson('You can also throw goblins away! Pinch one, swing your hand and let go. It lands far off, dizzy.', 'pinch', 'lessonGoblin', {
+        demo: 'pinchGoblin',
+      }),
+      (api, since) => api.tossed() > since,
+      (api) => api.tossed(),
+      {
+        start: (api) => api.lessonClimber(false),
+        fallbacks: [(api) => api.lessonClimber(false), (api) => api.lessonClimber(true)],
+        timeout: 45,
+      },
     ),
   ];
 }
@@ -670,6 +688,7 @@ function balloonLessons(): TutorialStep[] {
       'learn-balloon',
       lesson('Look up! A balloon rider! Balloons float over your wall and drop goblins inside. Pop it with your slingshot.', 'target', 'balloon', {
         aimDots: true,
+        signLow: true,
       }),
       (api, since) => api.balloonsPopped() > since,
       (api) => api.balloonsPopped(),

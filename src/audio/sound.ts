@@ -40,7 +40,7 @@ export class GameAudio {
   /** The player's volume for each sound group (pause panel settings). */
   readonly settings = new SoundSettings();
   /** What each voice plays now: its group and its own level, so a settings change can follow it. */
-  private playing = new Map<Audio | PositionalAudio, { category: SoundCategory; level: number }>();
+  private playing = new Map<Audio | PositionalAudio, { name: SoundName; category: SoundCategory; level: number }>();
 
   constructor(
     private scene: Object3D,
@@ -138,15 +138,17 @@ export class GameAudio {
     const def: SoundDef = SOUNDS[name];
     const now = this.listener.context.currentTime;
     if (minGap > 0 && now - (this.lastPlayed.get(name) ?? -Infinity) < minGap) return;
+    // A sound that plays once to its end (the bell): nothing while it still plays.
+    if (def.once && this.isPlaying(name)) return;
     this.lastPlayed.set(name, now);
     const buffer = this.buffers.get(this.rng.pick(def.files));
     if (!buffer) return;
     mark('sound');
     let voice: Audio | PositionalAudio;
     if (def.positional && at) {
-      const index = this.nextPositional;
+      const index = this.freeVoice(this.positional, this.nextPositional);
       const p = this.positional[index];
-      this.nextPositional = (this.nextPositional + 1) % this.positional.length;
+      this.nextPositional = (index + 1) % this.positional.length;
       p.position.copy(at);
       p.updateMatrixWorld();
       // Muffled right from the start if it is behind the head.
@@ -154,10 +156,27 @@ export class GameAudio {
       this.muffle(index, now, true);
       voice = p;
     } else {
-      voice = this.flat[this.nextFlat];
-      this.nextFlat = (this.nextFlat + 1) % this.flat.length;
+      const index = this.freeVoice(this.flat, this.nextFlat);
+      voice = this.flat[index];
+      this.nextFlat = (index + 1) % this.flat.length;
     }
-    this.start(voice, def, buffer, volume, soundCategory(name));
+    this.start(voice, def, buffer, volume, name);
+  }
+
+  /** True while a voice still plays this sound. */
+  isPlaying(name: SoundName): boolean {
+    for (const [voice, playing] of this.playing) if (playing.name === name && voice.isPlaying) return true;
+    return false;
+  }
+
+  /** The next voice from `from` on that is not playing a once sound (those are never cut). All busy: `from` itself. */
+  private freeVoice(pool: (Audio | PositionalAudio)[], from: number): number {
+    for (let k = 0; k < pool.length; k++) {
+      const index = (from + k) % pool.length;
+      const playing = this.playing.get(pool[index]);
+      if (!playing || !pool[index].isPlaying || !(SOUNDS[playing.name] as SoundDef).once) return index;
+    }
+    return from;
   }
 
   /**
@@ -219,10 +238,11 @@ export class GameAudio {
     }
   }
 
-  private start(voice: Audio | PositionalAudio, def: SoundDef, buffer: AudioBuffer, volume: number, category: SoundCategory): void {
+  private start(voice: Audio | PositionalAudio, def: SoundDef, buffer: AudioBuffer, volume: number, name: SoundName): void {
+    const category = soundCategory(name);
     const groupLevel = this.settings.level(category);
     if (groupLevel <= 0) return;
-    this.playing.set(voice, { category, level: def.volume * volume });
+    this.playing.set(voice, { name, category, level: def.volume * volume });
     if (voice.isPlaying) voice.stop();
     voice.setBuffer(buffer);
     voice.duration = def.maxSeconds;

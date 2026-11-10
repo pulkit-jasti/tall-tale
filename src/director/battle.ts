@@ -1,5 +1,5 @@
 // Runs one battle: the tutorial director, the win and lose rules, the flags,
-// the hint sign with its markers, and the end panel. It is the TutorialApi:
+// the hint sign with its arrow, and the end panel. It is the TutorialApi:
 // each director call goes to a game system (wave spawner, goblins, troops,
 // triggers, slingshot, food tools, food jar), and it counts what the player
 // does for the lessons. Nothing tutorial-only lives in those systems.
@@ -45,7 +45,6 @@ import type { PointerArrow } from '../ui/pointerArrow.js';
 import type { LessonBait } from '../units/lessonBait.js';
 import type { GhostHand, ViewFrame } from '../ui/ghostHand.js';
 import type { HintSign, SignContent } from '../ui/hintSign.js';
-import type { Markers } from '../ui/markers.js';
 import type { ThreatCues } from '../ui/threatCues.js';
 import type { UiImageName } from '../ui/kit/index.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
@@ -105,11 +104,10 @@ export interface BattleParts {
   flags: Flags;
   panel: EndPanel;
   sign: HintSign;
-  markers: Markers;
   ghost: GhostHand;
   /** Ghost aim dots from the pouch to the first trigger lesson's keg. */
   ghostAim: GhostAim;
-  /** The gold 3D arrow in front of the face that points at the lesson's target. */
+  /** The gold 3D arrow that points at the lesson's target: in front of the face, or right over it once in view (the only marker). */
   pointer: PointerArrow;
   /** Goblins brought just for a tool's use lesson. */
   bait: LessonBait;
@@ -157,6 +155,8 @@ export class Battle implements TutorialApi {
   private eatenCount = 0;
   private pepperedEatenCount = 0;
   private pickedCount = 0;
+  /** Goblins thrown away (fast enough, GOBLIN_RULES.tossLessonSpeed). */
+  private tossedCount = 0;
   private slingHits = 0;
   private toolUseCount = noTools();
   private toolGrabCount = noTools();
@@ -283,7 +283,7 @@ export class Battle implements TutorialApi {
     this.inWave = false;
     this.starts++;
     this.endTimer = -1;
-    this.eatenCount = this.pepperedEatenCount = this.pickedCount = this.slingHits = this.spun = this.moved = 0;
+    this.eatenCount = this.pepperedEatenCount = this.pickedCount = this.tossedCount = this.slingHits = this.spun = this.moved = 0;
     this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
@@ -346,7 +346,7 @@ export class Battle implements TutorialApi {
     this.clearBoard();
     this.parts.panel.hide();
     this.parts.sign.show(null);
-    this.parts.markers.hide();
+    this.parts.pointer.hide();
     this.parts.ghost.hide();
   }
 
@@ -356,16 +356,15 @@ export class Battle implements TutorialApi {
   }
 
   /**
-   * A lesson's yellow marker and arrow show where to look right now, so the
+   * A lesson's yellow arrow shows where to look right now, so the
    * red threat arrow stays away (it would point at the same lesson goblins).
    */
   lessonPointing = false;
 
-  /** Paused: the sign, the marker and the ghost hand step away. The next update brings them back. */
+  /** Paused: the sign, the arrow and the ghost hand step away. The next update brings them back. */
   hideHints(): void {
     this.lessonPointing = false;
     this.parts.sign.show(null);
-    this.parts.markers.hide();
     this.parts.ghost.hide();
     this.parts.ghostAim.hide();
     this.parts.pointer.hide();
@@ -390,13 +389,13 @@ export class Battle implements TutorialApi {
 
   /** Every frame while measuring. Returns true when it is over (measured, or given up without hands). */
   updateMeasure(dt: number, hands: HandState[], head: Vector3, forward: Vector3): boolean {
-    const { sign, markers } = this.parts;
+    const { sign } = this.parts;
     this.head.copy(head);
     this.forward.copy(forward);
     // The sign stays up, so the ghost arm stretching out in front is clear to see.
     sign.setCalm(false);
     sign.update(dt);
-    markers.hide();
+    this.parts.pointer.hide();
     if (this.measureDone > 0) {
       this.measureDone -= dt;
       if (this.measureDone > 0) return false;
@@ -438,6 +437,11 @@ export class Battle implements TutorialApi {
 
   notePicked(): void {
     this.pickedCount++;
+  }
+
+  /** A goblin let go away from the mouth: a real throw (fast enough, not just dropped) counts for the toss lesson. */
+  noteTossed(speed: number): void {
+    if (speed >= GOBLIN_RULES.tossLessonSpeed) this.tossedCount++;
   }
 
   update(dt: number, hands: HandState[], head: Vector3, forward: Vector3): void {
@@ -489,16 +493,22 @@ export class Battle implements TutorialApi {
     if (panel.update(hands, dt)) this.start();
   }
 
-  /** The hint sign, the marker and the ghost hand for the current step. */
+  /** The hint sign, the arrow and the ghost hand for the current step. */
   private updateHint(dt: number, hands: HandState[], head: Vector3): void {
-    const { sign, markers, goblins, ghost } = this.parts;
-    // In front of the eyes while no wave is fought, up out of the way during one.
+    const { sign, goblins, ghost } = this.parts;
+    const step = (this.director?.current ?? null) as TutorialStep | null;
+    const hint = step?.hint;
+    // Where the sign hangs, decided before it moves (deciding after made a low spot never stick):
+    // in front of the eyes while no wave is fought, up out of the way during one.
     sign.setCalm(!this.inWave);
+    // The reach check: the sign stays up, so the ghost arm stretching out in front is clear to see.
+    if (hint?.reachCheck) sign.setCalm(false);
+    // A target in the air (the balloon): the sign goes low, out of the way of it and the shot.
+    if (hint?.signLow) sign.setLow();
     sign.update(dt);
     this.lessonPointing = false;
     if (!this.running || this.state.phase !== 'playing') {
       sign.show(null);
-      markers.hide();
       ghost.hide();
       this.parts.ghostAim.hide();
       this.parts.pointer.hide();
@@ -507,21 +517,15 @@ export class Battle implements TutorialApi {
     if (this.doneFlash > 0) {
       this.doneFlash -= dt;
       sign.show(this.doneContent);
-      markers.hide();
       ghost.hide();
       this.parts.ghostAim.hide();
       this.parts.pointer.hide();
       return;
     }
-    const step = (this.director?.current ?? null) as TutorialStep | null;
-    const hint = step?.hint;
     this.shownStep = step;
-    // The reach check: the sign stays up, so the ghost arm stretching out in front is clear to see.
-    if (hint?.reachCheck) sign.setCalm(false);
     if (!hint) {
       this.shown = null;
       sign.show(null);
-      markers.hide();
       ghost.hide();
       this.parts.ghostAim.hide();
       this.parts.pointer.hide();
@@ -529,8 +533,7 @@ export class Battle implements TutorialApi {
     }
     const target = this.markerPosition(hint.marker, markerAt);
     this.updateGhost(dt, usesBell() && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
-    markers.update(dt, target);
-    // The 3D arrow in front of the face points at it while it is off to the side.
+    // The 3D arrow: in front of the face while the target is out of view, right over it once in view.
     this.parts.pointer.update(dt, head, this.forward, target);
     this.lessonPointing = target !== null;
     // The first trigger lesson: ghost aim dots from the pouch to the keg.
@@ -943,6 +946,10 @@ export class Battle implements TutorialApi {
     return this.pickedCount;
   }
 
+  tossed(): number {
+    return this.tossedCount;
+  }
+
   eaten(): number {
     return this.eatenCount;
   }
@@ -973,7 +980,7 @@ export class Battle implements TutorialApi {
     if (!this.lessonTrigger?.standing) this.lessonTrigger = this.parts.triggers.readyNearest(kind, this.parts.stage.spin);
     // Only the goblins that are gone (picked up, or knocked out another way) are replaced.
     if (this.lessonTrigger) this.parts.triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);
-    this.parts.markers.pulse();
+    this.parts.pointer.pulse();
   }
 
   endTriggerLesson(): void {

@@ -50,6 +50,8 @@ export class GrabEat {
   onEat: (goblin: Goblin) => void = () => {};
   /** Called with each goblin picked up (the tutorial waits for it). */
   onGrab: (goblin: Goblin) => void = () => {};
+  /** Called with each goblin let go away from the mouth, and how fast it flew off (cm per second): the toss lesson waits for one. */
+  onToss: (goblin: Goblin, speed: number) => void = () => {};
 
   /** True while a hand holds this goblin. */
   isHolding(goblin: Goblin): boolean {
@@ -107,8 +109,9 @@ export class GrabEat {
           this.eat(goblin, headPosition, headForward);
           this.clearHeld(slot);
         } else if (letGo) {
-          this.goblins.drop(goblin);
+          const speed = this.goblins.drop(goblin);
           this.clearHeld(slot);
+          this.onToss(goblin, speed);
         }
         continue;
       }

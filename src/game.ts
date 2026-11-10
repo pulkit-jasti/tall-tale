@@ -20,7 +20,6 @@ import { PointerArrow } from './ui/pointerArrow.js';
 import { LessonBait } from './units/lessonBait.js';
 import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
-import { Markers } from './ui/markers.js';
 import { ThreatCues } from './ui/threatCues.js';
 import { loadUiImages } from './ui/kit/index.js';
 import { WaveSpawner } from './units/waveSpawner.js';
@@ -260,7 +259,6 @@ export class GameSystem extends createSystem({}) {
       flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
       panel: this.endPanel,
       sign: this.sign,
-      markers: new Markers(root),
       ghost,
       ghostAim: new GhostAim(root),
       pointer: new PointerArrow(root),
@@ -293,6 +291,7 @@ export class GameSystem extends createSystem({}) {
       this.audio.play('balloonPop', world);
     };
     this.grabEat.onGrab = () => this.battle.notePicked();
+    this.grabEat.onToss = (_goblin, speed) => this.battle.noteTossed(speed);
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
     for (const tool of this.tools) tool.setVisible(false);

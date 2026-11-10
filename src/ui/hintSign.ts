@@ -41,11 +41,14 @@ export class HintSign {
   /** The sign's middle in a wave (up, out of the way), while no wave is fought (in front of the eyes), and where it goes now (cm). */
   private battleY: number;
   private calmY: number;
+  /** Low, under the way to a target in the air (the balloon lesson), so neither it nor the shot is hidden. */
+  private lowY: number;
   private targetY: number;
 
   constructor(parent: Object3D, audio: GameAudio) {
     const { width, height, radius, y, tiltDeg } = HINT_SIGN;
     this.battleY = centerAbove(y, height, tiltDeg);
+    this.lowY = centerAbove(HINT_SIGN.lowY, height, tiltDeg);
     this.calmY = BOARD.eyeToBoard * 100 - HINT_SIGN.calmBelowEyes;
     this.targetY = this.calmY;
     this.panel = new Panel(parent, {
@@ -75,6 +78,11 @@ export class HintSign {
    */
   setCalm(calm: boolean): void {
     this.targetY = calm ? this.calmY : this.battleY;
+  }
+
+  /** A lesson whose target is in the air: the sign glides down, below the way to it (call after setCalm). */
+  setLow(): void {
+    this.targetY = this.lowY;
   }
 
   show(content: SignContent | null): void {

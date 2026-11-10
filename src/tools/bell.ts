@@ -77,19 +77,22 @@ export class Bell extends HandTool {
     this.lastDirection.copy(direction);
     this.hasDirection = true;
     if (!turned) return;
-    // One stroke: the bell rings, louder the harder it is shaken.
+    // One stroke: the bell rings, louder the harder it is shaken. The ring plays once to its end:
+    // strokes while it still rings add no sound (the sound is a `once` sound).
     const hard = Math.min(1, (this.peak - BELL.ringSpeed) / (BELL.hardSpeed - BELL.ringSpeed));
     this.peak = 0;
     this.bodyToWorld(this.middleLocal, world);
-    this.audio.play('bell', world, 0.6 + 0.4 * hard, BELL.soundGap);
+    this.audio.play('bell', world, 0.6 + 0.4 * hard);
     const shake = this.time - this.lastStroke < BELL.ringWindow;
     this.lastStroke = this.time;
     if (!shake) return;
-    if (this.active) {
-      // Ringing on: the stun lasts longer.
+    if (this.active && this.stunWave.active) {
+      // Ringing on while the stun runs: it lasts longer.
       this.stunWave.extend(STUN.extraPerSecond * (0.25 + 0.25 * hard));
       return;
     }
+    // A new stun. Also while the use is still on but the last stun ran out (the tutorial holds the use
+    // open): extending a finished stun did nothing, so goblins that came after it were never stunned.
     if (!this.tryUse()) return;
     this.onUse(this.stunWave.stun(STUN.baseSeconds + STUN.hardExtra * hard, world));
   }

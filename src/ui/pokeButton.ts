@@ -55,9 +55,10 @@ export class PokeButton implements Control {
     options: ButtonOptions,
   ) {
     const { segments, travel } = POKE;
-    const radius = options.radius;
-    if (import.meta.env.DEV && (radius < BUTTON_SIZE.min - 1e-6 || radius > BUTTON_SIZE.max + 1e-6)) {
-      console.warn(`[ui] a ${options.icon} button of radius ${radius} cm is outside BUTTON_SIZE (${BUTTON_SIZE.min} to ${BUTTON_SIZE.max}): pick a size from BUTTON_SIZE`);
+    // Never smaller than the minimum (easy to hit with a fingertip), whatever size was asked for.
+    const radius = Math.max(options.radius, BUTTON_SIZE.min);
+    if (import.meta.env.DEV && radius > BUTTON_SIZE.max + 1e-6) {
+      console.warn(`[ui] a ${options.icon} button of radius ${radius} cm is over BUTTON_SIZE.max (${BUTTON_SIZE.max}): pick a size from BUTTON_SIZE`);
     }
     const depth = options.depth ?? radius * POKE.depthShare;
     this.radius = radius;

@@ -19,6 +19,7 @@ import {
   SLINGSHOT,
   SWATTER,
   TOOL_SPOTS,
+  UI_SPACING,
   UI_ZONE,
 } from '../config/game.js';
 
@@ -53,6 +54,12 @@ export function uiCenterY(height: number, tiltDeg: number): number {
   return center;
 }
 
+/** The settings page's tab row, below everything: its y on the panel (cm from its middle). */
+export function settingsTabRowY(): number {
+  const S = PAUSE.settings;
+  return -S.height / 2 + S.tabRadius * POKE.rimScale + UI_SPACING.edge;
+}
+
 /** True if a panel this tall fits inside UI_ZONE at all. */
 export function fitsUiZone(height: number, tiltDeg: number): boolean {
   return height * Math.cos((tiltDeg * Math.PI) / 180) <= UI_ZONE.highestAboveEyes + UI_ZONE.lowestBelowEyes;
@@ -73,11 +80,14 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
   const P = PAUSE.panel;
   const pauseCenter = uiCenterY(P.height, P.tiltDeg);
   const pauseDown = -(P.height / 2 - P.buttonRadius * POKE.rimScale - P.buttonMargin);
-  // The settings page: its lowest sound row and its top row (Back, Measure reach) at the sides.
+  // A balloon rider's middle: it stands on the basket's floor (src/units/balloons.ts), a grunt 3.9 cm tall.
+  const riderMiddle = BALLOONS.height - (BALLOONS.radius * 1.15 + 4.2 + BALLOONS.basketHeight / 2 - 0.2) + 3.9 * 0.5;
+  // The settings page: its lowest sound row, Back (top left) and the tabs (bottom row).
   const S = PAUSE.settings;
   const settingsCenter = uiCenterY(S.height, P.tiltDeg);
   const lowestRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.firstRowY - 4 * S.rowGap, S.sliderX + S.sliderLength / 2);
-  const topRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.backAt[1], S.backAt[0]);
+  const backButton = onPanel(P.radius, settingsCenter, P.tiltDeg, S.backAt[1], S.backAt[0]);
+  const tabRow = onPanel(P.radius, settingsCenter, P.tiltDeg, settingsTabRowY(), S.tabX[S.tabX.length - 1]);
   return [
     { name: 'ring handle', radius: HANDLES.radius, y: HANDLES.ringY },
     { name: 'slingshot handle', radius: TOOL_SPOTS.slingshot.radius, y: top + SLINGSHOT.handleHeight / 2 },
@@ -86,7 +96,8 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
     { name: 'bell handle', radius: TOOL_SPOTS.rightSide.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
     { name: 'megaphone grip', radius: TOOL_SPOTS.rightSide.radius, y: top + (MEGAPHONE.gripFrom + MEGAPHONE.gripTo) / 2 },
-    { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY },
+    // At the pause button's height, so like it a little past the sweet spot.
+    { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY, rare: true },
     // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.
     { name: 'pause button', radius: PAUSE.button.at, y: PAUSE.button.y, rare: true },
     { name: 'end panel button', ...endButton },
@@ -103,12 +114,13 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pause panel middle buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, P.buttonGap / 2) },
     { name: 'pause panel outer buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, 1.5 * P.buttonGap) },
     { name: 'settings lowest row (slider end)', ...lowestRow, rare: true },
-    { name: 'settings top row (Back)', ...topRow, rare: true },
+    { name: 'settings Back (top left)', ...backButton, rare: true },
+    { name: 'settings tabs (bottom row)', ...tabRow, rare: true },
     { name: 'climber on the rampart', radius: CASTLE.rampartRadius, y: CASTLE.wallHeight + 2, rare: true },
     { name: 'intruder at the courtyard edge', radius: CASTLE.courtyardMax, y: 2, rare: true },
-    // A balloon rider while it is dropped into the courtyard (its middle, under the basket), and as it crosses the wall.
-    { name: 'balloon rider over the courtyard', radius: BALLOONS.dropRadius, y: BALLOONS.height - BALLOONS.radius * 1.15 - 5.1 - 3.9 * 0.5 },
-    { name: 'balloon rider over the wall', radius: CASTLE.wallOut, y: BALLOONS.height - BALLOONS.radius * 1.15 - 5.1 - 3.9 * 0.5, rare: true },
+    // A balloon rider while it is dropped into the courtyard (its middle, standing in the basket), and as it crosses the wall.
+    { name: 'balloon rider over the courtyard', radius: BALLOONS.dropRadius, y: riderMiddle },
+    { name: 'balloon rider over the wall', radius: CASTLE.wallOut, y: riderMiddle, rare: true },
   ];
 }
 

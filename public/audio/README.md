@@ -46,7 +46,7 @@ Check each file's license on its Freesound page (the number in the name is the s
 | Balloon pop (`balloonPop`) | `372182__supersound23__pop.mp3` | |
 | Wave horn (`waveHorn`) | `539956__adharca__war-horn.wav` | |
 | Win fanfare (`winFanfare`) | `99961__cgeffex__medieval-fanfare_neonaeon_tweaked-by-cgeffex.wav` | |
-| Bell (`bell`) | `144497__wuola__medieval-bell-a3.wav` | Converted from the AIFF download (the Quest browser cannot play AIFF) to mono WAV with macOS `afconvert`; the AIFF was deleted. 10 s, cut at 4 s in code |
+| Bell (`bell`) | `144497__wuola__medieval-bell-a3.wav` | Converted from the AIFF download (the Quest browser cannot play AIFF) to mono WAV with macOS `afconvert`; the AIFF was deleted. 10 s, played whole and once (not again while it rings) |
 
 Downloaded but not used yet:
 
