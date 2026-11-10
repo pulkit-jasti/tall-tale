@@ -5,6 +5,7 @@
 import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
+import { usesBell } from './player/accessSettings.js';
 import { GameAudio } from './audio/sound.js';
 import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
@@ -114,6 +115,8 @@ export class GameSystem extends createSystem({}) {
   private endPanel!: EndPanel;
   /** The settings page is open from the welcome panel, and the reach check was started from it. */
   private titleSettings = false;
+  /** Which stun tool was in use last frame, to swap it when the setting changes. */
+  private usedBell = usesBell();
   private titleMeasure = false;
   private spawner!: ToySpawner;
   private battle!: Battle;
@@ -508,8 +511,14 @@ export class GameSystem extends createSystem({}) {
     this.balloons.update(unitDt);
     this.gearDebris.update(unitDt);
     this.triggers.update(unitDt);
-    // No mic: the bell is out instead. If the megaphone is ever out anyway (debug), it is tied down.
-    this.megaphone.tiedDown = !mic.on;
+    // The bell is out instead of the megaphone (no mic, or chosen in settings): it swaps live, and a
+    // megaphone that is ever out anyway (debug) is tied down.
+    const bell = usesBell();
+    if (bell !== this.usedBell) {
+      this.usedBell = bell;
+      this.battle.swapStunTool();
+    }
+    this.megaphone.tiedDown = bell;
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
@@ -737,9 +746,9 @@ export class GameSystem extends createSystem({}) {
         console.info('[debug] food 0: the food tools show Locked');
         break;
       case 'showTools':
-        // Only one stun tool is ever out: the megaphone with a mic, the bell without.
+        // Only one stun tool is ever out: the megaphone with a mic, the bell without (or when chosen).
         for (const tool of this.tools) {
-          if (tool === (mic.on ? this.bell : this.megaphone)) continue;
+          if (tool === (usesBell() ? this.megaphone : this.bell)) continue;
           if (!tool.visible) tool.appear();
         }
         break;

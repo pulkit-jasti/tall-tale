@@ -27,7 +27,7 @@
 // into one StaticBatch: a few draw calls for all of it.
 import { Group, Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import { BOARD, ROADS, SETTLEMENTS, type LandmarkKind } from '../config/game.js';
-import { groundAt, polarX, polarZ } from '../rules/boardMath.js';
+import { degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import { cloneStatic, loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
 import type { Road } from './roads.js';
@@ -430,11 +430,14 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
   };
 
   for (const village of plan.villages) {
-    // Houses around the square, doors toward it.
+    // Houses in an arc on the far side of the square, doors toward it: the side toward the castle stays open,
+    // so the player looks into the square and sees the villagers there (houses all round hid them).
     const count = rng.int(SETTLEMENTS.villages.houses[1] - SETTLEMENTS.villages.houses[0] + 1) + SETTLEMENTS.villages.houses[0];
-    const start = rng.range(0, Math.PI * 2);
+    const away = Math.atan2(village.x, -village.z);
+    const arc = degToRad(SETTLEMENTS.villages.houseArcDeg);
+    const start = away - arc / 2;
     for (let i = 0; i < count; i++) {
-      const a = start + (i / count) * Math.PI * 2 + rng.range(-0.2, 0.2);
+      const a = start + (count > 1 ? (i / (count - 1)) * arc : arc / 2) + rng.range(-0.08, 0.08);
       const d = village.size * rng.range(0.55, 0.68);
       const x = village.x + Math.sin(a) * d;
       const z = village.z - Math.cos(a) * d;
@@ -481,9 +484,10 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     // A banner on the square's edge (the kingdom's red or green), and hedges between some houses.
     const [fx, fz] = inSquare(0.45);
     add(rng.next() < 0.5 ? bannerRed : bannerGreen, place(fx, y(fx, fz), fz, rng.range(0, Math.PI * 2), 5));
-    for (let i = 0; i < count; i++) {
+    // Between the houses of the arc only, never on the open side toward the castle.
+    for (let i = 0; i < count - 1; i++) {
       if (rng.next() < 0.4) continue;
-      const a = start + ((i + 0.5) / count) * Math.PI * 2;
+      const a = start + ((i + 0.5) / (count - 1)) * arc;
       const hx = village.x + Math.sin(a) * village.size * 0.82;
       const hz = village.z - Math.cos(a) * village.size * 0.82;
       // The hedge's length (its z) along the ring of houses.

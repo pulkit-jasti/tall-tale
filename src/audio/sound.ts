@@ -34,6 +34,7 @@ export class GameAudio {
   private lastPlayed = new Map<SoundName, number>();
   private listener: AudioListener;
   private muffles: Muffle[] = [];
+  private suspendTimer: ReturnType<typeof setTimeout> | undefined;
   /** The background music, on the same listener. */
   readonly music: Music;
   /** The player's volume for each sound group (pause panel settings). */
@@ -105,8 +106,28 @@ export class GameAudio {
   /** Silences all sound while the game is paused (Quest menu open), and brings it back. */
   setPaused(paused: boolean): void {
     const context = this.listener.context;
-    if (paused && context.state === 'running') void context.suspend();
-    else if (!paused && context.state === 'suspended') void context.resume();
+    const master = this.listener.gain.gain;
+    const now = context.currentTime;
+    clearTimeout(this.suspendTimer);
+    if (paused && context.state === 'running') {
+      // Everything (the music too) fades out over a moment, then the audio stops, instead of cutting off.
+      master.cancelScheduledValues(now);
+      master.setValueAtTime(master.value, now);
+      master.linearRampToValueAtTime(0, now + SOUND_MIX.pauseFade);
+      this.suspendTimer = setTimeout(() => {
+        if (context.state === 'running') void context.suspend();
+      }, SOUND_MIX.pauseFade * 1000 + 50);
+    } else if (!paused) {
+      // And fades back in once it runs again.
+      const fadeIn = (): void => {
+        const t = context.currentTime;
+        master.cancelScheduledValues(t);
+        master.setValueAtTime(0, t);
+        master.linearRampToValueAtTime(1, t + SOUND_MIX.pauseFade);
+      };
+      if (context.state === 'suspended') void context.resume().then(fadeIn);
+      else if (master.value < 1) fadeIn();
+    }
   }
 
   /**

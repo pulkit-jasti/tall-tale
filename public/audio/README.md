@@ -20,7 +20,7 @@ Most are CC0 from Kenney packs (the Freesound files are listed below). Short `.o
 | Swatter whoosh | `rpg/knifeSlice`, `drawKnife1`, `drawKnife2` |
 | Swatter splat | `impact/impactSoft_heavy_*` |
 | Pepper shake | `rpg/handleCoins`, `handleCoins2` |
-| Bell (stun by hand) | `impact/impactBell_heavy_000`, `_001` |
+| Bell (stun by hand) | `144497__wuola__medieval-bell-a3.wav` (Freesound, below; was `impact/impactBell_heavy_000`, `_001`) |
 | Wall hit | `impact/impactMining_*` |
 | Tree creak, crash | `rpg/creak*`, `impact/impactWood_heavy_*` |
 | Boulder, keg debris | `impact/impactPlank_medium_000`, `impactWood_heavy_*` |
@@ -46,10 +46,10 @@ Check each file's license on its Freesound page (the number in the name is the s
 | Balloon pop (`balloonPop`) | `372182__supersound23__pop.mp3` | |
 | Wave horn (`waveHorn`) | `539956__adharca__war-horn.wav` | |
 | Win fanfare (`winFanfare`) | `99961__cgeffex__medieval-fanfare_neonaeon_tweaked-by-cgeffex.wav` | |
+| Bell (`bell`) | `144497__wuola__medieval-bell-a3.wav` | Converted from the AIFF download (the Quest browser cannot play AIFF) to mono WAV with macOS `afconvert`; the AIFF was deleted. 10 s, cut at 4 s in code |
 
 Downloaded but not used yet:
 
-- `144497__wuola__medieval-bell-a3.aiff`: the Quest browser cannot play AIFF. Convert to `.ogg` first.
 - `276874__lucabia__sword-hits.wav`: 10 s of many hits. Cut into single hits for `swordClash`.
 - Music (`MUSIC` in `src/config/sounds.ts`): `812170__giangallegos__ambient-music.mp3` on the menus and the pause panel, `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac` in battle (looped at 32 s).
 - `875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.wav`: ambience idea. 20 MB, needs a shorter loop as `.ogg`.

@@ -13,11 +13,15 @@
 // Sizes in cm (the rigs are scaled 0.01), poked like every other button.
 import { Group, type Object3D, type Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { BOARD, PAUSE, POKE, SLIDER } from '../config/game.js';
+import { mic } from '../audio/mic.js';
+import { BOARD, PAUSE, POKE, SLIDER, SWITCH, UI_SPACING } from '../config/game.js';
 import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
+import { access, usesBell } from '../player/accessSettings.js';
 import type { HandState } from '../player/hands.js';
 import {
+  Switch,
+  type Control,
   armControls,
   bottomRowY,
   drawLine,
@@ -43,6 +47,14 @@ const BUTTONS: { action: PauseAction | 'settings'; icon: ButtonIcon; label: stri
   { action: 'resetTable', icon: 'table', label: 'Reset table' },
   { action: 'settings', icon: 'settings', label: 'Settings' },
   { action: 'restart', icon: 'restart', label: 'Restart' },
+];
+
+/** The settings' categories, as tabs along the top of the page. */
+type SettingsTab = 'sound' | 'access';
+
+const SETTINGS_TABS: { id: SettingsTab; icon: ButtonIcon; label: string }[] = [
+  { id: 'sound', icon: 'sound', label: 'Sound' },
+  { id: 'access', icon: 'access', label: 'Access' },
 ];
 
 /** One row of the settings page's sound section. */
@@ -74,6 +86,11 @@ export class PauseMenu {
   private back: PokeButton;
   private reach: PokeButton;
   private rows: SoundRow[] = [];
+  /** The settings' categories: one tab button each, and a group with its controls (only the chosen one shows). */
+  private tab: SettingsTab = 'sound';
+  private tabButtons: PokeButton[] = [];
+  private tabGroups: Record<SettingsTab, Group> = { sound: new Group(), access: new Group() };
+  private bellSwitch: Switch;
   /** Follows the head lazily while open, like the Quest's own menus. */
   private follow: LazyFollow;
 
@@ -87,7 +104,7 @@ export class PauseMenu {
     parent.add(this.holder);
     this.follow = new LazyFollow(this.holder, { ...PAUSE.follow, recenter: 0.12 });
     // Right in front of the eyes, never too high or too low (UI_ZONE).
-    this.panel = new Panel(this.holder, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: 576, canvasScale: 2 });
+    this.panel = new Panel(this.holder, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: Math.round(width * 15), canvasScale: 2 });
     const rim = buttonRadius * POKE.rimScale;
     const buttonY = bottomRowY(height, rim, buttonMargin);
     BUTTONS.forEach((b, i) => {
@@ -109,19 +126,34 @@ export class PauseMenu {
       layoutWidth: Math.round(S.width * S.pxPerCm),
       canvasScale: 2,
     });
-    const add = (o: Object3D, x: number, y: number): void => {
+    const add = (o: Object3D, x: number, y: number, parent: Object3D = this.settings.root): void => {
       o.position.set(x, y, 0);
-      this.settings.root.add(o);
+      parent.add(o);
     };
     this.back = new PokeButton(audio, { radius: S.buttonRadius, icon: 'back' });
     add(this.back.group, S.backAt[0], S.backAt[1]);
+    // The tabs on the right of the top row: one category of settings at a time, the chosen one green.
+    for (const [i, tab] of SETTINGS_TABS.entries()) {
+      const button = new PokeButton(audio, { radius: S.buttonRadius, icon: tab.icon });
+      add(button.group, S.tabX[i], S.backAt[1]);
+      this.tabButtons.push(button);
+      this.settings.root.add(this.tabGroups[tab.id]);
+    }
+    // Accessibility: measure the reach again, and the bell in place of the megaphone (an on and off switch).
+    const controlLeft = S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius;
     this.reach = new PokeButton(audio, { radius: S.buttonRadius, icon: 'reach' });
-    add(this.reach.group, S.reachAt[0], S.reachAt[1]);
+    add(this.reach.group, controlLeft + S.buttonRadius * POKE.rimScale, S.firstRowY, this.tabGroups.access);
+    this.bellSwitch = new Switch(audio, { on: usesBell() });
+    add(this.bellSwitch.group, controlLeft + SWITCH.width / 2, S.firstRowY - S.rowGap, this.tabGroups.access);
+    this.bellSwitch.onChange = (on) => {
+      access.setBell(on);
+      this.repaintSettings();
+    };
     SOUND_CATEGORIES.forEach((c, i) => {
       const y = S.firstRowY - i * S.rowGap;
       // Just a slider per group: all the way down is off.
       const slider = new Slider(audio, { length: S.sliderLength, steps: SOUND_SETTINGS.steps, value: audio.settings.volume(c.id) });
-      add(slider.group, S.sliderX, y);
+      add(slider.group, S.sliderX, y, this.tabGroups.sound);
       // While dragging only the sound follows (no repaint); the number on the panel updates when it is let go.
       slider.onChange = (value, final) => {
         audio.settings.setVolume(c.id, value, final);
@@ -179,14 +211,34 @@ export class PauseMenu {
     this.page = page;
     this.panel.visible = page === 'main';
     this.settings.visible = page === 'settings';
+    // It follows the head only once the eyes go past the page's edge: the big settings page lets them roam to its corners.
+    this.follow.fitTo(page === 'main' ? PAUSE.panel.width : PAUSE.settings.width, PAUSE.panel.radius);
     (page === 'main' ? this.panel : this.settings).popIn(0.2);
     if (page === 'main') {
       armControls(this.buttons);
       return;
     }
-    armControls([this.back, this.reach, ...this.rows.map((r) => r.slider)]);
     for (const row of this.rows) row.slider.setValue(this.audio.settings.volume(row.category));
+    this.showTab(this.tab);
+  }
+
+  /** One category of settings shows, its tab green and the others grey; its controls start fresh. */
+  private showTab(tab: SettingsTab): void {
+    this.tab = tab;
+    SETTINGS_TABS.forEach((t, i) => {
+      this.tabGroups[t.id].visible = t.id === tab;
+      this.tabButtons[i].setColor(t.id === tab ? POKE.color : PAUSE.settings.tabOffColor);
+    });
+    // Without a mic the bell is the only choice: the switch shows On, locked.
+    this.bellSwitch.set(usesBell());
+    this.bellSwitch.setLocked(!mic.on);
+    armControls([this.back, ...this.tabButtons, ...this.tabControls()]);
     this.repaintSettings();
+  }
+
+  /** The controls of the tab that shows. */
+  private tabControls(): Control[] {
+    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch];
   }
 
   private repaintSettings(): void {
@@ -229,38 +281,67 @@ export class PauseMenu {
       else this.showPage('main');
       return null;
     }
+    for (const [i, button] of this.tabButtons.entries()) {
+      if (button.update(hands, dt) && SETTINGS_TABS[i].id !== this.tab) {
+        this.showTab(SETTINGS_TABS[i].id);
+        return null;
+      }
+    }
+    if (this.tab === 'sound') {
+      for (const row of this.rows) row.slider.update(hands, dt);
+      return null;
+    }
     if (this.reach.update(hands, dt)) return 'measureReach';
-    for (const row of this.rows) row.slider.update(hands, dt);
+    this.bellSwitch.update(hands, dt);
     return null;
   }
 
-  /** The settings page: a banner, the reach row, then one row per sound group (its name and volume). */
+  /**
+   * The settings page: Back, the title and the tabs along the top (the
+   * chosen tab's label bold green and underlined, the others light), then
+   * the chosen tab's rows, each with its name on the left.
+   */
   private drawSettings(c: CanvasRenderingContext2D, w: number, h: number): void {
     const S = PAUSE.settings;
     const at = panelMap(S.width, S.height, w, h);
     const left = at.x(S.labelX);
-    drawTitleBanner(c, 'Settings', w * 0.3, 10, w * 0.4, 56, 34);
-    // Small labels under the two top buttons.
-    const under = at.y(S.backAt[1] - S.buttonRadius * POKE.rimScale) + 12;
+    const title = at.x(S.titleX);
+    drawTitleBanner(c, 'Settings', title - (S.titleWidth / 2) * at.px, UI_SPACING.top * at.px, S.titleWidth * at.px, 56, 34);
+    // Small labels under the top row's buttons, a little gap below their rims.
+    const under = at.y(S.backAt[1] - S.buttonRadius * POKE.rimScale) + UI_SPACING.labelGap * at.px + 9;
     drawLine(c, 'Back', at.x(S.backAt[0]), under, 110, 18, UI_COLORS.accent);
-    drawLine(c, 'Reach', at.x(S.reachAt[0]), under, 110, 18, UI_COLORS.accent);
-    // Each group's name and level on the left, clear of its slider.
+    SETTINGS_TABS.forEach((t, i) => {
+      const chosen = t.id === this.tab;
+      const x = at.x(S.tabX[i]);
+      drawLine(c, t.label, x, under, 120, chosen ? 20 : 18, chosen ? UI_COLORS.accent : UI_COLORS.note);
+      if (chosen) {
+        c.fillStyle = UI_COLORS.accent;
+        c.fillRect(x - 32, under + 13, 64, 4);
+      }
+    });
+    // Each row's name on the left, clear of its control.
     const labelRight = at.x(S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius - 1);
-    for (const row of this.rows) {
-      const level = this.audio.settings.level(row.category);
-      const y = at.y(row.y);
-      drawLine(c, row.label, left, y - 10, labelRight - left, 26, UI_COLORS.ink, 'left');
-      drawLine(c, level <= 0 ? 'Off' : `${Math.round(level * 100)}%`, left, y + 14, 90, 20, level <= 0 ? UI_COLORS.warn : UI_COLORS.accent, 'left');
+    const name = (text: string, rowY: number, note: string, noteColor: string): void => {
+      const y = at.y(rowY);
+      drawLine(c, text, left, y - 10, labelRight - left, 26, UI_COLORS.ink, 'left');
+      drawLine(c, note, left, y + 14, labelRight - left, 20, noteColor, 'left');
+    };
+    if (this.tab === 'sound') {
+      for (const row of this.rows) {
+        const level = this.audio.settings.level(row.category);
+        name(row.label, row.y, level <= 0 ? 'Off' : `${Math.round(level * 100)}%`, level <= 0 ? UI_COLORS.warn : UI_COLORS.accent);
+      }
+      return;
     }
+    name('Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
+    name('Bell', S.firstRowY - S.rowGap, mic.on ? 'In place of the megaphone' : 'No mic: always the bell', mic.on ? UI_COLORS.note : UI_COLORS.warn);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {
-    const bannerTop = 18;
-    const bannerH = 74;
-    drawTitleBanner(c, 'Paused', w * 0.18, bannerTop, w * 0.64, bannerH, 40);
-    // A word over each button, nothing else.
     const at = panelMap(PAUSE.panel.width, PAUSE.panel.height, w, this.panel.layoutHeight);
-    const labelY = this.buttonTopPx - 18;
+    drawTitleBanner(c, 'Paused', w * 0.25, UI_SPACING.top * at.px, w * 0.5, 74, 40);
+    // A word over each button, nothing else, a little gap above their rims.
+    const labelY = this.buttonTopPx - UI_SPACING.labelGap * at.px - 11;
     BUTTONS.forEach((b, i) => drawLine(c, b.label, at.x(buttonX(i)), labelY, PAUSE.panel.buttonGap * at.px - 8, 22, UI_COLORS.accent));
   }
 }

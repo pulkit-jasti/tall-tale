@@ -10,6 +10,12 @@ import { AudioContext as ThreeAudioContext } from 'three';
 export type MicState = 'unknown' | 'asking' | 'on' | 'denied' | 'unsupported';
 
 const STORAGE_KEY = 'tallTale.micAsked';
+/** Below this loudness (RMS) the mic reads "perfect silence", which a live mic never does (room noise is far above it). */
+const MIC_SILENCE = 1e-6;
+/** Perfect silence this long while the megaphone is held (ms): the mic is opened again. */
+const MIC_DEAD_AFTER = 700;
+/** Never open the mic again more often than this (ms). */
+const MIC_REOPEN_GAP = 2000;
 
 export class Mic {
   state: MicState = 'unknown';
@@ -18,6 +24,13 @@ export class Mic {
   /** A reopen of the mic that is under way, so it only happens once at a time. */
   private reopening: Promise<void> | null = null;
   private samples: Float32Array<ArrayBuffer> | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  /** The audio was paused: the mic's source is built again once it runs (see ensureLive). */
+  private stale = false;
+  /** When the mic started to read perfect silence (ms, 0 = it hears something). */
+  private silentSince = 0;
+  private lastReopen = -Infinity;
+  private watching = false;
   /** Loudness of the last read (RMS, 0 to 1). */
   level = 0;
   /** The loudest read since takePeak() (for the debug page, to tune the scream level). */
@@ -86,17 +99,34 @@ export class Mic {
     if (this.state !== 'on') return;
     const context = ThreeAudioContext.getContext();
     if (context.state === 'suspended') void context.resume();
-    const track = this.stream?.getAudioTracks()[0];
-    if (!track || track.readyState === 'ended' || !track.enabled) {
-      if (this.reopening) return;
-      console.info('[mic] the mic track stopped: opening it again');
-      for (const t of this.stream?.getTracks() ?? []) t.stop();
-      // It stays 'on' meanwhile, so the megaphone never swaps for the bell in the middle of a battle.
-      this.reopening = this.open().then((ok) => {
-        this.reopening = null;
-        console.info(`[mic] reopened: ${ok ? 'on' : 'failed'}`);
-      });
+    else if (this.stale && context.state === 'running') {
+      this.stale = false;
+      this.reopen('the audio was paused');
+      return;
     }
+    const track = this.stream?.getAudioTracks()[0];
+    // A muted track (the system took the mic, for example the Quest menu) gives only silence, like an ended one.
+    if (!track || track.readyState === 'ended' || !track.enabled || track.muted) this.reopen('the mic track stopped or was muted');
+  }
+
+  /**
+   * Stops the old stream and opens the mic again (no prompt, the permission
+   * is already given). It stays 'on' meanwhile, so the megaphone never swaps
+   * for the bell in the middle of a battle. Only one reopen at a time.
+   */
+  private reopen(why: string): void {
+    // At most every MIC_REOPEN_GAP, so a mic the system keeps muted is not asked for every frame.
+    const now = performance.now();
+    if (this.reopening || now - this.lastReopen < MIC_REOPEN_GAP) return;
+    this.lastReopen = now;
+    console.info(`[mic] ${why}: opening it again`);
+    for (const t of this.stream?.getTracks() ?? []) t.stop();
+    this.source?.disconnect();
+    this.reopening = this.open().then((ok) => {
+      this.reopening = null;
+      this.silentSince = 0;
+      console.info(`[mic] reopened: ${ok ? 'on' : 'failed'}`);
+    });
   }
 
   /** Opens the mic stream into a silent analyser chain. False if the browser says no. */
@@ -108,7 +138,21 @@ export class Mic {
       });
       this.stream = stream;
       const context = ThreeAudioContext.getContext();
+      // The browser may leave the mic's source silent after the audio was paused (the Quest menu, the
+      // headset off): once it runs again, the source is built again (ensureLive).
+      if (!this.watching) {
+        this.watching = true;
+        let stopped = false;
+        context.addEventListener('statechange', () => {
+          if (context.state !== 'running') stopped = true;
+          else if (stopped) {
+            stopped = false;
+            this.stale = true;
+          }
+        });
+      }
       const source = context.createMediaStreamSource(stream);
+      this.source = source;
       const analyser = context.createAnalyser();
       analyser.fftSize = 512;
       source.connect(analyser);
@@ -134,6 +178,15 @@ export class Mic {
     for (let i = 0; i < this.samples.length; i++) sum += this.samples[i] * this.samples[i];
     this.level = Math.sqrt(sum / this.samples.length);
     this.peak = Math.max(this.peak, this.level);
+    // A real mic always hears a little room noise. Perfect silence for a while means the chain is dead
+    // (seen at random on the Quest: the meter read zero however loud the player was): open it again.
+    const now = performance.now();
+    if (this.level > MIC_SILENCE) this.silentSince = 0;
+    else if (this.silentSince === 0) this.silentSince = now;
+    else if (now - this.silentSince > MIC_DEAD_AFTER) {
+      this.silentSince = now;
+      this.reopen('the mic hears perfect silence');
+    }
     return this.level;
   }
 

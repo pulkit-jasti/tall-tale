@@ -6,7 +6,7 @@
 // stands apart, in front between the tool platforms (HINT_SIGN.nextAt).
 import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { HINT_SIGN, POKE } from '../config/game.js';
+import { BOARD, HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { HandState } from '../player/hands.js';
 import { centerAbove, drawIcon, drawLine, drawNineSlice, drawTitleBanner, Panel, StandButton, UI_COLORS, wrapText, type UiImageName } from './kit/index.js';
@@ -36,14 +36,23 @@ export class HintSign {
   private drawn = '';
   /** The Next button on its stand, in reach in front of the player. */
   private next: StandButton;
+  /** How long the Next button has waited for a poke (seconds); it blinks after HINT_SIGN.nextBlinkAfter. */
+  private nextWait = 0;
+  /** The sign's middle in a wave (up, out of the way), while no wave is fought (in front of the eyes), and where it goes now (cm). */
+  private battleY: number;
+  private calmY: number;
+  private targetY: number;
 
   constructor(parent: Object3D, audio: GameAudio) {
     const { width, height, radius, y, tiltDeg } = HINT_SIGN;
+    this.battleY = centerAbove(y, height, tiltDeg);
+    this.calmY = BOARD.eyeToBoard * 100 - HINT_SIGN.calmBelowEyes;
+    this.targetY = this.calmY;
     this.panel = new Panel(parent, {
       width,
       height,
       radius,
-      centerY: centerAbove(y, height, tiltDeg),
+      centerY: this.calmY,
       tiltDeg,
       layoutWidth: 768,
       canvasScale: 1.5,
@@ -59,6 +68,15 @@ export class HintSign {
     });
   }
 
+  /**
+   * While no wave is fought (the first lessons, the breathers) the sign
+   * hangs lower, right in front of the eyes, so it is not missed; in a wave
+   * it goes back up, out of the way of the enemies. It glides between them.
+   */
+  setCalm(calm: boolean): void {
+    this.targetY = calm ? this.calmY : this.battleY;
+  }
+
   show(content: SignContent | null): void {
     if (!content) {
       this.panel.visible = false;
@@ -67,6 +85,7 @@ export class HintSign {
       return;
     }
     this.panel.visible = true;
+    if (!!content.next !== this.next.visible) this.nextWait = 0;
     this.next.show(!!content.next);
     const key = JSON.stringify(content);
     if (key === this.drawn) return;
@@ -74,8 +93,10 @@ export class HintSign {
     const sameText = this.drawn && JSON.parse(this.drawn).text === content.text;
     if (!sameText) {
       this.panel.popIn(HINT_SIGN.popTime);
-      // A new step: a finger still on Next must not skip it too.
+      // A new step: a finger still on Next must not skip it too, and its blink waits again.
       this.next.lock(POKE.lockAfterChange);
+      this.nextWait = 0;
+      this.next.setBlink(null);
     }
     this.drawn = key;
     this.draw(content);
@@ -93,6 +114,17 @@ export class HintSign {
 
   update(dt: number): void {
     this.panel.update(dt);
+    // Glide up or down to where it hangs now.
+    const root = this.panel.root;
+    root.position.y += (this.targetY - root.position.y) * Math.min(1, dt / HINT_SIGN.moveTime * 3);
+    // Next waits a while for the player to read, then blinks until it is poked, so it is not missed.
+    if (this.next.visible && this.panel.visible) {
+      const before = this.nextWait;
+      this.nextWait += dt;
+      if (before < HINT_SIGN.nextBlinkAfter && this.nextWait >= HINT_SIGN.nextBlinkAfter) {
+        this.next.setBlink({ color: HINT_SIGN.nextBlinkColor, intensity: HINT_SIGN.nextBlinkIntensity, speed: HINT_SIGN.nextBlinkSpeed });
+      }
+    }
   }
 
   private draw(content: SignContent): void {
@@ -108,7 +140,8 @@ export class HintSign {
       drawTitleBanner(c, content.header, w * 0.2, pad, w * 0.6, headerH, 40);
     } else {
       drawLine(c, content.header, pad + 30, pad + headerH / 2, w - pad * 2 - 30 - 58 - 40, 34, SUB_INK, 'left');
-      drawIcon(c, content.done ? 'checkOn' : 'checkOff', w - pad - 30 - 58, pad + 6, 58);
+      // A green tick once done, so it reads as done at a glance.
+      drawIcon(c, content.done ? 'checkOn' : 'checkOff', w - pad - 30 - 58, pad + 6, 58, content.done ? HINT_SIGN.doneColor : undefined);
     }
     c.textBaseline = 'middle';
     // Body: icon on the left, the instruction on the right.

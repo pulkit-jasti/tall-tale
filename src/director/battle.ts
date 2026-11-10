@@ -4,10 +4,11 @@
 // triggers, slingshot, food tools, food jar), and it counts what the player
 // does for the lessons. Nothing tutorial-only lives in those systems.
 import { Vector3 } from 'three';
-import { mic } from '../audio/mic.js';
+import { usesBell } from '../player/accessSettings.js';
 import type { GameAudio } from '../audio/sound.js';
 import {
   CALIBRATION,
+  CASTLE,
   CASTLE_HEALTH,
   DEBUG,
   END_PANEL,
@@ -303,12 +304,17 @@ export class Battle implements TutorialApi {
     const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from, !this.reachKnown), this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
-      // A lesson the player just did: tick its box for a moment, with a chime.
-      if (how === 'done' && this.shownStep?.id === id && this.shownStep.hint?.kind === 'lesson' && this.shown) {
+      const shown = this.shownStep?.id === id ? this.shownStep.hint : undefined;
+      // A lesson the player just did: a green tick on its box with a chime, and a few seconds before the
+      // next instruction, so they can finish what they were doing (try the height a few times) and take it in.
+      if (how === 'done' && shown?.kind === 'lesson' && this.shown) {
         this.doneFlash = HINT_SIGN.doneTime;
-        const doneText = this.shownStep.hint.doneText;
-        this.doneContent = { ...this.shown, text: doneText ?? this.shown.text, done: true, sub: 'Nice!' };
+        this.doneContent = { ...this.shown, text: shown.doneText ?? this.shown.text, done: true, sub: 'Nice!' };
         this.parts.audio.play('lessonDone');
+        director.waitBeforeNext(HINT_SIGN.doneTime);
+      } else if (shown) {
+        // Any other step the player saw: a short quiet gap, so two signs never come right on top of each other.
+        director.waitBeforeNext(HINT_SIGN.stepGap);
       }
     };
     this.director = director;
@@ -387,6 +393,8 @@ export class Battle implements TutorialApi {
     const { sign, markers } = this.parts;
     this.head.copy(head);
     this.forward.copy(forward);
+    // The sign stays up, so the ghost arm stretching out in front is clear to see.
+    sign.setCalm(false);
     sign.update(dt);
     markers.hide();
     if (this.measureDone > 0) {
@@ -416,7 +424,9 @@ export class Battle implements TutorialApi {
     const text =
       this.reach.phase === 'counting'
         ? `Great, hold it there... ${this.reach.secondsLeft}`
-        : 'Sit back and stretch one arm straight out: hand flat, thumb up, fingers spread.';
+        : this.reach.phase === 'settling'
+          ? 'Good! Now hold your hand still.'
+          : 'Sit back and stretch one arm straight out: hand flat, thumb up, fingers spread.';
     sign.show({ kind: 'lesson', header, text, icon: ICONS.target });
     return false;
   }
@@ -482,6 +492,8 @@ export class Battle implements TutorialApi {
   /** The hint sign, the marker and the ghost hand for the current step. */
   private updateHint(dt: number, hands: HandState[], head: Vector3): void {
     const { sign, markers, goblins, ghost } = this.parts;
+    // In front of the eyes while no wave is fought, up out of the way during one.
+    sign.setCalm(!this.inWave);
     sign.update(dt);
     this.lessonPointing = false;
     if (!this.running || this.state.phase !== 'playing') {
@@ -504,6 +516,8 @@ export class Battle implements TutorialApi {
     const step = (this.director?.current ?? null) as TutorialStep | null;
     const hint = step?.hint;
     this.shownStep = step;
+    // The reach check: the sign stays up, so the ghost arm stretching out in front is clear to see.
+    if (hint?.reachCheck) sign.setCalm(false);
     if (!hint) {
       this.shown = null;
       sign.show(null);
@@ -514,21 +528,22 @@ export class Battle implements TutorialApi {
       return;
     }
     const target = this.markerPosition(hint.marker, markerAt);
-    this.updateGhost(dt, !mic.on && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
+    this.updateGhost(dt, usesBell() && hint.demoNoMic ? hint.demoNoMic : hint.demo, hands, head);
     markers.update(dt, target);
     // The 3D arrow in front of the face points at it while it is off to the side.
     this.parts.pointer.update(dt, head, this.forward, target);
     this.lessonPointing = target !== null;
     // The first trigger lesson: ghost aim dots from the pouch to the keg.
     this.parts.ghostAim.update(dt, hint.aimDots && target ? this.parts.slingshot.partWorld('pouch', pouchAt) : null, target);
-    // No mic: the bell is out in place of the megaphone, with its own words and demo.
-    let text = !mic.on && hint.whenNoMic ? hint.whenNoMic : hint.text;
+    // The bell is out in place of the megaphone (no mic, or the player chose it), with its own words and demo.
+    let text = usesBell() && hint.whenNoMic ? hint.whenNoMic : hint.text;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
     // A food tool lesson without enough food says so (a climber comes to eat).
     if (hint.whenLocked && hint.tool && !this.canAfford(hint.tool)) text = hint.whenLocked;
     // The reach check counts down while the arm is out, so the player knows when to rest.
     if (hint.reachCheck && this.reach.phase === 'counting') text = `Great, hold it there... ${this.reach.secondsLeft}`;
+    else if (hint.reachCheck && this.reach.phase === 'settling') text = 'Good! Now hold your hand still.';
     this.shown = { kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], next: hint.next };
     sign.show(this.shown);
     // Info steps can be skipped with the sign's "Next" button.
@@ -577,9 +592,12 @@ export class Battle implements TutorialApi {
         out.y -= GHOST_HAND.mouthDown;
         return out;
       case 'reach': {
-        // The right hand stretched straight out in front of the right shoulder, a little low.
+        // The right arm stretched straight out in front of the right shoulder, at shoulder height, the
+        // hand just where the reach the game expects ends: the rampart sits at rampartShare of the reach,
+        // so a full stretch is the rampart's distance over that share, sized with the board as it is now.
+        const reach = (CASTLE.rampartRadius / CALIBRATION.rampartShare) * 0.01 * this.parts.stage.boardScale * CALIBRATION.demoStretch;
         temp.copy(this.forward).setY(0).normalize();
-        out.copy(this.head).addScaledVector(temp, CALIBRATION.demoForward);
+        out.copy(this.head).addScaledVector(temp, reach);
         out.x += -temp.z * CALIBRATION.demoRight;
         out.z += temp.x * CALIBRATION.demoRight;
         out.y -= CALIBRATION.demoDown;
@@ -892,11 +910,25 @@ export class Battle implements TutorialApi {
 
   /**
    * The stun tool for this player: the megaphone when the mic is on, the
-   * bell when it is not. Only one of them is ever out. (A setting for a
-   * quiet bell with the mic on comes later.)
+   * bell when it is not or when the player chose the bell (settings,
+   * Accessibility). Only one of them is ever out.
    */
   private stunTool(): HandTool {
-    return mic.on ? this.parts.tools.megaphone : this.parts.tools.bell;
+    return usesBell() ? this.parts.tools.bell : this.parts.tools.megaphone;
+  }
+
+  /**
+   * The player switched between the megaphone and the bell (settings): if
+   * one is out on its platform, it goes and the other comes in its place.
+   */
+  swapStunTool(): void {
+    const { megaphone, bell } = this.parts.tools;
+    const now = this.stunTool();
+    const other = now === bell ? megaphone : bell;
+    if (!other.visible) return;
+    other.release();
+    other.setVisible(false);
+    now.setVisible(true);
   }
 
   boardSpun(): number {

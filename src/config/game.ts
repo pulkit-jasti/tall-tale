@@ -165,6 +165,8 @@ export const SETTLEMENTS = {
     // benches, hedges, wood piles, buckets, a chest and a banner in each square (`props` below), and more villagers.
     radius: [20, 26] as [number, number],
     houses: [5, 7] as [number, number],
+    /** The houses stand in an arc this wide (degrees) on the far side of the square; the side toward the castle stays open, so the villagers can be seen. */
+    houseArcDeg: 220,
     /** Small things in each village square: how many barrels and boxes, and how many of the other props. */
     props: { barrels: 7, extras: 6 },
     /** Gap from the village's edge to the nearest road (cm): close by a road, never on it. */
@@ -394,9 +396,24 @@ export const CALIBRATION = {
   /** The board size stays within this range, whatever the measurement says. */
   minScale: 0.85,
   maxScale: 1.45,
-  /** A hand farther than this from the head (level, meters) counts as stretched out and starts the countdown. */
-  startReach: 0.33,
-  /** Countdown while the arm stays out (seconds). The hand can rest when it ends. */
+  /**
+   * The countdown never rushes the player (it started at once before, with
+   * no time to read): nothing counts for readSeconds after the instruction
+   * shows; a hand must be at least startReach from the head (level, meters,
+   * was 0.33) to count as stretched out; and it must have settled, moving
+   * slower than stillSpeed (meters per second, smoothed over speedSmoothing)
+   * for stillFor (seconds), before the countdown starts. While counting, a
+   * hand moving faster than moveSpeed for moveGrace is still being adjusted:
+   * the countdown stops and waits for it to settle again.
+   */
+  readSeconds: 3,
+  startReach: 0.4,
+  stillSpeed: 0.08,
+  stillFor: 0.6,
+  speedSmoothing: 0.15,
+  moveSpeed: 0.25,
+  moveGrace: 0.25,
+  /** Countdown while the arm stays out and still (seconds). The hand can rest when it ends. */
   holdSeconds: 3,
   /** The arm may drop back this long before the countdown starts over (seconds), so a tracking blink does not reset it. */
   dropGrace: 0.4,
@@ -404,10 +421,18 @@ export const CALIBRATION = {
   smoothing: 0.12,
   /** The board grows or shrinks to its new size with this smoothing (seconds). */
   growSmoothing: 0.25,
-  /** The ghost hand demo: where the stretched hand ends, from the head (meters forward, right, down). */
-  demoForward: 0.55,
-  demoRight: 0.16,
-  demoDown: 0.2,
+  /**
+   * The ghost hand demo (the very first lesson): the right arm stretched
+   * straight out, hand flat, thumb up, fingers forward, exactly the pose the
+   * check wants. Its hand ends at demoStretch of the reach the game expects
+   * (the rampart's distance over rampartShare, sized with the board: about
+   * 56 cm for the default board, was a fixed 55), in front of the right
+   * shoulder (meters right and down from the eyes, was 20 cm down: the
+   * shoulder is higher).
+   */
+  demoStretch: 1,
+  demoRight: 0.17,
+  demoDown: 0.14,
   /** Saved in the browser, so it runs only once (debug page: "Measure reach again"). */
   storageKey: 'tallTale.boardScale',
 };
@@ -734,8 +759,9 @@ export const FLAGS = {
   /** Waving: sway angle (degrees) and speed. */
   swayDeg: 12,
   swaySpeed: 3,
-  /** Below this health share the red cloth darkens and droops (tears and smoke come with the juice step). */
+  /** Below this health share the red cloth darkens and hangs limp: it flies this share of its length, its edge on the pole. */
   lowShare: 0.3,
+  limpLength: 0.8,
   notchColor: 0xddd6c8,
 };
 
@@ -760,6 +786,19 @@ export const BUTTON_SIZE = {
 };
 
 /**
+ * Breathing room in every menu panel (cm), so nothing feels cramped (it did
+ * after the text was cut): no button, slider or line of text comes closer
+ * than `edge` to a panel's side or bottom edge, the title banner starts
+ * `top` down from the top edge, and a label keeps `labelGap` from the
+ * button it names.
+ */
+export const UI_SPACING = {
+  edge: 2.2,
+  top: 1.4,
+  labelGap: 0.9,
+};
+
+/**
  * Where menus and panels sit up and down (src/rules/reach.ts uiCenterY),
  * from the eyes, for the default board (cm): each panel's middle is
  * centerBelowEyes below the eyes, right in front, and no part of it reaches
@@ -778,13 +817,13 @@ export const END_PANEL = {
   radius: 41,
   /** Tilted back a little, toward the eyes (degrees). */
   tiltDeg: 20,
-  /** Only a title and a word over each button now (was 24 tall with a subtitle and long labels). */
-  width: 32,
-  height: 19,
+  /** Only a title and a word over each button now (was 24 tall with a subtitle and long labels), with room around them (UI_SPACING). */
+  width: 34,
+  height: 22,
   /** The round poke button at the bottom, below all the text, in front of the panel (cm). */
   buttonRadius: BUTTON_SIZE.primary,
-  /** Space between the button's rim and the panel's bottom edge (cm). */
-  buttonMargin: 1.2,
+  /** Space between the buttons' rims and the panel's bottom and side edges (cm). */
+  buttonMargin: UI_SPACING.edge,
   /** The welcome panel's smaller Settings button, in the bottom right corner (cm). */
   settingsRadius: BUTTON_SIZE.medium,
   /** The panel appears this long after the battle ends, after the last poofs (seconds). */
@@ -833,11 +872,16 @@ export const PAUSE = {
   /**
    * The panel follows the head lazily, like the Quest's own menus: it stays
    * still while the head turns a little (so it can be poked), and swings
-   * back in front once the head turned more than followDeg away. It is never
-   * behind the player.
+   * back in front once the head turned past its edge. How far that is goes
+   * by the panel's size: the angle from its middle to its side edge (as
+   * seen from the eyes) plus edgeMarginDeg, never less than followDeg. So a
+   * small panel comes back soon, and on a big one (the settings page) the
+   * player can look at its corners (Back, top left) without it moving away
+   * (it used to swing at a fixed 25 degrees). It is never behind the player.
    */
   follow: {
-    followDeg: 25,
+    followDeg: 20,
+    edgeMarginDeg: 10,
     /** Swings back with this smoothing (seconds), and moves with the head's position too. */
     smoothing: 0.3,
     /** It is in front again once within this angle (degrees), then it stops. */
@@ -848,40 +892,50 @@ export const PAUSE = {
   panel: {
     radius: 41,
     tiltDeg: 20,
-    // "Paused" and a word over each button only (was 23 tall with two more lines of text).
-    width: 38,
-    height: 17,
+    // "Paused" and a word over each button only (was 23 tall with two more lines of text), with room around them (UI_SPACING).
+    width: 44,
+    height: 20,
     buttonRadius: BUTTON_SIZE.large,
-    /** Gap between button centers (cm). */
-    buttonGap: 8.8,
-    buttonMargin: 1.2,
+    /** Gap between button centers (cm): 2.9 cm between the rims. */
+    buttonGap: 10.4,
+    buttonMargin: UI_SPACING.edge,
     /** Drawn after everything else (above the markers and ghost hands), never hidden by the castle or the sign. */
     renderOrder: RENDER_ORDER.pause,
   },
   /**
-   * The settings page (Settings on the pause panel): a bigger panel at the
-   * same spot, laid out in cm from its middle (x right, y up). Back at the
-   * top left, Measure reach on the right of its row, then one row per sound
-   * group: its name and level, a mute button, and a slider with minus and
-   * plus (SLIDER). Rows rowGap apart, so the targets keep over 12 mm between
-   * them (Meta's hands guidelines).
+   * The settings page (Settings on the pause panel or the welcome panel): a
+   * bigger panel at the same spot, laid out in cm from its middle (x right,
+   * y up). Back at the top left, Measure reach at the top right, then one
+   * row per sound group: its name and level on the left, a slider (SLIDER).
+   * Rows rowGap apart, so the targets keep over 12 mm between them (Meta's
+   * hands guidelines), and everything keeps UI_SPACING from the edges.
    */
   // Made shorter (38 to 32 cm) after its low rows were hard to touch: Back and Measure reach share the
   // top row beside the title. Then just one long slider per row (no mute, no minus and plus), the
-  // buttons small (BUTTON_SIZE, 3.6 cm across) and the slider handle 3.2 cm, rows 4.6 cm apart.
-  // Then no help line any more (menus keep text to a minimum), so it is 30 cm tall.
+  // buttons small (BUTTON_SIZE, 3.6 cm across) and the slider handle 3.2 cm. Then no help line, and
+  // then more room around and between everything (it felt cramped): 52 by 33, rows 4.8 cm apart.
   settings: {
-    width: 46,
-    height: 30,
+    width: 52,
+    height: 33,
     pxPerCm: 15,
     buttonRadius: BUTTON_SIZE.small,
-    backAt: [-19.5, 12.6] as [number, number],
-    reachAt: [19.5, 12.6] as [number, number],
-    labelX: -21.5,
-    firstRowY: 6.6,
-    rowGap: 4.6,
-    sliderX: 6.9,
-    sliderLength: 26,
+    backAt: [-22, 13.2] as [number, number],
+    /**
+     * The tabs (Sound, Access) on the right of the top row, beside the title
+     * (its middle and width): the chosen one's cap green with its label bold
+     * and underlined, the others' caps this grey (color, text and a line,
+     * so it reads without relying on color alone). Measure reach moved into
+     * the Access tab, with the bell switch.
+     */
+    tabX: [12.5, 21] as number[],
+    tabOffColor: 0x9a948a,
+    titleX: -6,
+    titleWidth: 16,
+    labelX: -23.8,
+    firstRowY: 6.4,
+    rowGap: 4.8,
+    sliderX: 8.6,
+    sliderLength: 27,
   },
 };
 
@@ -889,7 +943,7 @@ export const PAUSE = {
  * The slider (src/ui/slider.ts), from Meta's hands guidelines: targets well
  * over 22 mm with gaps over 12 mm, touched with the index finger only (cm,
  * in the slider's own frame, its face toward +z). The handle (3.2 cm) looks
- * like the buttons (their green cap in a dark rim), over a warm parchment
+ * like the buttons' green cap (no dark ring: it looked odd), over a warm parchment
  * fill and the dark track, so it matches the theme and still stands out
  * (the gold first tried looked out of place); grey at 0 (off). Its
  * face is at trackDepth + handleDepth; a finger within touchAt of the
@@ -899,6 +953,32 @@ export const PAUSE = {
  * than half the settings rows' gap, so two rows never both answer).
  * No minus and plus buttons any more: touching the track jumps the handle.
  */
+/**
+ * The on and off switch (src/ui/switch.ts): a 7 by 3 cm rounded track (the
+ * whole of it is the target, well over 22 mm), its knob on the right and the
+ * track green when on, on the left and grey when off, with the word On or
+ * Off written beside the knob, so position, color and text all say the same.
+ * Poked like a button (cm in its own frame, face toward +z): a finger within
+ * touchAt of its back flips it once, it has to come from the front (within
+ * readyDistance), and the zone reaches zoneOut past its edges. The knob
+ * glides over in slideTime (seconds).
+ */
+export const SWITCH = {
+  width: 7,
+  height: 3,
+  depth: 0.8,
+  knobRadius: 1.25,
+  knobDepth: 1,
+  onColor: 0x6fae4a,
+  offColor: 0x8a847a,
+  knobColor: 0xf7e2b0,
+  zoneOut: 0.6,
+  zoneBehind: 2.5,
+  readyDistance: 6,
+  touchAt: 2.1,
+  slideTime: 0.18,
+};
+
 export const SLIDER = {
   length: 14,
   trackHeight: 1.6,
@@ -971,8 +1051,34 @@ export const HINT_SIGN = {
   tiltDeg: -5,
   /** A new instruction pops in over this long (seconds). */
   popTime: 0.25,
-  /** A finished lesson shows its ticked box this long before the next one (seconds). */
-  doneTime: 1.2,
+  /**
+   * A finished lesson shows its green tick this long, and the next step
+   * waits as long (seconds): time to finish what the player was doing (try
+   * the height a few times) and take it in. Was 1.2: it rushed on.
+   */
+  doneTime: 3.5,
+  /** Any other step the player saw (a banner, an info step) leaves a short quiet gap before the next (seconds). */
+  stepGap: 0.8,
+  /** The tick on a finished lesson's box, green so it reads as done. */
+  doneColor: '#3faa3a',
+  /**
+   * Where the sign hangs while no wave is fought (the lessons before wave 1
+   * and the breathers between waves): lower, its middle this far below the
+   * eyes (cm), so it is right in front of them and not missed. During a wave
+   * it goes back up (y), out of the way of the enemies. It glides between
+   * the two over moveTime (seconds).
+   */
+  calmBelowEyes: 4,
+  moveTime: 0.6,
+  /**
+   * Info steps wait for the player's Next. If Next is not poked within
+   * nextBlinkAfter (seconds), it starts to blink (an emissive pulse, per
+   * second) until it is.
+   */
+  nextBlinkAfter: 5,
+  nextBlinkColor: 0xfff1a8,
+  nextBlinkIntensity: 0.75,
+  nextBlinkSpeed: 2.2,
   /**
    * Round "Next" poke button: its size, and its spot straight in front,
    * tilted toward the eyes (cm, degrees). Moved back toward the wall and up
@@ -2043,22 +2149,25 @@ export interface TroopKindSpec {
  * archer bodies without gear, in plain work clothes (brown, cream, straw,
  * moss green). perVillage each, at most max in all. Walk spots are shares of
  * the village size from its middle (inside the ring of houses). They
- * animate every animEvery frames (far away and small).
+ * animate every animEvery frames: every frame now, since every third
+ * looked very choppy; to pay for it they walk less (longer stops) and turn
+ * smoothly toward where they go (turnTime, seconds) instead of snapping.
  */
 export const VILLAGERS = {
   enabled: true,
   height: 3.9,
   /** Four in each of the bigger villages now (were 2). */
   perVillage: 4,
-  max: 18,
+  max: 16,
   speed: 2.4,
   walkFrom: 0.1,
   walkTo: 0.4,
   /** Share of stops spent working (the rest standing and looking about), and how long each lasts (seconds). */
   workShare: 0.6,
-  workSeconds: [3, 7] as [number, number],
-  lookSeconds: [2, 5] as [number, number],
-  animEvery: 3,
+  workSeconds: [4, 9] as [number, number],
+  lookSeconds: [3, 7] as [number, number],
+  animEvery: 1,
+  turnTime: 0.25,
   kinds: [
     {
       body: 'characters/mini-dungeon/character-human.glb',

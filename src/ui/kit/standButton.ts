@@ -57,6 +57,11 @@ export class StandButton implements Control {
     this.button.setBlink(on ? (this.options.blink ?? null) : null);
   }
 
+  /** Starts or stops a blink (an emissive pulse) while it waits to be poked. */
+  setBlink(blink: StandOptions['blink'] | null): void {
+    this.button.setBlink(blink ?? null);
+  }
+
   /** True on the frame it is poked (only while it shows). */
   update(hands: HandState[], dt: number): boolean {
     return this.stand.visible && this.button.update(hands, dt);

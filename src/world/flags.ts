@@ -88,25 +88,30 @@ class Flag {
     const k = 1 - Math.exp(-FLAGS.slideSpeed * dt);
     this.shown += (this.target - this.shown) * k;
     this.place();
-    // A low flag waves slower and droops (tears and smoke come with the juice step).
+    // The cloth only ever turns around the pole itself (y), so its whole edge stays on the pole. It used to
+    // tilt and jerk around its top corner, which swung its lower edge off the pole (headset test).
+    // A low flag waves slower and hangs limp: it flies shorter, its edge still on the pole.
     const sway = degToRad(FLAGS.swayDeg) * (low ? 0.4 : 1);
-    this.pivot.rotation.y = Math.sin(this.time * FLAGS.swaySpeed * (low ? 0.6 : 1)) * sway;
-    this.pivot.rotation.x = low ? 0.35 : 0;
+    let turn = Math.sin(this.time * FLAGS.swaySpeed * (low ? 0.6 : 1)) * sway;
     const material = this.cloth.material as ReturnType<typeof flatMaterial>;
     material.color.copy(this.color).multiplyScalar(low ? 0.55 : 1);
-    // Juice: hit, the cloth jerks and flashes bright. A wave won, it pops bigger and settles.
+    // Juice: hit, the cloth shakes on the pole and flashes bright. A wave won, it pops bigger and settles.
     if (this.jolt > 0) {
       this.jolt = Math.max(0, this.jolt - dt);
       const t = this.jolt / JUICE.flagJoltTime;
-      this.pivot.rotation.z = Math.sin(t * Math.PI * 6) * degToRad(JUICE.flagJoltDeg) * t;
+      turn += Math.sin(t * Math.PI * 6) * degToRad(JUICE.flagJoltDeg) * t;
       material.color.lerp(FLASH, t * 0.6);
-    } else this.pivot.rotation.z = 0;
+    }
+    this.pivot.rotation.set(0, turn, 0);
+    let size = 1;
     if (this.popTime > 0) {
       this.popTime = Math.max(0, this.popTime - dt);
       const t = 1 - this.popTime / JUICE.flagPopTime;
-      this.pivot.scale.setScalar(t < 0.5 ? 1 + popIn(t * 2) * 0.35 : 1.35 - (t - 0.5) * 0.7);
+      size = t < 0.5 ? 1 + popIn(t * 2) * 0.35 : 1.35 - (t - 0.5) * 0.7;
       material.color.lerp(FLASH, (1 - t) * 0.4);
-    } else this.pivot.scale.setScalar(1);
+    }
+    // Scaled from the pivot on the pole, so the edge never leaves it.
+    this.pivot.scale.set(size * (low ? FLAGS.limpLength : 1), size, size);
   }
 
   private place(): void {

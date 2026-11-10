@@ -34,7 +34,7 @@ Back to [GDD index](GDD.md).
 
 **Player**
 - Body abilities: **grab and eat only** ([controls-and-ui.md](controls-and-ui.md#3-grab-and-eat)). Goblins are picked up with a pinch. The pinch zone is bigger than the goblin and snaps to the nearest one.
-- **All 4 giant tools:** slingshot, fly swatter, pepper shaker, megaphone ([giant-tools.md](giant-tools.md)). The megaphone uses a fixed loudness threshold (no calibration). **The bell** triggers the same stun by shaking, so voice is never required. Only one of the two is ever out: the megaphone when mic permission is given, the bell when it is not.
+- **All 4 giant tools:** slingshot, fly swatter, pepper shaker, megaphone ([giant-tools.md](giant-tools.md)). The megaphone uses a fixed loudness threshold (no calibration). **The bell** triggers the same stun by shaking, so voice is never required. Only one of the two is ever out: the megaphone when mic permission is given, the bell when it is not, or when the player turns the Bell switch on in the settings' Access tab.
 - No loadout, no unlocks. Each tool appears on its platform in its tutorial wave with a poof, and glows until grabbed.
 - Slingshot aim assist ([giant-tools.md](giant-tools.md#slingshot-aim-assist)).
 - Food currency: eating fills the food jar, tools cost food (free while in the tutorial, `TOOLS.freeInTutorial`). Start with 4 food. Food carries over between waves.
@@ -242,7 +242,10 @@ Not part of the MVP build order. Built on the branch `feat/day-night-cycle` (202
 **A livelier world (same branch, after the step 7 and 8 test, not tested on the headset yet):**
 - **Goblin camps:** farther out (about 390 to 425 cm), except the front one at 300 cm, close enough to see its details. Each is a war camp inside a palisade (`CAMP_LOOK`), and no two look alike: spiked, branch or plank fences, red or green banners, a different siege machine each (catapult, ballista, ram, trebuchet), different tents, a weapon rack or a pile of supplies, goblin standing stones at most gates.
 - **Story scenes** in the empty land (`STORY_SPOTS`): stone circles, ruined watchtowers, old battlefields, a shrine, travelers' camps by the roads, an archery range, a goblin trap baited with coins.
-- **Villagers** (`VILLAGERS`): four per village walk about the square, stop to work or look about, and walk on.
+- **Villagers** (`VILLAGERS`): four per village (up to 16) walk about the square, stop to work or look about, and walk on. They animate every frame now (every third looked choppy) and turn smoothly; to pay for it they stop longer between walks. The houses stand in an arc on the far side of each square, so the side toward the castle is open and the villagers can be seen (`houseArcDeg`).
+- **Health flag stays on its pole:** it only turns around the pole now; its hit shake and its low-health droop used to tilt it around its top corner, which pulled the lower edge off the pole. Low, it flies shorter instead (`FLAGS.limpLength`).
+- **The megaphone never goes deaf:** at random it read zero however loud the player was. The mic now opens again when it hears perfect silence for 0.7 s while held (a live mic always hears some room noise), when its track is muted or ended, and after the audio was paused (the Quest menu), at most every 2 s (`src/audio/mic.ts`). Not reproduced on purpose, so check it on the headset: open and close the Quest menu, take the headset off and on, then shout.
+- **Sound fades on pause:** everything, the music too, fades out over 0.5 s before the audio pauses (the Quest menu, the headset off) and fades back in after, instead of cutting off (`SOUND_MIX.pauseFade`).
 - **Bigger, busier villages:** 20 to 26 cm across with 5 to 7 houses (were 16 to 21 with 3 to 5), two stalls, two lanterns, benches, wood piles, buckets, a chest, a banner and hedges.
 - **More tall landmarks** far out: up to 12 (were 5) towers, mage towers, gatehouses, ruined towers and keeps on the far hills, the kinds taking turns.
 - No farm animals: none of the Kenney packs in Downloads has any (only fish, in the survival kit).
@@ -271,8 +274,11 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-06), after the day an
 
 **Menus and UI** ([controls-and-ui.md](controls-and-ui.md))
 - **Pause button in front** on a post, below the Next button's spot (was on the wrist).
-- **Settings page** from the pause panel and from the welcome panel (its bottom right corner): Back, Measure reach (moved here from the pause panel), and one long slider per sound group, all the way left is off.
-- **The slider:** touch and slide with the index finger (touching the track jumps the handle), snaps to off and full near the ends, a handle like the buttons (green in a dark rim) over a tan fill, grey at off.
+- **Settings page** from the pause panel and from the welcome panel (its bottom right corner), with tabs: **Sound** (one long slider per sound group, all the way left is off) and **Access** (Measure reach, moved here from the pause panel, and a Bell switch: the bell in place of the megaphone, saved; locked on without a mic).
+- **The switch:** a new shared on and off part (knob side, color and the words On or Off).
+- **Reach check never rushes:** 3 s to read first, the hand at least 40 cm out, and still (slower than 8 cm/s for 0.6 s) before the countdown starts ("Good! Now hold your hand still." meanwhile); moving a lot again stops it (`CALIBRATION.readSeconds`, `startReach`, `stillSpeed`, `moveSpeed`). Tested in `src/player/reachCheck.test.ts`.
+- **Reach check ghost arm:** the very first lesson's ghost hand stretches out to exactly the reach the game expects (the rampart's distance over 0.88, sized with the board) at shoulder height, hand flat and thumb up, and the sign stays up during it so the ghost is not hidden behind it.
+- **The slider:** touch and slide with the index finger (touching the track jumps the handle), snaps to off and full near the ends, a handle in the buttons' green (no dark ring) over a tan fill, grey at off.
 - **Quick pokes work:** buttons and sliders used to miss a fast poke; they now click as soon as the fingertip is in, and catch a finger that jumped through between two tracking frames.
 - **Minimal text:** each menu shows only its title and a word over each button (no subtitles, no help lines); the panels got shorter to match.
 - **Menus right in front of the eyes** (`UI_ZONE`): never higher than 2 cm above the eyes or lower than 30 cm below; a test checks every panel.
@@ -281,7 +287,10 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-06), after the day an
 - **Our own UI library** (`src/ui/kit/`): every panel, button, slider, label and on-top layer is built from it.
 
 **Tutorial**
-- **The red threat arrow** stays away while a lesson's yellow arrow points the way.
+- **The red threat arrow** stays away while a lesson's yellow arrow points the way. It points at one threat at a time: the nearest to where the player looks, and it stays on that one until it is handled, then the next (it used to jump between goblins).
+- **Breathers between steps:** a lesson the player just did shows a green tick for 3.5 s, and the next step waits that long, so they can finish (try the height a few times) and take it in (`HINT_SIGN.doneTime`, was 1.2 s). Any other step leaves a 0.8 s quiet gap (`stepGap`). The pause comes from the director (`Director.waitBeforeNext`), so the next step's goblins and tools also wait.
+- **The sign hangs in front of the eyes** while no wave is fought (the first lessons, the breathers), 4 cm below eye level, and glides back up during a wave, out of the enemies' way (`HINT_SIGN.calmBelowEyes`).
+- **Next blinks only when missed:** an info step's Next waits 5 s for the player to read, then blinks until it is poked (`nextBlinkAfter`).
 - **Pepper:** peppered goblins sneeze for 10 s and do no castle damage meanwhile; the lesson ends only when a peppered goblin is eaten.
 - **Balloons:** taught in the slingshot wave after the trigger lessons and a few more knockouts, one balloon hovering in front until popped, no Next button.
 
@@ -298,7 +307,7 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-06), after the day an
 - **Pacing:** with the camps farther out a grunt walks about 60 s to the wall (was about 33 s). Raise the goblin speeds if the waves drag.
 - **Music:** check the battle loop point (32 s, taken from the file's name), and the music layers idea ([audio.md](audio.md)).
 - **Sound licenses:** check each Freesound file's license on its page (CC BY needs a credit line). InspectorJ (the sneeze) usually uses CC BY.
-- **Sound files still to prepare:** the bell (AIFF does not play in the Quest browser, convert it), the sword hits (cut into single hits), the village ambience (20 MB, needs a short loop). Still missing: goblin chatter, burp, keg explosion, troop cheer, lose sound, ambience and night sounds.
+- **Sound files still to prepare:** the sword hits (cut into single hits), the village ambience (20 MB, needs a short loop). Still missing: goblin chatter, burp, keg explosion, troop cheer, lose sound, ambience and night sounds.
 - **Debug keys:** safe to remove (the debug page does everything, the headset has no keyboard), not removed yet. The debug actions and their code stay for the page.
 - **Campfires at night:** the goblin camps' fires fade with the terrain; a small glow would help.
 - **Lighting the ground near torches** in the terrain shader, if night still looks flat (option 2 of the torch light ideas).

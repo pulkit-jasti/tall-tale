@@ -327,6 +327,9 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 49. **A volume slider with minus and plus buttons and a mute button:** too much. Just one long slider per sound group now, all the way left is off, its handle like the buttons (green in a dark rim, a gold one looked out of place), grey at off.
 52. **Menus with explaining text:** subtitles and help lines are gone. Each menu shows only its title and a word over each button.
 53. **Buttons that wanted a slow push:** a quick poke was missed (the click waited for the animated cap to catch up, and a fast finger could skip past the button between two tracking frames). The click now goes by the finger itself, and a finger that was in front one frame and in the next counts.
+54. **The tutorial rushing on:** a finished lesson moved on after 1.2 s while the player was still trying it. Now a green tick shows for 3.5 s and the next step waits that long; other steps leave a short gap. The sign hangs in front of the eyes outside waves, and Next only blinks once it was missed for 5 s.
+55. **A red arrow that jumped between threats:** it now stays on the nearest threat until that one is handled.
+56. **A megaphone that went deaf at random:** the mic chain is now rebuilt when it hears perfect silence, is muted, or the audio was paused.
 50. **Menus placed by hand-picked heights:** the settings page grew too tall and its low rows were hard to touch. Every menu now gets its height from one rule: right in front of the eyes, never higher than 2 cm above them or lower than 30 cm below (`UI_ZONE`).
 51. **UI code written again in each panel:** buttons on posts, button rows, panel text, canvas textures and draw-on-top code were copied around. It all lives in our own UI library now (`src/ui/kit/`), and new UI must be built from it.
 

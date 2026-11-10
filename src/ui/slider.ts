@@ -3,8 +3,9 @@
 //
 //   - A wide track with a big round handle (well over the 22 mm minimum
 //     target), the filled part of the track showing the value at a glance.
-//     The handle looks like the buttons (green cap, dark rim) over a warm
-//     parchment fill, and turns grey at 0 (off), so the state shows in color.
+//     The handle is the buttons' green over a warm parchment fill (no dark
+//     ring around it, that looked odd), and turns grey at 0 (off), so the
+//     state shows in color.
 //   - Touch it with the index finger, on the handle or anywhere on the track
 //     (the handle jumps there, so it works without dragging too), then slide
 //     the finger along: the handle follows 1:1. It lets go once the finger
@@ -73,12 +74,6 @@ export class Slider implements Control {
     this.handle = new Mesh(new CylinderGeometry(S.handleRadius, S.handleRadius, S.handleDepth, POKE.segments), this.handleMaterial);
     this.handle.rotation.x = Math.PI / 2;
     this.handle.position.z = S.trackDepth + S.handleDepth / 2;
-    // A dark rim around the handle, like the buttons' rim.
-    const rim = new Mesh(new CylinderGeometry(S.handleRadius * POKE.rimScale * 0.85, S.handleRadius * POKE.rimScale * 0.85, S.handleDepth * 0.6, POKE.segments), flatMaterial(POKE.rimColor));
-    rim.rotation.x = Math.PI / 2;
-    // Just behind the cap (the handle is turned, so its own y points out of the slider's face).
-    rim.position.y = -S.handleDepth * 0.2;
-    this.handle.add(rim);
     this.group.add(track, this.fill, this.handle);
     this.show();
   }

@@ -51,7 +51,8 @@ export const SOUNDS = {
     positional: true,
   },
   pepperShake: { files: ['rpg/handleCoins.ogg', 'rpg/handleCoins2.ogg'], volume: 0.6, positional: true },
-  bell: { files: ['impact/impactBell_heavy_000.ogg', 'impact/impactBell_heavy_001.ogg'], volume: 0.8, positional: true },
+  /** A real medieval hand bell (Freesound, converted to mono WAV). The 10 s ring is cut at 4 s and fades out, so shakes never pile up. */
+  bell: { files: ['144497__wuola__medieval-bell-a3.wav'], volume: 0.8, positional: true, maxSeconds: 4 },
   stunned: { files: ['interface/glass_001.ogg', 'interface/glass_002.ogg'], volume: 0.7, positional: false },
   swordClash: {
     files: ['impact/impactMetal_light_000.ogg', 'impact/impactMetal_light_001.ogg', 'impact/impactMetal_medium_000.ogg'],
@@ -195,6 +196,8 @@ export const SOUND_MIX = {
    * of the sound), so they end softly. Shorter sounds keep their sharp end.
    */
   fadeOut: { longFrom: 2, seconds: 1.2, maxShare: 0.4 },
+  /** When the audio pauses (the Quest menu, the headset off) everything fades out over this long first, and back in after (seconds). */
+  pauseFade: 0.5,
 };
 
 /** Wave start voice, by wave (the last wave always says "final round"). */

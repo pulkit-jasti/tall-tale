@@ -7,7 +7,7 @@
 // its button stays in reach.
 import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { END_PANEL, POKE } from '../config/game.js';
+import { END_PANEL, POKE, UI_SPACING } from '../config/game.js';
 import type { HandState } from '../player/hands.js';
 import { armControls, bottomRowY, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY } from './kit/index.js';
 
@@ -26,8 +26,6 @@ const TEXT: Record<EndKind, PanelText> = {
   lost: { title: 'The castle has fallen', button: 'Try again' },
 };
 
-/** Text keeps this far from the panel's sides (layout pixels). */
-const TEXT_MARGIN = 44;
 
 export class EndPanel {
   private panel: Panel;
@@ -104,15 +102,16 @@ export class EndPanel {
   }
 
   private drawText(c: CanvasRenderingContext2D, w: number, text: PanelText): void {
-    const textWidth = w - TEXT_MARGIN * 2;
-    // Title on a banner, the button's label just above its rim. Every line shrinks to fit inside the panel.
-    drawTitleBanner(c, text.title, w * 0.1, 16, w * 0.8, 80, 44);
-    const labelY = this.buttonTopPx - 22;
+    const at = panelMap(END_PANEL.width, END_PANEL.height, w, this.panel.layoutHeight);
+    const textWidth = w - UI_SPACING.edge * at.px * 2;
+    // Title on a banner, the button's label a little above its rim. Every line shrinks to fit inside the panel.
+    drawTitleBanner(c, text.title, w * 0.12, UI_SPACING.top * at.px, w * 0.76, 80, 44);
+    const gap = UI_SPACING.labelGap * at.px;
+    const labelY = this.buttonTopPx - gap - 15;
     // The main label stays clear of the Settings button on the welcome panel.
     const settingsShown = this.kind === 'welcome';
-    const at = panelMap(END_PANEL.width, END_PANEL.height, w, this.panel.layoutHeight);
     const settingsLeft = at.x(this.settingsX - END_PANEL.settingsRadius * POKE.rimScale);
-    drawLine(c, text.button, w / 2, labelY, settingsShown ? (settingsLeft - w / 2) * 2 - 16 : textWidth, 30, UI_COLORS.accent);
-    if (settingsShown) drawLine(c, 'Settings', at.x(this.settingsX), this.settingsTopPx - 16, 110, 20, UI_COLORS.accent);
+    drawLine(c, text.button, w / 2, labelY, settingsShown ? (settingsLeft - w / 2) * 2 - gap * 2 : textWidth, 30, UI_COLORS.accent);
+    if (settingsShown) drawLine(c, 'Settings', at.x(this.settingsX), this.settingsTopPx - gap - 10, 110, 20, UI_COLORS.accent);
   }
 }

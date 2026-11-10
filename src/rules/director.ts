@@ -34,6 +34,9 @@ export class Director<C> {
   private index = -1;
   private time = 0;
   private used = 0;
+  /** Between two steps: the last one ended, the next starts once `wait` runs out (see waitBeforeNext). */
+  private between = false;
+  private wait = 0;
 
   /** Called when a step ends, for logs. */
   onStepEnd: (id: string, how: StepEnd, time: number, fallbacks: number) => void = () => {};
@@ -48,7 +51,17 @@ export class Director<C> {
   }
 
   get current(): DirectorStep<C> | null {
+    if (this.between) return null;
     return this.index >= 0 && this.index < this.steps.length ? this.steps[this.index] : null;
+  }
+
+  /**
+   * Called from onStepEnd: the next step starts only after this many
+   * seconds, so the player gets a breather (time to finish what they were
+   * doing and see the tick) before the next instruction.
+   */
+  waitBeforeNext(seconds: number): void {
+    this.wait = Math.max(this.wait, seconds);
   }
 
   get stepTime(): number {
@@ -67,8 +80,13 @@ export class Director<C> {
 
   update(dt: number): void {
     if (this.index < 0) this.begin(0);
+    if (this.between) {
+      this.wait -= dt;
+      if (this.wait > 0) return;
+      this.begin(this.index + 1);
+    }
     // Several steps can end in one frame (a goal already met), but each one starts first.
-    for (let guard = 0; guard < this.steps.length && !this.finished; guard++) {
+    for (let guard = 0; guard < this.steps.length && !this.finished && !this.between; guard++) {
       const step = this.steps[this.index];
       if (step.done(this.ctx, this.time)) {
         this.end('done');
@@ -94,17 +112,26 @@ export class Director<C> {
   /** Moves on to the next step right away (debug: skip). */
   skip(): void {
     if (this.index < 0) this.begin(0);
+    else if (this.between) this.begin(this.index + 1);
     else if (!this.finished) this.end('timeout');
   }
 
   private end(how: StepEnd): void {
     const step = this.steps[this.index];
     step.end?.(this.ctx);
+    this.wait = 0;
     this.onStepEnd(step.id, how, this.time, this.used);
+    // A breather asked for in onStepEnd: the next step waits.
+    if (this.wait > 0) {
+      this.between = true;
+      return;
+    }
     this.begin(this.index + 1);
   }
 
   private begin(index: number): void {
+    this.between = false;
+    this.wait = 0;
     this.index = index;
     this.time = 0;
     this.used = 0;

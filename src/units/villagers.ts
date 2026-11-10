@@ -4,13 +4,14 @@
 // busy at something, picking something up) or to stand and look about, then
 // walks on. Decor only: no one fights, no one can be grabbed. The same human
 // and archer bodies as the soldiers, with no gear and plain work clothes.
-// Far from the player, so they animate every few frames.
+// They animate every frame (every few frames looked choppy) and turn smoothly.
 import { AnimationClip, AnimationMixer, Group, LoopOnce, LoopRepeat, type AnimationAction, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import { VILLAGERS } from '../config/game.js';
 import { groundAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
 import type { Spot } from '../world/settlements.js';
+import { angleTo } from '../ui/kit/layout.js';
 import { rigTemplate } from './gear.js';
 
 type Doing = 'walk' | 'work' | 'look';
@@ -111,7 +112,9 @@ export class Villagers {
         } else {
           p.x += (dx / d) * step;
           p.z += (dz / d) * step;
-          v.root.rotation.y = Math.atan2(dx, dz);
+          // Turn smoothly toward the way it walks, the short way round, never snapping.
+          const turn = angleTo(v.root.rotation.y, Math.atan2(dx, dz));
+          v.root.rotation.y += turn * Math.min(1, dt / VILLAGERS.turnTime);
         }
         this.settle(v);
       } else if (v.timer <= 0) {

@@ -187,7 +187,7 @@ export function iconTextureSource(name: UiImageName, tint?: string): HTMLCanvasE
   return image ? tintCanvas(image, tint) : null;
 }
 
-export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach' | 'minus' | 'plus' | 'sound' | 'muted' | 'settings' | 'back';
+export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach' | 'minus' | 'plus' | 'sound' | 'muted' | 'settings' | 'back' | 'access';
 
 /**
  * A crisp button icon drawn in code (256 px), in the same look as the arrows:
@@ -270,6 +270,25 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.globalCompositeOperation = 'destination-out';
     c.fill();
     c.globalCompositeOperation = 'source-over';
+  } else if (icon === 'access') {
+    // Accessibility: a round head over a figure with open arms and legs, in a ring.
+    c.lineWidth = s * 0.07;
+    c.beginPath();
+    c.arc(0, 0, s * 0.38, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.arc(0, -s * 0.2, s * 0.07, 0, Math.PI * 2);
+    c.fill();
+    c.lineWidth = s * 0.08;
+    c.beginPath();
+    c.moveTo(-s * 0.22, -s * 0.07);
+    c.lineTo(s * 0.22, -s * 0.07);
+    c.moveTo(0, -s * 0.07);
+    c.lineTo(0, s * 0.08);
+    c.lineTo(-s * 0.12, s * 0.26);
+    c.moveTo(0, s * 0.08);
+    c.lineTo(s * 0.12, s * 0.26);
+    c.stroke();
   } else if (icon === 'back') {
     // Back: an arrow pointing left.
     c.lineWidth = s * 0.06;

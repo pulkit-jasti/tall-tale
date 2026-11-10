@@ -88,6 +88,11 @@ export class PokeButton implements Control {
     this.group.add(this.cap);
   }
 
+  /** Changes the cap's color (for example a selected tab green, the others grey). The touch looks stay emissive on top. */
+  setColor(color: number): void {
+    this.material.color.setHex(color);
+  }
+
   /** Changes the icon on the face (for example Play on the welcome panel, restart on the end panel). */
   setIcon(icon: ButtonIcon): void {
     if (icon === this.icon) return;
