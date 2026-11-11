@@ -860,6 +860,10 @@ export const RENDER_ORDER = {
   ghostGlow: 6,
   labels: 20,
   stunWave: 30,
+  /** The horn's aim beam (src/ui/hornAim.ts). */
+  hornAim: 32,
+  /** The glass sign in front of the eyes (src/ui/kit/glassSign.ts). */
+  glassSign: 34,
   pointer: 36,
   pause: 40,
 };
@@ -887,6 +891,26 @@ export const PAUSE = {
     tiltDeg: 40,
   },
   /**
+   * The Quest menu can stop the frames without the page ever seeing a
+   * hidden frame (headset test: it did not always pause). So it also pauses
+   * when the XR session or the page says it lost focus (their events, even
+   * between frames), or when frames stopped for this long (seconds).
+   */
+  // Was 0.75: one long hitch (a new effect drawn the first time, memory clean-up) could pause at random.
+  autoPauseGap: 1.5,
+  /**
+   * The Quest menu gesture itself (a pinch with the palm toward the eyes)
+   * pauses too, the moment the pinch starts, so the pause never depends on
+   * the browser's events (headset test: still random with the right hand's
+   * Meta pinch). `facing`: how straight the palm faces the head (dot of the
+   * palm's normal and the way to the head), `maxDistance` from the head (m).
+   * The game never uses this pose itself, and a goblin held at the mouth is
+   * pinched long before, so it never pauses by mistake.
+   */
+  // Stricter after random pauses (was facing 0.6, 55 cm, at once): straighter, nearer, a hand holding
+  // nothing, and the pose kept for `hold` seconds. The FPS panel shows what caused a pause.
+  metaGesture: { facing: 0.8, maxDistance: 0.45, hold: 0.15 },
+  /**
    * The panel follows the head lazily, like the Quest's own menus: it stays
    * still while the head turns a little (so it can be poked), and swings
    * back in front once the head turned past its edge. How far that is goes
@@ -910,6 +934,7 @@ export const PAUSE = {
     radius: 41,
     tiltDeg: 20,
     // "Paused" and a word over each button only (was 23 tall with two more lines of text), with room around them (UI_SPACING).
+    // Four buttons: Resume, Settings, Restart, Skip tutorial (Reset table moved into the settings).
     width: 44,
     height: 20,
     buttonRadius: BUTTON_SIZE.large,
@@ -952,9 +977,11 @@ export const PAUSE = {
      * its button: the chosen one's cap green with its name bold and
      * underlined, the others' caps this grey (color, text and a line, so it
      * reads without relying on color alone). Measure reach moved into the
-     * Access tab, with the bell switch.
+     * Access tab, with the bell switch, then Reset table too. Access comes
+     * first (open by default), then Sound, the pair centered across the
+     * panel (each button with its name to the right, about 12 cm, 3 cm apart).
      */
-    tabX: [1, 14] as number[],
+    tabX: [-10.6, 4.6] as number[],
     tabOffColor: 0x9a948a,
     /** The title banner, at the top beside Back (its middle and width). */
     titleX: -6,
@@ -1092,13 +1119,18 @@ export const HINT_SIGN = {
   /** A new instruction pops in over this long (seconds). */
   popTime: 0.25,
   /**
-   * A finished lesson shows its green tick this long, and the next step
-   * waits as long (seconds): time to finish what the player was doing (try
-   * the height a few times) and take it in. Was 1.2: it rushed on.
+   * A finished lesson shows its green tick this long before the next
+   * instruction, unless the lesson sets its own pause (TutorialStep.afterDone
+   * in src/director/tutorial.ts: longer where the player needs time to watch
+   * or finish a move, none where the next lesson follows straight on). Was a
+   * fixed 3.5 s for every lesson (before that 1.2): it made the player wait
+   * after things they had already read and done.
    */
-  doneTime: 3.5,
+  doneTime: 0.6,
+  /** The reach check from the pause panel or welcome settings: its "rest your arm" tick stays this long (seconds). */
+  measureDoneTime: 2.5,
   /** Any other step the player saw (a banner, an info step) leaves a short quiet gap before the next (seconds). */
-  stepGap: 0.8,
+  stepGap: 0.4,
   /** The tick on a finished lesson's box, green so it reads as done. */
   doneColor: '#3faa3a',
   /**
@@ -1662,50 +1694,74 @@ export const PEPPER = {
 
 /**
  * The war horn (v2, docs/v2-plan.md 2.3, replaces the megaphone): calls the
- * field knights. Held like the megaphone was (a short grip, the horn on top
- * of it, mouthpiece toward the face). Two ways to blow it: hold the
- * mouthpiece within `mouthDistance` of the head for `holdTime` (no mic, like
- * eating), or blow into the mic while it is at the mouth: the loudness over
- * `blowLevel` for `blowHold` sounds it at once and louder, so talking or room
- * noise does not trigger it. Sizes in cm, times in seconds.
+ * field knights. Aim with the head while holding it, lift it to the lips to
+ * lock the spot, then blow (src/tools/horn.ts). A curved hunting horn held
+ * from below: the mouthpiece on top of the grip toward the face, the body
+ * curving forward, down past the fist and a little to the side, the bell
+ * ending low, so at the lips it stays below the line of sight; near the face
+ * it also fades to see-through (headset test: the straight horn covered the
+ * middle of the view). With the mic only a real blow sends the knights; the
+ * quiet horn (or no mic) sends them after `holdTime` at the lips. Sizes in
+ * cm, times in seconds.
  */
 export const HORN = {
-  /** The horn along the tool's -z (bell end) on top of a short grip. */
+  /** The leather grip along +y from the fist. */
   gripLength: 6,
   gripRadius: 0.9,
-  hornLength: 15,
-  mouthRadius: 0.7,
-  bellRadius: 3,
-  /** The mouthpiece is this far behind the grip (toward the face). */
-  hornBack: 3,
+  /**
+   * The horn's center line, from the mouthpiece to the bell (tool cm): on top
+   * of the grip toward the face (+z), arching forward, then down past the
+   * fist and out to the side. A tapered tube along it.
+   */
+  curve: [
+    [0, 8.6, 2.6],
+    [0, 9.4, -0.4],
+    [1.2, 7.8, -3],
+    [2.6, 4.4, -3.6],
+    [3.6, 0.9, -2.6],
+    [4.2, -2.2, -0.8],
+  ] as [number, number, number][],
+  mouthRadius: 0.6,
+  bellRadius: 2.6,
+  /** It rests standing on its bell: its grip this far above the platform top. */
+  restLift: 3.4,
   bodyColor: 0xeadfc4,
   bandColor: 0xc9952e,
   gripColor: 0x5a3a22,
   gripFrom: 0,
   gripTo: 6,
   grabRadius: 0.06,
-  /** The mouthpiece counts as at the mouth this close to the head (meters, like EAT.mouthDistance). */
-  mouthDistance: 0.2,
-  /** Held at the mouth this long, it blows (seconds). */
-  holdTime: 1,
-  /** Mic loudness (RMS, 0 to 1) that counts as blowing, and how long it must stay over it (seconds). */
-  blowLevel: 0.025,
-  blowHold: 0.3,
+  /** The mouthpiece counts as at the lips (the spot locks) this close to the head (meters, a little more than EAT.mouthDistance). */
+  mouthDistance: 0.24,
+  /**
+   * Near the face it fades: fully solid farther than fadeFar, down to
+   * fadeOpacity at fadeNear (meters from the mouthpiece to the head).
+   */
+  fadeFar: 0.3,
+  fadeNear: 0.13,
+  fadeOpacity: 0.15,
+  /**
+   * The quiet horn (or no mic): kept at the lips this long, it sounds
+   * (seconds). With the mic only a blow sounds it: a hold never does, so
+   * aiming is never cut short (headset test: it went off while still aiming).
+   */
+  holdTime: 1.2,
+  /**
+   * Mic loudness (RMS, 0 to 1) that counts as blowing, and how long it must
+   * stay over it (seconds). Was 0.025, which breathing and room noise passed,
+   * then 0.06, which a real blow did not reach, then 0.04 and 0.05, too
+   * easy, then half as sensitive, 0.1, which even loud talking never
+   * reached, then 0.07, still too high, so 0.035 (headset tests). The live bar on the glass
+   * sign (GLASS_SIGN) shows the level against this line, and the debug
+   * page's mic column shows the loudest level, to tune it.
+   */
+  blowLevel: 0.035,
+  blowHold: 0.25,
   /** The loudness is smoothed this much (seconds). */
   levelSmoothing: 0.05,
   /** The horn sound's volume when held to blow, and when blown into the mic (louder). */
   heldVolume: 0.8,
   blownVolume: 1,
-  /**
-   * The breath meter on top of the horn, shown while it is at the mouth: a
-   * thin bar that fills over holdTime (at once with a blow), so it reads
-   * without sound. The same build as the megaphone's loudness meter was.
-   */
-  meterWidth: 0.5,
-  meterLift: 0.35,
-  meterTrackColor: 0x2a2018,
-  meterLowColor: 0xfff1b8,
-  meterFullColor: 0xffd23f,
   /** Little puffs out of the bell while it fills: this often (seconds). */
   puffEvery: 0.15,
   waveColors: [0xffffff, 0xfff1b8, 0xffd23f],
@@ -1901,8 +1957,8 @@ export const TROOPS = {
    * Most soldiers on the board at once (they share the unit budget with the
    * goblins). Tune after the headset test and the stress test with troops.
    */
-  /** v2: field knights (KNIGHTS.maxField) plus the wall garrison (GARRISON.size). */
-  max: 16,
+  /** v2: field knights (KNIGHTS.maxField, 4 squads of up to 5) plus the wall garrison (6). */
+  max: 26,
   /** The same size as the goblins (grunts 3.9 cm), raised from 2.5 after the step 6 test. */
   height: 3.9,
   speed: 5.5,
@@ -1927,31 +1983,53 @@ export const TROOPS = {
 
 /**
  * Field knights (v2, docs/v2-plan.md 2.7): they only come when the horn calls
- * them. A squad of swordsmen and spearmen bursts out of the wall entry in
- * front of the player and sprints down that road with a banner, crashes into
- * the first goblins it meets (several are knocked over, with a hit stop),
- * then holds the first junction at least holdMinRadius out and fights
- * everything that comes down the road, until it falls or the wave ends (then
- * it marches home). Runners dodge past with a quick hop. Sizes in cm, times
- * in seconds.
+ * them. The player aims the horn by looking at a road (HORN_AIM): a squad of
+ * swordsmen and spearmen bursts out of the nearest wall entry and sprints
+ * along the roads to that spot with a banner, crashes into the first goblins
+ * it meets (several are knocked over, with a hit stop), then holds the spot:
+ * it fights any goblin that comes within watchRadius of it, never chasing
+ * past leash. At most maxSquads squads; at the limit the horn moves the
+ * squad nearest the aimed spot there instead. A squad down to breakAt
+ * knights marches home and frees its place. Squads stay between waves.
+ * Runners dodge past with a quick hop. Sizes in cm, times in seconds.
  */
 export const KNIGHTS = {
-  squadMin: 4,
+  /** Knights per squad, picked at random from min to max. */
+  squadMin: 3,
   squadMax: 5,
-  /** Most field knights at once (squads add up when the horn is blown again). */
-  maxField: 10,
+  /** Squads at once (a level setting later). */
+  maxSquads: 4,
+  /** Most field knights at once (maxSquads full squads). */
+  maxField: 20,
+  /** A squad with this many knights left (or fewer) breaks: the rest march home, a new squad may come. */
+  breakAt: 1,
   /** Gap between knights bursting out of the gate. */
   leaveGap: 0.3,
   /** Sprint speed as a multiple of TROOPS.speed, and the sprint clip's speed. */
   sprintScale: 2.5,
   sprintClipSpeed: 1.5,
-  /** They hold the first junction on the road at least this far from the center. */
-  holdMinRadius: 120,
-  /** Their spots at the junction: this far apart sideways, and the second row this far behind. */
+  /** Their spots at the aimed point: this far apart sideways, and the second row this far behind. */
   holdSpread: 3.5,
   holdBack: 3,
-  /** At the junction they fight any goblin this close to them. */
-  holdRange: 10,
+  /** They go for any goblin this close to their spot... */
+  watchRadius: 22,
+  /** ...but never chase it farther than this from their spot (then they walk back). */
+  leash: 35,
+  /**
+   * Safety net: a knight walking up to its goblin that has not reached it
+   * after this long lets go (seconds), and leaves that goblin alone for
+   * ignoreTime (headset test: knights ran in place beside goblins, nobody
+   * fighting). The console says so ("[troops] a knight could not reach"), to
+   * find the cause if it shows up.
+   */
+  closeGiveUp: 4,
+  ignoreTime: 3,
+  /** A knight in a moving mode that has not moved for this long is put where it was going (seconds, the run-in-place watchdog). */
+  stuckTime: 2,
+  /** At most this many knights fight one goblin, so a squad cannot swarm a small group at once. */
+  maxPerGoblin: 2,
+  /** A knight's strike lands this share (the garrison's guards use TROOPS.strikeChance). */
+  strikeChance: 0.35,
   /** Walking back to their spot after a fight (multiple of TROOPS.speed). */
   postSpeedScale: 1.6,
   /** The crash: goblins this close to the first goblin met are knocked over (at most crashMax). */
@@ -1961,13 +2039,117 @@ export const KNIGHTS = {
   dodgeRange: 7,
   hopTime: 0.35,
   hopHeight: 3,
-  /** The squad's banner, carried by its first knight (cm). */
+  /** The squad's banner, carried by its first knight in its left hand, held this far above the pole's foot (cm). */
+  bannerGrip: 1.2,
   bannerHeight: 8,
   bannerWidth: 2.6,
   bannerLength: 1.8,
   bannerColor: 0x4673d2,
   bannerTrim: 0xffc446,
   poleColor: 0x5a4330,
+  /** The banner of the squad the horn would move (aiming at the limit) pulses this much bigger, this fast. */
+  answerPulse: 0.35,
+  answerPulseSpeed: 7,
+  answerColor: 0x9cc2ff,
+};
+
+/**
+ * Aiming the horn (v2, src/ui/hornAim.ts). While the horn is held (anywhere,
+ * so nothing covers the view), the head points it (Quest 3S has no eye
+ * tracking: head gaze). Built from Meta's ray and gaze specs: for a head ray
+ * the cue is on the target, not a long laser, so on the board: a soft glowing
+ * pool on the road where the knights will go (like the system's gaze
+ * spotlight, no hard ring), a light pillar up from it and a see-through ghost
+ * banner. The spot only moves to a new road spot once the head has pointed
+ * there for consensusTime (Meta's gaze consensus window), so it never
+ * flickers. Lifted to the lips it locks: gold, a click, and the path the
+ * knights will take lights up along the roads. Sizes in board cm.
+ */
+export const HORN_AIM = {
+  /**
+   * The look ray points this far below where the head points (degrees). The
+   * headset knows only the head, and in VR most people rest their eyes a
+   * little below it (headset test: the spot sat too far out, so the player
+   * kept looking up with the eyes). 7 was still too far: 12 lets the head
+   * stay level instead of bending the neck down for long. Tune it here.
+   */
+  gazeDropDeg: 12,
+  /** The look ray is searched from just outside the wall out to this far (cm from the center). */
+  minRadius: 62,
+  maxRadius: 320,
+  /** Step along the look ray when finding where it meets the ground (cm). */
+  rayStep: 4,
+  /** The spot snaps to the nearest road within this far of where the look meets the ground (cm). */
+  snapRadius: 22,
+  /** A new spot takes over only after it is pointed at this long (seconds), and if this far from the old one (cm). */
+  consensusTime: 0.2,
+  moveAtLeast: 4,
+  /** The spot glides to its new place with this smoothing (seconds). */
+  glide: 0.06,
+  /** The light pillar up from the spot (cm), fading upward; locked, it grows by up to pillarGrow as the call charges. */
+  pillarHeight: 22,
+  pillarRadius: 0.9,
+  pillarGrow: 0.8,
+  pillarOpacity: 0.6,
+  /** The path along the roads once locked (cm): ribbon width, a point every pathStep, just above the road, and its opacity. */
+  pathWidth: 1.6,
+  pathStep: 3,
+  pathLift: 0.35,
+  pathOpacity: 0.7,
+  /** Locked at the lips: everything turns gold. */
+  lockColor: 0xffc23a,
+  /** The glowing pool on the road: radius (cm) and its strongest opacity. A slow breathing pulse. */
+  poolRadius: 7,
+  poolOpacity: 0.55,
+  poolPulse: 0.15,
+  /** Colors: a spot the knights can go to, and none in sight (grey, the horn will not blow). */
+  color: 0xfff1b8,
+  noneColor: 0x8a8a8a,
+  /**
+   * Off the road (headset test: the faint grey glow was hard to see): a
+   * white ring with a dark edge where the look meets the ground (radius, cm),
+   * and an arrow on the ground toward the nearest road, arrowGap out from the
+   * ring, nudging arrowBob that way. Drawn over the hills.
+   */
+  offRoad: { radius: 4.5, color: 0xffffff, edgeColor: 0x1a1410, arrowSize: 3, arrowGap: 2, arrowBob: 1.5 },
+  /** The ghost banner's opacity. */
+  ghostOpacity: 0.55,
+};
+
+/**
+ * The glass sign (src/ui/kit/glassSign.ts): the see-through variant of the
+ * hint sign. A small dark glass label a little above the look's center (it
+ * never covers what the player looks at), following the look smoothly. Used
+ * by lessons where the player must watch what is in front of them (the horn,
+ * the balloon: `Hint.glass`, which hides the hint sign, so only one sign shows)
+ * and by the horn while it is held (what to do now, and at the lips a live
+ * bar: the blow against the line it must pass, or the quiet hold). Meters,
+ * degrees, seconds.
+ */
+export const GLASS_SIGN = {
+  distance: 0.6,
+  /** Above the look's center by this much (degrees). */
+  aboveDeg: 9,
+  width: 0.26,
+  height: 0.09,
+  /** Text size on its 512 px wide canvas (shrinks to fit two lines). */
+  fontPx: 40,
+  glass: 'rgba(30, 22, 16, 0.55)',
+  /** Follows the look with this smoothing. */
+  smoothing: 0.12,
+  bar: {
+    width: 0.2,
+    height: 0.012,
+    /** Its middle, below the sign's middle. */
+    y: -0.027,
+    /** The shown level falls back this slowly (seconds for a full bar), so a short blow reads. */
+    fall: 0.4,
+    color: 0x7fd36a,
+    overColor: 0xffc23a,
+    lineColor: 0xffffff,
+  },
+  /** The horn's blow bar is full at this many times HORN.blowLevel (its line sits at 1 / hornBarMax). */
+  hornBarMax: 1.6,
 };
 
 /**
@@ -2306,13 +2488,13 @@ export const TROOP_KINDS: Record<TroopKind, TroopKindSpec> = {
 export const ARCHERS = {
   /** The share of arrows that hit (the goblin is knocked out, or loses its helmet or shield). */
   hitChance: 0.55,
-  /** Arrow flight time (seconds) and arc height (cm). */
-  flightTime: 0.9,
-  arcHeight: 22,
-  /** Arrow size (cm). Was 2.2. */
-  length: 7.5,
+  /** Arrow flight time (seconds) and arc height (cm). A little lower and quicker since the range is shorter. */
+  flightTime: 0.75,
+  arcHeight: 16,
+  /** Arrow size (cm). Was 2.2, then 7.5 (too long after the headset test). */
+  length: 4.5,
   /** The light streak behind it (cm long) and its look. */
-  streakLength: 7,
+  streakLength: 4.5,
   streakColor: 0xfff6d8,
   streakOpacity: 0.45,
   poolSize: 16,
@@ -2340,13 +2522,24 @@ export const GARRISON = {
   homesDeg: [0, 180, 60, 120, 240, 300],
   /** Where they stand on the wall top (cm from the center), a little inside the goblins' path. */
   radius: 47.8,
+  /** A missing archer is replaced every refillEvery, a missing guard every guardRefillEvery (slower, so helping them matters). */
   refillEvery: 15,
+  guardRefillEvery: 30,
   /** Climbing up from the courtyard takes this long. */
   climbTime: 2.2,
-  /** Walking speed along the rampart (cm per second). */
+  /** Walking speed along the rampart (cm per second), and the guards' (they hunt goblins round the whole wall). */
   walkSpeed: 4,
-  /** Archers shoot goblins this far from them (cm, flat), all together this often, a little staggered. */
-  archerRange: 100,
+  guardSpeed: 8,
+  /**
+   * Archers shoot goblins this far from them (cm, flat), all together this
+   * often, a little staggered. Was 100 with one arrow per knockout (goblins
+   * never reached the wall), then 35 (too short). Now longer again, but an
+   * arrow is weaker than a sword: it takes arrowsPerHit arrows to make one
+   * hit (a bare goblin, or a helmet or shield coming off). 85 reached almost
+   * to the end of the first ring of roads (headset test): 60 now.
+   */
+  archerRange: 60,
+  arrowsPerHit: 2,
   volleyEvery: 2.2,
   volleyStagger: 0.07,
   /** Archers back away from a goblin on the rampart this close (cm along the wall). */
@@ -3012,13 +3205,14 @@ export const STRESS_TEST = {
   maxUnits: 120,
   /**
    * Standing for the whole test (v2): the full wall garrison on the rampart
-   * (GARRISON, 2 guards and 4 archers) and one knight squad at the junction
-   * in front (KNIGHTS.squadMax), all walking on the spot so they cost what
+   * (GARRISON, 2 guards and 4 archers) and the full knight squads on roads
+   * around the board (KNIGHTS.maxSquads of squadMax), all walking on the spot so they cost what
    * moving soldiers cost but never fight, plus balloons with riders
    * (hovering), so the budget counts the army and the flying enemies too.
    */
   garrison: 6,
-  knights: 5,
+  /** KNIGHTS.maxSquads full squads (4 of 5). */
+  knights: 20,
   balloons: 2,
 };
 

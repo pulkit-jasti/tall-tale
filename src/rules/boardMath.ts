@@ -84,10 +84,10 @@ export function clearOfTowers(angle: number): number {
 
 /** Shortest signed difference between two angles (radians). */
 export function angleDelta(from: number, to: number): number {
-  let d = to - from;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
+  // No loop: a huge or endless value (a bad angle somewhere) can never hang the game.
+  const d = to - from;
+  if (!Number.isFinite(d)) return 0;
+  return d - Math.round(d / (Math.PI * 2)) * Math.PI * 2;
 }
 
 /**

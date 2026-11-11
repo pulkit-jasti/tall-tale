@@ -20,7 +20,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { CASTLE, DAY_NIGHT, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
+import { CASTLE, DAY_NIGHT, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
@@ -28,7 +28,7 @@ import { armorHit, rollGear, type GoblinWeapon } from '../rules/gear.js';
 import { bashSeconds, climbSpeed } from '../rules/climb.js';
 import { popIn } from '../fx/ease.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
-import { angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
+import { angleDelta, angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
 import type { Particles } from '../fx/particles.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
@@ -168,6 +168,10 @@ export class Goblin {
   bashLeft = 0;
   /** A runner hopping past a knight: time left of the hop (seconds, KNIGHTS.hopTime). */
   hopLeft = 0;
+  /** Arrows that hit it since its last real hit (GARRISON.arrowsPerHit make one). */
+  arrowWounds = 0;
+  /** Its rampart time is over but soldiers are still on the wall: it hunts the nearest one (v2). */
+  hunting = false;
   /** A hit flash is showing for this long (seconds). */
   flashTime = 0;
   /** Juice: time left of the landing squash, of the pop-in from its camp, and to its next dust puff (seconds). */
@@ -230,7 +234,8 @@ export class Goblin {
     if (this.seasoned) color.multiply(tint.setRGB(...PEPPER.seasonedTint));
   }
 
-  play(name: string, loop = true, timeScale = 1): void {
+  /** `restart`: plays it fresh even when it is already the current clip. */
+  play(name: string, loop = true, timeScale = 1, restart = false): void {
     let action = this.actions.get(name);
     if (!action) {
       const clip = AnimationClip.findByName(this.clips, name);
@@ -239,7 +244,7 @@ export class Goblin {
       this.actions.set(name, action);
     }
     action.timeScale = timeScale;
-    if (action === this.current && loop) return;
+    if (action === this.current && loop && !(restart && (!action.isRunning() || action.getEffectiveWeight() < 0.5))) return;
     action.reset();
     action.setLoop(loop ? LoopRepeat : LoopOnce, Infinity);
     action.clampWhenFinished = !loop;
@@ -410,9 +415,11 @@ export class Goblins {
   knockOffRampart(): number {
     let count = 0;
     for (const g of this.list) {
-      // Calm lesson goblins too: the bell lesson shows them falling. They are no longer calm then.
+      // Calm lesson goblins too: the bell lesson shows them falling. From then on they are
+      // ordinary goblins (they used to keep an endless rampart wait: back up the wall they
+      // stood still forever, ignored by the army, and the final wave could never end).
       if (g.mode !== 'rampart') continue;
-      g.calm = false;
+      this.unLesson(g);
       const p = g.root.position;
       const a = angleOf(p.x, p.z);
       const r = CASTLE.wallOut + 1;
@@ -430,6 +437,18 @@ export class Goblins {
     }
     if (count > 0) this.audio.play('squeal', undefined, 1, 0.1);
     return count;
+  }
+
+  /** A lesson goblin becomes an ordinary goblin (the battle: a wave starts while one still waits). */
+  makeOrdinary(g: Goblin): void {
+    this.unLesson(g);
+  }
+
+  /** A lesson goblin (calm, or with a long rampart wait) becomes an ordinary goblin. */
+  private unLesson(g: Goblin): void {
+    g.calm = false;
+    g.rampartWait = GOBLIN_RULES.rampartWait;
+    if (g.mode === 'rampart') g.timer = Math.min(g.timer, GOBLIN_RULES.rampartWait);
   }
 
   /** A runner dodges past a knight with a quick hop (v2). Only while walking, one hop at a time. */
@@ -546,6 +565,8 @@ export class Goblins {
     } else goblin.setGear('none', false, false);
     goblin.hitGrace = 0;
     goblin.hopLeft = 0;
+    goblin.arrowWounds = 0;
+    goblin.hunting = false;
     goblin.speed = goblin.stats.speed * (1 + this.rng.range(-GOBLIN_RULES.speedJitter, GOBLIN_RULES.speedJitter));
     goblin.root.visible = true;
     goblin.root.rotation.set(0, 0, 0);
@@ -568,7 +589,10 @@ export class Goblins {
     goblin.dashPause = 0;
     goblin.root.scale.setScalar(1);
     goblin.body.rotation.x = 0;
-    this.setTouch(goblin, 'idle');
+    // Always repainted: setTouch skips a goblin already 'idle', and one knocked out in the middle of
+    // its white hit flash came back from the pool still white (headset test: all-white goblins).
+    goblin.touch = 'idle';
+    this.applyLook(goblin);
     return goblin;
   }
 
@@ -809,6 +833,11 @@ export class Goblins {
       this.onKnockOut(goblin, this.centerWorld(goblin, temp3));
     }
     if (this.aimed === goblin) this.setAimed(null);
+    // A hit flash still showing ends here (the update loop skips dead goblins, so it would never fade).
+    if (goblin.flashTime > 0) {
+      goblin.flashTime = 0;
+      this.applyLook(goblin);
+    }
     goblin.mode = 'dead';
     goblin.root.visible = false;
     goblin.road = null;
@@ -916,6 +945,9 @@ export class Goblins {
     goblin.mode = 'falling';
     goblin.landAs = 'dazed';
     goblin.play('fall', true, 1);
+    // Thrown away (not just let go): a lesson goblin is an ordinary goblin from now on, so when it
+    // comes back and climbs up it runs about the rampart and fights the garrison like any other.
+    if (speed >= GOBLIN_RULES.tossLessonSpeed) this.unLesson(goblin);
     return Math.min(speed, GOBLIN_RULES.maxThrowSpeed);
   }
 
@@ -1179,7 +1211,12 @@ export class Goblins {
         if (g.calm) break;
         g.timer -= dt;
         if (g.timer <= 0) {
-          this.jumpIntoCourtyard(g);
+          // v2: it only jumps in once no soldier is left on the wall; until then it hunts the nearest one.
+          const target = this.huntAngle(g);
+          if (target === null) {
+            g.hunting = false;
+            this.jumpIntoCourtyard(g);
+          } else this.hunt(g, target, dt);
           break;
         }
         // A tutorial climber with a long wait stands still to be picked up. The others run about.
@@ -1235,7 +1272,8 @@ export class Goblins {
     const r = CASTLE.wallOut + GOBLIN_RULES.bashStandOff;
     g.target.set(polarX(r, a), 0, polarZ(r, a));
     g.mode = 'toWall';
-    g.play(g.stats.moveClip, true, g.stats.moveClipSpeed);
+    // Restarted even if it was the last clip, so a goblin coming back after a throw never slides along frozen.
+    g.play(g.stats.moveClip, true, g.stats.moveClipSpeed, true);
   }
 
   /** Step 1: bashes the wall for a few seconds, then climbs. */
@@ -1292,9 +1330,7 @@ export class Goblins {
     // Along the wall's own curve, never across it: always right on the rampart.
     const step = ((g.speed * GOBLIN_RULES.rampartRunShare) / CASTLE.rampartRadius) * dt;
     // The short way round (angles wrap at the back of the board).
-    let d = g.dashTo - at;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
+    const d = angleDelta(at, g.dashTo);
     const arrived = Math.abs(d) <= step;
     const next = arrived ? at + d : at + Math.sign(d) * step;
     p.set(polarX(CASTLE.rampartRadius, next), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, next));
@@ -1308,6 +1344,51 @@ export class Goblins {
       g.faceCenter();
     }
   }
+
+  /**
+   * After its rampart time, while soldiers are still on the wall: it runs
+   * along the wall (the short way, past towers) to the nearest one and stops
+   * next to it (the garrison makes it strike, src/units/garrison.ts). Its
+   * stretch of wall still flashes red as it goes.
+   */
+  private hunt(g: Goblin, target: number, dt: number): void {
+    // Fighting a soldier right now (the garrison holds it there).
+    if (g.dashPause > 0) {
+      g.dashPause -= dt;
+      return;
+    }
+    const p = g.root.position;
+    const at = angleOf(p.x, p.z);
+    const d = angleDelta(at, target);
+    const arrive = GARRISON.goblinReach * 0.6 / CASTLE.rampartRadius;
+    g.markTimer -= dt;
+    if (g.markTimer <= 0) {
+      g.markTimer = GOBLIN_RULES.rampartMarkEvery;
+      this.onRampartStep(g);
+    }
+    if (Math.abs(d) <= arrive) {
+      if (g.hunting) {
+        g.hunting = false;
+        g.play('idle');
+      }
+      return;
+    }
+    if (!g.hunting) {
+      g.hunting = true;
+      g.play('sprint', true, 1.4);
+    }
+    const step = ((g.speed * GOBLIN_RULES.rampartRunShare) / CASTLE.rampartRadius) * dt;
+    const next = at + Math.sign(d) * Math.min(step, Math.abs(d) - arrive);
+    p.set(polarX(CASTLE.rampartRadius, next), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, next));
+    const s = Math.sign(d) || 1;
+    g.face(Math.cos(next) * s, Math.sin(next) * s);
+  }
+
+  /**
+   * The board angle of the soldier on the wall nearest a goblin, or null when
+   * none is left (then goblins on the rampart jump in). Set by the game (the garrison).
+   */
+  huntAngle: (goblin: Goblin) => number | null = () => null;
 
   /** Lets lesson goblins on the rampart and patrolling ones go on as usual. */
   releaseLesson(): void {
@@ -1328,6 +1409,7 @@ export class Goblins {
     g.mode = 'rampart';
     g.timer = g.rampartWait;
     g.hasTarget = false;
+    g.hunting = false;
     // A breath after the jump up, then it starts running about.
     g.dashPause = GOBLIN_RULES.rampartStop[1];
     g.faceCenter();

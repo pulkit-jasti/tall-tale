@@ -34,6 +34,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BOARD, GIANT } from '../config/game.js';
+import { angleDelta } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 
 const material = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true });
@@ -170,9 +171,8 @@ export class GiantBody {
       this.yaw = faceYaw;
     } else {
       // Only past a dead zone, and slowly, so a glance to the side never swings the body.
-      let d = faceYaw - this.yaw;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
+      // No loop: a bad angle can never hang the game.
+      const d = angleDelta(this.yaw, faceYaw);
       const dead = (GIANT.turnDeadDeg * Math.PI) / 180;
       if (Math.abs(d) > dead) {
         const k = 1 - Math.exp(-dt / GIANT.turnSmoothing);

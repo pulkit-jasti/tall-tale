@@ -214,6 +214,74 @@ The mechanics the tutorial will show. The tutorial must stay playable after this
   - Done: `STRESS_TEST.garrison` (6, on the rampart at their homes) and `STRESS_TEST.knights` (5, at the junction in front, the first with its banner), all walking on the spot via `Troops.standForTest(garrison, knights)`, plus the 2 balloons as before. Topic docs, the README (status, what the player does, voice, history 57 to 62) and castle-machines.md (dropped) are updated.
   - Not done in run 1: the stress test itself (needs the headset), typecheck and tests (not run, by the run's rules; `director.test.ts` and other tests may fail), mvp.md (run 2 updates it with the tutorial rebuild).
 
+**Fixes after the first run 1 headset test (2026-11-10):**
+
+- [x] Tutorial pauses are by context, not a fixed 3.5 s: `TutorialStep.afterDone` per lesson (`PAUSE_AFTER` in `src/director/tutorial.ts`). No pause where the next lesson follows straight on (pick up then eat, grab a tool then use it, the slingshot grab, pebble and load); 1.5 s to finish a move or see it land (spin, toss, the first shot, the balloon, swatter, pepper); 2.5 s to watch what was set off or settle (height, the triggers, the horn charge, the bell, the reach check). Everything else: a 0.6 s tick (`HINT_SIGN.doneTime`, was 3.5); info steps leave 0.4 s (`stepGap`, was 0.8).
+- [x] Horn lesson: the grab lesson says what the horn is for; the use lesson says to bring it to the lips and blow (or hold until the bar fills, without a mic), only counts a blow made during it (an early blow no longer skips it), no wave clear ends it, and it waits up to 10 minutes. Done text: the knights hold that road, spin the board to pick another.
+- [x] Horn: with the mic on it needs a real blow: `blowLevel` 0.06 (was 0.025, breathing passed it) for 0.35 s; holding alone takes 4 s (`micHoldTime`, still there so voice is never required). Quiet horn or no mic: 1.2 s hold.
+- [x] Banner: held in the first knight's left hand (its shield put away), the pole through the fist and upright, following the hand every frame (it stood from the ground beside the knight and looked like it floated).
+- [x] A thrown lesson goblin becomes an ordinary goblin (`Goblins.unLesson`): it used to keep the lesson's long rampart wait, so after climbing back it stood still and the army ignored it. Its walk clip is restarted when it heads back to the wall.
+- [x] Arrows 4.5 cm (was 7.5), streak 4.5 cm, arc 16 cm, 0.75 s flight. Archer range 35 cm (was 100): only the last stretch before the wall and goblins bashing it, so goblins reach the wall for the hands and close tools.
+- [x] Pepper lesson: its waiting goblins wear a helmet and a shield and carry a spear or sword, so the disarm shows.
+- [x] Bell freeze in the final wave: not reproduced (no headset in this session). Fixed what was found on that path: the bell lesson's goblins knocked off the wall kept an endless rampart wait, so they came back and stood on the wall forever, ignored by the army and never jumping in, and the last wave could never be cleared; they are ordinary goblins now. Also: every angle wrap is loop free (a bad angle can no longer hang the page), and an error in one frame is logged (`[game] frame error`) instead of freezing the game. If it still happens, the console error says where.
+
+**Knights rework after the headset test (2026-11-10), decided with the developer:**
+
+- [x] Aim the horn by looking (head gaze) while it is at the mouth: the spot snaps to the nearest road, shown by a short fading beam from the bell, a glowing pool and a ghost banner (Meta's head ray and gaze specs: the cue is on the target, a 0.2 s consensus window). No road in sight: grey, it will not blow. `HORN_AIM`, `src/ui/hornAim.ts`. (Meta's asset library was checked but not used: AGENTS.md allows only the listed CC0 assets; the aim is made in code.)
+- [x] Squads go to the aimed spot along the roads (`src/rules/roadRoute.ts`, a Dijkstra over the road graph), guard it with a 22 cm watch radius and a 35 cm leash, at most 2 knights per goblin, 35% hits.
+- [x] Up to 4 squads of 3 to 5 knights (random). At the limit the horn moves the squad nearest the spot (its banner pulses while aiming). A squad down to 1 knight breaks and marches home, freeing its place. Squads stay between waves. `TROOPS.max` 26: **run the stress test** with this many.
+
+**Fixes after the second headset test (2026-11-10), decided with the developer:**
+
+- [x] The tutorial never blocks: lessons that need a goblin (pick up, eat, throw) bring a new one within 1.5 s when it is eaten, thrown or knocked out instead (eating the throw lesson's goblin used to leave nothing to throw); tool lessons top up their waiting goblins, the shoot lesson its moving target (`TutorialStep.tick`, `keepLessonGoblin`, `keepBait`, `keepMovingBait`). A lesson goblin still waiting when a wave starts becomes ordinary. The horn lesson moves on after 90 s at most (was 10 minutes).
+- [x] Fewer signs in a row: the two flag signs are one; after the basics, wave 1 plays on its own, and the horn is taught in the middle of it once 3 goblins are eaten (or after 45 s): one grab lesson, then one lesson in three beats on the same sign (aim, lift to lock, blow), replacing the old horn lesson before wave 1.
+- [x] Horn: aim with the head whenever it is held (not only at the mouth), the spot locks when it reaches the lips (everything turns gold, a click, the path the knights will take lights up along the roads, a light pillar grows as the call charges); lowered again it unlocks. With the mic only a real blow sends them (no more firing just from holding it at the mouth); the quiet horn (or no mic) sends them after 1.2 s at the lips. The use window and recharge start only when it sounds. The beam out of the bell is gone (it was hidden behind the horn).
+- [x] Horn model: a curved hunting horn held from below (mouthpiece on top of the grip, the body curving forward and down past the fist, the bell low and a little to the side), resting on its bell; it fades to 15% near the face (`HORN.fade*`), so it never covers the view.
+- [x] Archers: two arrows make one hit (`GARRISON.arrowsPerHit`), range 85 cm.
+- [x] Guards hunt goblins anywhere on the rampart (they walk past towers), at 8 cm/s; a fallen guard is replaced after 30 s (archers 15 s).
+- [x] Goblins on the rampart jump in only once no soldier is left on the wall; after their rampart time they hunt the nearest soldier. No new goblins come out while any are inside the castle.
+
+**Fixes after the third headset test (2026-11-10), decided with the developer:**
+
+- [x] The two flags have their own signs again, one arrow each (one sign for both was missed).
+- [x] Archer range 60 cm (85 reached almost to the end of the first ring of roads).
+- [x] No lesson moves on by itself any more (the horn lesson ran out and the wave went on untaught): every lesson timeout is gone, tool lessons no longer end on a wave clear, and a stalemate never ends a wave while a lesson waits. The way out is **Skip tutorial**: on the welcome panel (bottom left) and on the pause panel (while the tutorial runs). It starts a fresh battle from wave 1 with every tool out and no lessons (`Battle.skipTutorial`, `buildTutorialSteps(..., teach)`); Restart and Play again keep it, the welcome panel's Play brings the tutorial back. Debug action "Skip tutorial".
+- [x] Horn cue where the eyes are (`HORN_CUE`, `src/ui/hornCue.ts`): the horn aims by gaze, so the sign's changing text was missed. A small label floats a little above the look's center while the horn is held: what to do now, and at the lips a live loudness bar with the line the blow must pass.
+- [x] The blow did not work: the level is now 0.04 for 0.3 s (was 0.06 for 0.35 s), the mic is read the whole time the horn is held (awake before the lips), and the lips count from 24 cm (was 20). The live bar shows whether the mic hears the blow.
+- [x] No stray blinking: during a lesson only its own tool may glow (no beckon, Ready glow or ring flash on the others, `HandTool.quiet`), and a lesson's "grab me" glow ends with the lesson (a hint used to keep a tool blinking through later lessons).
+- [x] All-white goblins: a goblin knocked out during its white hit flash went back to the pool still white, and the pool's reset skipped repainting it. It is always repainted now, and a knockout ends the flash.
+- [x] Pause on the Quest menu: it also listens to the XR session's and the page's visibility events (the menu can stop the frames before a hidden frame is ever seen), and pauses when no frame ran for 0.75 s (`PAUSE.autoPauseGap`).
+- [ ] Not run: `src/rules/director.test.ts` still expects the old lesson timeouts (and the food jar and megaphone, from before v2).
+
+**Fixes after the fourth headset test (2026-11-10), decided with the developer:**
+
+- [x] Settings: Reset table moved from the pause panel into the settings' Access tab; Access is the first tab and open by default, then Sound, both centered.
+- [x] One glass sign (`GLASS_SIGN`, `src/ui/kit/glassSign.ts`, in the UI library): the see-through variant of the hint sign that follows the look. Lessons with `Hint.glass` (the horn, the knights' first fight, the balloon) show only it, never two signs at once. The horn's bar is plain meshes now: the canvas redrawn on every bar step made the whole view flicker.
+- [x] Every tutorial text cut to one short, easy instruction.
+- [x] Opposite hand: the ghost hands and texts use the left hand for tools on the right (slingshot, horn) and the right hand for tools on the left (swatter, pepper, bell); the pebble, the load and the pull are the right hand's. Rule added to AGENTS.md.
+- [x] The horn lesson ends with the knights' first fight: 3 plain grunts come down the squad's road into it (`Troops.sendGroupAt`, `TUTORIAL_TIMING.squadFight`), done once they are gone.
+- [x] Knights frozen next to a goblin: a knight walking back to its spot took a goblin past its leash, let go the same frame, and again, forever. Knights at their spot now only take goblins inside the leash, and letting go of a fight frees the goblin at once.
+- [x] Pause: the Quest menu gesture itself (a pinch with the palm toward the eyes) pauses at once (`PAUSE.metaGesture`).
+- [x] Horn a little less sensitive: blow level 0.05.
+- [x] Fifth test: during a lesson every other tool is locked (dimmed, a grab only buzzes, let go if held; the slingshot too), so no other tool can break it (`HandTool.quiet`, `Slingshot.locked`).
+- [x] Fifth test: the horn half as sensitive (blow level 0.1).
+- [x] Fifth test: knights still ran in place beside goblins. No cause found in the code, so two safety nets with console logs: a knight that does not reach its goblin within 4 s lets go of it for 3 s (`KNIGHTS.closeGiveUp`), and one in a moving mode that has not moved for 2 s is put where it was going (`KNIGHTS.stuckTime`). The log line ("[troops] a knight ...") says which case it was.
+- [x] Fifth test: the knights' first fight waits until the squad has reached its spot (or 15 s), then 3 goblins appear 32 cm out on its road and walk in; "Congratulations! Your knights won!" when they are gone.
+- [x] Fifth test: random pauses. The Meta gesture check is stricter (palm straight at the eyes, within 45 cm, a hand holding nothing, kept 0.15 s) and the no-frames pause needs 1.5 s (was 0.75: one long hitch could pause). The FPS panel shows what caused a pause ("paused (menu gesture)", "focus lost", "no frames", "hidden").
+- [x] Sixth test: the horn lesson goes one beat at a time: "Look around. The flag goes where you look." for at least 3.5 s of holding it, then "Now lift the horn to your mouth.", then "Spot set! Your knights will walk this path." for 2 s (the horn locks but waits, no bar), then "Blow into the horn!" with the bar (`TUTORIAL_TIMING.hornLookTime`, `hornLockedTime`, `Horn.waiting`).
+- [x] Sixth test: fewer goblins before the horn: half the spawn rate after the basics, the horn after 2 eaten (or 30 s), then a breather with no new goblins until the board is clear (at most 12 s).
+- [x] Sixth test: blow level 0.07 (0.1 was never reached, even by loud talking).
+- [x] Seventh test: blow level 0.035 for 0.25 s (0.07 was still out of reach).
+- [x] Seventh test: no goblins around the horn: after the basics only 3 come out (`hornGoblins`, half rate), then none until the horn lessons are over; the breather waits up to 25 s for a clear board.
+- [x] Seventh test: "Look around" stays at least 7 s of holding the horn.
+- [x] Seventh test: off the road, the look shows a crisp white ring with a dark edge and an arrow on the ground toward the nearest road (`HORN_AIM.offRoad`), drawn over the hills, instead of the faint grey glow.
+- [x] Seventh test: gaze offset 12 degrees (was 7), so the head can stay level.
+- [x] Eighth test: the bell still did nothing. Its stroke check is simpler now: every stroke that rings stuns, unless a stun is still running; a resting bell says so. Each case is a note on the debug page (`[bell] ...`), so if it fails again the note says why.
+- [x] Eighth test: in the tutorial the knight squads march home after each wave's cheer (`Troops.sendHome`), so lessons start with an empty field. In the real game (Skip tutorial) they stay.
+- [x] Eighth test: knights still ran in place, but the safety nets now bring them back. The debug page has a new "notes" column (`src/debug/notes.ts`): the last few knight, bell and pause notes from the headset, with the knight's mode, leg, its goblin's mode and distance, to find the real cause.
+- [x] Horn aim 7 degrees below where the head points (`HORN_AIM.gazeDropDeg`): the eyes rest a little below the head's direction, so the spot sat too far out.
+- [x] Bell: one firm stroke stuns (and shows the shock ring); it needed two strokes within 0.7 s, so it often rang and did nothing.
+
 ### Run 2: everything judges see
 
 Decide section 4 first (after feeling run 1 on the headset).

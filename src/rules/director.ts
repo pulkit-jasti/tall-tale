@@ -20,12 +20,21 @@ export interface DirectorStep<C> {
   timeout: number;
   /** Runs when the timeout moves on without the goal. */
   onTimeout?(ctx: C): void;
+  /**
+   * Every frame while the step runs (after its goal is checked): keeps what
+   * the lesson needs on the board, for example a new lesson goblin right
+   * after the player ate the one they were meant to throw, so a player who
+   * does something else is never left waiting.
+   */
+  tick?(ctx: C, dt: number): void;
   /** Runs whenever the step ends: done, timed out or skipped. */
   end?(ctx: C): void;
   /** While this step waits for the player, enemies come at half the spawn rate. */
   slowSpawns?: boolean;
   /** While this step waits for the player, no new enemies come out at all (the wave holds its spawns). */
   holdSpawns?: boolean;
+  /** Holds the spawns too while this is true (checked every frame), for example once a few goblins are out. */
+  holdSpawnsWhen?(ctx: C): boolean;
 }
 
 export type StepEnd = 'done' | 'timeout';
@@ -74,7 +83,7 @@ export class Director<C> {
 
   /** Spawn rate share for the current step (0.5 while it waits for the player, 0 while it holds the wave). */
   get spawnRate(): number {
-    if (this.current?.holdSpawns) return 0;
+    if (this.current?.holdSpawns || this.current?.holdSpawnsWhen?.(this.ctx)) return 0;
     return this.current?.slowSpawns ? 0.5 : 1;
   }
 
@@ -93,6 +102,7 @@ export class Director<C> {
         continue;
       }
       this.time += dt;
+      step.tick?.(this.ctx, dt);
       const fallbacks = step.fallbacks ?? [];
       const allowed = Math.min(MAX_FALLBACKS, fallbacks.length);
       const stuckAfter = step.stuckAfter ?? Infinity;

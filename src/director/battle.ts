@@ -57,6 +57,7 @@ import {
   TUTORIAL_TIMING,
   TUTORIAL_WAVES,
   type HintIcon,
+  type HornSteps,
   type MarkerTarget,
   type ToolName,
   type TutorialApi,
@@ -68,6 +69,18 @@ const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'bell'];
 const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, bell: 0, horn: 0 });
 const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0 });
+/** The tool a lesson's marker belongs to, so only that tool works during it (the others are locked). */
+const MARKER_TOOL: Partial<Record<MarkerTarget, ToolName>> = {
+  swatterHandle: 'swatter',
+  pepperHandle: 'pepper',
+  hornHandle: 'horn',
+  bellHandle: 'bell',
+  slingHandle: 'slingshot',
+  bowl: 'slingshot',
+  pouch: 'slingshot',
+  lessonTrigger: 'slingshot',
+  balloon: 'slingshot',
+};
 const ICONS: Record<HintIcon, UiImageName> = {
   pinch: 'target',
   grab: 'target',
@@ -110,6 +123,8 @@ export interface BattleParts {
   pointer: PointerArrow;
   /** Goblins brought just for a tool's use lesson. */
   bait: LessonBait;
+  /** Where the horn is in its lesson: not held, aiming, a spot to lock, locked at the lips (src/ui/hornAim.ts). */
+  hornState: () => 'idle' | 'aim' | 'lift' | 'blow';
   /** The pause button in front (world), while it shows, for the pause lesson's marker. */
   pauseButton: (out: Vector3) => Vector3 | null;
   audio: GameAudio;
@@ -139,6 +154,8 @@ export class Battle implements TutorialApi {
    * not mean playing the earlier ones every time.
    */
   playFromWave = 0;
+  /** The battle teaches (the tutorial's lessons). False after Skip tutorial, until the welcome panel's Play. */
+  private teach = true;
   /** The reach check at the start (only until the player's reach is known). */
   private reach = new ReachCheck();
   /** True once the board was sized to this player (saved in the browser). */
@@ -165,6 +182,16 @@ export class Battle implements TutorialApi {
   private lastSpin = 0;
   private lastHeight = 0;
   private lessonGoblin: Goblin | null = null;
+  /** The horn lesson's pace: how long the horn has been held (looking around), and how long it has been locked (seconds). */
+  private hornLookTime = 0;
+  private hornLockTime = 0;
+  /**
+   * The horn lesson shows "spot set" right now: the horn waits (no bar, no
+   * call) until the sign says to blow. The game passes it to the horn.
+   */
+  hornWaiting = false;
+  /** The goblins sent at the knights after the horn lesson (with their serials, as goblins are reused). */
+  private squadFoes: { g: Goblin; serial: number }[] = [];
   /** The powder keg of the trigger lesson, and how many triggers of each kind were set off. */
   private lessonTrigger: Trigger | null = null;
   private triggerCount = noTriggers();
@@ -179,6 +206,14 @@ export class Battle implements TutorialApi {
   /** A finished lesson keeps its ticked box up this long (seconds). */
   private doneFlash = 0;
   private doneContent: SignContent | null = null;
+  /** The ticked lesson was a glass lesson: its tick shows on the glass sign. */
+  private doneGlass = false;
+  /**
+   * The current glass lesson's text (Hint.glass), or null: the game shows it
+   * on the glass sign that follows the look (with the horn's live bar while
+   * the horn is at the lips), instead of the hint sign.
+   */
+  glassText: string | null = null;
   private head = new Vector3();
   private forward = new Vector3();
 
@@ -235,7 +270,11 @@ export class Battle implements TutorialApi {
 
   /** Every hand tool hidden (it waits for its wave) and ready (hiding a tool makes it ready). */
   private resetTools(): void {
-    for (const tool of Object.values(this.parts.tools)) tool.setVisible(false);
+    for (const tool of Object.values(this.parts.tools)) {
+      tool.setVisible(false);
+      tool.quiet = false;
+    }
+    this.parts.slingshot.locked = false;
     this.toolUseCount = noTools();
     this.toolGrabCount = noTools();
     this.parts.stun.reset();
@@ -259,9 +298,11 @@ export class Battle implements TutorialApi {
    * lessons and waves are left out, and their tools are already on their
    * platforms, like a player who got there.
    */
-  start(fromWave = this.playFromWave): void {
+  start(fromWave = this.playFromWave, teach = this.teach): void {
     const { goblins, spawner, slingshot, flags, panel, stage } = this.parts;
-    const from = Math.max(0, Math.min(fromWave, TUTORIAL_WAVES.length - 1));
+    // Without the tutorial (Skip tutorial) the battle starts at wave 1 with every tool out.
+    const from = teach ? Math.max(0, Math.min(fromWave, TUTORIAL_WAVES.length - 1)) : 0;
+    this.teach = teach;
     spawner.stop();
     goblins.killAll();
     this.clearBoard();
@@ -285,29 +326,38 @@ export class Battle implements TutorialApi {
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     this.lessonGoblin = null;
+    this.squadFoes = [];
     this.lessonTrigger = null;
     this.triggerCount = noTriggers();
     this.pauses = 0;
     this.shownStep = null;
     this.doneFlash = 0;
     // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
-    for (const wave of TUTORIAL_WAVES.slice(0, from)) {
+    for (const wave of teach ? TUTORIAL_WAVES.slice(0, from) : TUTORIAL_WAVES) {
       const tool = wave.newTool;
       if (tool === 'slingshot') slingshot.setVisible(true);
       else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
     }
     this.reach.stop();
-    const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from, !this.reachKnown), this);
+    const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from, !this.reachKnown, teach), this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
-      const shown = this.shownStep?.id === id ? this.shownStep.hint : undefined;
-      // A lesson the player just did: a green tick on its box with a chime, and a few seconds before the
-      // next instruction, so they can finish what they were doing (try the height a few times) and take it in.
+      const step = this.shownStep?.id === id ? this.shownStep : null;
+      const shown = step?.hint;
+      this.missingFor = 0;
+      this.clearBeckons();
+      // A lesson the player just did: a chime and a green tick on its box. How long the tick stays before the
+      // next instruction depends on the lesson (TutorialStep.afterDone): a pause only where the player needs one
+      // (watch what they set off, finish a pull, rest the arm), otherwise just a short tick.
       if (how === 'done' && shown?.kind === 'lesson' && this.shown) {
-        this.doneFlash = HINT_SIGN.doneTime;
-        this.doneContent = { ...this.shown, text: shown.doneText ?? this.shown.text, done: true, sub: 'Nice!' };
+        const pause = step?.afterDone ?? HINT_SIGN.doneTime;
         this.parts.audio.play('lessonDone');
-        director.waitBeforeNext(HINT_SIGN.doneTime);
+        if (pause > 0) {
+          this.doneFlash = pause;
+          this.doneGlass = !!shown.glass;
+          this.doneContent = { ...this.shown, text: shown.doneText ?? this.shown.text, done: true, sub: 'Nice!' };
+          director.waitBeforeNext(pause);
+        }
       } else if (shown) {
         // Any other step the player saw: a short quiet gap, so two signs never come right on top of each other.
         director.waitBeforeNext(HINT_SIGN.stepGap);
@@ -315,7 +365,22 @@ export class Battle implements TutorialApi {
     };
     this.director = director;
     this.running = true;
-    console.info(from > 0 ? `[battle] tutorial started at wave ${from + 1}` : '[battle] tutorial started');
+    console.info(!teach ? '[battle] started without the tutorial' : from > 0 ? `[battle] tutorial started at wave ${from + 1}` : '[battle] tutorial started');
+  }
+
+  /**
+   * Skip tutorial (welcome panel, pause panel): a fresh battle from wave 1
+   * with every tool out and no lessons, for a player who knows the game (for
+   * example after clearing the browser's data). Restart and Play again keep
+   * it that way; the welcome panel's Play brings the tutorial back.
+   */
+  skipTutorial(): void {
+    this.start(0, false);
+  }
+
+  /** True while a battle with the tutorial runs (the pause panel's Skip tutorial shows only then). */
+  get teaching(): boolean {
+    return this.running && this.teach;
   }
 
   /**
@@ -406,8 +471,8 @@ export class Battle implements TutorialApi {
     if (this.reachChecked()) {
       this.parts.ghost.hide();
       this.parts.audio.play('lessonDone');
-      sign.show({ kind: 'lesson', header, text: 'Done! You can rest your arm now.', done: true, sub: 'Nice!' });
-      this.measureDone = HINT_SIGN.doneTime;
+      sign.show({ kind: 'lesson', header, text: 'Done! Rest your arm.', done: true, sub: 'Nice!' });
+      this.measureDone = HINT_SIGN.measureDoneTime;
       return false;
     }
     if (this.measureTime > TUTORIAL_TIMING.reachTimeout) {
@@ -418,10 +483,10 @@ export class Battle implements TutorialApi {
     }
     const text =
       this.reach.phase === 'counting'
-        ? `Great, hold it there... ${this.reach.secondsLeft}`
+        ? `Hold it... ${this.reach.secondsLeft}`
         : this.reach.phase === 'settling'
-          ? 'Good! Now hold your hand still.'
-          : 'Sit back and stretch one arm straight out: hand flat, thumb up, fingers spread.';
+          ? 'Hold still.'
+          : 'Stretch one arm out, hand flat.';
     sign.show({ kind: 'lesson', header, text, icon: ICONS.target });
     return false;
   }
@@ -465,7 +530,9 @@ export class Battle implements TutorialApi {
         this.lastClosest = closest;
       }
       // Stalemate: every goblin is out, some are left far away, but none has hurt the castle for a long time.
-      if (this.wave >= 0 && spawner.allOut && goblins.aliveCount > 0 && this.sinceDamage > CASTLE_HEALTH.stalemateSeconds) {
+      // Never while a lesson waits: its goblins wait on purpose, and only the player ends a lesson.
+      const teaching = (this.director?.current as TutorialStep | null)?.hint?.kind === 'lesson';
+      if (!teaching && this.wave >= 0 && spawner.allOut && goblins.aliveCount > 0 && this.sinceDamage > CASTLE_HEALTH.stalemateSeconds) {
         console.info('[battle] stalemate: the leftover goblins run off');
         this.endWave();
         this.sinceDamage = 0;
@@ -475,7 +542,9 @@ export class Battle implements TutorialApi {
       // No soldiers come out while something is taught: the lesson needs goblins, and the soldiers would knock them out first.
       const step = (this.director?.current ?? null) as TutorialStep | null;
       this.parts.troops.held = step?.hint?.kind === 'lesson';
-      spawner.rate = this.director?.spawnRate ?? 1;
+      this.quietTools(step);
+      // No new goblins while any are inside the castle (v2): the player has to deal with the intruders first.
+      spawner.rate = goblins.countMode('intruder') > 0 ? 0 : (this.director?.spawnRate ?? 1);
       spawner.update(dt);
       if (this.state.phase !== 'playing') this.end();
     }
@@ -486,7 +555,37 @@ export class Battle implements TutorialApi {
       this.endTimer -= dt;
       if (this.endTimer <= 0) panel.show(this.state.phase === 'won' ? 'won' : 'lost');
     }
-    if (panel.update(hands, dt)) this.start();
+    // Welcome panel: Play is the tutorial, Skip tutorial the battle without it. Play again keeps the last choice.
+    const choice = panel.update(hands, dt);
+    if (choice === 'skip') this.skipTutorial();
+    else if (choice === 'play') this.start(this.playFromWave, panel.kindShown === 'welcome' ? true : this.teach);
+  }
+
+  /**
+   * During a lesson only that lesson's tool works: every other tool is
+   * locked (dimmed, no glow, a grab only buzzes) and let go if it was held,
+   * so nothing blinks, and no other tool can break the lesson. Outside
+   * lessons every tool works.
+   */
+  private quietTools(step: TutorialStep | null): void {
+    const hint = step?.hint;
+    const lesson = hint?.kind === 'lesson';
+    const focus = hint?.tool ?? (hint?.marker ? MARKER_TOOL[hint.marker] : undefined);
+    for (const tool of Object.values(this.parts.tools)) {
+      const locked = lesson && tool.name !== focus;
+      if (locked && !tool.quiet) tool.release();
+      tool.quiet = locked;
+    }
+    const sling = this.parts.slingshot;
+    const slingLocked = lesson && focus !== 'slingshot';
+    if (slingLocked && !sling.locked) sling.release();
+    sling.locked = slingLocked;
+  }
+
+  /** A lesson's "grab me" glow ends with it, so a tool hinted at once never keeps blinking through later lessons. */
+  private clearBeckons(): void {
+    this.parts.slingshot.beckon = false;
+    for (const tool of Object.values(this.parts.tools)) tool.beckon = false;
   }
 
   /** The hint sign, the arrow and the ghost hand for the current step. */
@@ -503,6 +602,8 @@ export class Battle implements TutorialApi {
     if (hint?.signLow) sign.setLow();
     sign.update(dt);
     this.lessonPointing = false;
+    this.glassText = null;
+    this.hornWaiting = false;
     if (!this.running || this.state.phase !== 'playing') {
       sign.show(null);
       ghost.hide();
@@ -512,7 +613,11 @@ export class Battle implements TutorialApi {
     }
     if (this.doneFlash > 0) {
       this.doneFlash -= dt;
-      sign.show(this.doneContent);
+      // A glass lesson's tick shows on the glass sign too, so the sign never jumps to the board.
+      if (this.doneGlass) {
+        sign.show(null);
+        this.glassText = this.doneContent ? `✓ ${this.doneContent.text}` : null;
+      } else sign.show(this.doneContent);
       ghost.hide();
       this.parts.ghostAim.hide();
       this.parts.pointer.hide();
@@ -536,17 +641,51 @@ export class Battle implements TutorialApi {
     this.parts.ghostAim.update(dt, hint.aimDots && target ? this.parts.slingshot.partWorld('pouch', pouchAt) : null, target);
     // A quiet horn (no mic, or the player chose it) has its own words: hold it, no blowing.
     let text = !hornHearsMic() && hint.whenNoMic ? hint.whenNoMic : hint.text;
+    // The horn lesson's three beats follow what the player is doing: aim, lift to lock, blow.
+    if (hint.hornSteps) text = this.hornBeat(hint.hornSteps, dt);
+    if (hint.watchSteps) text = this.squadFoes.length > 0 ? hint.watchSteps.fight : hint.watchSteps.march;
     const lessonGoblin = this.lessonGoblin;
     if (hint.whenDropped && lessonGoblin && goblins.isHittable(lessonGoblin)) text = hint.whenDropped;
     // A tool lesson while the tool recharges says so (watch the ring fill, or eat to speed it up).
     if (hint.whenLocked && hint.tool && !this.toolReady(hint.tool)) text = hint.whenLocked;
     // The reach check counts down while the arm is out, so the player knows when to rest.
-    if (hint.reachCheck && this.reach.phase === 'counting') text = `Great, hold it there... ${this.reach.secondsLeft}`;
-    else if (hint.reachCheck && this.reach.phase === 'settling') text = 'Good! Now hold your hand still.';
+    if (hint.reachCheck && this.reach.phase === 'counting') text = `Hold it... ${this.reach.secondsLeft}`;
+    else if (hint.reachCheck && this.reach.phase === 'settling') text = 'Hold still.';
     this.shown = { kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], next: hint.next };
+    // A glass lesson (the horn, the balloon): its text goes on the glass sign that follows the look,
+    // and the hint sign steps away, so only one sign ever shows.
+    if (hint.glass && !hint.next) {
+      sign.show(null);
+      this.glassText = text;
+      return;
+    }
     sign.show(this.shown);
     // Info steps can be skipped with the sign's "Next" button.
     if (hint.next && sign.pokedNext(hands, dt)) this.director?.skip();
+  }
+
+  /**
+   * The horn lesson's text, one beat at a time: look around (at least
+   * hornLookTime of holding it), lift it, "spot set" for hornLockedTime once
+   * it locks, then blow. Lowering it goes back to lift (the look time is kept).
+   */
+  private hornBeat(steps: HornSteps, dt: number): string {
+    const state = this.parts.hornState();
+    this.hornWaiting = state === 'blow';
+    if (state === 'idle') {
+      this.hornLookTime = 0;
+      this.hornLockTime = 0;
+      return steps.idle;
+    }
+    if (state !== 'blow') {
+      this.hornLockTime = 0;
+      this.hornLookTime += dt;
+      return state === 'aim' || this.hornLookTime < TUTORIAL_TIMING.hornLookTime ? steps.aim : steps.lift;
+    }
+    this.hornLockTime += dt;
+    if (this.hornLockTime < TUTORIAL_TIMING.hornLockedTime) return steps.locked;
+    this.hornWaiting = false;
+    return hornHearsMic() ? steps.blow : steps.blowQuiet;
   }
 
   /** Loops the step's ghost hand demo next to its target, out of the way of the player's own hand. */
@@ -708,7 +847,11 @@ export class Battle implements TutorialApi {
     this.parts.troops.recall();
     this.poofAll();
     this.parts.slingshot.release();
-    for (const tool of Object.values(this.parts.tools)) tool.release();
+    this.parts.slingshot.locked = false;
+    for (const tool of Object.values(this.parts.tools)) {
+      tool.release();
+      tool.quiet = false;
+    }
     this.parts.audio.play(this.state.phase === 'won' ? 'win' : 'lose');
     if (this.state.phase === 'won') this.parts.audio.play('winFanfare');
     this.endTimer = END_PANEL.showDelay;
@@ -733,6 +876,9 @@ export class Battle implements TutorialApi {
     this.wave = index;
     this.inWave = true;
     this.sinceDamage = 0;
+    // A lesson goblin still waiting from before becomes an ordinary goblin, so it never holds the wave up.
+    const old = this.lessonGoblin;
+    if (old && old.mode !== 'dead') this.parts.goblins.makeOrdinary(old);
     const plan = TUTORIAL_WAVES[index];
     // Helmets from their wave on. The first balloon wave holds its balloons until the balloon banner shows.
     this.parts.goblins.helmetsOn = index + 1 >= GOBLIN_GEAR.helmetFromWave;
@@ -776,6 +922,9 @@ export class Battle implements TutorialApi {
     if (this.state.phase === 'playing') this.parts.audio.play('cheer');
     // The soldiers on the field cheer, and confetti flutters down over the castle.
     this.parts.troops.cheerAll();
+    // In the tutorial the squads then march home, so the next lessons start with an empty field
+    // (knights next to lesson goblins they leave alone were confusing). In the real game they stay.
+    if (this.teach) this.parts.troops.sendHome(TUTORIAL_TIMING.squadsHomeAfter);
     this.parts.celebrate(this.state.phase === 'won');
   }
 
@@ -961,8 +1110,81 @@ export class Battle implements TutorialApi {
     this.parts.bait.patrol(this.parts.stage.spin);
   }
 
-  baitForTool(): void {
-    this.parts.bait.onRampart(this.parts.stage.spin);
+  baitForTool(armored = false): void {
+    this.parts.bait.onRampart(this.parts.stage.spin, armored);
+  }
+
+  /** Time the lesson goblin (or bait) has been missing, before a new one comes (TUTORIAL_TIMING.respawnAfter). */
+  private missingFor = 0;
+
+  keepLessonGoblin(dt: number): void {
+    const g = this.lessonGoblin;
+    // Still there for the lesson: on the board as a lesson goblin, or in the hand.
+    const there = g && g.mode !== 'dead' && (this.parts.isHeld(g) || this.parts.goblins.isLesson(g));
+    if (there) {
+      this.missingFor = 0;
+      return;
+    }
+    this.missingFor += dt;
+    if (this.missingFor < TUTORIAL_TIMING.respawnAfter) return;
+    this.missingFor = 0;
+    // A thrown one is an ordinary goblin now: it stays, and a new lesson goblin pops up on the wall in front.
+    this.lessonGoblin = null;
+    this.lessonClimber(true);
+  }
+
+  keepBait(dt: number, armored: boolean): void {
+    if (this.parts.bait.first()) {
+      this.missingFor = 0;
+      return;
+    }
+    this.missingFor += dt;
+    if (this.missingFor < TUTORIAL_TIMING.respawnAfter) return;
+    this.missingFor = 0;
+    this.baitForTool(armored);
+  }
+
+  keepMovingBait(dt: number): void {
+    if (this.parts.bait.first()) {
+      this.missingFor = 0;
+      return;
+    }
+    this.missingFor += dt;
+    if (this.missingFor < TUTORIAL_TIMING.respawnAfter) return;
+    this.missingFor = 0;
+    this.baitMoving();
+  }
+
+  hornState(): 'idle' | 'aim' | 'lift' | 'blow' {
+    return this.parts.hornState();
+  }
+
+  sendGroupAtSquad(): boolean {
+    const { count, from, gap } = TUTORIAL_TIMING.squadFight;
+    this.squadFoes = this.parts.troops.sendGroupAt(count, from, gap).map((g) => ({ g, serial: g.serial }));
+    return this.squadFoes.length > 0;
+  }
+
+  goblinsLeft(): number {
+    return this.parts.goblins.aliveCount;
+  }
+
+  spawnedInWave(): number {
+    return this.parts.spawner.spawned;
+  }
+
+  hasSquad(): boolean {
+    return this.parts.troops.hasCalledSquad;
+  }
+
+  squadReady(): boolean {
+    return this.parts.troops.calledSquadReady;
+  }
+
+  squadFoesLeft(): number {
+    let left = 0;
+    for (const { g, serial } of this.squadFoes) if (g.serial === serial && g.mode !== 'dead') left++;
+    return left;
   }
 
   releaseBait(): void {

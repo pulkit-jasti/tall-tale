@@ -5,8 +5,8 @@
 //   shows). It stays there while a battle runs, poked with either hand.
 //
 //   Pause panel: the battle freezes and a panel comes up in front of the
-//   player with four poke buttons: Resume, Reset table, Measure reach and
-//   Restart. It is placed from the head when it opens, not on the board, so
+//   player with poke buttons: Resume, Reset table, Settings, Restart and
+//   (while the tutorial runs) Skip tutorial. It is placed from the head when it opens, not on the board, so
 //   its buttons are always in reach, even when the board ended up somewhere
 //   odd (that is what Reset table is for).
 //
@@ -40,22 +40,29 @@ import {
   type ButtonIcon,
 } from './kit/index.js';
 
-export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart';
+export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart' | 'skipTutorial';
 
-/** The main page's buttons. Settings opens the settings page (in the panel, not an action for the game). */
+/**
+ * The main page's buttons. Settings opens the settings page (in the panel, not
+ * an action for the game). Skip tutorial shows only while the tutorial runs,
+ * so no player is ever stuck in it.
+ */
 const BUTTONS: { action: PauseAction | 'settings'; icon: ButtonIcon; label: string }[] = [
   { action: 'resume', icon: 'play', label: 'Resume' },
-  { action: 'resetTable', icon: 'table', label: 'Reset table' },
+  // Reset table lives in the settings now (Access tab), with Measure reach.
   { action: 'settings', icon: 'settings', label: 'Settings' },
   { action: 'restart', icon: 'restart', label: 'Restart' },
+  { action: 'skipTutorial', icon: 'skip', label: 'Skip tutorial' },
 ];
+const SKIP_INDEX = BUTTONS.findIndex((b) => b.action === 'skipTutorial');
 
 /** The settings' categories, as tabs along the top of the page. */
 type SettingsTab = 'sound' | 'access';
 
+/** Access first (and open by default), then Sound. Centered in their row (PAUSE.settings.tabX). */
 const SETTINGS_TABS: { id: SettingsTab; icon: ButtonIcon; label: string }[] = [
-  { id: 'sound', icon: 'sound', label: 'Sound' },
   { id: 'access', icon: 'access', label: 'Access' },
+  { id: 'sound', icon: 'sound', label: 'Sound' },
 ];
 
 /** One row of the settings page's sound section. */
@@ -79,6 +86,8 @@ export class PauseMenu {
   private pauseButton: StandButton;
   private buttonTopPx = 0;
   private open = false;
+  /** Skip tutorial shows (only while the tutorial runs). */
+  private skipShown = true;
   /** The settings page: measure reach again, and the sound groups' volumes. */
   private settings: Panel;
   private page: 'main' | 'settings' = 'main';
@@ -86,9 +95,11 @@ export class PauseMenu {
   private settingsOnly = false;
   private back: PokeButton;
   private reach: PokeButton;
+  /** Reset table, in the Access tab under Quiet horn. */
+  private table: PokeButton;
   private rows: SoundRow[] = [];
   /** The settings' categories: one tab button each, and a group with its controls (only the chosen one shows). */
-  private tab: SettingsTab = 'sound';
+  private tab: SettingsTab = 'access';
   private tabButtons: PokeButton[] = [];
   private tabGroups: Record<SettingsTab, Group> = { sound: new Group(), access: new Group() };
   private bellSwitch: Switch;
@@ -152,6 +163,9 @@ export class PauseMenu {
       access.setQuietHorn(on);
       this.repaintSettings();
     };
+    // Reset table (was on the pause panel's main page): the board placed again at its starting height.
+    this.table = new PokeButton(audio, { radius: S.reachRadius, icon: 'table' });
+    add(this.table.group, controlLeft + S.reachRadius * POKE.rimScale, S.firstRowY - 2 * S.accessRowGap, this.tabGroups.access);
     SOUND_CATEGORIES.forEach((c, i) => {
       const y = S.firstRowY - i * S.rowGap;
       // Just a slider per group: all the way down is off.
@@ -184,10 +198,16 @@ export class PauseMenu {
    * Opens the panel in front of the head, at the same spot from the eyes as
    * the end panel (sized with the board, so it matches the player's reach).
    */
-  show(head: Vector3, forward: Vector3, boardScale: number): void {
+  /** `skipShown`: the tutorial runs, so Skip tutorial is on the panel. */
+  show(head: Vector3, forward: Vector3, boardScale: number, skipShown = false): void {
     this.open = true;
     this.settingsOnly = false;
     this.pauseButton.show(false);
+    if (skipShown !== this.skipShown) {
+      this.skipShown = skipShown;
+      this.buttons[SKIP_INDEX].group.visible = skipShown;
+      this.panel.paint((c, w) => this.draw(c, w));
+    }
     this.follow.snap(head, forward, BOARD.eyeToBoard * boardScale, CM * boardScale);
     this.showPage('main');
   }
@@ -241,7 +261,7 @@ export class PauseMenu {
 
   /** The controls of the tab that shows. */
   private tabControls(): Control[] {
-    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch];
+    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table];
   }
 
   private repaintSettings(): void {
@@ -268,6 +288,7 @@ export class PauseMenu {
     this.panel.update(dt);
     let action: PauseAction | 'settings' | null = null;
     for (const [i, button] of this.buttons.entries()) {
+      if (!button.group.visible) continue;
       if (button.update(hands, dt) && !action) action = BUTTONS[i].action;
     }
     if (action === 'settings') {
@@ -295,6 +316,7 @@ export class PauseMenu {
       return null;
     }
     if (this.reach.update(hands, dt)) return 'measureReach';
+    if (this.table.update(hands, dt)) return 'resetTable';
     this.bellSwitch.update(hands, dt);
     return null;
   }
@@ -340,6 +362,7 @@ export class PauseMenu {
     }
     name('Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
     name('Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
+    name('Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {
@@ -347,6 +370,9 @@ export class PauseMenu {
     drawTitleBanner(c, 'Paused', w * 0.25, UI_SPACING.top * at.px, w * 0.5, 74, 40);
     // A word over each button, nothing else, a little gap above their rims.
     const labelY = this.buttonTopPx - UI_SPACING.labelGap * at.px - 11;
-    BUTTONS.forEach((b, i) => drawLine(c, b.label, at.x(buttonX(i)), labelY, PAUSE.panel.buttonGap * at.px - 8, 22, UI_COLORS.accent));
+    BUTTONS.forEach((b, i) => {
+      if (i === SKIP_INDEX && !this.skipShown) return;
+      drawLine(c, b.label, at.x(buttonX(i)), labelY, PAUSE.panel.buttonGap * at.px - 8, 22, UI_COLORS.accent);
+    });
   }
 }

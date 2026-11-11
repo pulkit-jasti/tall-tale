@@ -1,5 +1,6 @@
 // The panel in front of the player with one round button poked with the index
-// finger: the welcome panel before the battle ("Play", docs/mvp.md "Menus"),
+// finger: the welcome panel before the battle ("Play", with Settings and Skip
+// tutorial in its bottom corners, docs/mvp.md "Menus"),
 // and the end of battle panel (docs/castle-rules.md section 4) that says
 // "Congratulations, the kingdom is safe!" or "The castle has fallen", to play
 // again. A shared Panel, drawn once per show. It lives in boardLift (cm), so
@@ -12,6 +13,8 @@ import type { HandState } from '../player/hands.js';
 import { armControls, bottomRowY, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY } from './kit/index.js';
 
 export type EndKind = 'welcome' | 'won' | 'lost';
+/** What was poked: the main button (Play, Play again) or Skip tutorial (welcome panel only). */
+export type EndChoice = 'play' | 'skip' | null;
 
 /** As little text as possible: a title, and one word or two over each button. */
 interface PanelText {
@@ -32,6 +35,8 @@ export class EndPanel {
   private button: PokeButton;
   /** The welcome panel's Settings button (bottom right, smaller than Play). */
   private settings: PokeButton;
+  /** The welcome panel's Skip tutorial button (bottom left, the same size as Settings, mirrored). */
+  private skip: PokeButton;
   private kind: EndKind = 'welcome';
   private buttonTopPx = 0;
   private settingsX = 0;
@@ -58,23 +63,32 @@ export class EndPanel {
     const settingsY = bottomRowY(height, settingsRim, buttonMargin);
     this.settings.group.position.set(this.settingsX, settingsY, 0);
     this.settingsTopPx = at.y(settingsY + settingsRim);
-    this.panel.root.add(this.button.group, this.settings.group);
+    // Skip tutorial in the bottom left corner, mirroring Settings.
+    this.skip = new PokeButton(audio, { radius: settingsRadius, icon: 'skip' });
+    this.skip.group.position.set(-this.settingsX, settingsY, 0);
+    this.panel.root.add(this.button.group, this.settings.group, this.skip.group);
   }
 
   get visible(): boolean {
     return this.panel.visible;
   }
 
+  /** The panel that shows (or showed last). */
+  get kindShown(): EndKind {
+    return this.kind;
+  }
+
   show(kind: EndKind): void {
     this.kind = kind;
     this.draw(TEXT[kind]);
-    // Play to start, restart to play again. Settings only on the welcome panel.
+    // Play to start, restart to play again. Settings and Skip tutorial only on the welcome panel.
     this.button.setIcon(kind === 'welcome' ? 'play' : 'restart');
     this.settings.group.visible = kind === 'welcome';
+    this.skip.group.visible = kind === 'welcome';
     this.panel.visible = true;
     this.panel.popIn(0.25);
     // A finger still there from the last poke must not start the next battle at once.
-    armControls([this.button, this.settings]);
+    armControls([this.button, this.settings, this.skip]);
   }
 
   /** Shows the same panel again (after its settings page closed). */
@@ -86,15 +100,16 @@ export class EndPanel {
     this.panel.visible = false;
   }
 
-  /** Returns true on the frame the main button is poked. A poke on Settings calls onSettings. */
-  update(hands: HandState[], dt: number): boolean {
-    if (!this.panel.visible) return false;
+  /** What was poked this frame: the main button or Skip tutorial. A poke on Settings calls onSettings. */
+  update(hands: HandState[], dt: number): EndChoice {
+    if (!this.panel.visible) return null;
     this.panel.update(dt);
     if (this.settings.group.visible && this.settings.update(hands, dt)) {
       this.onSettings();
-      return false;
+      return null;
     }
-    return this.button.update(hands, dt);
+    if (this.skip.group.visible && this.skip.update(hands, dt)) return 'skip';
+    return this.button.update(hands, dt) ? 'play' : null;
   }
 
   private draw(text: PanelText): void {
@@ -112,6 +127,9 @@ export class EndPanel {
     const settingsShown = this.kind === 'welcome';
     const settingsLeft = at.x(this.settingsX - END_PANEL.settingsRadius * POKE.rimScale);
     drawLine(c, text.button, w / 2, labelY, settingsShown ? (settingsLeft - w / 2) * 2 - gap * 2 : textWidth, 30, UI_COLORS.accent);
-    if (settingsShown) drawLine(c, 'Settings', at.x(this.settingsX), this.settingsTopPx - gap - 10, 110, 20, UI_COLORS.accent);
+    if (settingsShown) {
+      drawLine(c, 'Settings', at.x(this.settingsX), this.settingsTopPx - gap - 10, 110, 20, UI_COLORS.accent);
+      drawLine(c, 'Skip tutorial', at.x(-this.settingsX), this.settingsTopPx - gap - 10, 120, 20, UI_COLORS.accent);
+    }
   }
 }

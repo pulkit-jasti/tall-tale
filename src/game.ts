@@ -6,7 +6,7 @@ import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { BALLOONS, DEBUG, FPS, GOBLIN_RULES, JUICE, HANDLES, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TOOLS, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
+import { BALLOONS, DEBUG, FPS, GLASS_SIGN, GOBLIN_RULES, HORN, JUICE, HANDLES, PAUSE, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TOOLS, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
 import { eatShare } from './rules/recharge.js';
 import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
@@ -21,10 +21,11 @@ import { LessonBait } from './units/lessonBait.js';
 import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { ThreatCues } from './ui/threatCues.js';
-import { loadUiImages } from './ui/kit/index.js';
+import { GlassSign, loadUiImages, type GlassBar } from './ui/kit/index.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';
+import { note, recentNotes } from './debug/notes.js';
 import { mark } from './debug/perfMarks.js';
 import { sendHeartbeat, sendRunStats, sendStressTest, takeRemoteCommands } from './debug/remote.js';
 import { StressTest } from './debug/stressTest.js';
@@ -41,6 +42,7 @@ import { Bell } from './tools/bell.js';
 import { FlySwatter } from './tools/flySwatter.js';
 import type { HandTool } from './tools/handTool.js';
 import { Horn } from './tools/horn.js';
+import { HornAim } from './ui/hornAim.js';
 import { PepperShaker } from './tools/pepperShaker.js';
 import { Slingshot } from './tools/slingshot.js';
 import { StunWave } from './tools/stunWave.js';
@@ -65,7 +67,7 @@ import { Stage } from './world/stage.js';
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
 const headForward = new Vector3();
-const labelAt = new Vector3();
+const toHead = new Vector3();
 const boardAt = new Vector3();
 /** Session storage key for the debug "Start at wave" choice. */
 const PLAY_FROM_KEY = 'tallTale.playFromWave';
@@ -90,6 +92,9 @@ export class GameSystem extends createSystem({}) {
   private swatter!: FlySwatter;
   private pepper!: PepperShaker;
   private horn!: Horn;
+  private hornAim!: HornAim;
+  /** The see-through sign that follows the look (glass lessons, the horn). */
+  private glass!: GlassSign;
   private bell!: Bell;
   private stun!: StunWave;
   private tools: HandTool[] = [];
@@ -124,6 +129,20 @@ export class GameSystem extends createSystem({}) {
   private wasImmersive = false;
   /** The Quest menu is open, the headset is off or the page is hidden. */
   private hidden = false;
+  /**
+   * The XR session or the page said it lost focus since the last frame (their
+   * events), even if no frame ran while the Quest menu was open. The next
+   * frame pauses the battle.
+   */
+  private blurSeen = false;
+  /** The XR session whose visibility events are watched. */
+  private watchedSession: XRSession | null = null;
+  /** When the last frame ran (performance.now, ms), to notice frames that stopped (the Quest menu). */
+  private lastFrameAt = 0;
+  /** What paused the game last (the FPS panel shows it while paused). */
+  private pauseReason = 'button';
+  /** How long each hand has held a pinch with its palm toward the eyes (the Quest menu gesture). */
+  private menuPinch = [0, 0];
   /** Paused from the pause button (or auto-paused in VR): stays paused until Resume. */
   private menuPaused = false;
   /** "Measure reach" from the pause panel is running (the battle stays frozen). */
@@ -135,6 +154,10 @@ export class GameSystem extends createSystem({}) {
   private heartbeatTimer = 0;
 
   init(): void {
+    // The page hidden (the headset off, the Quest browser in the background): pause on the next frame.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.blurSeen = true;
+    });
     void this.setup().catch((error) => console.error('[game] setup failed', error));
   }
 
@@ -197,6 +220,8 @@ export class GameSystem extends createSystem({}) {
     this.troops.onUpdate = (dt) => garrison.update(dt);
     this.troops.onMan = () => garrison.fill();
     this.troops.onClear = () => garrison.stop();
+    // Goblins on the rampart hunt the soldiers there, and jump in only when none is left (v2).
+    this.goblins.huntAngle = (g) => garrison.nearestSoldierAngle(g);
     this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
     this.gearDebris = new GearDebris(this.stage.boardSpin, createRandom(seed + 960));
@@ -268,6 +293,8 @@ export class GameSystem extends createSystem({}) {
       pointer: new PointerArrow(root),
       bait: new LessonBait(this.goblins, built.network),
       pauseButton: (out) => this.pauseMenu.buttonWorld(out),
+      // The horn lesson's beats: not held, aiming, a spot to lock, locked at the lips.
+      hornState: () => (!this.horn.aiming ? 'idle' : this.horn.locked ? 'blow' : this.hornAim.valid ? 'lift' : 'aim'),
       audio: this.audio,
       particles: this.particles,
       threat: this.threat,
@@ -295,8 +322,16 @@ export class GameSystem extends createSystem({}) {
       this.juice.blast(world, 0.7 * this.stage.boardScale);
       this.audio.play('balloonPop', world);
     };
-    // The horn calls the field knights (v2): they charge down the road in front of the player.
-    this.horn.onCall = () => this.troops.charge(this.stage.spin);
+    // The horn calls the field knights (v2) to the road spot the player looks at (src/ui/hornAim.ts).
+    this.hornAim = new HornAim(this.stage, this.troops, this.audio);
+    this.glass = new GlassSign(root);
+    this.horn.aimOk = () => this.hornAim.valid;
+    this.horn.onCall = () => {
+      const target = this.hornAim.target;
+      // Debug (no hands, no aim): the road in front.
+      if (target) this.troops.command(target);
+      else this.troops.charge(this.stage.spin);
+    };
     // Their crash into the goblins: a hit stop, a ring and a pow star.
     this.troops.onCrash = (world) => {
       this.juice.hitStop();
@@ -386,7 +421,27 @@ export class GameSystem extends createSystem({}) {
     this.giant?.snap();
   }
 
+  /**
+   * Safety net: an error in one frame must never freeze the game in the
+   * headset (a thrown error stopped the whole frame, so the view froze and
+   * nothing answered). It is logged (at most once a second, with its stack)
+   * and the next frame runs as usual.
+   */
   update(delta: number): void {
+    try {
+      this.tick(delta);
+    } catch (error) {
+      const now = performance.now();
+      if (now - this.lastErrorAt > 1000) {
+        this.lastErrorAt = now;
+        console.error('[game] frame error (the game goes on)', error);
+      }
+    }
+  }
+
+  private lastErrorAt = -Infinity;
+
+  private tick(delta: number): void {
     if (!this.ready) return;
     // Entering VR: place the board once the head pose has settled.
     const immersive = this.immersive;
@@ -400,6 +455,16 @@ export class GameSystem extends createSystem({}) {
       this.goblins.killAll();
     }
     this.wasImmersive = immersive;
+    // The Quest menu can stop the frames without any hidden frame showing up here, so its focus events
+    // and a long gap between frames pause the battle too (headset test: it did not always pause).
+    this.watchSession();
+    const now = performance.now();
+    const gap = this.lastFrameAt > 0 ? (now - this.lastFrameAt) / 1000 : 0;
+    this.lastFrameAt = now;
+    if ((this.blurSeen || gap > PAUSE.autoPauseGap) && immersive && this.battle.canPause && !this.menuPaused) {
+      this.pause(this.blurSeen ? 'focus lost' : `no frames ${gap.toFixed(1)} s`);
+    }
+    this.blurSeen = false;
     // Auto-pause while the Quest menu is open or the headset is off. Read the
     // XR session directly too, and the page itself, in case one of them
     // reports the menu and the other does not. In VR during a battle it stays
@@ -416,13 +481,13 @@ export class GameSystem extends createSystem({}) {
       // Sound (and the mic, which shares the audio context) stops only while hidden, and always comes back with the view.
       this.audio.setPaused(hidden);
       if (!hidden) mic.ensureLive();
-      if (hidden && immersive && this.battle.canPause) this.pause();
+      if (hidden && immersive && this.battle.canPause) this.pause(`hidden: ${state}`);
     }
     if (!this.battle.canPause && this.menuPaused) this.resume();
     const paused = hidden || this.menuPaused;
     if (paused !== this.paused) {
       this.paused = paused;
-      this.fps.status = paused ? 'paused' : '';
+      this.fps.status = paused ? `paused (${this.hidden ? 'hidden' : this.pauseReason})` : '';
       // Menu frames and the hitch after it would pollute the measured run.
       this.fps.resetRun();
     }
@@ -442,6 +507,7 @@ export class GameSystem extends createSystem({}) {
         step: this.battle.stepId,
         playFrom: this.battle.playFromWave + 1,
         mic: mic.describe(),
+        notes: recentNotes(),
       });
     }
     if (hidden) return;
@@ -451,6 +517,8 @@ export class GameSystem extends createSystem({}) {
     this.player.updateWorldMatrix(true, false);
     this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
     this.readHead();
+    // The Quest menu gesture (a pinch with the palm toward the eyes) pauses at once, whatever the browser reports.
+    if (immersive && this.battle.canPause && !this.menuPaused && this.metaGesture(dt)) this.pause('menu gesture');
     this.debugKeys(dt);
     // The giant's body stays under the head, also while paused.
     this.giant.update(dt, headPosition, headForward, this.stage.boardLift.position.y);
@@ -481,6 +549,10 @@ export class GameSystem extends createSystem({}) {
         this.titleMeasure = true;
         this.measuring = true;
         this.battle.startMeasure();
+      } else if (action === 'resetTable') {
+        // The board placed again; the settings page stays open.
+        this.stage.height = 0;
+        this.placeBoard();
       } else if (!this.pauseMenu.isOpen) {
         this.titleSettings = false;
         this.endPanel.showAgain();
@@ -489,7 +561,7 @@ export class GameSystem extends createSystem({}) {
     }
     if (this.menuPaused) {
       // Shown here, not when pausing: auto-pause happens while the head pose is unknown (Quest menu).
-      if (!this.pauseMenu.isOpen) this.pauseMenu.show(headPosition, headForward, this.stage.boardScale);
+      if (!this.pauseMenu.isOpen) this.pauseMenu.show(headPosition, headForward, this.stage.boardScale, this.battle.teaching);
       const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
       if (action) this.pauseAction(action);
       return;
@@ -525,9 +597,15 @@ export class GameSystem extends createSystem({}) {
     this.triggers.update(unitDt);
     // The horn blows when its mouthpiece is at the head.
     this.horn.head.copy(headPosition);
+    // The horn lesson's "spot set" beat: the horn locks but waits for the "blow" sign.
+    this.horn.waiting = this.battle.hornWaiting;
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
+    // The horn held: the head aims it (a glowing pool, a light pillar and a ghost banner on the road);
+    // at the lips the spot locks (gold, the path along the roads).
+    this.hornAim.update(dt, this.horn.aiming, this.horn.locked, this.horn.charge, headPosition, headForward);
+    this.updateGlass(dt, headPosition, headForward);
     this.stun.update(dt);
     this.threat.update(dt);
     // The red arrow only while a battle is fought, and not while a lesson's yellow arrow points the way.
@@ -558,19 +636,82 @@ export class GameSystem extends createSystem({}) {
   }
 
   /**
+   * The glass sign where the eyes are (one sign only): a glass lesson's text
+   * (the horn, the balloon), or while the horn is held what to do now. At the
+   * lips it carries the horn's live bar: the blow against the line it must
+   * pass, or the quiet hold.
+   */
+  private updateGlass(dt: number, head: Vector3, forward: Vector3): void {
+    const horn = this.horn;
+    let bar: GlassBar | null = null;
+    if (horn.aiming && horn.locked && !horn.waiting) {
+      bar = horn.listening
+        ? { share: horn.loudness / (HORN.blowLevel * GLASS_SIGN.hornBarMax), line: 1 / GLASS_SIGN.hornBarMax, over: horn.loudness > HORN.blowLevel }
+        : { share: horn.charge, line: null, over: false };
+    }
+    let text = this.battle.glassText;
+    if (!text && horn.aiming) text = horn.locked ? (horn.listening ? 'Blow!' : 'Hold it there') : this.hornAim.valid ? 'Lift it to your lips' : 'Look at a road';
+    this.glass.show(dt, text, bar, head, forward);
+  }
+
+  /**
+   * The Quest menu gesture: a hand holding nothing pinches with its palm
+   * straight toward the eyes, near the head, and keeps that pose for
+   * PAUSE.metaGesture.hold. Stricter since it paused at random (a short
+   * tracking glitch can flip which way the palm seems to face).
+   */
+  private metaGesture(dt: number): boolean {
+    const { facing, maxDistance, hold } = PAUSE.metaGesture;
+    let fired = false;
+    this.hands.hands.forEach((hand, i) => {
+      let pose = false;
+      if (hand.tracked && hand.usingHand && hand.pinch.on && !this.grabEat.handBusy(hand)) {
+        toHead.subVectors(headPosition, hand.palm);
+        const d = toHead.length();
+        pose = d > 1e-4 && d <= maxDistance && hand.palmNormal.dot(toHead.divideScalar(d)) > facing;
+      }
+      // The pose must start with the pinch (not a pinch already held, like a goblin carried to the mouth).
+      if (!pose || (this.menuPinch[i] === 0 && !hand.pinch.started)) {
+        this.menuPinch[i] = 0;
+        return;
+      }
+      this.menuPinch[i] += Math.max(dt, 1e-3);
+      if (this.menuPinch[i] >= hold) {
+        this.menuPinch[i] = 0;
+        fired = true;
+      }
+    });
+    return fired;
+  }
+
+  /** Listens to the XR session's focus once per session: the Quest menu blurs or hides it. */
+  private watchSession(): void {
+    const session = this.world.session ?? null;
+    if (!session || session === this.watchedSession) return;
+    this.watchedSession = session;
+    session.addEventListener('visibilitychange', () => {
+      if (session.visibilityState !== 'visible') this.blurSeen = true;
+    });
+  }
+
+  /**
    * Pauses the battle (pause button, auto-pause or debug): everything
    * freezes, whatever the hands held is let go, and the pause panel comes
    * up on the next visible frame.
    */
-  private pause(): void {
+  private pause(reason = 'button'): void {
     if (this.menuPaused || !this.battle.canPause) return;
     this.menuPaused = true;
+    // Shown on the FPS panel while paused, so a pause nobody asked for says what caused it.
+    this.pauseReason = reason;
     this.grabEat.releaseAll();
     this.battle.hideHints();
     this.threat.hideArrow();
+    this.hornAim.hide();
+    this.glass.hide();
     this.pauseMenu.hideButton();
     this.audio.play('pauseOpen');
-    console.info('[game] paused (pause panel)');
+    note(`[game] paused (${reason})`);
   }
 
   private resume(): void {
@@ -603,6 +744,11 @@ export class GameSystem extends createSystem({}) {
       case 'restart':
         this.resume();
         this.battle.start();
+        break;
+      case 'skipTutorial':
+        // A fresh battle without the lessons, every tool out (a player is never stuck in the tutorial).
+        this.resume();
+        this.battle.skipTutorial();
         break;
     }
   }
@@ -669,7 +815,10 @@ export class GameSystem extends createSystem({}) {
       case 'restartBattle':
         // The whole game again: Play starts from the first lesson from now on.
         this.setPlayFromWave(0);
-        this.battle.start();
+        this.battle.start(0, true);
+        break;
+      case 'skipTutorial':
+        this.battle.skipTutorial();
         break;
       case 'measureReach':
         // Forget the measured reach and measure again right away, before the wave Play starts at.
@@ -680,7 +829,7 @@ export class GameSystem extends createSystem({}) {
         const wave = Math.round(arg ?? 1);
         if (wave < 1 || wave > TUTORIAL_WAVES.length) break;
         this.setPlayFromWave(wave - 1);
-        this.battle.start();
+        this.battle.start(wave - 1, true);
         break;
       }
       case 'grunts':

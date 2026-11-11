@@ -16,6 +16,12 @@
 //            knuckles), `palm` where the palm faces.
 // The contact point is the fist's hole for rod keys and the pinch tips for
 // pinch keys, so it is placed exactly on the anchor and never inside an object.
+//
+// Opposite hand (AGENTS.md): a tool on the player's right is grabbed with the
+// left hand and one on the left with the right hand (bending a hand back
+// toward its own side while looking at it is hard; a small twist of the body
+// and the other hand is easy). The slingshot (right) is held in the left hand,
+// so the pebble, the load and the pull are the right hand's.
 import { SWATTER } from '../config/game.js';
 
 export type GhostPose = 'open' | 'pinch' | 'fist';
@@ -63,47 +69,41 @@ export interface GhostDemo {
 // Grips used by the demos.
 /** Right hand over the ring from above: knuckles along the rail, thumb to the left, palm down and a little forward. */
 const RING_GRIP = { rod: [-1, 0, 0] as Dir, palm: [0, -1, 0.25] as Dir };
-/** Right hand around the upright slingshot handle: thumb up, palm facing in (left) and a bit forward. */
+/**
+ * Right hand reaching across to an upright handle on the left (the pepper
+ * front left, the bell): thumb up, palm facing in (left) and a bit forward.
+ */
 const HANDLE_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.35] as Dir };
-/** Left hand around the upright pepper shaker (front left): the mirror of HANDLE_GRIP. Thumb up, palm facing in (right). */
+/**
+ * Left hand reaching across to an upright handle on the right (the
+ * slingshot, the horn): the mirror of HANDLE_GRIP. Thumb up, palm facing in (right).
+ */
 const LEFT_HANDLE_GRIP = { rod: [0, 1, 0] as Dir, palm: [1, 0, 0.35] as Dir };
 /**
- * Left hand around the swatter handle on the left side, reaching out to the
- * left like a handshake, from behind the handle: palm toward the player's
- * front (right in this frame, where forward points left), thumb up along the
- * handle, which leans back (left here) by SWATTER.restLeanDeg. The palm turns
- * up by the same angle, so it stays square to the handle.
+ * Right hand reaching across to the swatter handle on the left side, from
+ * the player's front and behind the handle: thumb up along the handle, which
+ * leans back (toward -right in this frame, where forward points left) by
+ * SWATTER.restLeanDeg, palm facing in (-right), square to the handle.
  */
 const lean = (SWATTER.restLeanDeg * Math.PI) / 180;
 const SWATTER_GRIP = {
   rod: [-Math.sin(lean), Math.cos(lean), 0] as Dir,
-  palm: [Math.cos(lean), Math.sin(lean), 0] as Dir,
+  palm: [-Math.cos(lean), -Math.sin(lean), 0] as Dir,
 };
 /**
- * Right fist holding the horn up at the mouth: thumb up along the grip, palm
- * facing in (left), so the horn points straight ahead and its mouthpiece is
+ * Left fist holding the horn up at the mouth: thumb up along the grip, palm
+ * facing in (right), so the horn points straight ahead and its mouthpiece is
  * at the lips. The palm never faces the headset (Quest menu).
  */
-const BLOW_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0] as Dir };
-/**
- * Right hand around the upright horn grip on the right side platform,
- * reaching out to the right like a handshake: thumb up along the grip, palm
- * toward the player's front (left in this frame, where forward points right)
- * and a little forward.
- */
-const SIDE_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.2] as Dir };
-/**
- * Left hand around the upright bell handle on the left platform (v2: its own
- * spot): the mirror of SIDE_GRIP, thumb up, palm toward the player's front
- * (right in this frame, where forward points left) and a little forward.
- */
-const BELL_GRIP = { rod: [0, 1, 0] as Dir, palm: [1, 0, 0.2] as Dir };
+const BLOW_GRIP = { rod: [0, 1, 0] as Dir, palm: [1, 0, 0] as Dir };
+/** Right hand around the upright bell handle on the left platform: thumb up, palm facing in (left) and a little forward. */
+const BELL_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.2] as Dir };
 /** Pinch from above: fingers down and forward, palm down and toward the player. */
 const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Dir };
 /** Throwing a pinched goblin: fingers forward and a little up, palm down and a little forward (never toward the headset). */
 const TOSS_GRIP = { fingers: [0, 0.3, 1] as Dir, palm: [0, -1, 0.3] as Dir };
-/** Left hand pinching the pouch from behind, like a bow string: fingers along the shot, palm facing in (right). */
-const PULL_GRIP = { fingers: [0, 0, 1] as Dir, palm: [1, 0, 0] as Dir };
+/** Right hand pinching the pouch from behind, like a bow string: fingers along the shot, palm facing in (left). */
+const PULL_GRIP = { fingers: [0, 0, 1] as Dir, palm: [-1, 0, 0] as Dir };
 /** Bringing food to the mouth: fingers toward the face, thumb up, palm facing in. Never toward the headset (Quest menu). */
 const MOUTH_GRIP = { fingers: [0, 0.25, -1] as Dir, palm: [-1, 0, 0] as Dir };
 /**
@@ -199,39 +199,39 @@ export const GHOST_DEMOS = {
       key(2.4, 'lessonGoblin', [0, 14, 8], 'open', TOSS_GRIP),
     ],
   },
-  /** Come in from the right and behind, close the fist around the handle, lift the slingshot. */
+  /** The slingshot is on the right: the left hand comes in from its side and behind, closes the fist around the handle, lifts it. */
   slingGrab: {
-    hand: 'right',
-    keys: [
-      key(0, 'slingHandle', [5, 1, -6], 'open', HANDLE_GRIP),
-      key(0.8, 'slingHandle', [0, 0, 0], 'open', HANDLE_GRIP),
-      key(1.1, 'slingHandle', [0, 0, 0], 'fist', HANDLE_GRIP),
-      key(2.0, 'slingHandle', [0, 6, -4], 'fist', HANDLE_GRIP),
-    ],
-  },
-  /** Left hand from behind and the player's side, low (clear of the head above), closes the fist around the handle, lifts it. */
-  swatterGrab: {
     hand: 'left',
     keys: [
-      key(0, 'swatterHandle', [-6, 0, -4], 'open', SWATTER_GRIP),
+      key(0, 'slingHandle', [-5, 1, -6], 'open', LEFT_HANDLE_GRIP),
+      key(0.8, 'slingHandle', [0, 0, 0], 'open', LEFT_HANDLE_GRIP),
+      key(1.1, 'slingHandle', [0, 0, 0], 'fist', LEFT_HANDLE_GRIP),
+      key(2.0, 'slingHandle', [0, 6, -4], 'fist', LEFT_HANDLE_GRIP),
+    ],
+  },
+  /** The swatter is on the left: the right hand from the player's front and behind, low (clear of the head above), closes the fist, lifts it. */
+  swatterGrab: {
+    hand: 'right',
+    keys: [
+      key(0, 'swatterHandle', [6, 0, -4], 'open', SWATTER_GRIP),
       key(0.8, 'swatterHandle', [0, 0, 0], 'open', SWATTER_GRIP),
       key(1.1, 'swatterHandle', [0, 0, 0], 'fist', SWATTER_GRIP),
       key(2.0, 'swatterHandle', [0, 6, -3], 'fist', SWATTER_GRIP),
     ],
   },
-  /** Left hand from the left and behind (the mirror of slingGrab), closes the fist around the shaker, lifts it. */
+  /** The pepper is front left: the right hand from its side and behind, closes the fist around the shaker, lifts it. */
   pepperGrab: {
-    hand: 'left',
+    hand: 'right',
     keys: [
-      key(0, 'pepperHandle', [-5, 1, -6], 'open', LEFT_HANDLE_GRIP),
-      key(0.8, 'pepperHandle', [0, 0, 0], 'open', LEFT_HANDLE_GRIP),
-      key(1.1, 'pepperHandle', [0, 0, 0], 'fist', LEFT_HANDLE_GRIP),
-      key(2.0, 'pepperHandle', [0, 6, -4], 'fist', LEFT_HANDLE_GRIP),
+      key(0, 'pepperHandle', [5, 1, -6], 'open', HANDLE_GRIP),
+      key(0.8, 'pepperHandle', [0, 0, 0], 'open', HANDLE_GRIP),
+      key(1.1, 'pepperHandle', [0, 0, 0], 'fist', HANDLE_GRIP),
+      key(2.0, 'pepperHandle', [0, 6, -4], 'fist', HANDLE_GRIP),
     ],
   },
-  /** Left hand from the player's side, a little high (clear of the bell below), closes the fist around the handle, lifts it. */
+  /** The bell is on the left: the right hand from the player's side, a little high (clear of the bell below), closes the fist, lifts it. */
   bellGrab: {
-    hand: 'left',
+    hand: 'right',
     keys: [
       key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
       key(0.8, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
@@ -239,35 +239,38 @@ export const GHOST_DEMOS = {
       key(2.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
     ],
   },
-  /** Right hand from the player's side, a little high, closes the fist around the upright horn grip, lifts it. */
+  /** The horn is on the right: the left hand from its side and behind, a little high, closes the fist around the upright grip, lifts it. */
   hornGrab: {
-    hand: 'right',
+    hand: 'left',
     keys: [
-      key(0, 'hornHandle', [0, 2, -8], 'open', SIDE_GRIP),
-      key(0.8, 'hornHandle', [0, 0, 0], 'open', SIDE_GRIP),
-      key(1.1, 'hornHandle', [0, 0, 0], 'fist', SIDE_GRIP),
-      key(2.0, 'hornHandle', [0, 5, -4], 'fist', SIDE_GRIP),
+      key(0, 'hornHandle', [-4, 2, -7], 'open', LEFT_HANDLE_GRIP),
+      key(0.8, 'hornHandle', [0, 0, 0], 'open', LEFT_HANDLE_GRIP),
+      key(1.1, 'hornHandle', [0, 0, 0], 'fist', LEFT_HANDLE_GRIP),
+      key(2.0, 'hornHandle', [0, 5, -4], 'fist', LEFT_HANDLE_GRIP),
     ],
   },
   /**
-   * Grab the horn, bring it up to the mouth (the fist a little below and to
-   * the right, so the mouthpiece behind the fist is at the lips), hold it
-   * there until it sounds (HORN.holdTime, 1 s).
+   * Aim, then lift (v2): grab the horn, hold it low in front of the chest
+   * while looking out (the head aims it), then bring it up to the lips (the
+   * fist a little below and to the left, so the mouthpiece on top of the
+   * grip is at the lips: the spot locks) and hold it there for the blow.
+   * The left hand (the horn is on the right).
    */
   hornBlow: {
-    hand: 'right',
+    hand: 'left',
     keys: [
-      key(0, 'hornHandle', [0, 2, -8], 'open', SIDE_GRIP),
-      key(0.6, 'hornHandle', [0, 0, 0], 'open', SIDE_GRIP),
-      key(0.9, 'hornHandle', [0, 0, 0], 'fist', SIDE_GRIP),
-      key(1.4, 'hornHandle', [0, 6, -4], 'fist', SIDE_GRIP),
-      key(2.4, 'mouth', [3, -7, 4], 'fist', BLOW_GRIP),
-      key(3.8, 'mouth', [3, -7, 4], 'fist', BLOW_GRIP),
+      key(0, 'hornHandle', [-4, 2, -7], 'open', LEFT_HANDLE_GRIP),
+      key(0.6, 'hornHandle', [0, 0, 0], 'open', LEFT_HANDLE_GRIP),
+      key(0.9, 'hornHandle', [0, 0, 0], 'fist', LEFT_HANDLE_GRIP),
+      key(1.5, 'mouth', [-5, -24, 10], 'fist', BLOW_GRIP),
+      key(2.7, 'mouth', [-5, -24, 10], 'fist', BLOW_GRIP),
+      key(3.5, 'mouth', [-3, -9, 4], 'fist', BLOW_GRIP),
+      key(4.8, 'mouth', [-3, -9, 4], 'fist', BLOW_GRIP),
     ],
   },
-  /** Grab the bell with the left hand, lift it, shake it hard side to side a few times (each turn back is one ring). */
+  /** Grab the bell with the right hand (it is on the left), lift it, ring it with a hard swing side to side. */
   bellRing: {
-    hand: 'left',
+    hand: 'right',
     keys: [
       key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
       key(0.6, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
@@ -281,9 +284,9 @@ export const GHOST_DEMOS = {
       key(3.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
     ],
   },
-  /** The other hand comes down into the bowl and pinches a pebble off the top of the pile. */
+  /** The right hand (the left holds the slingshot) comes down into the bowl and pinches a pebble off the top of the pile. */
   pebble: {
-    hand: 'left',
+    hand: 'right',
     keys: [
       key(0, 'pebbles', [0, 9, -2], 'open', PINCH_DOWN),
       key(0.8, 'pebbles', [0, 0, 0], 'open', PINCH_DOWN),
@@ -293,7 +296,7 @@ export const GHOST_DEMOS = {
   },
   /** Lift the pebble out of the bowl, bring it to the pouch from the player's side (clear of the fork), let go. */
   load: {
-    hand: 'left',
+    hand: 'right',
     keys: [
       key(0, 'pebbles', [0, 0, 0], 'pinch', PINCH_DOWN),
       key(0.5, 'pebbles', [0, 9, -3], 'pinch', PINCH_DOWN),
@@ -305,10 +308,10 @@ export const GHOST_DEMOS = {
   },
   /** Come up behind the pouch, pinch it, pull straight back along the shot, let go. */
   shoot: {
-    hand: 'left',
+    hand: 'right',
     frame: 'shot',
     keys: [
-      key(0, 'pouch', [-3, 3, -7], 'open', PULL_GRIP),
+      key(0, 'pouch', [3, 3, -7], 'open', PULL_GRIP),
       key(0.7, 'pouch', [0, 0, 0], 'open', PULL_GRIP),
       key(1.0, 'pouch', [0, 0, 0], 'pinch', PULL_GRIP),
       key(2.0, 'pouch', [0, 0, -14], 'pinch', PULL_GRIP),
@@ -320,10 +323,10 @@ export const GHOST_DEMOS = {
    * the keg (frame 'aim'), so the shot goes at it. Ghost aim dots show the arc.
    */
   aimKeg: {
-    hand: 'left',
+    hand: 'right',
     frame: 'aim',
     keys: [
-      key(0, 'pouch', [-3, 3, -7], 'open', PULL_GRIP),
+      key(0, 'pouch', [3, 3, -7], 'open', PULL_GRIP),
       key(0.7, 'pouch', [0, 0, 0], 'open', PULL_GRIP),
       key(1.0, 'pouch', [0, 0, 0], 'pinch', PULL_GRIP),
       key(2.0, 'pouch', [0, 0, -14], 'pinch', PULL_GRIP),

@@ -53,6 +53,14 @@ export class GrabEat {
   /** Called with each goblin let go away from the mouth, and how fast it flew off (cm per second): the toss lesson waits for one. */
   onToss: (goblin: Goblin, speed: number) => void = () => {};
 
+  /** True while this hand holds anything: a goblin, the slingshot or a pebble, or a tool. */
+  handBusy(hand: HandState): boolean {
+    if (this.slots.get(hand)?.held) return true;
+    if (this.slingshot.isBusy(hand)) return true;
+    for (const t of this.tools) if (t.isBusy(hand)) return true;
+    return false;
+  }
+
   /** True while a hand holds this goblin. */
   isHolding(goblin: Goblin): boolean {
     for (const slot of this.slots.values()) if (slot.held === goblin) return true;

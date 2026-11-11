@@ -15,6 +15,7 @@ export type DebugCommand =
   | 'loseCastle'
   | 'damageCastle'
   | 'restartBattle'
+  | 'skipTutorial'
   | 'startWave'
   | 'measureReach'
   | 'grunts'
@@ -106,6 +107,13 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     does: 'Forget the saved reach (the board goes back to its normal size) and start the battle with the reach check ("Show me how big you are, giant!"), then the wave Play starts at',
   },
   { id: 'skipStep', group: 'game', icon: '⏭️', code: 'KeyS', label: 'Skip step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
+  {
+    id: 'skipTutorial',
+    group: 'game',
+    icon: '⏩',
+    label: 'Skip tutorial',
+    does: 'Start a new battle without the tutorial: wave 1, every tool out, no lessons (like Skip tutorial on the welcome and pause panels)',
+  },
   { id: 'pause', group: 'game', icon: '⏸️', code: 'Space', label: 'Pause / resume', does: 'Pause the battle (like the pause button) or resume it' },
   {
     id: 'pauseAction',
@@ -142,7 +150,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'pepper', group: 'food', icon: '🌶️', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },
   { id: 'horn', group: 'food', icon: '📯', code: 'Digit4', label: 'Blow horn', does: 'Horn: it sounds without hands or a mic and the field knights charge down the road in front of you (30 s recharge)' },
   { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (35 s recharge)' },
-  { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send knights', does: 'What the horn does: a squad of 4 to 5 knights charges down the road in front of you and holds its first junction (spin the board to pick the road)' },
+  { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send knights', does: 'What the horn does, aimed at the road about 130 cm out in front of you: a new squad of 3 to 5 knights (up to 4 squads), or at the limit the nearest squad moves there' },
   { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, every soldier (knights and the wall garrison) is gone; on, the garrison is back on the walls' },
   { id: 'thinGarrison', group: 'army', icon: '🏹', code: 'Minus', label: 'Thin garrison', does: 'Two soldiers of the wall garrison go down (archers first): one new one climbs up from the courtyard every 15 s' },
   {
@@ -243,6 +251,8 @@ export interface PageInfo {
   playFrom: number;
   /** Mic state, and the loudest level read since the last check in (only read while the megaphone is held). */
   mic: string;
+  /** The game's last few notes (src/debug/notes.ts): a stuck knight, what the bell did, what paused it. */
+  notes?: string;
 }
 
 /** A debug command as it comes in from a key or the debug page. */

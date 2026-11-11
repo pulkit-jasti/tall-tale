@@ -8,6 +8,7 @@
 // goes back and recharges (TOOLS.recharge, the longest).
 import { Vector3 } from 'three';
 import { BELL, STUN, TOOL_SPOTS } from '../config/game.js';
+import { note } from '../debug/notes.js';
 import { handBell } from '../world/shapes.js';
 import { HandTool, type ToolParts } from './handTool.js';
 import type { StunWave } from './stunWave.js';
@@ -81,17 +82,23 @@ export class Bell extends HandTool {
     if (!turned) return;
     // One stroke: the bell rings, louder the harder it is shaken. The ring plays once to its end:
     // strokes while it still rings add no sound (the sound is a `once` sound).
-    const hard = Math.min(1, (this.peak - BELL.ringSpeed) / (BELL.hardSpeed - BELL.ringSpeed));
+    const peak = this.peak;
+    const hard = Math.min(1, (peak - BELL.ringSpeed) / (BELL.hardSpeed - BELL.ringSpeed));
     this.peak = 0;
     this.bodyToWorld(this.middleLocal, world);
     this.audio.play('bell', world, 0.6 + 0.4 * hard);
-    const shake = this.time - this.lastStroke < BELL.ringWindow;
     this.lastStroke = this.time;
-    if (!shake) return;
-    // One stun per use (v2): ringing on in the short use window adds nothing.
-    // While the tutorial holds the window open, a ring after the stun ran out stuns again.
-    if (this.active && (this.stunWave.active || !this.timerHeld)) return;
-    if (!this.tryUse()) return;
+    // Every stroke that rings stuns (headset tests: it rang and did nothing, twice). Only a stun still
+    // running makes a stroke ring without a new stun. Each case says so in the console, to find it if it fails again.
+    if (this.stunWave.active) {
+      note('[bell] rang: a stun is still running');
+      return;
+    }
+    if (!this.tryUse()) {
+      note(`[bell] rang but it is resting (${this.recharging ? 'recharging' : 'tied down'})`);
+      return;
+    }
+    // One stun per use (v2): its short use window runs out long before the stun does, then it goes back.
     this.ring(STUN.baseSeconds + STUN.hardExtra * hard);
   }
 
@@ -99,6 +106,7 @@ export class Bell extends HandTool {
   private ring(seconds: number): void {
     const stunned = this.stunWave.stun(seconds, world);
     const knocked = this.goblins.knockOffRampart();
+    note(`[bell] stun: ${stunned} goblins for ${seconds.toFixed(1)} s, ${knocked} knocked off the wall`);
     this.onUse(stunned + knocked);
   }
 

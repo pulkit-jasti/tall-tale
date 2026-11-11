@@ -42,14 +42,18 @@ export class LessonBait {
   /**
    * Calm climbers on the rampart in front of the player (`front`: the board
    * angle in front, radians). Tops up to LESSON_BAIT.rampartCount.
+   * `armored`: each wears a helmet and a shield and carries a weapon (the
+   * pepper lesson, so the disarm is there to see).
    */
-  onRampart(front: number): void {
+  onRampart(front: number, armored = false): void {
     const { rampartCount, rampartSpreadDeg } = LESSON_BAIT;
     const have = this.alive().filter((g) => g.calm).length;
     for (let i = have; i < rampartCount; i++) {
       const offset = (i - (rampartCount - 1) / 2) * rampartSpreadDeg;
       const g = this.goblins.spawnClimberAt(front + degToRad(offset), true, Infinity);
       if (!g) continue;
+      // Spear and sword in turn, so both weapons are seen flying off.
+      if (armored) g.setGear(i % 2 === 0 ? 'spear' : 'sword', true, true);
       g.calm = true;
       this.list.push(g);
     }

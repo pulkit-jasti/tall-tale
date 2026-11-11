@@ -282,6 +282,8 @@ export class Slingshot {
   onEvent: (event: SlingEvent) => void = () => {};
   /** The frame glows (pulsing) until the handle is grabbed: a new tool, or a hint. */
   beckon = false;
+  /** Another tool's lesson runs: the slingshot, its pebbles and its pouch cannot be grabbed (the battle sets it). */
+  locked = false;
 
   /**
    * World position of a part, for the tutorial's markers and ghost hand:
@@ -443,7 +445,8 @@ export class Slingshot {
 
   /** The nearest slingshot part this hand can reach, with its distance (meters), or null. */
   reach(hand: HandState): { part: SlingPart; distance: number } | null {
-    if (!this.root.visible || this.isBusy(hand)) return null;
+    // Locked by another lesson: nothing on it can be grabbed or pinched.
+    if (!this.root.visible || this.locked || this.isBusy(hand)) return null;
     let part: SlingPart | null = null;
     let best = Infinity;
     // Pouch: pinch, unless the hand holds the slingshot or the other hand already pulls it.

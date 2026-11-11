@@ -107,6 +107,13 @@ export class WaveSpawner {
     this.updateHills();
   }
 
+  /** How many enemies of this wave came out so far. */
+  get spawned(): number {
+    let n = 0;
+    for (const g of this.groups) n += g.out;
+    return n;
+  }
+
   /** True when every planned enemy came out (or the wave was stopped). */
   get allOut(): boolean {
     return this.groups.every((g) => g.out >= g.count);

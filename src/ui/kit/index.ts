@@ -6,6 +6,7 @@
 //   Controls:  PokeButton, Slider, Switch (on and off: knob side, color and the word), StandButton,
 //              armControls, changeTouch
 //   Panels:    Panel (a parchment board with a canvas), LazyFollow (menus that follow the head), centerAbove,
+//              GlassSign (the see-through hint sign that follows the look, with an optional live bar),
 //              uiCenterY (every menu panel's height: in front of the eyes, inside UI_ZONE)
 //   Layout:    rowX, bottomRowY, panelMap, stepValue, clamp01, angleTo (no Three.js); the room around
 //              everything in a panel is UI_SPACING (config): edge, top and label gaps
@@ -18,6 +19,7 @@ export { Slider, type SliderOptions } from '../slider.js';
 export { Switch, type SwitchOptions } from '../switch.js';
 export { StandButton, type StandOptions } from './standButton.js';
 export { LazyFollow, type FollowOptions } from './lazyFollow.js';
+export { GlassSign, type GlassBar } from './glassSign.js';
 export { armControls, changeTouch, type Control } from './controls.js';
 export { angleTo, bottomRowY, clamp01, panelMap, rowX, stepValue, type PanelMap } from './layout.js';
 export { drawLine, drawOutlined, drawTitleBanner, UI_COLORS } from './text.js';

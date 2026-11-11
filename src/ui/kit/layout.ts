@@ -40,8 +40,8 @@ export function stepValue(value: number, step: number, steps: number): number {
 
 /** The shortest turn from angle `from` to angle `to` (radians, from -PI to PI). */
 export function angleTo(from: number, to: number): number {
-  let d = to - from;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
+  // No loop: a bad angle can never hang the game.
+  const d = to - from;
+  if (!Number.isFinite(d)) return 0;
+  return d - Math.round(d / (Math.PI * 2)) * Math.PI * 2;
 }

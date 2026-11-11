@@ -88,7 +88,7 @@ The tutorial is a hand-written script in code (`src/director/tutorial.ts`), not 
 ### Rules that keep it safe
 
 - **Keep fallbacks simple:** at most two. First repeat the step, then make it easier.
-- **It must never get stuck.** Every lesson has a timeout that moves on anyway. A judge who cannot do something still sees the rest of the game. Info steps have no timeout: they wait for Next, which always works. **Waves have no timer either:** a wave ends when it is cleared or the castle falls. Only a stalemate ends a wave early: every goblin is out, none has hurt the castle or got closer for 90 seconds (`CASTLE_HEALTH.stalemateSeconds`, `progressCm`), so the leftovers run off. A goblin at or on the wall, in the courtyard, or held always blocks it. There is only ever one lesson climber.
+- **It must never get stuck, but never skip a lesson by itself either.** v2 (headset test: the horn lesson ran out and the wave went on untaught): no lesson has a timeout any more. Each one waits for the player, its fallbacks help, and what it needs is always topped up (a new lesson goblin, new bait). The way out is **Skip tutorial** on the welcome panel and the pause panel ([controls-and-ui.md](controls-and-ui.md#5-pause-and-settings)). Info steps wait for Next, which always works. **Waves have no timer either:** a wave ends when it is cleared or the castle falls. Only a stalemate ends a wave early: every goblin is out, none has hurt the castle or got closer for 90 seconds (`CASTLE_HEALTH.stalemateSeconds`, `progressCm`), so the leftovers run off. A goblin at or on the wall, in the courtyard, or held always blocks it. There is only ever one lesson climber.
 - **Enemies keep coming while a step waits, but at half the spawn rate.** Lessons that need their own goblins (the shot, the triggers, the tool uses) hold the wave's spawns completely.
 
 ### Tutorial waves
@@ -169,7 +169,7 @@ If time runs short, cut from the end of this list.
 
 Only a few logic tests, in Vitest. No tests for visuals, hand feel or sound, and no screenshots or browser runs.
 
-- **Tutorial director:** steps move on when their goal is met, fall back after a timeout, at most 2 fallbacks.
+- **Tutorial director:** steps move on when their goal is met, fall back when stuck, at most 2 fallbacks. Lessons have no timeout (v2); Skip tutorial is the way out.
 - **Win and lose:** clearing the last wave wins, castle health at zero loses, the breather repairs part of the damage.
 - **Food and tool costs:** eating adds food, a tool cannot be used without enough food, food carries over between waves.
 

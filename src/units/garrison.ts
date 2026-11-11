@@ -45,7 +45,9 @@ const DUST = [0xc9b79a, 0xa8957a, 0xe0d4bd];
 export class Garrison {
   /** One slot per home stretch: guards first, then archers (GARRISON.homesDeg). */
   private slots: (Member | null)[] = GARRISON.homesDeg.map(() => null);
+  /** Archers and guards come back on their own clocks (guards slower, GARRISON.guardRefillEvery). */
   private refill: RefillState = { timer: 0 };
+  private guardRefill: RefillState = { timer: 0 };
   private active = false;
   private volleyTimer = 0;
 
@@ -73,6 +75,7 @@ export class Garrison {
   fill(): void {
     this.active = true;
     this.refill.timer = 0;
+    this.guardRefill.timer = 0;
     this.volleyTimer = GARRISON.volleyEvery;
     for (let i = 0; i < this.slots.length; i++) if (!this.slots[i]) this.recruit(i, false);
   }
@@ -81,6 +84,27 @@ export class Garrison {
   stop(): void {
     this.active = false;
     this.slots.fill(null);
+  }
+
+  /**
+   * The board angle of the soldier on the wall nearest this goblin, or null
+   * when none is up there (v2: goblins on the rampart jump in only then; until
+   * then they hunt the soldiers). Ones still climbing up do not count yet.
+   */
+  nearestSoldierAngle(g: Goblin): number | null {
+    if (!this.active) return null;
+    const a = angleOf(g.root.position.x, g.root.position.z);
+    let best: number | null = null;
+    let bestArc = Infinity;
+    for (const m of this.slots) {
+      if (!m || m.troop.mode === 'climbingUp' || m.troop.mode === 'dead') continue;
+      const arc = arcDistance(a, m.troop.angle, GARRISON.radius);
+      if (arc < bestArc) {
+        bestArc = arc;
+        best = m.troop.angle;
+      }
+    }
+    return best;
   }
 
   /** Debug: `n` soldiers on the rampart go down (archers first), to watch the refill climb up. */
@@ -139,11 +163,11 @@ export class Garrison {
       if (m && (m.troop.mode === 'dead' || !m.troop.garrison)) this.slots[i] = null;
       else if (m) m.role === 'archer' ? archers++ : guards++;
     }
-    // One new soldier climbs up every so often until the garrison is full again.
-    if (this.troops.enabled && refillTick(this.refill, archers + guards, GARRISON.archers + GARRISON.guards, dt, GARRISON.refillEvery)) {
-      const role = nextRecruit(archers, guards, GARRISON.archers, GARRISON.guards);
-      const slot = this.slots.findIndex((m, i) => !m && this.roleOf(i) === role);
-      if (slot >= 0) this.recruit(slot, true);
+    // One new archer climbs up every so often until they are full again; a fallen guard takes longer to
+    // come back (GARRISON.guardRefillEvery), so helping the guards matters.
+    if (this.troops.enabled) {
+      if (refillTick(this.refill, archers, GARRISON.archers, dt, GARRISON.refillEvery)) this.recruitRole('archer');
+      if (refillTick(this.guardRefill, guards, GARRISON.guards, dt, GARRISON.guardRefillEvery)) this.recruitRole('guard');
     }
     // The volley: every archer with a target looses an arrow, a little staggered.
     this.volleyTimer -= dt;
@@ -173,6 +197,12 @@ export class Garrison {
     this.goblinsAttack(dt);
   }
 
+  /** A new soldier of this role climbs up into a free slot of it. */
+  private recruitRole(role: Role): void {
+    const slot = this.slots.findIndex((m, i) => !m && this.roleOf(i) === role);
+    if (slot >= 0) this.recruit(slot, true);
+  }
+
   /** Climbing up the inner side of the wall, then on guard on the rampart. */
   private climb(t: Troop, dt: number): void {
     t.timer -= dt;
@@ -182,13 +212,18 @@ export class Garrison {
     this.particles.burst(this.board.localToWorld(temp.copy(t.root.position)), DUST, 3, 0.06);
   }
 
-  /** Walks along the rampart toward an angle, never past the towers of its own stretch. Returns true when there. */
-  private walkTo(t: Troop, target: number, dt: number): boolean {
+  /**
+   * Walks along the rampart toward an angle. Archers never past the towers of
+   * their own stretch; guards (`free`) anywhere round the wall, the short way.
+   * Returns true when there.
+   */
+  private walkTo(t: Troop, target: number, dt: number, free = false): boolean {
     const [lo, hi] = towerGap(t.home);
-    // The home stretch around the home angle, on the same turn of the circle.
-    const goal = t.home + Math.min(hi - t.home, Math.max(lo - t.home, angleDelta(t.home, target)));
+    // The home stretch around the home angle, on the same turn of the circle (a guard: the target itself).
+    const goal = free ? t.angle + angleDelta(t.angle, target) : t.home + Math.min(hi - t.home, Math.max(lo - t.home, angleDelta(t.home, target)));
     const d = angleDelta(t.angle, goal);
-    const step = (GARRISON.walkSpeed / GARRISON.radius) * dt;
+    // Guards hurry round the wall to a fight; archers step about their stretch.
+    const step = ((free ? GARRISON.guardSpeed : GARRISON.walkSpeed) / GARRISON.radius) * dt;
     if (Math.abs(d) <= step) {
       if (Math.abs(d) > 1e-4) this.place(t, goal);
       return true;
@@ -202,8 +237,11 @@ export class Garrison {
     return false;
   }
 
-  /** The nearest goblin on the rampart on this soldier's stretch (lesson goblins are left alone). */
-  private rampartFoe(t: Troop): { goblin: Goblin; angle: number; arc: number } | null {
+  /**
+   * The nearest goblin on the rampart: on this soldier's stretch, or (a
+   * guard, `anywhere`) round the whole wall. Lesson goblins are left alone.
+   */
+  private rampartFoe(t: Troop, anywhere = false): { goblin: Goblin; angle: number; arc: number } | null {
     const [lo, hi] = towerGap(t.home);
     let best: Goblin | null = null;
     let bestAngle = 0;
@@ -212,7 +250,7 @@ export class Garrison {
       if (g.mode !== 'rampart' || this.goblins.isLesson(g)) continue;
       const a = angleOf(g.root.position.x, g.root.position.z);
       const fromHome = angleDelta(t.home, a);
-      if (fromHome < lo - t.home - 0.05 || fromHome > hi - t.home + 0.05) continue;
+      if (!anywhere && (fromHome < lo - t.home - 0.05 || fromHome > hi - t.home + 0.05)) continue;
       const arc = arcDistance(t.angle, a, GARRISON.radius);
       if (arc < bestArc) {
         bestArc = arc;
@@ -282,13 +320,17 @@ export class Garrison {
     if (this.troops.arrows.fire(temp, temp2, g)) this.audio.play('slingRelease', this.board.localToWorld(temp), 0.35, 0.12);
   }
 
-  /** A guard: walks to the nearest goblin on its stretch of rampart and fights it up close. */
+  /**
+   * A guard: hunts the nearest goblin anywhere on the rampart (headset test:
+   * guards kept to their own stretch), walks to it along the wall and fights
+   * it up close until it is out, then goes back home.
+   */
   private guard(m: Member, dt: number): void {
     const t = m.troop;
-    const foe = this.rampartFoe(t);
+    const foe = this.rampartFoe(t, true);
     if (!foe) {
       t.foe = null;
-      if (this.walkTo(t, t.home, dt)) {
+      if (this.walkTo(t, t.home, dt, true)) {
         t.mode = 'guarding';
         t.face(polarX(1, t.angle), polarZ(1, t.angle));
         t.play('idle');
@@ -296,7 +338,7 @@ export class Garrison {
       return;
     }
     if (foe.arc > GARRISON.guardReach) {
-      this.walkTo(t, foe.angle, dt);
+      this.walkTo(t, foe.angle, dt, true);
       return;
     }
     // Up close: strike at it.

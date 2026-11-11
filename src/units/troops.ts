@@ -45,14 +45,15 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameAudio } from '../audio/sound.js';
 import { ARCHERS, CASTLE, DAY_NIGHT, GARRISON, GOBLIN_GEAR, GOBLIN_RULES, JUICE, KNIGHTS, TROOP_KINDS, TROOPS, type GearName, type TroopKind } from '../config/game.js';
+import { note } from '../debug/notes.js';
 import { mark } from '../debug/perfMarks.js';
 import { addNightRim } from '../fx/nightRim.js';
 import type { Particles } from '../fx/particles.js';
-import { angleDelta, degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
+import { degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
-import type { Step } from '../rules/roadGraph.js';
+import { legsToPoint, legsToWall, reverseLegs, type Leg, type RoadPoint } from '../rules/roadRoute.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
-import type { RoadNetwork } from '../world/roads.js';
+import type { Road, RoadNetwork } from '../world/roads.js';
 import { knightBanner } from '../world/shapes.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { strikeEvery, troopHitsToDown } from '../rules/gear.js';
@@ -60,14 +61,17 @@ import { findGearBones, rigTemplate, setGear } from './gear.js';
 import type { Goblin, GoblinMode, Goblins } from './goblins.js';
 
 /**
- * walking: on its route (out, or home). charging: a field knight sprinting
- * out. toPost: back to its spot after a fight. holding: at its junction.
- * The garrison modes are run by src/units/garrison.ts.
+ * walking: on its walk home. charging: a field knight sprinting along the
+ * roads to its squad's spot. joining: stepping back onto the road before a
+ * new walk (the squad was moved). toPost: to its own spot after arriving or
+ * a fight. holding: at its spot, watching. The garrison modes are run by
+ * src/units/garrison.ts.
  */
 export type TroopMode =
   | 'dead'
   | 'walking'
   | 'charging'
+  | 'joining'
   | 'toPost'
   | 'holding'
   | 'fighting'
@@ -85,13 +89,27 @@ const FIELD_KINDS: TroopKind[] = ['sword', 'spear'];
 
 const temp = new Vector3();
 const temp2 = new Vector3();
+const handAt = new Vector3();
+/** The left hand's spot on the left arm bone (model units, the same as GEAR's left hand gear). */
+const LEFT_HAND_SPOT: [number, number, number] = [0.26, 0, 0.04];
 
-/** One horn call: its knights share the crash and the junction they hold. */
-interface Squad {
+/**
+ * One squad of field knights: its members share the crash and the spot they
+ * hold. A horn call at the squad limit moves the squad nearest the aimed
+ * spot there (KNIGHTS.maxSquads).
+ */
+export interface Squad {
   crashed: boolean;
-  /** The junction's position (board, cm) and the way out from it (unit, flat). */
+  /** The spot it holds: on a road (graph road, cm along), its board position, and the way it faces (unit, flat). */
+  anchor: RoadPoint;
   readonly post: Vector3;
   readonly out: Vector3;
+  /** Its knights (out on the board or still waiting at the gate). */
+  readonly members: Troop[];
+  /** Knights still waiting at the gate. */
+  pending: number;
+  /** Broke (too few left): its last knights march home. */
+  broken: boolean;
 }
 
 export class Troop {
@@ -100,10 +118,10 @@ export class Troop {
   private actions = new Map<string, AnimationAction>();
   private current: AnimationAction | null = null;
   mode: TroopMode = 'dead';
-  /** Roads from the wall entry out to the camp (each walked in its `dir`). */
-  route: Step[] = [];
+  /** The walk it is on (src/rules/roadRoute.ts): stretches of road, the one it is on, and cm along that road. */
+  legs: Leg[] = [];
   leg = 0;
-  /** Walking out toward the camp (true) or back home (false). */
+  /** Walking out to its squad's spot (true) or back home (false). */
   outward = true;
   distance = 0;
   offset = 0;
@@ -123,8 +141,18 @@ export class Troop {
   /** A field knight's squad, and its own spot at the junction (board, cm). Null for the garrison. */
   squad: Squad | null = null;
   readonly post = new Vector3();
-  /** A field knight reached its junction (after a fight it walks back to its spot). */
+  /** A field knight reached its squad's spot (after a fight it walks back to its own place there). */
   arrived = false;
+  /** Walking up to the goblin it fights (it went for one seen from its spot). */
+  closing = false;
+  /** How long it has been walking up to its goblin without reaching it (seconds). */
+  closeTime = 0;
+  /** A goblin it could not reach: it leaves that one alone for `ignoreTime` seconds. */
+  ignore: Goblin | null = null;
+  ignoreTime = 0;
+  /** How long it has been in a moving mode without moving (seconds), and where it was (the run-in-place watchdog). */
+  stillTime = 0;
+  readonly lastAt = new Vector3();
   /** The garrison: on the rampart (src/units/garrison.ts), its home angle and the angle it stands at now (radians). */
   garrison = false;
   home = 0;
@@ -146,7 +174,11 @@ export class Troop {
     this.mixer = new AnimationMixer(model);
     this.gear = findGearBones(model);
     this.shieldName = spec.gear.find((g) => g === 'roundShield' || g === 'rectShield') ?? null;
+    this.handBone = model.getObjectByName('arm-left') ?? null;
   }
+
+  /** The left arm's bone (the banner is held in that hand). */
+  readonly handBone: Object3D | null;
 
   /** Fresh out of the castle: its shield back on. */
   rearm(): void {
@@ -172,10 +204,10 @@ export class Troop {
     this.current = action;
   }
 
-  /** The direction the current road is walked in right now. */
+  /** The direction the current stretch of road is walked in right now. */
   get dir(): 1 | -1 {
-    const step = this.route[this.leg];
-    return this.outward ? step.dir : step.dir === 1 ? -1 : 1;
+    const leg = this.legs[this.leg];
+    return !leg || leg.to >= leg.from ? 1 : -1;
   }
 
   face(dx: number, dz: number): void {
@@ -184,8 +216,8 @@ export class Troop {
 }
 
 interface Waiting {
-  /** The roads from the wall entry out to the junction. */
-  route: Step[];
+  /** The walk from the wall entry out to the squad's spot. */
+  legs: Leg[];
   squad: Squad;
   kind: TroopKind;
   wait: number;
@@ -233,8 +265,8 @@ export class Arrows {
     // Thicker than a real arrow at this length, so it reads from the seat.
     const shaft = new CylinderGeometry(0.12, 0.12, L, 4).rotateX(Math.PI / 2);
     const tip = new ConeGeometry(0.3, 0.8, 4).rotateX(Math.PI / 2).translate(0, 0, L / 2 + 0.3);
-    const feather = new BoxGeometry(0.04, 0.8, 1.4).translate(0, 0, -L / 2 + 0.7);
-    const feather2 = new BoxGeometry(0.8, 0.04, 1.4).translate(0, 0, -L / 2 + 0.7);
+    const feather = new BoxGeometry(0.04, 0.7, 1.1).translate(0, 0, -L / 2 + 0.55);
+    const feather2 = new BoxGeometry(0.7, 0.04, 1.1).translate(0, 0, -L / 2 + 0.55);
     const geometry = mergeGeometries([
       part(shaft, ARCHERS.shaftColor),
       part(tip, ARCHERS.tipColor),
@@ -332,11 +364,23 @@ export class Troops {
   /** Knights of a squad waiting to burst out of the gate, one after the other. */
   private waiting: Waiting[] = [];
   private frame = 0;
+  /** The field squads out now (KNIGHTS.maxSquads at most). */
+  readonly squads: Squad[] = [];
+  /** Each road's length (cm), for routes. */
+  private lengths: number[];
+  /** Knights fighting each goblin this frame (KNIGHTS.maxPerGoblin). Rebuilt every frame, no new map. */
+  private fighters = new Map<Goblin, number>();
+  /** The squad the horn would move now (its banner pulses), or null. */
+  answering: Squad | null = null;
 
   /** Debug: false keeps every soldier inside the castle (testing without help). Turning it off sends them all home. */
   private on = true;
   /** Kept for the battle (lessons set it). v2: no squads come out on their own, so it does nothing now. */
   held = false;
+  /** The squad the horn called or moved last (the horn lesson sends goblins at it). */
+  private lastCalled: Squad | null = null;
+  /** The tutorial sends every squad home after this long (seconds, negative: not asked). */
+  private homeTimer = -1;
   /** Called when a battle starts: the wall garrison mans the rampart (src/units/garrison.ts). */
   onMan: () => void = () => {};
   /** Called on a squad's crash into the goblins, with the world point (juice: a hit stop and a ring). */
@@ -366,6 +410,7 @@ export class Troops {
     private rng: Random,
   ) {
     this.arrows = new Arrows(board);
+    this.lengths = network.roads.map((r) => r.length);
   }
 
   async load(): Promise<void> {
@@ -396,22 +441,40 @@ export class Troops {
   /** A wave starts. v2: no squads come out on their own any more (only the horn sends knights). */
   deploy(_campIds: string[]): void {}
 
-  /** The wave is over: knights still waiting stay in, and every field knight marches home. */
-  recall(): void {
-    this.waiting.length = 0;
-    for (const t of this.list) {
-      if (t.mode === 'dead' || t.mode === 'standing' || t.garrison) continue;
-      this.release(t);
-      this.marchHome(t);
-    }
+  /** The wave is over. v2: the field squads stay where they are (they are the army in the field); only a new battle clears them. */
+  recall(): void {}
+
+  /**
+   * The tutorial between waves: every field squad marches home once its
+   * cheer is over (`after` seconds), so the next lesson's goblins are not
+   * left alone by knights standing next to them (headset test: confusing).
+   * In the real game squads stay between waves.
+   */
+  sendHome(after: number): void {
+    this.homeTimer = after;
   }
 
-  /** The wave was won: every soldier cheers for a moment (field knights then march home). */
+  /** Every field squad breaks and marches home now; knights still waiting at the gate stay inside. */
+  private allHome(): void {
+    this.waiting.length = 0;
+    for (const squad of this.squads) {
+      squad.broken = true;
+      for (const m of squad.members) {
+        if (m.mode === 'dead' || m.squad !== squad) continue;
+        m.squad = null;
+        this.marchHome(m);
+      }
+    }
+    this.squads.length = 0;
+    this.answering = null;
+    this.lastCalled = null;
+  }
+
+  /** The wave was won: every soldier cheers for a moment, then goes back to its spot. */
   cheerAll(): void {
     for (const t of this.list) {
-      if (t.mode === 'dead' || t.mode === 'standing' || t.mode === 'climbingUp') continue;
+      if (t.mode === 'dead' || t.mode === 'standing' || t.mode === 'climbingUp' || t.mode === 'walking') continue;
       this.release(t);
-      if (!t.garrison) this.marchHome(t);
       this.cheer(t, JUICE.waveCheerTime);
     }
   }
@@ -420,6 +483,10 @@ export class Troops {
   clear(): void {
     this.waiting.length = 0;
     for (const t of this.list) if (t.mode !== 'dead') this.remove(t, false);
+    this.squads.length = 0;
+    this.answering = null;
+    this.homeTimer = -1;
+    this.lastCalled = null;
     this.arrows.clear();
     this.onClear();
   }
@@ -439,81 +506,215 @@ export class Troops {
     return count;
   }
 
-  /**
-   * The horn (v2): a squad of KNIGHTS.squadMin to squadMax swordsmen and
-   * spearmen bursts out of the wall entry nearest `frontAngle` (the board
-   * angle in front of the player, radians: spin the board to choose the
-   * road) and sprints down that road to its first junction at least
-   * KNIGHTS.holdMinRadius out. Returns false if no road leads out there.
-   */
-  charge(frontAngle: number): boolean {
-    if (!this.on) this.on = true;
-    const route = this.routeOut(frontAngle);
-    if (route.length === 0) return false;
-    const graph = this.network.graph;
-    const last = route[route.length - 1];
-    const node = graph.endOf(last);
-    const squad: Squad = { crashed: false, post: new Vector3(), out: new Vector3() };
-    this.network.nodePosition(node, squad.post);
-    squad.out.set(squad.post.x, 0, squad.post.z).normalize();
-    const room = Math.max(0, KNIGHTS.maxField - this.fieldCount);
-    const size = Math.min(room, KNIGHTS.squadMin + this.rng.int(KNIGHTS.squadMax - KNIGHTS.squadMin + 1));
-    for (let i = 0; i < size; i++) this.waiting.push({ route, squad, kind: this.pickFieldKind(), wait: i * KNIGHTS.leaveGap, slot: i });
-    if (size > 0) {
-      mark('knight charge');
-      // The gate bursts open: a battle cry and dust at the wall entry.
-      this.network.nodePosition(graph.roads[route[0].road][route[0].dir === 1 ? 'from' : 'to'], temp);
-      this.board.localToWorld(temp);
-      this.audio.play('swordClash', temp, 0.8);
-      this.particles.burst(temp, TROOPS.poofColors, 10, 0.12);
-    }
-    return size > 0;
-  }
-
-  /** Debug "Send squad": the horn's charge down the road at this board angle. */
-  sendSquad(frontAngle = 0): void {
-    this.charge(frontAngle);
-  }
-
-  /**
-   * The roads from the wall entry nearest `angle` out to the first junction
-   * at least KNIGHTS.holdMinRadius from the center (or the last point before
-   * a camp): at each point it takes the road to the point farthest out.
-   */
-  private routeOut(angle: number): Step[] {
-    const graph = this.network.graph;
-    let start = -1;
+  /** The nearest spot on any road to a board point (x, z), and how far it is (cm). */
+  roadPointNear(x: number, z: number): { point: RoadPoint; distance: number } {
+    let road = 0;
     let best = Infinity;
-    graph.nodes.forEach((n, i) => {
-      if (n.kind !== 'wall') return;
-      const d = Math.abs(angleDelta(degToRad(n.at[1]), angle));
+    this.network.roads.forEach((r, i) => {
+      const d = r.distanceTo(x, z);
       if (d < best) {
         best = d;
-        start = i;
+        road = i;
       }
     });
-    const route: Step[] = [];
-    let here = start;
-    for (let guard = 0; here >= 0 && guard < graph.nodes.length; guard++) {
-      let next = -1;
-      let road = -1;
-      for (const r of graph.nodes[here].roads) {
-        if (!graph.roads[r].open) continue;
-        const other = graph.other(r, here);
-        if (graph.nodes[other].kind === 'wall') continue;
-        if (next < 0 || graph.nodes[other].at[0] > graph.nodes[next].at[0]) {
-          next = other;
-          road = r;
-        }
-      }
-      if (next < 0 || graph.nodes[next].at[0] <= graph.nodes[here].at[0]) break;
-      // Never on into a camp: they hold the point before it.
-      if (graph.nodes[next].kind === 'camp') break;
-      route.push({ road, dir: graph.roads[road].from === here ? 1 : -1 });
-      here = next;
-      if (graph.nodes[here].at[0] >= KNIGHTS.holdMinRadius) break;
+    return { point: { road, along: this.network.roads[road].nearestAlong(x, z) }, distance: best };
+  }
+
+  /** A road (for the horn's path). */
+  road(index: number): Road {
+    return this.network.roads[index];
+  }
+
+  /**
+   * The way knights would go to a road spot (the horn's path once locked):
+   * a new squad from the nearest wall entry, or at the squad limit the squad
+   * that would move, from its spot. Null when none can get there.
+   */
+  previewLegs(target: RoadPoint): Leg[] | null {
+    const plan = this.plan(target);
+    if (!plan) return null;
+    const graph = this.network.graph;
+    if (plan.kind === 'move') return legsToPoint(graph, this.lengths, plan.squad.anchor, target);
+    const home = legsToWall(graph, this.lengths, target);
+    return home ? reverseLegs(home) : null;
+  }
+
+  /** A road spot's board position (cm, on the road). */
+  roadPointPosition(point: RoadPoint, out: Vector3): Vector3 {
+    return this.network.roads[point.road].pointAt(point.along, 0, out);
+  }
+
+  /** Squads that still count against KNIGHTS.maxSquads (not broken). */
+  private get activeSquads(): Squad[] {
+    return this.squads.filter((s) => !s.broken);
+  }
+
+  /**
+   * What the horn would do for a road spot: send a new squad (under the
+   * limit), or move the squad nearest it (at the limit). Null when no squad
+   * can get there (every road to it is cut).
+   */
+  plan(target: RoadPoint): { kind: 'new' } | { kind: 'move'; squad: Squad } | null {
+    const graph = this.network.graph;
+    const active = this.activeSquads;
+    if (active.length < KNIGHTS.maxSquads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField) {
+      return legsToWall(graph, this.lengths, target) ? { kind: 'new' } : null;
     }
-    return route;
+    let squad: Squad | null = null;
+    let best = Infinity;
+    const p = this.network.roads[target.road];
+    p.pointAt(target.along, 0, temp);
+    for (const s of active) {
+      const d = s.post.distanceToSquared(temp);
+      if (d < best && legsToPoint(graph, this.lengths, s.anchor, target)) {
+        best = d;
+        squad = s;
+      }
+    }
+    return squad ? { kind: 'move', squad } : null;
+  }
+
+  /**
+   * The horn sounds at a road spot (v2): under the squad limit a new squad of
+   * KNIGHTS.squadMin to squadMax (random) swordsmen and spearmen bursts out
+   * of the nearest wall entry and sprints there along the roads; at the
+   * limit the squad nearest the spot goes there instead. Returns false if
+   * nothing could go.
+   */
+  command(target: RoadPoint): boolean {
+    if (!this.on) this.on = true;
+    const plan = this.plan(target);
+    if (!plan) return false;
+    if (plan.kind === 'move') {
+      this.moveSquad(plan.squad, target);
+      this.lastCalled = plan.squad;
+      return true;
+    }
+    const graph = this.network.graph;
+    const home = legsToWall(graph, this.lengths, target);
+    if (!home) return false;
+    const legs = reverseLegs(home);
+    const squad: Squad = { crashed: false, anchor: { ...target }, post: new Vector3(), out: new Vector3(), members: [], pending: 0, broken: false };
+    this.placeSquad(squad, target);
+    const room = Math.max(0, KNIGHTS.maxField - this.fieldCount);
+    const size = Math.min(room, KNIGHTS.squadMin + this.rng.int(KNIGHTS.squadMax - KNIGHTS.squadMin + 1));
+    if (size <= 0) return false;
+    for (let i = 0; i < size; i++) this.waiting.push({ legs, squad, kind: this.pickFieldKind(), wait: i * KNIGHTS.leaveGap, slot: i });
+    squad.pending = size;
+    this.squads.push(squad);
+    this.lastCalled = squad;
+    mark('knight charge');
+    // The gate bursts open: a battle cry and dust at the wall entry.
+    this.network.roads[legs[0].road].pointAt(legs[0].from, 0, temp);
+    this.board.localToWorld(temp);
+    this.audio.play('swordClash', temp, 0.8);
+    this.particles.burst(temp, TROOPS.poofColors, 10, 0.12);
+    return true;
+  }
+
+  /** The squad the horn called or moved last, while it is still in the field. */
+  private get calledSquad(): Squad | null {
+    const squad = this.lastCalled;
+    return squad && !squad.broken && this.squads.includes(squad) ? squad : null;
+  }
+
+  /** True while the squad called last is in the field. */
+  get hasCalledSquad(): boolean {
+    return this.calledSquad !== null;
+  }
+
+  /** The squad called last has reached its spot: none still at the gate, none on the way there. */
+  get calledSquadReady(): boolean {
+    const squad = this.calledSquad;
+    if (!squad || squad.pending > 0) return false;
+    return squad.members.every((t) => t.mode === 'dead' || (t.arrived && t.mode !== 'toPost'));
+  }
+
+  /**
+   * The horn lesson's last beat (the first time the player sees the knights):
+   * `count` plain grunts come down the road of the squad called last, from
+   * `from` cm farther out, toward the castle, so they walk straight into it
+   * and the knights fight them. Ordinary goblins (not lesson goblins), so the
+   * knights take them on. Returns them (empty without a squad in the field).
+   */
+  sendGroupAt(count: number, from: number, gap: number): Goblin[] {
+    const squad = this.calledSquad;
+    if (!squad) return [];
+    const { road: index, along } = squad.anchor;
+    const road = this.network.roads[index];
+    // Toward the castle along this road: the end nearer the middle.
+    road.pointAt(0, 0, temp);
+    const r0 = Math.hypot(temp.x, temp.z);
+    road.pointAt(road.length, 0, temp);
+    const dir: 1 | -1 = Math.hypot(temp.x, temp.z) < r0 ? 1 : -1;
+    const sent: Goblin[] = [];
+    for (let i = 0; i < count; i++) {
+      const g = this.goblins.spawnBefore('grunt', index, dir, along, from + i * gap, ((i % 3) - 1) * 1.4);
+      if (g) sent.push(g);
+    }
+    return sent;
+  }
+
+  /** The squad's spot: its anchor on the road, the board point, and facing away from the castle along the road. */
+  private placeSquad(squad: Squad, target: RoadPoint): void {
+    squad.anchor.road = target.road;
+    squad.anchor.along = target.along;
+    const road = this.network.roads[target.road];
+    road.pointAt(target.along, 0, squad.post);
+    road.directionAt(target.along, temp);
+    temp.y = 0;
+    temp.normalize();
+    // Facing the way goblins come from: away from the castle.
+    if (temp.x * squad.post.x + temp.z * squad.post.z < 0) temp.negate();
+    squad.out.copy(temp);
+  }
+
+  /** A knight's own spot in its squad: two rows across the road, facing out. */
+  private placePost(t: Troop, squad: Squad, slot: number): void {
+    const out = squad.out;
+    const row = slot % 3;
+    const side = (row - 1) * KNIGHTS.holdSpread + (slot >= 3 ? KNIGHTS.holdSpread / 2 : 0);
+    const back = slot >= 3 ? KNIGHTS.holdBack : 0;
+    t.post.set(squad.post.x - out.z * side - out.x * back, 0, squad.post.z + out.x * side - out.z * back);
+    t.post.y = groundAt(t.post.x, t.post.z);
+  }
+
+  /** The horn at the squad limit: this squad marches along the roads to the new spot (a new crash there too). */
+  private moveSquad(squad: Squad, target: RoadPoint): void {
+    const legs = legsToPoint(this.network.graph, this.lengths, squad.anchor, target);
+    if (!legs) return;
+    this.placeSquad(squad, target);
+    squad.crashed = false;
+    // Knights of it still waiting at the gate go straight to the new spot.
+    const fromWall = legsToWall(this.network.graph, this.lengths, target);
+    if (fromWall) for (const w of this.waiting) if (w.squad === squad) w.legs = reverseLegs(fromWall);
+    let slot = 0;
+    for (const t of squad.members) {
+      if (t.mode === 'dead' || t.squad !== squad) continue;
+      // From where it is now: on its road if it is walking one, else the road spot nearest it.
+      const walking = (t.mode === 'charging' || t.mode === 'walking') && t.legs[t.leg];
+      const from = walking ? { road: t.legs[t.leg].road, along: t.distance } : this.roadPointNear(t.root.position.x, t.root.position.z).point;
+      const own = legsToPoint(this.network.graph, this.lengths, from, target) ?? legs;
+      this.release(t);
+      this.placePost(t, squad, slot++);
+      t.legs = own;
+      t.leg = 0;
+      t.distance = own[0].from;
+      t.outward = true;
+      t.arrived = false;
+      // First a few steps back onto the road where the walk starts, then the sprint.
+      t.mode = 'joining';
+      t.play('sprint', true, KNIGHTS.sprintClipSpeed);
+    }
+    mark('knight charge');
+    this.board.localToWorld(temp.copy(squad.post));
+    this.audio.play('swordClash', temp, 0.6, 0.2);
+  }
+
+  /** Debug "Send knights": what the horn does, aimed at the road spot nearest the point this far out at this board angle. */
+  charge(frontAngle: number, radius = 130): boolean {
+    const near = this.roadPointNear(polarX(radius, frontAngle), polarZ(radius, frontAngle));
+    return this.command(near.point);
   }
 
   /**
@@ -536,17 +737,21 @@ export class Troops {
       troop.root.position.set(polarX(GARRISON.radius, a), CASTLE.wallHeight, polarZ(GARRISON.radius, a));
       troop.face(polarX(1, a), polarZ(1, a));
     }
-    // A knight squad at the junction in front, the first with its banner.
-    const route = this.routeOut(0);
-    if (route.length === 0) return;
-    this.network.nodePosition(this.network.graph.endOf(route[route.length - 1]), temp);
-    for (let i = 0; i < knights; i++) {
-      const troop = this.obtain(FIELD_KINDS[i % FIELD_KINDS.length]);
-      if (!troop) return;
-      stand(troop);
-      troop.root.position.set(temp.x + (i - (knights - 1) / 2) * KNIGHTS.holdSpread, temp.y, temp.z);
-      troop.face(temp.x, temp.z);
-      if (i === 0) this.showBanner(troop);
+    // The knight squads (KNIGHTS.squadMax each) on roads around the board, each first knight with its banner.
+    const squads = Math.ceil(knights / KNIGHTS.squadMax);
+    for (let s = 0; s < squads; s++) {
+      const a = (s / squads) * Math.PI * 2;
+      const near = this.roadPointNear(polarX(130, a), polarZ(130, a)).point;
+      this.network.roads[near.road].pointAt(near.along, 0, temp);
+      const size = Math.min(KNIGHTS.squadMax, knights - s * KNIGHTS.squadMax);
+      for (let i = 0; i < size; i++) {
+        const troop = this.obtain(FIELD_KINDS[i % FIELD_KINDS.length]);
+        if (!troop) return;
+        stand(troop);
+        troop.root.position.set(temp.x + (i - (size - 1) / 2) * KNIGHTS.holdSpread, temp.y, temp.z);
+        troop.face(temp.x, temp.z);
+        if (i === 0) this.showBanner(troop);
+      }
     }
   }
 
@@ -562,22 +767,38 @@ export class Troops {
     return 'sword';
   }
 
+  private time = 0;
+
   update(dt: number): void {
     this.frame++;
+    this.time += dt;
     for (let i = this.waiting.length - 1; i >= 0; i--) {
       const w = this.waiting[i];
       w.wait -= dt;
       // At the cap the knight waits inside the castle.
       if (w.wait <= 0 && this.aliveCount < TROOPS.max && this.spawn(w)) this.waiting.splice(i, 1);
     }
+    if (this.homeTimer >= 0) {
+      this.homeTimer -= dt;
+      if (this.homeTimer < 0) this.allHome();
+    }
+    // Knights on each goblin now (at most KNIGHTS.maxPerGoblin join one fight).
+    this.fighters.clear();
+    for (const t of this.list) {
+      if (t.mode === 'fighting' && t.foe && !t.garrison) this.fighters.set(t.foe, (this.fighters.get(t.foe) ?? 0) + 1);
+    }
     const far2 = TROOPS.farAnimFrom * TROOPS.farAnimFrom;
     for (let i = 0; i < this.list.length; i++) {
       const t = this.list[i];
       if (t.mode === 'dead') continue;
+      if (t.ignoreTime > 0) t.ignoreTime -= dt;
       switch (t.mode) {
         case 'walking':
         case 'charging':
           this.walk(t, dt);
+          break;
+        case 'joining':
+          this.join(t, dt);
           break;
         case 'toPost':
           this.toPost(t, dt);
@@ -597,11 +818,16 @@ export class Troops {
       }
       // Knocked down or gone home this frame.
       if ((t.mode as TroopMode) === 'dead') continue;
+      if (!t.garrison) this.watchStuck(t, dt);
       t.animDt += dt;
       const p = t.root.position;
       if (p.x * p.x + p.z * p.z < far2 || (this.frame + i) % 2 === 0) {
         t.mixer.update(t.animDt);
         t.animDt = 0;
+      }
+      if (t.banner?.visible) {
+        this.holdBanner(t);
+        this.pulseBanner(t);
       }
     }
     // The wall garrison (src/units/garrison.ts) moves, shoots and fights on the rampart.
@@ -648,26 +874,29 @@ export class Troops {
     return this.obtain(kind);
   }
 
-  /** A knight bursts out of the gate and sprints down its road. */
+  /** A knight bursts out of the gate and sprints along the roads to its squad's spot. */
   private spawn(w: Waiting): boolean {
     const troop = this.obtain(w.kind);
     if (!troop) return false;
     this.prepare(troop);
-    troop.route = w.route;
+    w.squad.pending = Math.max(0, w.squad.pending - 1);
+    // A squad that broke or was cleared before this knight left: it stays in.
+    if (w.squad.broken || !this.squads.includes(w.squad)) {
+      troop.mode = 'dead';
+      troop.root.visible = false;
+      return true;
+    }
     troop.squad = w.squad;
+    w.squad.members.push(troop);
+    troop.legs = w.legs;
     troop.leg = 0;
+    troop.distance = w.legs[0].from;
     troop.outward = true;
     troop.mode = 'charging';
     troop.offset = this.rng.range(-TROOPS.laneJitter, TROOPS.laneJitter);
     troop.speed = TROOPS.speed * TROOP_KINDS[w.kind].speed * (1 + this.rng.range(-TROOPS.speedJitter, TROOPS.speedJitter));
-    // Its own spot at the junction: two rows across the road, facing out.
-    const out = w.squad.out;
-    const row = w.slot % 3;
-    const side = (row - 1) * KNIGHTS.holdSpread + (w.slot >= 3 ? KNIGHTS.holdSpread / 2 : 0);
-    const back = w.slot >= 3 ? KNIGHTS.holdBack : 0;
-    troop.post.set(w.squad.post.x - out.z * side - out.x * back, 0, w.squad.post.z + out.x * side - out.z * back);
-    const road = this.network.roads[troop.route[0].road];
-    troop.distance = troop.dir === 1 ? 0 : road.length;
+    this.placePost(troop, w.squad, w.slot);
+    const road = this.network.roads[w.legs[0].road];
     road.pointAt(troop.distance, troop.offset * troop.dir, troop.root.position);
     troop.play('sprint', true, KNIGHTS.sprintClipSpeed);
     // The first knight carries the squad's banner.
@@ -677,14 +906,39 @@ export class Troops {
     return true;
   }
 
+  /**
+   * The first knight carries the banner in its left hand (its shield is put
+   * away, the hand holds the pole). It used to stand beside the knight from
+   * the ground, which looked like it floated and clipped (headset test).
+   */
   private showBanner(t: Troop): void {
     if (!t.banner) {
       t.banner = knightBanner();
-      // Over its left shoulder, in soldier units (the model is TROOPS.height tall).
-      t.banner.position.set(0.9, 0, -0.6);
       t.root.add(t.banner);
     }
+    if (t.shieldName) {
+      t.shield = false;
+      setGear(t.gear, t.shieldName, false);
+    }
     t.banner.visible = true;
+    // Fresh matrices (it just moved to the gate), so the first frame is already in the hand.
+    t.root.updateMatrixWorld(true);
+    this.holdBanner(t);
+  }
+
+  /**
+   * Keeps the banner in the bearer's left hand: the pole goes through the
+   * fist (KNIGHTS.bannerGrip above its foot) and stays upright, whatever the
+   * arm does, the cloth trailing behind. The hand's point comes from the arm
+   * bone of the last drawn frame, like the gear (GEAR's left hand spot).
+   */
+  private holdBanner(t: Troop): void {
+    const banner = t.banner;
+    const bone = t.handBone;
+    if (!banner || !bone) return;
+    bone.localToWorld(handAt.set(LEFT_HAND_SPOT[0], LEFT_HAND_SPOT[1], LEFT_HAND_SPOT[2]));
+    t.root.worldToLocal(handAt);
+    banner.position.set(handAt.x, handAt.y - KNIGHTS.bannerGrip, handAt.z);
   }
 
   private walk(t: Troop, dt: number): void {
@@ -699,31 +953,64 @@ export class Troops {
       this.engage(t, close);
       return;
     }
-    const road = this.network.roads[t.route[t.leg].road];
+    const leg = t.legs[t.leg];
+    if (!leg) {
+      this.arrive(t);
+      return;
+    }
+    const road = this.network.roads[leg.road];
     const dir = t.dir;
     const sprint = t.mode === 'charging' ? KNIGHTS.sprintScale : 1;
     t.distance += t.speed * sprint * dt * dir;
+    const end = dir === 1 ? t.distance >= leg.to : t.distance <= leg.to;
+    if (end) t.distance = leg.to;
     road.pointAt(t.distance, t.offset * dir, t.root.position);
     road.directionAt(t.distance, temp);
     t.face(temp.x * dir, temp.z * dir);
-    if (dir === 1 ? t.distance < road.length : t.distance > 0) return;
-    // End of this road: the next one, or the junction they hold, or home.
-    if (t.outward) {
-      if (t.leg + 1 < t.route.length) this.startLeg(t, t.leg + 1);
-      else {
-        t.arrived = true;
-        this.goToPost(t);
-      }
-    } else if (t.leg > 0) {
-      this.startLeg(t, t.leg - 1);
-    } else {
-      this.remove(t, false);
-    }
+    if (!end) return;
+    // End of this stretch: the next one, or the spot (out) or the wall entry (home).
+    if (t.leg + 1 < t.legs.length) this.startLeg(t, t.leg + 1);
+    else this.arrive(t);
   }
 
   private startLeg(t: Troop, leg: number): void {
     t.leg = leg;
-    t.distance = t.dir === 1 ? 0 : this.network.roads[t.route[leg].road].length;
+    t.distance = t.legs[leg].from;
+  }
+
+  /** The end of a walk: out at the squad's spot, it takes its own place there; home, it goes back into the castle. */
+  private arrive(t: Troop): void {
+    if (!t.outward) {
+      this.remove(t, false);
+      return;
+    }
+    t.arrived = true;
+    this.goToPost(t);
+  }
+
+  /** The squad was moved: a few steps straight back onto the road where its new walk starts, then the sprint. */
+  private join(t: Troop, dt: number): void {
+    const leg = t.legs[0];
+    if (!leg) {
+      this.arrive(t);
+      return;
+    }
+    this.network.roads[leg.road].pointAt(leg.from, t.offset * t.dir, temp);
+    const p = t.root.position;
+    const dx = temp.x - p.x;
+    const dz = temp.z - p.z;
+    const d = Math.hypot(dx, dz);
+    const step = t.speed * KNIGHTS.sprintScale * dt;
+    if (d <= step) {
+      t.mode = t.outward ? 'charging' : 'walking';
+      t.leg = 0;
+      t.distance = leg.from;
+      return;
+    }
+    p.x += (dx / d) * step;
+    p.z += (dz / d) * step;
+    p.y = groundAt(p.x, p.z);
+    t.face(dx, dz);
   }
 
   /**
@@ -787,9 +1074,54 @@ export class Troops {
     p.y = groundAt(p.x, p.z);
   }
 
-  /** Holding the junction: fights anything that comes close. Runners hop past. */
+  /**
+   * Run-in-place watchdog (headset test: knights kept running on the spot).
+   * A field knight in a moving mode (walking up to a goblin, to its place, on
+   * the road) that has not moved for KNIGHTS.stuckTime is put where it was
+   * going, and the console says which mode it was in, to find the cause.
+   */
+  private watchStuck(t: Troop, dt: number): void {
+    const p = t.root.position;
+    const moving = t.mode === 'walking' || t.mode === 'charging' || t.mode === 'joining' || t.mode === 'toPost' || (t.mode === 'fighting' && t.closing);
+    const dx = p.x - t.lastAt.x;
+    const dz = p.z - t.lastAt.z;
+    t.lastAt.copy(p);
+    // dt is the units' time (a hit stop slows it), so a slowed knight builds up still time slowly too.
+    if (!moving || dx * dx + dz * dz > 1e-4 || dt <= 0) {
+      t.stillTime = 0;
+      return;
+    }
+    t.stillTime += dt;
+    if (t.stillTime < KNIGHTS.stuckTime) return;
+    t.stillTime = 0;
+    const foe = t.foe;
+    note(
+      `[troops] knight ran in place: ${t.mode}${t.closing ? ' closing' : ''}, arrived ${t.arrived}, leg ${t.leg}/${t.legs.length}` +
+        (foe ? `, goblin ${foe.mode} ${Math.hypot(foe.root.position.x - p.x, foe.root.position.z - p.z).toFixed(1)} cm` : ''),
+    );
+    if (t.mode === 'fighting') {
+      t.ignore = t.foe;
+      t.ignoreTime = KNIGHTS.ignoreTime;
+      this.release(t);
+    } else if (t.mode === 'toPost') {
+      p.copy(t.post);
+      t.mode = 'holding';
+      t.play('idle');
+    } else if (t.mode === 'joining') {
+      const leg = t.legs[0];
+      if (!leg) this.arrive(t);
+      else {
+        t.mode = t.outward ? 'charging' : 'walking';
+        t.leg = 0;
+        t.distance = leg.from;
+      }
+    } else if (t.leg + 1 < t.legs.length) this.startLeg(t, t.leg + 1);
+    else this.arrive(t);
+  }
+
+  /** Holding its spot: it goes for any goblin that comes within KNIGHTS.watchRadius of the spot. Runners hop past. */
   private hold(t: Troop): void {
-    const foe = this.findFoe(t, KNIGHTS.holdRange);
+    const foe = this.findFoe(t, KNIGHTS.watchRadius, t.post);
     if (foe) {
       this.engage(t, foe);
       return;
@@ -805,23 +1137,40 @@ export class Troops {
     }
   }
 
-  /** A field knight turns for home along its route (the wave is over). */
+  /** A field knight of a broken squad walks home along the roads to the nearest wall entry and goes in. */
   private marchHome(t: Troop): void {
-    if (t.garrison || t.route.length === 0) return;
-    if (t.arrived) {
-      // From the junction: back onto the last road, at its far end.
-      t.arrived = false;
-      t.leg = t.route.length - 1;
-      t.outward = false;
-      const road = this.network.roads[t.route[t.leg].road];
-      t.distance = t.route[t.leg].dir === 1 ? road.length : 0;
+    if (t.garrison) return;
+    this.release(t);
+    const p = t.root.position;
+    const near = this.roadPointNear(p.x, p.z).point;
+    const legs = legsToWall(this.network.graph, this.lengths, near);
+    if (!legs) {
+      this.remove(t, false);
+      return;
     }
+    t.legs = legs;
+    t.leg = 0;
+    t.distance = legs[0].from;
     t.outward = false;
-    if (t.mode !== 'cheering') {
-      t.mode = 'walking';
-      t.play('walk', true, 1.2);
-    }
+    t.arrived = false;
+    // First back onto the road, then the walk home.
+    t.mode = 'joining';
+    t.play('walk', true, 1.2);
     if (t.banner) t.banner.visible = false;
+  }
+
+  /** The squad the horn would move: its bearer's banner pulses bigger and brighter while the horn is aimed. */
+  private pulseBanner(t: Troop): void {
+    const banner = t.banner!;
+    const cloth = banner.userData.cloth as MeshBasicMaterial | undefined;
+    if (t.squad && t.squad === this.answering) {
+      const s = 1 + KNIGHTS.answerPulse * (0.5 + 0.5 * Math.sin(this.time * KNIGHTS.answerPulseSpeed));
+      banner.scale.setScalar(s);
+      cloth?.color.setHex(KNIGHTS.answerColor);
+    } else if (banner.scale.x !== 1) {
+      banner.scale.setScalar(1);
+      cloth?.color.setHex(KNIGHTS.bannerColor);
+    }
   }
 
   /** After a cheer: a field knight goes back to what it was doing. */
@@ -830,21 +1179,44 @@ export class Troops {
       t.mode = 'guarding';
       t.play('idle');
     } else if (t.outward && t.arrived) this.goToPost(t);
-    else {
-      t.mode = t.outward && t.squad && !t.squad.crashed ? 'charging' : 'walking';
+    else if (t.outward) {
+      // Still on its way: back onto the road where it left it, then on with the sprint.
+      t.mode = 'joining';
+      t.legs = t.legs.slice(t.leg);
+      if (t.legs.length > 0) t.legs[0] = { ...t.legs[0], from: t.distance };
+      t.leg = 0;
+      t.play('sprint', true, KNIGHTS.sprintClipSpeed);
+    } else {
+      t.mode = 'walking';
       t.play('walk', true, 1.2);
     }
   }
 
-  /** The nearest goblin within `range` on the field that can be fought. Runners rush past, lesson goblins are left alone. */
-  private findFoe(t: Troop, range: number): Goblin | null {
-    const p = t.root.position;
+  /**
+   * The nearest goblin within `range` of a point (the knight, or its spot)
+   * on the field that can be fought, that fewer than KNIGHTS.maxPerGoblin
+   * knights are already fighting. Runners rush past, lesson goblins are left alone.
+   */
+  private findFoe(t: Troop, range: number, from: Vector3 = t.root.position): Goblin | null {
+    const p = from;
     let best: Goblin | null = null;
     let bestD = range * range;
+    // A knight at its spot only takes goblins inside its leash: fight() lets go of any farther one, so
+    // taking it made an endless loop (headset test: a knight walking back to its spot met a goblin past
+    // the leash, started a fight, let go the same frame, and again, frozen mid-run, the goblin frozen too).
+    const leashed = t.arrived && !!t.squad;
+    const leash2 = KNIGHTS.leash * KNIGHTS.leash;
     for (const g of this.goblins.list) {
       if (g.type === 'runner' || !FIGHTABLE.has(g.mode) || this.goblins.isLesson(g)) continue;
+      if (g === t.ignore && t.ignoreTime > 0) continue;
+      if (g !== t.foe && (this.fighters.get(g) ?? 0) >= KNIGHTS.maxPerGoblin) continue;
       const q = g.root.position;
       if (q.x * q.x + q.z * q.z < CASTLE.wallOut * CASTLE.wallOut) continue;
+      if (leashed) {
+        const lx = q.x - t.post.x;
+        const lz = q.z - t.post.z;
+        if (lx * lx + lz * lz > leash2) continue;
+      }
       const dx = q.x - p.x;
       const dz = q.z - p.z;
       const d = dx * dx + dz * dz;
@@ -859,6 +1231,9 @@ export class Troops {
   private engage(t: Troop, g: Goblin): void {
     t.mode = 'fighting';
     t.foe = g;
+    t.closing = false;
+    t.closeTime = 0;
+    this.fighters.set(g, (this.fighters.get(g) ?? 0) + 1);
     t.strikeTimer = this.rng.range(0.3, 0.9);
     t.play('idle');
     const foe = g.foe as Troop | null;
@@ -868,6 +1243,9 @@ export class Troops {
 
   /** Stops fighting and goes on: a knight back to its spot or on its way, the garrison back on guard. */
   release(t: Troop): void {
+    // The goblin carries on at once if this knight was the one it fought (no frozen goblin left behind).
+    const g = t.foe;
+    if (g && g.mode === 'fighting' && g.foe === t) this.goblins.endFight(g);
     t.foe = null;
     if (t.mode === 'fighting' || t.mode === 'cheering') this.afterCheer(t);
   }
@@ -892,6 +1270,13 @@ export class Troops {
       this.particles.burst(temp, ARCHER_DUST, 3, 0.08);
       return;
     }
+    // An arrow is weaker than a blade: GARRISON.arrowsPerHit arrows make one hit. Until then it flinches.
+    if (++g.arrowWounds < GARRISON.arrowsPerHit) {
+      this.goblins.flash(g);
+      this.audio.play('pebbleHit', temp, 0.4, 0.08);
+      return;
+    }
+    g.arrowWounds = 0;
     if (this.goblins.armor(g, arrow.from.x, arrow.from.z)) return;
     this.goblins.worldPosition(g, temp);
     this.particles.burst(temp, TROOPS.poofColors, 8);
@@ -908,6 +1293,45 @@ export class Troops {
     }
     const p = t.root.position;
     const q = g.root.position;
+    // Never farther than the leash from its spot: it lets go and walks back.
+    if (t.arrived && t.squad) {
+      const lx = q.x - t.post.x;
+      const lz = q.z - t.post.z;
+      if (lx * lx + lz * lz > KNIGHTS.leash * KNIGHTS.leash) {
+        this.release(t);
+        return;
+      }
+    }
+    // Walks up to it if it is a step away (a fight joined from the spot), then fights.
+    const dx = q.x - p.x;
+    const dz = q.z - p.z;
+    const gap = Math.hypot(dx, dz);
+    const reach = TROOP_KINDS[t.kind].engageRange * 0.6;
+    if (gap > reach) {
+      // Safety net (headset test: knights ran in place next to a goblin, neither fighting): one that does not
+      // reach its goblin in time gives up on it for a while, and the goblin carries on.
+      t.closeTime += dt;
+      if (t.closeTime > KNIGHTS.closeGiveUp) {
+        note(`[troops] knight could not reach its goblin: gap ${gap.toFixed(1)} cm, reach ${reach.toFixed(1)}, goblin ${g.mode}, its foe ${g.foe === t ? 'this knight' : g.foe ? 'another' : 'none'}`);
+        t.ignore = g;
+        t.ignoreTime = KNIGHTS.ignoreTime;
+        this.release(t);
+        return;
+      }
+      const step = Math.min(gap - reach, t.speed * KNIGHTS.postSpeedScale * dt);
+      p.x += (dx / gap) * step;
+      p.z += (dz / gap) * step;
+      p.y = groundAt(p.x, p.z);
+      if (!t.closing) t.play('walk', true, 1.4);
+      t.closing = true;
+      t.face(dx, dz);
+      return;
+    }
+    t.closeTime = 0;
+    if (t.closing) {
+      t.closing = false;
+      t.play('idle');
+    }
     t.face(q.x - p.x, q.z - p.z);
     // The goblin's foe was knocked down: this soldier takes its place.
     const foe = g.foe as Troop | null;
@@ -930,7 +1354,8 @@ export class Troops {
     t.attackRight = !t.attackRight;
     t.play(t.attackRight ? 'attack-melee-right' : 'attack-melee-left', false);
     this.clash(p);
-    if (this.rng.next() >= TROOPS.strikeChance) return;
+    // Field knights land fewer blows than the guards (KNIGHTS.strikeChance), so a squad slows a group rather than wiping it.
+    if (this.rng.next() >= KNIGHTS.strikeChance) return;
     // A helmet takes the blow: it flies off, the goblin reels back, and the fight goes on.
     if (this.goblins.armor(g, p.x, p.z)) {
       this.release(t);
@@ -986,9 +1411,32 @@ export class Troops {
     t.foe = null;
     t.mode = 'dead';
     t.garrison = false;
+    const carried = !!t.banner?.visible;
     if (t.banner) t.banner.visible = false;
     // Soldiers, like goblins, keep their poof (no shrink).
     t.root.visible = false;
+    const squad = t.squad;
+    t.squad = null;
+    if (squad && knocked) this.lost(squad, carried);
+  }
+
+  /**
+   * A knight of a squad went down: another takes up its banner, and a squad
+   * down to KNIGHTS.breakAt knights breaks: the last of it march home and
+   * its place is free for a new squad.
+   */
+  private lost(squad: Squad, banner: boolean): void {
+    const left = squad.members.filter((m) => m.mode !== 'dead' && m.squad === squad);
+    if (banner && left.length > 0) this.showBanner(left[0]);
+    if (squad.broken || left.length + squad.pending > KNIGHTS.breakAt) return;
+    squad.broken = true;
+    const i = this.squads.indexOf(squad);
+    if (i >= 0) this.squads.splice(i, 1);
+    if (this.answering === squad) this.answering = null;
+    for (const m of left) {
+      m.squad = null;
+      this.marchHome(m);
+    }
   }
 }
 

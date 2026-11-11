@@ -87,7 +87,7 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
   const settingsCenter = uiCenterY(S.height, P.tiltDeg);
   const lowestRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.firstRowY - 4 * S.rowGap, S.sliderX + S.sliderLength / 2);
   const backButton = onPanel(P.radius, settingsCenter, P.tiltDeg, S.backAt[1], S.backAt[0]);
-  const tabRow = onPanel(P.radius, settingsCenter, P.tiltDeg, settingsTabRowY(), S.tabX[S.tabX.length - 1]);
+  const tabRow = onPanel(P.radius, settingsCenter, P.tiltDeg, settingsTabRowY(), Math.max(...S.tabX.map(Math.abs)));
   return [
     { name: 'ring handle', radius: HANDLES.radius, y: HANDLES.ringY },
     { name: 'slingshot handle', radius: TOOL_SPOTS.slingshot.radius, y: top + SLINGSHOT.handleHeight / 2 },
@@ -95,7 +95,7 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'swatter grip', radius: TOOL_SPOTS.leftSide.radius, y: top + (SWATTER.gripFrom + SWATTER.gripTo) / 2 },
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
     { name: 'bell handle', radius: TOOL_SPOTS.leftMiddle.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
-    { name: 'horn grip', radius: TOOL_SPOTS.rightSide.radius, y: top + (HORN.gripFrom + HORN.gripTo) / 2 },
+    { name: 'horn grip', radius: TOOL_SPOTS.rightSide.radius, y: top + HORN.restLift + (HORN.gripFrom + HORN.gripTo) / 2 },
     // At the pause button's height, so like it a little past the sweet spot.
     { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY, rare: true },
     // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.
@@ -111,6 +111,7 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
         E.width / 2 - E.settingsRadius * POKE.rimScale - E.buttonMargin,
       ),
     },
+    // Four in a row: Resume, Settings, Restart, Skip tutorial.
     { name: 'pause panel middle buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, P.buttonGap / 2) },
     { name: 'pause panel outer buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, 1.5 * P.buttonGap) },
     { name: 'settings lowest row (slider end)', ...lowestRow, rare: true },

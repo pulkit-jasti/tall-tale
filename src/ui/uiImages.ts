@@ -187,7 +187,7 @@ export function iconTextureSource(name: UiImageName, tint?: string): HTMLCanvasE
   return image ? tintCanvas(image, tint) : null;
 }
 
-export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach' | 'minus' | 'plus' | 'sound' | 'muted' | 'settings' | 'back' | 'access';
+export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach' | 'minus' | 'plus' | 'sound' | 'muted' | 'settings' | 'back' | 'access' | 'skip';
 
 /**
  * A crisp button icon drawn in code (256 px), in the same look as the arrows:
@@ -311,6 +311,22 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.lineTo(-s * 0.24, s * 0.34);
     c.closePath();
     c.lineWidth = s * 0.06;
+    c.fill();
+    c.stroke();
+  } else if (icon === 'skip') {
+    // Skip: two play triangles and a bar after them (skip to the end).
+    c.lineWidth = s * 0.05;
+    for (const x of [-s * 0.34, -s * 0.06]) {
+      c.beginPath();
+      c.moveTo(x + s * 0.26, 0);
+      c.lineTo(x, -s * 0.24);
+      c.lineTo(x, s * 0.24);
+      c.closePath();
+      c.fill();
+      c.stroke();
+    }
+    c.beginPath();
+    c.roundRect(s * 0.23, -s * 0.24, s * 0.09, s * 0.48, s * 0.02);
     c.fill();
     c.stroke();
   } else if (icon === 'pause') {

@@ -32,8 +32,8 @@ export function nextRecruit(archers: number, guards: number, wantArchers: number
 
 /** Arc distance along the rampart between two board angles (cm, radius `radius`). */
 export function arcDistance(a: number, b: number, radius: number): number {
-  let d = b - a;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return Math.abs(d) * radius;
+  // No loop: a bad angle can never hang the game.
+  const d = b - a;
+  if (!Number.isFinite(d)) return Infinity;
+  return Math.abs(d - Math.round(d / (Math.PI * 2)) * Math.PI * 2) * radius;
 }

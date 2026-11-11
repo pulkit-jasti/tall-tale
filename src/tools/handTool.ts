@@ -127,6 +127,14 @@ export abstract class HandTool {
 
   /** The tool glows (pulsing) until grabbed: a new tool, or a hint. */
   beckon = false;
+  /**
+   * Another tool's lesson (or a lesson about something else) runs: this one
+   * is locked by the lesson. It does not glow (no beckon, no Ready glow, no
+   * ring flash), it is dimmed, and a grab only buzzes, so the player cannot
+   * break the lesson with another tool (headset tests: tools blinked during
+   * other lessons, and using them could break a lesson).
+   */
+  quiet = false;
   /** Called with how many enemies a use hit (the tutorial counts them). */
   onUse: (count: number) => void = () => {};
   /** Called on each grab (the tutorial's grab lessons wait for it). */
@@ -179,7 +187,7 @@ export abstract class HandTool {
 
   /** True when the tool can be used right now: ready, or its use window is open. */
   get usable(): boolean {
-    return !this.tiedDown && chargeUsable(this.use);
+    return !this.tiedDown && !this.quiet && chargeUsable(this.use);
   }
 
   /** True while its use window is open. */
@@ -312,7 +320,7 @@ export abstract class HandTool {
     const share = using ? this.use.useLeft / this.useSeconds : this.use.charge;
     const segments = Math.max(0, Math.min(R.segments, Math.ceil(share * R.segments)));
     fill.geometry.setDrawRange(0, segments * 6);
-    this.ringFlash = Math.max(0, this.ringFlash - dt);
+    this.ringFlash = this.quiet ? 0 : Math.max(0, this.ringFlash - dt);
     material.color.setHex(this.ringFlash > 0 ? R.flashColor : using ? R.useColor : R.chargeColor);
   }
 
@@ -567,6 +575,8 @@ export abstract class HandTool {
     if (this.active && this.use.useLeft < TOOLS.warnTime && this.useSeconds > TOOLS.warnTime && Math.sin(this.time * 18) > 0) state = 'idle';
     // A new tool glows until grabbed. A hand near it shows Ready instead.
     if (this.beckon && state === 'idle' && Math.sin(this.time * 6) > 0) state = 'ready';
+    // Quiet during another lesson: only held shows.
+    if (this.quiet && !this.holder) state = 'idle';
     if (state !== this.touch) {
       this.touch = state;
       applyTouchState(this.materials, state);
