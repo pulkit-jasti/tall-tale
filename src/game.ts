@@ -322,7 +322,7 @@ export class GameSystem extends createSystem({}) {
       setup: () => {
         // The army and flying enemies stand on the board for the whole test.
         this.goblins.cap = Math.max(this.goblins.cap, GOBLIN_RULES.maxGoblins);
-        this.troops.standForTest(STRESS_TEST.troops);
+        this.troops.standForTest(STRESS_TEST.garrison, STRESS_TEST.knights);
         this.balloons.hold = true;
         for (let i = 0; i < STRESS_TEST.balloons; i++) this.balloons.spawn(this.stage.spin + degToRad(60 + i * 120), 90);
         return this.troops.aliveCount + this.goblins.aliveCount;

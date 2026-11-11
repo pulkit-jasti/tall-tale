@@ -3011,11 +3011,14 @@ export const STRESS_TEST = {
   /** Stop here even if it still passes. */
   maxUnits: 120,
   /**
-   * Standing for the whole test since build step 7: this many soldiers (all
-   * three kinds, walking on the spot) and balloons with riders (hovering),
-   * so the budget counts the army and the flying enemies too.
+   * Standing for the whole test (v2): the full wall garrison on the rampart
+   * (GARRISON, 2 guards and 4 archers) and one knight squad at the junction
+   * in front (KNIGHTS.squadMax), all walking on the spot so they cost what
+   * moving soldiers cost but never fight, plus balloons with riders
+   * (hovering), so the budget counts the army and the flying enemies too.
    */
-  troops: 8,
+  garrison: 6,
+  knights: 5,
   balloons: 2,
 };
 

@@ -15,7 +15,8 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 - Details, open items and the build order are in [docs/mvp.md](docs/mvp.md). Frame rate results are in [docs/performance.md](docs/performance.md).
 - **Day and night is built** on the branch `feat/day-night-cycle` (2026-11-05, tested on the headset 2026-11-10, [docs/mvp.md](docs/mvp.md#day-and-night-cycle-started)): four times of day that follow the waves, a dark night with stars, a moon and a ringed planet, glowing windows, torches and lanterns, and a bright edge on the units so goblins stay easy to spot. Stylized hands are a far future idea. The MVP has a hand-made tutorial map. The level generator comes later.
 - **The same branch grew much more** (2026-11-05 to 2026-11-10, tested on the headset 2026-11-10, typecheck, build and tests not run yet, nothing committed, [docs/mvp.md](docs/mvp.md#more-on-the-same-branch-sound-ui-and-a-livelier-world)): real sounds from Freesound and menu and battle music, sound placement fixes (mono, a muffle behind the head, soft ends on long sounds), a pause button in front instead of on the wrist, a settings page with Sound and Access tabs, sliders and a sliding switch, the bell as a choice in place of the megaphone, our own UI library, menus centered in front of the eyes, one 3D arrow as the only tutorial marker, a throw lesson, farther and bigger goblin camps, story scenes, villagers, road torches, a rolling pebble, and tutorial fixes (reach check, pepper, balloons).
-- The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
+- **v2 run 1 is built** on the branch `feat/v2` (2026-11-10, build only, not tested on the headset yet, typecheck and tests not run, [docs/v2-plan.md](docs/v2-plan.md)): gear with real effects (helmets and shields as extra hits, spears and swords, goblin shields and swords), every goblin climbs (bash, climb, rampart, courtyard), free tools with use windows and recharge rings (eating fills them; the food jar and price tags are gone), the pepper disarms, the bell knocks the rampart down, the war horn replaces the megaphone and calls field knights who charge and hold a junction, and a wall garrison of 4 archers and 2 guards. Next: the headset check, then run 2 (the tutorial rebuild, levels, saving, menus).
+- The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win (and [docs/v2-plan.md](docs/v2-plan.md) wins over every other doc).
 
 ---
 
@@ -97,17 +98,18 @@ Each zone is the backup for the one before it.
 All actions are simple grab, pull, shake, poke and release. No complex gestures. Details in [docs/giant-tools.md](docs/giant-tools.md) and [docs/controls-and-ui.md](docs/controls-and-ui.md).
 
 - **Grab and eat:** pinch a tiny goblin and hold it near your mouth for a moment. Your bare hands only grab and eat. No smashing, and a toss does no damage.
-- **Slingshot (free):** pull back and release to shoot pebbles. Precise, middle and far. A pebble thrown by hand only knocks a goblin back. Load a goblin instead of a pebble for a stronger shot that knocks over the ones around it, at the cost of a meal.
-- **Fly swatter (4 food):** about 10 seconds of swatting groups near the wall.
-- **Pepper shaker (3 food):** enemies sneeze off their gear and become "seasoned" (worth more food).
-- **Megaphone or bell (6 food):** scream into the megaphone, or shake the bell, to stun every enemy. Both sit on the same platform, so voice is never needed.
+- **Slingshot (free, always):** pull back and release to shoot pebbles. Precise, middle and far. A pebble thrown by hand only knocks a goblin back. Load a goblin instead of a pebble for a stronger shot that knocks over the ones around it, at the cost of a meal.
+- **Fly swatter (10 s, then 20 s recharge):** swatting groups near the wall and on the rampart.
+- **Pepper shaker (8 s, then 20 s):** goblins in a small area lose their weapon, helmet and shield, sneeze and become "seasoned".
+- **Bell (one stun, then 35 s):** shake it to stun every goblin and knock the ones on the rampart back down.
+- **War horn (one call, then 30 s):** hold it at your mouth (or blow into the mic) to send a squad of knights charging down the road in front of you.
 - **Move the board:** grab the ring handle in front of you. Pull sideways to spin the board, or up or down to raise or lower it. Each grab locks to one direction.
 
-### Food
+### Tools and eating (v2)
 
-- One food jar powers all tools except the slingshot. Eating fills it. It never drains on its own.
-- Food comes from climbers (goblins that climb the wall and pop up in reach) and intruders in the courtyard.
-- No loadout and no unlocks after the tutorial. Every tool is always on its platform.
+- Tools are free, with a use window and then a recharge; a ring on each platform shows it. Eating a goblin fills every recharging ring a little (a seasoned one twice as much).
+- Every goblin climbs the wall, so there is always something in reach to eat. Your army: a wall garrison of archers and guards, and knights that only come when you blow the horn.
+- Run 2 adds a loadout (the slingshot plus 3 tools) and unlocks in a 25 level campaign ([docs/v2-plan.md](docs/v2-plan.md)).
 
 ### Win and lose
 
@@ -116,9 +118,9 @@ All actions are simple grab, pull, shake, poke and release. No complex gestures.
 
 ### Voice (optional, never required)
 
-- **Megaphone:** uses only mic loudness, no speech recognition. Mic permission is asked on the start page.
+- **War horn (v2, replaces the megaphone):** blowing into the mic uses only its loudness, no speech recognition. Mic permission is asked on the start page.
 - **Voice troop orders:** later, not in the MVP.
-- **Hand alternatives are required** for every voice action. The bell sits next to the megaphone and does the same thing. This keeps the game hands-only and helps accessibility.
+- **Hand alternatives are required** for every voice action. The horn also blows when simply held at the mouth for a moment, and a "Quiet horn" setting never listens to the mic. This keeps the game hands-only and helps accessibility.
 
 ### Surround play and comfort
 
@@ -264,7 +266,7 @@ The MVP is the submission. Endless, Daily Battle and the other modes are bonus i
 ## Open questions
 
 - Subtitle for the name (to make it searchable), for example *Tall Tale: The Giant's Keep*
-- Castle machines: keep or cut, after the first playtest ([docs/castle-machines.md](docs/castle-machines.md))
+- Castle machines: cut in v2 ([docs/castle-machines.md](docs/castle-machines.md) stays as history)
 - Endless scoring and difficulty curve ([docs/modes-and-progression.md](docs/modes-and-progression.md))
 - Final food numbers and climber counts (tune in playtests)
 - Goblin walk speeds now that the camps are farther out (a grunt takes about 60 s to reach the wall instead of about 33 s)
@@ -332,6 +334,12 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 56. **A megaphone that went deaf at random:** the mic chain is now rebuilt when it hears perfect silence, is muted, or the audio was paused.
 50. **Menus placed by hand-picked heights:** the settings page grew too tall and its low rows were hard to touch. Every menu now gets its height from one rule: right in front of the eyes, never higher than 2 cm above them or lower than 30 cm below (`UI_ZONE`).
 51. **UI code written again in each panel:** buttons on posts, button rows, panel text, canvas textures and draw-on-top code were copied around. It all lives in our own UI library now (`src/ui/kit/`), and new UI must be built from it.
+57. **Food currency, food jar and price tags (v2):** one favorite tool got used all the time, and the jar was one more thing to read. Tools are free now, with a use window and a recharge ring on the platform; eating fills every ring a little ([docs/v2-plan.md](docs/v2-plan.md)).
+58. **Climbers as their own type (v2):** goblins could hide behind the wall, and there was little to eat. Every goblin now bashes, climbs, runs on the rampart and jumps in, so the order of threats is always clear.
+59. **Spears for looks, helmets one hit, big hits through armor (v2):** helmet and shield are each one extra hit for every hit (triggers ignore armor), spears double wall damage, swords strike soldiers faster, and the pepper strips it all.
+60. **The megaphone scream and the bell as its voice-free twin (v2):** the bell is now the only stun and also knocks the rampart down; the new war horn calls the knights, held at the mouth or blown into the mic, so voice is still never needed.
+61. **Squads walking out every 14 s to the camp and back, with field archers (v2):** they looked aimless. A wall garrison (4 archers, 2 guards) defends the rampart, and field knights only come when the horn calls them, charge down the road in front and hold its first junction.
+62. **Castle machines on hold (v2):** dropped, no time to design, add and balance them. Only the giant's hand tools.
 
 ---
 

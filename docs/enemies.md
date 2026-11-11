@@ -1,8 +1,8 @@
 # Enemies
 
-Status: first set decided. Numbers and behavior details will be tuned in playtests.
+Status: first set decided, v2 run 1 built (2026-11-10, [v2-plan.md](v2-plan.md)): every goblin climbs, gear has real effects. Numbers and behavior details will be tuned in playtests.
 
-Back to [GDD index](GDD.md). Related: [Giant tools and food](giant-tools.md).
+Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md).
 
 ---
 
@@ -29,9 +29,22 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Toughness (no health bars)
 
 - **Basic enemies die in one hit.**
-- **Tough enemies wear their health as gear** that breaks off: helmet (one extra hit), shield (blocks from the front until broken), balloon (riders fall when popped).
+- **Tough enemies wear their health as gear** that breaks off (v2, `src/rules/gear.ts`): **helmet** one extra hit, **shield** one extra hit, counted separately, so helmet and shield take 3 hits. This counts for every hit, the swatter too; only triggers (keg, boulder, tree) ignore armor. Balloon: riders fall when popped.
+- **Weapons:** a **spear** doubles wall damage, a **sword** strikes soldiers faster in a fight. **Pepper strips everything** (weapon, helmet, shield).
+- Gear mix (`GOBLIN_GEAR`): grunts carry a spear (40%), a sword (25%) or nothing, helmets from wave 3 (35%), shields from wave 4 (30%). Runners stay bare handed. Kenney's sword and round shield models, merged into the goblin's skinned mesh like the spear and helmet (`src/units/gear.ts`).
 - No health bars on regular enemies. A boss may get the only big bar in the game (boss is not designed yet).
 - Breaking and death effects are described in [giant-tools.md, section 5](giant-tools.md#5-how-tools-hit-enemies).
+
+### Every goblin climbs (v2)
+
+There is no separate climber type any more. Every goblin that reaches the wall goes through four steps, each more dangerous than the last (`src/rules/climb.ts`, `GOBLIN_RULES`):
+
+1. **Bash the wall** for about 5 s (plus or minus 20%), on a stretch between two towers: wall damage and the red wall flash.
+2. **Climb:** grunts 2 cm/s, runners 4 cm/s, a helmet slows it to 1.5 cm/s (`GoblinStats.climbSpeed`, `helmetClimbSpeed`). The wall is 6 cm high.
+3. **Run around on the rampart** for about 8 s: no castle damage, but they **attack the wall garrison** ([core-loop.md](core-loop.md#2-troops)). A giggle (`goblinCackle`) plays where one pops up, a sound cue for where to look.
+4. **Jump into the courtyard** as intruders (the biggest damage).
+
+So the player always knows the order: deal with the ones on top first. Goblins can no longer hide behind the wall, there is much more to eat, and armored goblins come close enough for the pepper. Variety comes from runners, gear and balloons. The red wall flash and the red threat arrow stay, as helpers. Goblins walk faster too (grunts 7.5 cm/s, runners 15).
 
 ---
 
@@ -40,14 +53,14 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Grunt goblin
 
 - **Question:** "Can you handle numbers?"
-- **Behavior:** walks the road, fights troops, then stops at the wall and hits it (it does not climb).
-- **Toughness:** one hit. Can wear a helmet for one extra hit (built in step 7: from wave 3, against pebbles, arrows and soldiers. Big hits go through).
-- **Best answer:** fly swatter (groups).
+- **Behavior:** walks the road, fights troops, bashes the wall, then climbs (v2, see above).
+- **Toughness:** one hit. A helmet or a shield is one extra hit each, against every hit but triggers (v2).
+- **Best answer:** fly swatter (groups), the horn's knights on its road.
 
 ### Shield goblin
 
 - **Question:** "How do you get past a shield?"
-- **Behavior:** carries a big round front shield that blocks hits from the front. Often walks in a wall formation.
+- **Behavior:** carries a big round front shield that blocks hits from the front. Often walks in a wall formation. (v2 run 1: grunts already carry a round shield for one extra hit; the front-blocking shield goblin is not built.)
 - **Toughness:** shield must be broken or stripped first, then one hit.
 - **Best answer:** pepper shaker (strips a whole group at once).
 - **Also works:** slingshot (breaks one shield at a time, slow), grabbing by hand (shields do not stop hands), catapult (hits from above).
@@ -55,10 +68,10 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Runner imps
 
 - **Question:** "Can you react fast?"
-- **Behavior:** tiny, fast, in big swarms. Rush past troops toward the wall, then hit it (they do not climb).
+- **Behavior:** tiny, fast, in big swarms. Rush past troops toward the wall (they dodge past the horn's knights with a quick hop), bash it, then climb fast (4 cm/s).
 - **Toughness:** one hit.
 - **Best answer:** fly swatter.
-- **Also works:** arrow volley, megaphone, hands when they reach the wall.
+- **Also works:** the garrison's arrows, the bell, hands when they reach the rampart.
 - **Weak:** slingshot (too small and fast).
 
 ### Balloon riders
@@ -68,18 +81,16 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 - **Toughness:** pop the balloon and the riders fall.
 - **In the MVP (build step 7):** only the goblin drop into the courtyard (no bombs, since there are no machines or carts yet). First seen in wave 4. Details in [mvp.md](mvp.md#build-order). Built: two grunts stand in each balloon's basket (`BALLOONS`, `src/units/balloons.ts`). A popped balloon's riders fall and poof. Riders can be pinched off, swatted or knocked out one by one, and a stun stops the balloon in the air.
 - **Best answer:** slingshot.
-- **Also works:** grab or swat when close, ballista, megaphone.
+- **Also works:** grab or swat when close, the bell (a stunned balloon stops).
 - **Weak:** pepper.
 
-### Climbers
+### Climbers (no longer their own type, v2)
 
-- **Question:** "Are you paying attention?"
-- **Behavior:** the only enemy that climbs the wall. They climb unseen and suddenly pop up on the rampart, in reach. Up there they run about, causing chaos (since step 6): short dashes back and forth along the wall top between the two towers, with quick stops (`GOBLIN_RULES.rampartDash*`). If ignored for a few seconds, they jump down into the courtyard and become intruders. Tutorial climbers that wait for a lesson stand still.
-- **Toughness:** one hit.
-- **Best answer:** hands (grab and eat). They are also a main food source.
-- **Also works:** swatter, pepper (seasoned for eating), cauldron.
+- Every goblin climbs now (section 2). On the rampart they run about, causing chaos: short dashes back and forth along the wall top between the two towers, with quick stops (`GOBLIN_RULES.rampartDash*`), and they stop to fight a garrison soldier next to them. If ignored for about 8 s, they jump down into the courtyard and become intruders. Tutorial lesson goblins that wait stand still.
+- **Best answer on the rampart:** hands (grab and eat, which also fills the tool rings), the bell (knocks them all back down), the guards.
+- **Also works:** swatter, pepper (disarmed and seasoned for eating).
 - **Weak:** slingshot (too close).
-- Every wave includes some climbers. In wave 1, one is scripted to climb right in front of the player so the eating moment happens in the first minute.
+- Before wave 1, one is scripted to climb right in front of the player so the eating moment happens in the first minute (`Goblins.spawnClimberAt`, a bare handed grunt).
 
 ### Boom goblin
 
@@ -107,15 +118,19 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 
 ★ = best, ✓ = works, ✗ = weak or does not work
 
-| Enemy | Slingshot | Swatter | Pepper | Megaphone / bell | Hands | Machines |
+v2: castle machines are dropped; the horn (knights) and the bell take their columns.
+
+| Enemy | Slingshot | Swatter | Pepper | Bell | Horn (knights) | Hands |
 |---|---|---|---|---|---|---|
-| Grunt | ✓ | ★ | ✓ | ✓ | ✓ | ✓ |
-| Shield | ✓ (slow) | ✗ | ★ | ✓ | ✓ | ✓ (catapult) |
-| Runners | ✗ | ★ | ✓ | ✓ | ✓ (at the wall) | ✓ (arrow volley) |
-| Balloons | ★ | ✓ (when close) | ✗ | ✓ | ✓ (when close) | ✓ (ballista) |
-| Climbers | ✗ | ✓ | ✓ | ✓ | ★ | ✓ (cauldron) |
-| Boom goblin | ★ | ✗ (explodes at the wall) | ✓ | ✓ | ✓ (at the wall) | ✓ |
-| Tinker | ★ | ✓ (when close) | ✓ | ✓ | ✓ (when close) | ✓ (catapult) |
+| Grunt | ✓ | ★ | ✓ | ✓ | ★ (a group on a road) | ✓ |
+| Armored grunt (helmet, shield) | ✓ (slow) | ✓ (3 swats) | ★ | ✓ | ✓ | ✓ |
+| Runners | ✗ | ★ | ✓ | ✓ | ✗ (they hop past) | ✓ (on the rampart) |
+| Balloons | ★ | ✓ (when close) | ✗ | ✓ | ✗ | ✓ (when close) |
+| Goblins on the rampart | ✗ | ✓ | ✓ | ★ (knocked down) | ✗ | ★ |
+| Boom goblin | ★ | ✗ (explodes at the wall) | ✓ | ✓ | ✓ | ✓ (at the wall) |
+| Tinker | ★ | ✓ (when close) | ✓ | ✓ | ✓ | ✓ (when close) |
+
+The answer to each threat: a big group on a road is the horn; a crowded wall is the bell, pepper or hands.
 
 ---
 
@@ -131,7 +146,7 @@ Most of the variety and strategy comes from mixing enemy types in one wave, not 
 | Boom goblins inside a group | Shoot the barrel early and the group blows itself up. Wait too long and they reach your troops. |
 | Boom goblin near a powder keg or bridge | One shot sets off a chain reaction. |
 | Attacks from two sides at once | Where do you turn first? |
-| Climbers during a big push | Deal with the wall top, or the main group? |
+| Goblins on the rampart during a big push | Deal with the wall top (they attack your archers), or the main group? |
 
 ### Other dials per wave
 
@@ -146,7 +161,7 @@ Most of the variety and strategy comes from mixing enemy types in one wave, not 
 
 Enemies only get inside through mistakes:
 - balloons dropping goblins into the courtyard
-- climbers the player missed
+- goblins on the rampart the player missed (every goblin climbs, v2)
 
 What happens:
 - **Workers panic.** The people inside the castle are workers, not troops, so they cannot fight. They drop what they are carrying and hide in buildings. Supply stops: carts freeze, machines are not reloaded, the pebble bowl stops filling.
@@ -155,7 +170,7 @@ What happens:
 How the player deals with them (the courtyard is fully in reach):
 - Grab and eat.
 - Swatter. Kills the intruders it hits.
-- Pepper. They sneeze and are seasoned for eating.
+- Pepper. They are disarmed, sneeze and are seasoned for eating.
 
 When the courtyard is clear, workers peek out, cheer and wave at the giant, then go back to work.
 

@@ -44,13 +44,16 @@ Two tall flagpoles on the inner rim, one on each side, just outside the ring han
 
 ## 3. What damages the castle
 
+v2: every goblin bashes the wall for about 5 s, climbs, runs on the rampart for about 8 s, then jumps in ([enemies.md](enemies.md#every-goblin-climbs-v2)), so the damage grows step by step.
+
 | Cause | Damage |
 |---|---|
-| Grunts and runners hitting the wall | Small, steady |
-| Balloon bombs on the wall | Medium |
-| Boom goblin exploding at the wall | Medium |
-| Intruders smashing things inside the courtyard | Faster than outside attacks, until cleared |
-| Climbers | No direct damage. If ignored, they jump into the courtyard and become intruders |
+| Goblins bashing the wall (step 1) | Small, steady (`CASTLE_HEALTH.wallHitDamage` per hit); a spear hits twice as hard |
+| Goblins on the rampart (step 3) | No castle damage, but they attack the wall garrison |
+| Balloon bombs on the wall | Medium (not built) |
+| Boom goblin exploding at the wall | Medium (not built) |
+| Intruders smashing things inside the courtyard (step 4) | Faster than outside attacks, until cleared |
+| Peppered (sneezing) goblins | None while they sneeze (5 s) |
 
 ### Where the damage is
 

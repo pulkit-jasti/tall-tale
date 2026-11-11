@@ -44,11 +44,11 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameAudio } from '../audio/sound.js';
-import { ARCHERS, CASTLE, DAY_NIGHT, GOBLIN_GEAR, GOBLIN_RULES, JUICE, KNIGHTS, TROOP_KINDS, TROOPS, type GearName, type TroopKind } from '../config/game.js';
+import { ARCHERS, CASTLE, DAY_NIGHT, GARRISON, GOBLIN_GEAR, GOBLIN_RULES, JUICE, KNIGHTS, TROOP_KINDS, TROOPS, type GearName, type TroopKind } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import { addNightRim } from '../fx/nightRim.js';
 import type { Particles } from '../fx/particles.js';
-import { angleDelta, degToRad, groundAt } from '../rules/boardMath.js';
+import { angleDelta, degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import type { Step } from '../rules/roadGraph.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
@@ -517,23 +517,36 @@ export class Troops {
   }
 
   /**
-   * The stress test (src/debug/stressTest.ts): `count` soldiers of all three
-   * kinds stand on the roads just outside the wall, walking on the spot (the
-   * same cost as walking), and never fight or leave until clear().
+   * The stress test (src/debug/stressTest.ts, STRESS_TEST): the wall garrison
+   * on the rampart and a knight squad at the junction in front, walking on
+   * the spot (the same cost as walking), never fighting or leaving until clear().
    */
-  standForTest(count: number): void {
-    const roads = this.network.roads;
-    if (roads.length === 0) return;
-    for (let i = 0; i < count; i++) {
-      const troop = this.obtain(KINDS[i % KINDS.length]);
-      if (!troop) return;
-      const road = roads[i % roads.length];
-      road.pointAt(Math.min(road.length, 8 + (i * 7) % 30), 0, troop.root.position);
+  standForTest(garrison: number, knights: number): void {
+    const stand = (troop: Troop): void => {
+      this.prepare(troop);
       troop.mode = 'standing';
-      troop.foe = null;
-      troop.root.visible = true;
-      troop.root.rotation.y = this.rng.range(0, Math.PI * 2);
       troop.play('walk', true, 1.2);
+    };
+    // The wall garrison on the rampart, guards first, then archers (GARRISON.homesDeg).
+    for (let i = 0; i < Math.min(garrison, GARRISON.homesDeg.length); i++) {
+      const troop = this.obtain(i < GARRISON.guards ? 'sword' : 'archer');
+      if (!troop) return;
+      stand(troop);
+      const a = degToRad(GARRISON.homesDeg[i]);
+      troop.root.position.set(polarX(GARRISON.radius, a), CASTLE.wallHeight, polarZ(GARRISON.radius, a));
+      troop.face(polarX(1, a), polarZ(1, a));
+    }
+    // A knight squad at the junction in front, the first with its banner.
+    const route = this.routeOut(0);
+    if (route.length === 0) return;
+    this.network.nodePosition(this.network.graph.endOf(route[route.length - 1]), temp);
+    for (let i = 0; i < knights; i++) {
+      const troop = this.obtain(FIELD_KINDS[i % FIELD_KINDS.length]);
+      if (!troop) return;
+      stand(troop);
+      troop.root.position.set(temp.x + (i - (knights - 1) / 2) * KNIGHTS.holdSpread, temp.y, temp.z);
+      troop.face(temp.x, temp.z);
+      if (i === 0) this.showBanner(troop);
     }
   }
 

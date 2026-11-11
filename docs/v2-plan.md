@@ -1,6 +1,6 @@
 # Tall Tale v2: Plan and Decisions
 
-Status: decided (2026-11-10), not built yet. Branch: `feat/v2`.
+Status: decided (2026-11-10). Run 1 built (2026-11-10, build only, waiting for the headset check). Branch: `feat/v2`.
 
 **This file wins over every other doc where they disagree.** The other docs describe the MVP as built. As each part below is built, update its topic doc (the "What this replaces" table says which) and tick it in the checklist here. When everything is folded in, this file is history.
 
@@ -210,7 +210,9 @@ The mechanics the tutorial will show. The tutorial must stay playable after this
   - Done: `src/units/garrison.ts` (`GARRISON` in config, rules in `src/rules/garrison.ts`), run from `Troops.update` (`onUpdate`), manned full at every battle start (`Troops.manWalls()`). One soldier per stretch between two towers (homes at 0 and 180 degrees for the 2 guards, 60, 120, 240, 300 for the 4 archers), at radius 47.8 on the wall top, walking only inside their own stretch (no tower clipping). Refill: one climbs up the inner side of the wall from the courtyard (2.2 s) every 15 s while any is missing, archers first. Archers pick the nearest goblin walking in within 100 cm and fire together every 2.2 s (`volleyEvery`, staggered 0.07 s), 55% hits; they back away from a rampart goblin within 9 cm. Guards walk to the nearest rampart goblin on their stretch and strike it up close (armor counts). Rampart goblins next to a soldier (3 cm) stop dashing and strike it (sword faster); archers go down in 2 hits, guards in 3 (shield). Arrows: 7.5 cm (was 2.2), bigger white feathers, a 7 cm see-through light streak (one more instanced mesh), arc 22 cm, 0.9 s flight.
   - Decided: archers do not shoot climbing goblins (only goblins walking in, at the wall or dazed outside). The army never targets lesson goblins. Debug: "Thin garrison" (key `-`) takes 2 soldiers down to watch the refill; "Troops on/off" brings the garrison back.
   - This also finishes the 1.2 item "rampart goblins attack the garrison".
-- [ ] **1.7 Stress test config** includes the garrison and a knight squad (`STRESS_TEST`), and the topic docs (giant-tools, enemies, core-loop, castle-rules, controls-and-ui, assets, placeholder-shapes) and the README history are updated for run 1.
+- [x] **1.7 Stress test config** includes the garrison and a knight squad (`STRESS_TEST`), and the topic docs (giant-tools, enemies, core-loop, castle-rules, controls-and-ui, assets, placeholder-shapes) and the README history are updated for run 1.
+  - Done: `STRESS_TEST.garrison` (6, on the rampart at their homes) and `STRESS_TEST.knights` (5, at the junction in front, the first with its banner), all walking on the spot via `Troops.standForTest(garrison, knights)`, plus the 2 balloons as before. Topic docs, the README (status, what the player does, voice, history 57 to 62) and castle-machines.md (dropped) are updated.
+  - Not done in run 1: the stress test itself (needs the headset), typecheck and tests (not run, by the run's rules; `director.test.ts` and other tests may fail), mvp.md (run 2 updates it with the tutorial rebuild).
 
 ### Run 2: everything judges see
 

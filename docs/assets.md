@@ -26,7 +26,9 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Worker in the courtyard | `characters/mini-dungeon/character-human.glb` | 2.5 cm tall | Own colors |
 | Grunt | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Green (own colors) |
 | Runner | `characters/mini-dungeon/character-orc.glb` | 3.35 cm tall | Yellow accent |
-| Climber | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Purple accent |
+| Goblin sword and shield (v2) | `props/mini-arena/weapon-sword.glb`, `props/mini-dungeon/shield-round.glb` (the soldiers' models, a little smaller) | Merged into the orc's skinned mesh (`GEAR.pieces.goblinSword`, `goblinShield`) | Fly off when knocked off or peppered |
+
+(The climber type is gone in v2: every goblin climbs.)
 
 - Goblin types share one model and differ by size, tint and speed (each type has its own color accent, see [enemies.md](enemies.md)). The agent picks the exact tints.
 - **Performance fallback:** 40 to 80 skinned characters may be too slow on Quest 3S. If the frame rate drops, switch goblins to code-made shapes (one InstancedMesh per body part, animated in code). First headset test: about 50 skinned goblins hold 72 Hz, so the fallback is not needed yet. Decide again with troops in step 5 ([performance.md](performance.md)).
@@ -38,13 +40,14 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Moment | Clip |
 |---|---|
 | Walking on a road | `walk` |
-| Runner moving | `sprint` |
-| Grunt or runner hitting the wall, troops fighting | `attack-melee-right`, `attack-melee-left` (alternate) |
-| Climber climbing the wall | `interact-right` while moving up |
-| Climber popping up on the rampart | `jump` |
+| Runner moving, field knights charging (v2) | `sprint` |
+| Goblins bashing the wall, troops fighting, goblins on the rampart striking the garrison | `attack-melee-right`, `attack-melee-left` (alternate) |
+| Any goblin climbing the wall (v2), a garrison soldier climbing up from the courtyard | `interact-right` while moving up |
+| A goblin popping up on the rampart | `jump` |
+| Garrison archer's volley | `holding-left-shoot` (once) |
 | Held by the player (struggling) | `fall` (loop) |
-| Dropped back on the board, dazed | `crouch`, then `idle` |
-| Stunned by the megaphone or bell | `emote-no` (loop) |
+| Dropped back on the board, dazed, or knocked off the rampart by the bell | `fall` in the air, then `crouch`, then `idle` |
+| Stunned by the bell | `emote-no` (loop) |
 | Sneezing from pepper | `emote-no` (once) |
 | Death (before the poof) | `die` |
 | Waiting, troops at the gate | `idle` |
@@ -102,7 +105,6 @@ Not in the MVP map as gameplay: siege machines, bridge, forest, mud, hill featur
 | Castle health flag | `castle/castle-kit/flag-banner-long.glb` | Banner 8 cm tall | Tint red. Slides down a code-made pole as health drops |
 | Wave flag | `castle/castle-kit/flag-pennant.glb` | 6 cm tall | Tint blue. Rises one notch per wave on a code-made pole |
 | Tool platforms | `castle/castle-kit/tower-hexagon-top.glb` | 12 to 15 cm wide | One per tool |
-| Food jar | `props/mini-dungeon/pot.glb` | 7 cm tall (10 did not fit between the platforms) | The pot has a narrow neck, so the food shows as a code-made heap of food balls on its mouth, one per food |
 | Pebbles | Code: a low-poly lumpy ball like the sun ([placeholder-shapes.md](placeholder-shapes.md)) | 2.5 cm (bigger than first planned, easier to see and hit) | Instanced and pooled. Was `rocks/survival/resource-stone.glb` |
 | Villagers (decor) | `characters/mini-dungeon/character-human.glb`, `characters/mini-forest/character-archer.glb`, no gear, recolored to work clothes (`VILLAGERS`) | 3.9 cm like the soldiers | Four per village (up to 18), walking about the square, working, looking about (`src/units/villagers.ts`) |
 | Village square props | `town/fantasy-town/stall-bench`, `hedge`, `banner-red`, `banner-green`, `props/survival/bucket`, `barrel-open`, `resource-wood`, `resource-planks`, `chest` (with the stalls, lanterns, carts, barrels and boxes) | 1 to 4 cm | Two stalls and two lanterns per square, benches, wood, buckets, a chest, a banner, hedges between some houses (`SETTLEMENTS.villages.props`) |

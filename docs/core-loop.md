@@ -23,21 +23,36 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
 
 ---
 
-## 2. Troops (basic behavior)
+## 2. Troops
 
-- **Spawn:** squads of 3 to 4 soldiers come out of a hidden gate at the front of the castle every few seconds. Cap of about 15 on the board.
-- **Movement:** they walk the road graph outward toward the camp that is attacking. Same road system as enemies, in reverse.
-- **Fighting:** when an enemy is close, both stop and fight with simple timed hits. Soldiers take 2 hits, grunts take 1.
-- **At the wall:** grunts and runners that get past them stop at the wall and hit it. Only climbers climb.
+v2 (run 1 built, [v2-plan.md](v2-plan.md#27-the-army-field-knights-and-the-wall-garrison)): two clear jobs, so the army never looks dumb. No squads come out on their own any more.
+
+- **Fighting:** simple timed hits. A soldier strikes every 1.4 s and lands half of them, a goblin strikes back every 1.1 s (a sword faster, x0.6) and lands 60%. Soldiers take 2 hits, a shield is one more (it flies off). Goblins take 1, a helmet and a shield one more each (`src/rules/gear.ts`).
+- **At the wall:** every goblin that gets past bashes the wall, then climbs ([enemies.md](enemies.md#every-goblin-climbs-v2)).
 - **Balance target:** on their own, troops lose slowly. The player is always needed, but never overwhelmed.
+- The swatter, pepper and bell never hurt troops, and the army leaves the tutorial's lesson goblins alone.
 
-### How it works (step 5, `src/units/troops.ts`)
+### Wall garrison (defends the wall, `src/units/garrison.ts`, `GARRISON`)
 
-- A squad comes out every 16 s while a wave is fought (the first after 4 s), 2 soldiers each, cap 4 (lowered for testing from squads of 3 to 4 every 10 s, cap 12). Debug key 9 turns them off. Squads take turns going to each attacking camp. About a third are archers, with the same rules.
-- The gate is hidden: each squad leaves through the wall entry at the castle end of its camp's shortest road, and walks that route backward out to the camp.
-- A goblin within 4 cm is fought: both stop. A soldier strikes every 1.4 s and lands half of them, a goblin strikes back every 1.1 s and lands 60%. Runners rush past and are never fought. Soldiers can fight goblins at the wall, never climbers on it or intruders.
-- At the camp, or when the wave ends, soldiers walk home and go back into the castle.
-- Numbers in `TROOPS`. Debug key 6 sends a squad.
+- On the rampart: **6 at most, 4 archers and 2 guards** (swordsmen), one per stretch of wall between two towers (guards at the front and back, archers between). Full at every battle start.
+- When there are fewer than 6, **one new one climbs up the inner side of the wall from the courtyard every 15 s** (archers first) until there are 6 again.
+- They walk along the rampart (one angle on a ring, no road pathfinding, cheap), inside their own stretch, toward the nearest threat.
+- **Archers** shoot outward at goblins walking in, within 100 cm, all together as a **volley** every 2.2 s. **Random hits, 55%**; a miss lands with a small puff (damage is decided in code, arrows have no hitboxes). They **back away** from goblins on the rampart and keep shooting; they do not fight up close.
+- **Arrows are easy to see:** 7.5 cm (3 to 4 times longer than before), big white feathers, a short light streak, a 22 cm high arc so they rise against the sky. One instanced mesh plus one for the streaks, a pool of 16.
+- **Guards** walk to goblins on their stretch of rampart and fight them up close.
+- **Goblins on the rampart attack the garrison:** one next to a soldier stops and strikes it. An archer goes down in 2 hits. Protecting the archers is part of the player's job.
+- Debug: key `-` takes two of them down (to watch the refill), key 9 turns all troops off and on.
+
+### Field knights (stop goblins reaching the wall), only through the horn (`KNIGHTS`)
+
+- **Blow the horn** ([giant-tools.md](giant-tools.md#war-horn-new-in-v2-replaces-the-megaphone)): the gate bursts open with a battle cry and dust, and **a squad of 4 to 5 (swordsmen and spearmen) sprints down the road in front of the player** (the wall entry nearest the front: spin the board to choose the road) at 2.5 times walking speed, the first one carrying a blue and gold banner.
+- **They crash into the goblins** on that road: the first contact knocks up to 6 goblins within 12 cm back down the road (dazed), with a clash, a hit stop, a ring and a pow star.
+- Then they **hold the first junction** on that road at least 120 cm out (on the tutorial map 124 to 140 cm), each on its own spot in two rows across the road, and fight everything that comes within 10 cm, until they fall or the wave ends. They never walk to the camp.
+- **Runners dodge past them** with a quick hop.
+- When the wave ends, they march home along their road and go back in.
+- Blowing the horn again sends another squad (at most 10 field knights). Field soldiers are swordsmen and spearmen only; archers live on the rampart.
+- The answer to each threat: a big group on a road is the horn; a crowded wall is the bell, pepper or hands.
+- Debug key 6 sends a squad down the road in front (what the horn does).
 
 ### On hold (not in the MVP)
 
@@ -58,4 +73,4 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
 
 - 40 to 80 enemies each playing their own sound is too many sound sources for Quest.
 - One sound emitter per group (for example a squad on a road), with volume based on group size and distance.
-- The few enemies closest to the player get their own sounds, for example a climber's giggle right before it pops up.
+- The few enemies closest to the player get their own sounds, for example the giggle (`goblinCackle`) where a goblin pops up on the rampart (built in v2, at most every 0.6 s).
