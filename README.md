@@ -2,7 +2,7 @@
 
 A seated, hands-only VR game for Meta Quest.
 
-You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Your little army does most of the fighting. You turn the battle with giant tools (a slingshot, a fly swatter, a pepper shaker and a megaphone), and when goblins climb the wall, you pick one up and eat it. Eating is also how you pay for your tools.
+You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Your little army does most of the fighting. You turn the battle with giant tools (a slingshot, a fly swatter, a pepper shaker, a bell and a war horn that calls your knights), and when goblins climb the wall, you pick one up and eat it. Tools are free but rest after each use, and eating fills them up faster.
 
 The feeling we want: being a kid playing with toy soldiers, making up your own battle story, except the toys are alive.
 
@@ -15,7 +15,8 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 - Details, open items and the build order are in [docs/mvp.md](docs/mvp.md). Frame rate results are in [docs/performance.md](docs/performance.md).
 - **Day and night is built** on the branch `feat/day-night-cycle` (2026-11-05, tested on the headset 2026-11-10, [docs/mvp.md](docs/mvp.md#day-and-night-cycle-started)): four times of day that follow the waves, a dark night with stars, a moon and a ringed planet, glowing windows, torches and lanterns, and a bright edge on the units so goblins stay easy to spot. Stylized hands are a far future idea. The MVP has a hand-made tutorial map. The level generator comes later.
 - **The same branch grew much more** (2026-11-05 to 2026-11-10, tested on the headset 2026-11-10, typecheck, build and tests not run yet, nothing committed, [docs/mvp.md](docs/mvp.md#more-on-the-same-branch-sound-ui-and-a-livelier-world)): real sounds from Freesound and menu and battle music, sound placement fixes (mono, a muffle behind the head, soft ends on long sounds), a pause button in front instead of on the wrist, a settings page with Sound and Access tabs, sliders and a sliding switch, the bell as a choice in place of the megaphone, our own UI library, menus centered in front of the eyes, one 3D arrow as the only tutorial marker, a throw lesson, farther and bigger goblin camps, story scenes, villagers, road torches, a rolling pebble, and tutorial fixes (reach check, pepper, balloons).
-- **v2 run 1 is built** on the branch `feat/v2` (2026-11-10, build only, not tested on the headset yet, typecheck and tests not run, [docs/v2-plan.md](docs/v2-plan.md)): gear with real effects (helmets and shields as extra hits, spears and swords, goblin shields and swords), every goblin climbs (bash, climb, rampart, courtyard), free tools with use windows and recharge rings (eating fills them; the food jar and price tags are gone), the pepper disarms, the bell knocks the rampart down, the war horn replaces the megaphone and calls field knights who charge and hold a junction, and a wall garrison of 4 archers and 2 guards. Next: the headset check, then run 2 (the tutorial rebuild, levels, saving, menus).
+- **v2 run 1 is built** on the branch `feat/v2` (2026-11-10, build only, not tested on the headset yet, typecheck and tests not run, [docs/v2-plan.md](docs/v2-plan.md)): gear with real effects (helmets and shields as extra hits, spears and swords, goblin shields and swords), every goblin climbs (bash, climb, rampart, courtyard), free tools with use windows and recharge rings (eating fills them; the food jar and price tags are gone), the pepper disarms, the bell knocks the rampart down, the war horn replaces the megaphone and calls field knights who charge and hold a junction, and a wall garrison of 4 archers and 2 guards.
+- **v2 run 1 tuned over 15 headset rounds** (2026-11-10 to 2026-11-11, build only, committed, typecheck and tests not run): the horn aimed by gaze with a lock that follows the look and a one-frame blow, knights routed over the roads in up to 4 squads, a tutorial that never skips a lesson (Skip tutorial instead), the glass sign, opposite-hand ghost demos, the bell rewritten, auto-pause for the Quest menu and a headset taken off, and a cleaner debug page with notes and a mic panel. The current state and the handoff are in [docs/v2-plan.md](docs/v2-plan.md#run-1-as-it-stands-now-after-15-headset-rounds-2026-11-10-to-2026-11-11). Next: the stress test, typecheck and tests, then run 2 (the tutorial rebuild, levels, saving, menus).
 - The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win (and [docs/v2-plan.md](docs/v2-plan.md) wins over every other doc).
 
 ---
@@ -88,7 +89,7 @@ Stage 1 is a pass/fail check that the project fits the theme and uses the requir
 | Zone | What happens there | What you do |
 |---|---|---|
 | Far | Enemies leave their camps | Slingshot, shoot triggers (powder kegs, boulders, trees) |
-| Middle | Troops and enemies clash | Slingshot, megaphone |
+| Middle | Troops and enemies clash | Slingshot, war horn |
 | Near (castle wall) | Enemies hit the wall, climbers pop up | Fly swatter, pepper shaker, grab and eat |
 
 Each zone is the backup for the one before it.

@@ -99,7 +99,7 @@ So the player always knows the order: deal with the ones on top first. Goblins c
 - **Behavior:** runs at your troops (or the wall if no troops are near) and explodes. Kills troops, and drops the flag if it hits the wall.
 - **Toughness:** one hit, but hitting the barrel makes it explode where it stands.
 - **Best answer:** slingshot (shoot the barrel early so it blows up its own group).
-- **Also works:** pepper (it sneezes and drops the barrel, which becomes a powder keg on the road), megaphone (stunned in place, easy target), hands (if it reaches the wall, grab it and eat it, with a smoky burp), machines.
+- **Also works:** pepper (it sneezes and drops the barrel, which becomes a powder keg on the road), bell (stunned in place, easy target), hands (if it reaches the wall, grab it and eat it, with a smoky burp), machines.
 - **Weak:** swatter (works, but it explodes right at the wall and costs a bit of flag).
 - **Chain reactions:** its explosion follows the same rule as powder kegs, so it can set off kegs, knock over trees and break bridges (see [map.md](map.md#5-triggers)).
 
@@ -110,7 +110,7 @@ So the player always knows the order: deal with the ones on top first. Goblins c
 - **Behavior:** stays behind a group. Every few seconds it hammers gear back onto a nearby goblin, with a clang and a puff.
 - **Limits:** one piece at a time with a delay. Cannot bring back dead goblins.
 - **Best answer:** slingshot (precise shot past the group).
-- **Also works:** catapult splash, megaphone (stuns it mid-repair), pepper (sneezes, drops its hammer), hands if it gets close.
+- **Also works:** catapult splash, bell (stuns it mid-repair), pepper (sneezes, drops its hammer), hands if it gets close.
 
 ---
 

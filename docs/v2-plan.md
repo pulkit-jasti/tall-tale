@@ -1,6 +1,6 @@
 # Tall Tale v2: Plan and Decisions
 
-Status: decided (2026-11-10). Run 1 built (2026-11-10, build only, waiting for the headset check). Branch: `feat/v2`.
+Status: decided (2026-11-10). Run 1 built (2026-11-10) and tuned over 15 headset rounds (to 2026-11-11, build only, committed). Next: run 2, see "Before run 2 (handoff)" in section 3. Branch: `feat/v2`.
 
 **This file wins over every other doc where they disagree.** The other docs describe the MVP as built. As each part below is built, update its topic doc (the "What this replaces" table says which) and tick it in the checklist here. When everything is folded in, this file is history.
 
@@ -214,6 +214,54 @@ The mechanics the tutorial will show. The tutorial must stay playable after this
   - Done: `STRESS_TEST.garrison` (6, on the rampart at their homes) and `STRESS_TEST.knights` (5, at the junction in front, the first with its banner), all walking on the spot via `Troops.standForTest(garrison, knights)`, plus the 2 balloons as before. Topic docs, the README (status, what the player does, voice, history 57 to 62) and castle-machines.md (dropped) are updated.
   - Not done in run 1: the stress test itself (needs the headset), typecheck and tests (not run, by the run's rules; `director.test.ts` and other tests may fail), mvp.md (run 2 updates it with the tutorial rebuild).
 
+#### Run 1 as it stands now (after 15 headset rounds, 2026-11-10 to 2026-11-11)
+
+This is the current state. The step notes above and the round log below are history: where they differ, this list wins. Numbers are in `src/config/game.ts`.
+
+- **Tutorial** (`src/director/tutorial.ts`, `src/director/battle.ts`), in order:
+  - Before wave 1: reach check (only if the reach is not saved), pause, spin, height, pinch, eat, throw, then the red flag and the blue flag (one sign each).
+  - Wave 1: its banner, then it plays at half rate with only 3 goblins (`hornGoblins`) until 2 are eaten (or 30 s), then a breather with no spawns until the board is clear.
+  - The horn: grab it (left hand), then one lesson in beats on the glass sign: "Look around" (at least 7 s of holding), lift to the mouth, "Spot set" (2 s, the horn waits), blow with the bar.
+  - The knights' first fight: once the full squad of 5 has reached its spot, 3 goblins come and stop in front of it to be fought ("Congratulations! Your knights won!"). Then wave 1 plays on.
+  - Wave 2: slingshot (grab with the left hand, pebble with the right, load, shoot a moving goblin), keg, boulder, tree, a little practice, then a balloon (glass sign).
+  - Wave 3: swatter. Wave 4: pepper (armored goblins). Wave 5: bell.
+  - **Rules:** no lesson ever moves on by itself (Skip tutorial is the way out); no wave goblins while a lesson runs, only the lesson's own; every other tool is locked (dimmed, a grab buzzes) during a lesson; knight squads march home after each wave's cheer; texts are one short easy line; ghost hands use the opposite hand of the tool's side (AGENTS.md).
+- **Horn** (`src/tools/horn.ts`, `src/ui/hornAim.ts`):
+  - Aim by gaze, 12 degrees below where the head points, snapped to a road within 22 cm. Off the road: a white ring with a dark edge and an arrow to the nearest road.
+  - At the lips (17 cm from the eyes): a steady look of 0.4 s locks the spot (gold, path), and a look more than 30 degrees away for 0.3 s unlocks it.
+  - Blow: one frame of raw mic loudness at or over 0.015. The bar on the glass sign shows the same number, and stays full and gold for 1.5 s after a blow. Quiet horn (or no mic): 1.2 s locked at the lips.
+  - The called spot stays marked until the squad arrives. The use window starts on the call; 30 s recharge.
+- **Knights** (`src/units/troops.ts`):
+  - Up to 4 squads of 3 to 5 (always 5 in the tutorial), routed over the roads.
+  - At their spot: a 22 cm watch radius and a 35 cm leash. A free knight takes the least crowded goblin near it (no cap), 35% hits.
+  - A squad down to 1 breaks and goes home. Squads stay between waves, except in the tutorial.
+  - Safety nets for the "running in place" bug (cause still unknown): `closeGiveUp` 4 s and `stuckTime` 2 s, each with a debug note.
+- **Garrison** (`src/units/garrison.ts`): archers within 60 cm, 2 arrows make a hit. Guards hunt the whole rampart at 8 cm/s. Refills: archers every 15 s, guards 30 s. Rampart goblins jump in only once no soldier is left on the wall. No spawns while intruders are inside.
+- **Bell** (`src/tools/bell.ts`, rewritten twice): the trigger reads the holding hand on tracked frames only; it rings when the hand gets 3 cm from a slow anchor (0.15 s) and re-arms within 1.2 cm, never in the first 0.4 s after the grab. The game does the stun (`Bell.onRing`); the sound comes last and guarded. The stun itself is checked on the headset (debug ring); the swing trigger is not yet.
+- **Pause:**
+  - The button in front.
+  - The Quest menu: visibility events, no frames for 1.5 s, or the menu gesture (strict).
+  - The headset taken off: no hand and the head still within 3 mm and 0.4 degrees for 5 s, since the Quest 3S has no proximity sensor.
+  - The FPS panel shows the reason while paused.
+- **Menus and UI:**
+  - Welcome panel: Play, Settings, Skip tutorial.
+  - Pause panel: Resume, Settings, Restart, Skip tutorial.
+  - Settings: Access first and open by default (Measure reach, Quiet horn, Reset table), then Sound.
+  - The glass sign (`src/ui/kit/glassSign.ts`) is in the UI library.
+- **Debug:** no keyboard keys, everything is on the debug page (cleaned up, with a notes column from `src/debug/notes.ts`). FPS panel, and the mic panel (`?mic` or "Mic panel on/off") for the blow line.
+- **Bugs fixed on the way:** all-white goblins (pool repaint), the knight leash loop, stray tool blinking, the stuck off-road ring, random pauses.
+
+#### Before run 2 (handoff)
+
+- **Commits:** steps 1.1 to 1.7 are `34da0d2` to `da7a656`; the headset rounds are `26fac84` and `adb977a`. Only this docs update is left to commit.
+- **Not yet checked on the headset:** the bell's swing trigger (read its "held ... farthest swing" note), the headset-off pause, the blow at 0.015 with the gaze lock, the knights' first fight, and the left-hand horn demo (the horn's curve was shaped for a right hand).
+- **Owed:** the stress test with 26 troops plus the garrison (`STRESS_TEST`), logged in [performance.md](performance.md). `npm run typecheck` has not run since run 1 started, so expect type errors. `npm test` is stale: `src/rules/director.test.ts` still expects the food jar, the megaphone and lesson timeouts.
+- **Known open bug:** knights now and then run in place beside a goblin. The safety nets recover it; the debug page notes give the knight's mode, leg and its goblin's mode and distance, to find the cause.
+- **Decide section 4** (the tutorial order is built as wave 1 horn, 2 slingshot, 3 swatter, 4 pepper, 5 bell; the proposal there differs).
+- A good first task for run 2: run typecheck and fix it, and bring the tests up to date, before the tutorial rebuild.
+
+#### Headset rounds log (history)
+
 **Fixes after the first run 1 headset test (2026-11-10):**
 
 - [x] Tutorial pauses are by context, not a fixed 3.5 s: `TutorialStep.afterDone` per lesson (`PAUSE_AFTER` in `src/director/tutorial.ts`). No pause where the next lesson follows straight on (pick up then eat, grab a tool then use it, the slingshot grab, pebble and load); 1.5 s to finish a move or see it land (spin, toss, the first shot, the balloon, swatter, pepper); 2.5 s to watch what was set off or settle (height, the triggers, the horn charge, the bell, the reach check). Everything else: a 0.6 s tick (`HINT_SIGN.doneTime`, was 3.5); info steps leave 0.4 s (`stepGap`, was 0.8).
@@ -323,6 +371,8 @@ Decide section 4 first (after feeling run 1 on the headset).
 
 ## 4. Decide before run 2: tutorial order and lessons
 
+**Built in run 1 (so the tutorial plays now):** wave 1 hands and the horn (taught mid wave, then the knights' first fight), wave 2 slingshot with the trigger and balloon lessons, wave 3 swatter, wave 4 pepper, wave 5 bell. The lines "tools rest after use" and "eating fills them" are in the first tool's grab lesson.
+
 Proposed, to confirm after the run 1 headset test:
 
 - **Tools:** slingshot, swatter, horn, bell. Pepper is the first campaign unlock.
@@ -339,10 +389,10 @@ Proposed, to confirm after the run 1 headset test:
 ## 5. Still open
 
 - Does the player pick their 3 tools per level, or does each level set them?
-- Do triggers ignore armor? (Proposed: yes.)
+- ~~Do triggers ignore armor?~~ Decided in 1.1: yes.
 - Which levels unlock which tools (after run 1, once the tool count is known).
 - Which new tools to build in run 3.
-- Final numbers: use and recharge times, refund shares, climb speeds, garrison refill, knight squad size.
+- Final numbers: use and recharge times, refund shares, climb speeds, garrison refill, knight squad size, the bell's swing line and the horn's blow line (set them from the debug notes and the mic panel).
 
 ---
 
