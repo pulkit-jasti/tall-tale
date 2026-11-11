@@ -544,9 +544,6 @@ export const HANDLES = {
   woodColor: 0x5a4330,
   trackColor: 0x3b2b1f,
   arrowColor: 0xf2c14e,
-  /** Keyboard debug speeds. */
-  keyRotateDegPerSec: 60,
-  keyHeightCmPerSec: 12,
 };
 
 export const HANDS = {
@@ -910,6 +907,13 @@ export const PAUSE = {
   // Stricter after random pauses (was facing 0.6, 55 cm, at once): straighter, nearer, a hand holding
   // nothing, and the pose kept for `hold` seconds. The FPS panel shows what caused a pause.
   metaGesture: { facing: 0.8, maxDistance: 0.45, hold: 0.15 },
+  /**
+   * The headset taken off (headset test: the game played on for 30 s). The
+   * Quest 3S has no proximity sensor, so the system never tells the page
+   * (Meta's VRC.Quest.Functional.2). No hand tracked and the head within
+   * moveCm (cm) and turnDeg (degrees) of where it was for `seconds` pauses.
+   */
+  headsetOff: { moveCm: 0.3, turnDeg: 0.4, seconds: 5 },
   /**
    * The panel follows the head lazily, like the Quest's own menus: it stays
    * still while the head turns a little (so it can be poked), and swings
@@ -1731,8 +1735,13 @@ export const HORN = {
   gripFrom: 0,
   gripTo: 6,
   grabRadius: 0.06,
-  /** The mouthpiece counts as at the lips (the spot locks) this close to the head (meters, a little more than EAT.mouthDistance). */
-  mouthDistance: 0.24,
+  /**
+   * The mouthpiece counts as at the lips (the spot locks) this close to the
+   * head (meters, measured from the eyes; the mouth is about 10 to 12 cm
+   * below them). Was 0.24, which a horn just held at rest in front of the
+   * chest sometimes reached, so it locked by accident (headset test).
+   */
+  mouthDistance: 0.17,
   /**
    * Near the face it fades: fully solid farther than fadeFar, down to
    * fadeOpacity at fadeNear (meters from the mouthpiece to the head).
@@ -1747,18 +1756,12 @@ export const HORN = {
    */
   holdTime: 1.2,
   /**
-   * Mic loudness (RMS, 0 to 1) that counts as blowing, and how long it must
-   * stay over it (seconds). Was 0.025, which breathing and room noise passed,
-   * then 0.06, which a real blow did not reach, then 0.04 and 0.05, too
-   * easy, then half as sensitive, 0.1, which even loud talking never
-   * reached, then 0.07, still too high, so 0.035 (headset tests). The live bar on the glass
-   * sign (GLASS_SIGN) shows the level against this line, and the debug
-   * page's mic column shows the loudest level, to tune it.
+   * Mic loudness (raw RMS of one frame, 0 to 1) that counts as a blow: one
+   * frame over it is enough, no smoothing and no holding it (headset test).
+   * Set from the live loudness panel (MIC_PANEL, debug page "Mic panel").
+   * Earlier smoothed values, held for 0.25 to 0.35 s, ran from 0.025 to 0.1.
    */
-  blowLevel: 0.035,
-  blowHold: 0.25,
-  /** The loudness is smoothed this much (seconds). */
-  levelSmoothing: 0.05,
+  blowLevel: 0.015,
   /** The horn sound's volume when held to blow, and when blown into the mic (louder). */
   heldVolume: 0.8,
   blownVolume: 1,
@@ -1780,12 +1783,23 @@ export const BELL = {
   gripFrom: 0,
   gripTo: 4,
   grabRadius: 0.06,
-  /** Shake detection, like the pepper: a quick move that turns back on the last one is a ring (cm per second, seconds). */
-  speedSmoothing: 0.04,
-  ringSpeed: 30,
-  ringWindow: 0.7,
-  /** Harder shaking means a longer stun: the shake speed from ringSpeed up to this gives the full extra stun. */
-  hardSpeed: 140,
+  /**
+   * A ring (src/tools/bell.ts, second rewrite: speed checks never rang, hand
+   * tracking runs at 30 Hz and smooths fast motion, Meta docs): the holding
+   * hand's distance from a slow anchor that follows it (anchorSmoothing
+   * seconds). ringOffset cm away is a ring; back within rearmOffset (and
+   * ringGap seconds) before the next. No ring for grabQuiet seconds after the
+   * grab. The debug notes show each grab's farthest swing, to tune it.
+   */
+  // Carried steadily at v cm/s the hand trails the anchor by about v x anchorSmoothing: 15 cm/s gives
+  // about 2 cm (no ring), a swing of 40 cm/s about 6 cm (a ring).
+  anchorSmoothing: 0.15,
+  ringOffset: 3,
+  rearmOffset: 1.2,
+  ringGap: 0.25,
+  grabQuiet: 0.4,
+  /** A bigger swing stuns longer: from ringOffset up to this (cm) gives the full extra stun. */
+  hardOffset: 9,
 };
 
 /** The stun of the bell: every goblin on the board stops, dizzy. */
@@ -2022,12 +2036,12 @@ export const KNIGHTS = {
    * fighting). The console says so ("[troops] a knight could not reach"), to
    * find the cause if it shows up.
    */
+  /** The horn lesson's goblins stop this far out in front of the squad's spot (cm along the road), waiting to be fought. */
+  lessonHoldOut: 6,
   closeGiveUp: 4,
   ignoreTime: 3,
   /** A knight in a moving mode that has not moved for this long is put where it was going (seconds, the run-in-place watchdog). */
   stuckTime: 2,
-  /** At most this many knights fight one goblin, so a squad cannot swarm a small group at once. */
-  maxPerGoblin: 2,
   /** A knight's strike lands this share (the garrison's guards use TROOPS.strikeChance). */
   strikeChance: 0.35,
   /** Walking back to their spot after a fight (multiple of TROOPS.speed). */
@@ -2111,6 +2125,18 @@ export const HORN_AIM = {
    * and an arrow on the ground toward the nearest road, arrowGap out from the
    * ring, nudging arrowBob that way. Drawn over the hills.
    */
+  /**
+   * The lock follows the look (headset test: a spot locked while looking
+   * elsewhere was lost from view): at the lips, the look resting on a road
+   * spot for lockDwell seconds locks it; locked, the look more than unlockDeg
+   * degrees from the spot for unlockGrace seconds unlocks it (a soft click),
+   * and the spot follows the look again until it rests and locks once more.
+   */
+  lockDwell: 0.4,
+  unlockDeg: 30,
+  unlockGrace: 0.3,
+  /** After a call the spot stays marked (gold) until the squad arrives, at most this long (seconds). */
+  calledMax: 30,
   offRoad: { radius: 4.5, color: 0xffffff, edgeColor: 0x1a1410, arrowSize: 3, arrowGap: 2, arrowBob: 1.5 },
   /** The ghost banner's opacity. */
   ghostOpacity: 0.55,
@@ -2150,6 +2176,8 @@ export const GLASS_SIGN = {
   },
   /** The horn's blow bar is full at this many times HORN.blowLevel (its line sits at 1 / hornBarMax). */
   hornBarMax: 1.6,
+  /** After the horn sounds, the bar stays full and gold this long (seconds), so the player sees the blow counted. */
+  blownHold: 1.5,
 };
 
 /**
@@ -3216,6 +3244,21 @@ export const STRESS_TEST = {
   balloons: 2,
 };
 
+/**
+ * The live loudness panel (debug, src/debug/micPanel.ts): like the FPS panel,
+ * on the other side of front. The loudest level over the last recentSeconds,
+ * redrawn at most every drawEvery seconds (only when a number changed).
+ */
+export const MIC_PANEL = {
+  radius: 27,
+  angleDeg: 16,
+  aboveRing: 1,
+  width: 13.6,
+  height: 6.8,
+  recentSeconds: 3,
+  drawEvery: 0.25,
+};
+
 /** Live frame rate panel for performance checks (debug). */
 export const FPS = {
   /** Frame rate to hold when the XR session does not report its own (Quest browser default). */
@@ -3224,7 +3267,7 @@ export const FPS = {
   refresh: 0.5,
   /** The panel redraws at most this often, and only when its text changed (seconds). */
   drawEvery: 1,
-  /** Hidden by default. The debug page's "FPS on/off" button (or key F) shows it, and ?fps in the URL on the hosted build. */
+  /** Hidden by default. The debug page's "FPS on/off" button shows it, and ?fps in the URL on the hosted build. */
   showInDev: false,
   /** Panel spot: on the ring, a little left of front (clear of the Next button), standing just above it (cm, degrees). */
   radius: 27,

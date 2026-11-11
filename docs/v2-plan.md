@@ -279,6 +279,23 @@ The mechanics the tutorial will show. The tutorial must stay playable after this
 - [x] Eighth test: the bell still did nothing. Its stroke check is simpler now: every stroke that rings stuns, unless a stun is still running; a resting bell says so. Each case is a note on the debug page (`[bell] ...`), so if it fails again the note says why.
 - [x] Eighth test: in the tutorial the knight squads march home after each wave's cheer (`Troops.sendHome`), so lessons start with an empty field. In the real game (Skip tutorial) they stay.
 - [x] Eighth test: knights still ran in place, but the safety nets now bring them back. The debug page has a new "notes" column (`src/debug/notes.ts`): the last few knight, bell and pause notes from the headset, with the knight's mode, leg, its goblin's mode and distance, to find the real cause.
+- [x] Ninth test: the debug keys are gone (the landing page list, the key codes, the key handling); the debug page does everything. The debug page is cleaned up: centered, every part in a card, tables that scroll sideways, stat tiles for the live run.
+- [x] Ninth test: after a horn call, the called spot stays marked (gold pool, pillar, banner, path) until the squad arrives, then goes; the off-road ring no longer stays on the board after the call.
+- [x] Ninth test: no wave goblins at all while a lesson runs, only the lesson's own.
+- [x] Ninth test: the bell's ring sound is off, as a test: if the stun works without it, playing the sound broke the rest of that frame.
+- [x] Tenth test: the horn lesson starts only once no goblin is left on the board (no time limit).
+- [x] Tenth test: blow level 0.05 (0.035 was too easy).
+- [x] Tenth test: in the tutorial every horn call sends a full squad of 5 (`Troops.fullSquads`), and the lesson's 3 goblins stop just in front of the squad and wait to be fought (`Goblin.holdRoad`), so none walks past; if the squad breaks anyway they walk on to the wall.
+- [x] Eleventh test: the bell's code rewritten from scratch (only its model kept): one quick swing is a ring, it must slow down before the next, no ring right after the grab, the game does the stun (`Bell.onRing`), the sound comes last and guarded, and every ring leaves a debug note.
+- [x] Eleventh test: a live loudness panel (`src/debug/micPanel.ts`, `MIC_PANEL`), like the FPS panel and right of front: the mic level now, the loudest in the last 3 s and since opened, and the blow line. Debug page "Mic panel on/off", or ?mic in the URL. Set `HORN.blowLevel` from its numbers.
+- [x] Twelfth test: the bell made no sound at all: its swing line (55 cm/s) was never reached, likely because fast swings blur hand tracking. Back to 30 (what the old check rang at), and notes on each grab and put-down with the top swing speed, to tune it from real numbers.
+- [x] Twelfth test: knights spread without a hard cap: a free knight takes the least crowded goblin near it, so none stands idle while goblins are near.
+- [x] Thirteenth test: the bell's action works (debug ring), only the trigger failed. Trigger rewritten from the Meta docs (hands at 30 Hz, fast motion smoothed or lost): it reads the holding hand, only on tracked frames, and rings on distance from a slow anchor (3 cm), not on speed. Notes on each grab and put-down with the farthest swing.
+- [x] Thirteenth test: no pause when the headset was taken off. The Quest 3S has no proximity sensor (Meta's VRC.Quest.Functional.2), so the game pauses itself: no hand tracked and the head still (3 mm, 0.4 degrees) for 5 s ("paused (headset off)").
+- [x] Fourteenth test: the blow is one frame of raw loudness over 0.015 (no hold, no smoothing); the bar and the loudness panel show the same raw number.
+- [x] Fifteenth test: after the horn sounds the bar stays full and gold for 1.5 s (`GLASS_SIGN.blownHold`), so the player sees the blow counted.
+- [x] Fifteenth test: the spot locks only within 17 cm of the eyes (`HORN.mouthDistance`, was 24): a horn held at rest sometimes locked.
+- [x] Fifteenth test: the lock follows the look. At the lips, a steady look at a road for 0.4 s locks it; looking more than 30 degrees away for 0.3 s unlocks it (soft click) and the spot follows the look again, so a spot locked by accident is never lost from view, and re-aiming needs no lowering of the horn (`HornAim.locked`, `Horn.atLips`).
 - [x] Horn aim 7 degrees below where the head points (`HORN_AIM.gazeDropDeg`): the eyes rest a little below the head's direction, so the spot sat too far out.
 - [x] Bell: one firm stroke stuns (and shows the shock ring); it needed two strokes within 0.7 s, so it often rang and did nothing.
 

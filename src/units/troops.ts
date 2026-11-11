@@ -368,7 +368,7 @@ export class Troops {
   readonly squads: Squad[] = [];
   /** Each road's length (cm), for routes. */
   private lengths: number[];
-  /** Knights fighting each goblin this frame (KNIGHTS.maxPerGoblin). Rebuilt every frame, no new map. */
+  /** Knights fighting each goblin this frame (knights spread to the least crowded one). Rebuilt every frame, no new map. */
   private fighters = new Map<Goblin, number>();
   /** The squad the horn would move now (its banner pulses), or null. */
   answering: Squad | null = null;
@@ -379,6 +379,8 @@ export class Troops {
   held = false;
   /** The squad the horn called or moved last (the horn lesson sends goblins at it). */
   private lastCalled: Squad | null = null;
+  /** The tutorial runs: every horn call sends a full squad (KNIGHTS.squadMax). Set by the battle. */
+  fullSquads = false;
   /** The tutorial sends every squad home after this long (seconds, negative: not asked). */
   private homeTimer = -1;
   /** Called when a battle starts: the wall garrison mans the rampart (src/units/garrison.ts). */
@@ -597,7 +599,8 @@ export class Troops {
     const squad: Squad = { crashed: false, anchor: { ...target }, post: new Vector3(), out: new Vector3(), members: [], pending: 0, broken: false };
     this.placeSquad(squad, target);
     const room = Math.max(0, KNIGHTS.maxField - this.fieldCount);
-    const size = Math.min(room, KNIGHTS.squadMin + this.rng.int(KNIGHTS.squadMax - KNIGHTS.squadMin + 1));
+    // In the tutorial a full squad comes (so its first fight is won); otherwise 3 to 5 at random.
+    const size = Math.min(room, this.fullSquads ? KNIGHTS.squadMax : KNIGHTS.squadMin + this.rng.int(KNIGHTS.squadMax - KNIGHTS.squadMin + 1));
     if (size <= 0) return false;
     for (let i = 0; i < size; i++) this.waiting.push({ legs, squad, kind: this.pickFieldKind(), wait: i * KNIGHTS.leaveGap, slot: i });
     squad.pending = size;
@@ -650,9 +653,18 @@ export class Troops {
     const sent: Goblin[] = [];
     for (let i = 0; i < count; i++) {
       const g = this.goblins.spawnBefore('grunt', index, dir, along, from + i * gap, ((i % 3) - 1) * 1.4);
-      if (g) sent.push(g);
+      if (!g) continue;
+      // They stop just in front of the squad (side by side, a little apart) and wait to be fought, so none walks past.
+      g.holdRoad = index;
+      g.holdAt = Math.max(0, Math.min(road.length, along - dir * (KNIGHTS.lessonHoldOut + i * 2.5)));
+      sent.push(g);
     }
     return sent;
+  }
+
+  /** The squad is gone (it broke): the goblins sent at it walk on to the wall like any goblin. */
+  releaseGroup(goblins: Goblin[]): void {
+    for (const g of goblins) g.holdRoad = -1;
   }
 
   /** The squad's spot: its anchor on the road, the board point, and facing away from the castle along the road. */
@@ -782,7 +794,7 @@ export class Troops {
       this.homeTimer -= dt;
       if (this.homeTimer < 0) this.allHome();
     }
-    // Knights on each goblin now (at most KNIGHTS.maxPerGoblin join one fight).
+    // Knights on each goblin now (a free knight takes the least crowded goblin near it).
     this.fighters.clear();
     for (const t of this.list) {
       if (t.mode === 'fighting' && t.foe && !t.garrison) this.fighters.set(t.foe, (this.fighters.get(t.foe) ?? 0) + 1);
@@ -1193,14 +1205,19 @@ export class Troops {
   }
 
   /**
-   * The nearest goblin within `range` of a point (the knight, or its spot)
-   * on the field that can be fought, that fewer than KNIGHTS.maxPerGoblin
-   * knights are already fighting. Runners rush past, lesson goblins are left alone.
+   * A goblin within `range` of a point (the knight, or its spot) on the
+   * field that can be fought: the one with the fewest knights already on it,
+   * the nearest of those. Runners rush past, lesson goblins are left alone.
    */
   private findFoe(t: Troop, range: number, from: Vector3 = t.root.position): Goblin | null {
     const p = from;
     let best: Goblin | null = null;
     let bestD = range * range;
+    // Spread, no hard cap (headset test: with a cap of 2, extra knights stood idle and a goblin walked past):
+    // the goblin with the fewest knights on it wins, the nearest of those. So knights split over a group,
+    // and once every goblin is taken the rest still join in.
+    let bestCount = Infinity;
+    const range2 = range * range;
     // A knight at its spot only takes goblins inside its leash: fight() lets go of any farther one, so
     // taking it made an endless loop (headset test: a knight walking back to its spot met a goblin past
     // the leash, started a fight, let go the same frame, and again, frozen mid-run, the goblin frozen too).
@@ -1209,7 +1226,6 @@ export class Troops {
     for (const g of this.goblins.list) {
       if (g.type === 'runner' || !FIGHTABLE.has(g.mode) || this.goblins.isLesson(g)) continue;
       if (g === t.ignore && t.ignoreTime > 0) continue;
-      if (g !== t.foe && (this.fighters.get(g) ?? 0) >= KNIGHTS.maxPerGoblin) continue;
       const q = g.root.position;
       if (q.x * q.x + q.z * q.z < CASTLE.wallOut * CASTLE.wallOut) continue;
       if (leashed) {
@@ -1220,7 +1236,11 @@ export class Troops {
       const dx = q.x - p.x;
       const dz = q.z - p.z;
       const d = dx * dx + dz * dz;
-      if (d < bestD) {
+      if (d > range2) continue;
+      // Knights already on it, not counting this one.
+      const count = (this.fighters.get(g) ?? 0) - (g === t.foe && t.mode === 'fighting' ? 1 : 0);
+      if (count < bestCount || (count === bestCount && d < bestD)) {
+        bestCount = count;
         bestD = d;
         best = g;
       }

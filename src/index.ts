@@ -2,14 +2,12 @@ import { World } from '@iwsdk/core';
 import { AudioContext as ThreeAudioContext } from 'three';
 import projectOptions from 'virtual:iwsdk-project';
 import { mic } from './audio/mic.js';
-import { DEBUG_KEYS } from './debug/debugKeys.js';
 import { GameSystem, requestBattleStart } from './game.js';
 import { MouseLookSystem } from './player/mouseLook.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const startPage = document.getElementById('start-page') as HTMLDivElement;
 const enterButton = document.getElementById('enter-vr') as HTMLButtonElement;
-const keyList = document.getElementById('debug-keys') as HTMLUListElement;
 const micStatus = document.getElementById('mic-status') as HTMLParagraphElement;
 
 const MIC_TEXT: Record<string, string> = {
@@ -22,12 +20,6 @@ const MIC_TEXT: Record<string, string> = {
 const showMic = (): void => {
   micStatus.textContent = MIC_TEXT[mic.state];
 };
-
-for (const { key, does } of DEBUG_KEYS) {
-  const item = document.createElement('li');
-  item.innerHTML = `<b>${key}</b> ${does}`;
-  keyList.appendChild(item);
-}
 
 World.create(container, projectOptions).then(async (world) => {
   world.registerSystem(GameSystem);

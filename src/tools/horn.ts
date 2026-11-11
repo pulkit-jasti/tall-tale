@@ -4,13 +4,14 @@
 //   1. Held anywhere (not yet at the mouth), the head aims it: where the look
 //      meets a road, a glowing pool, a light pillar and a ghost banner show
 //      where the knights will go (src/ui/hornAim.ts). Nothing covers the view.
-//   2. Lifted to the lips, the spot locks: the banner turns gold, a click, and
-//      the path the knights will take lights up along the roads. Lowered
-//      again, it unlocks. Near the face the horn fades to see-through
+//   2. At the lips, a steady look at a road locks the spot: the banner turns
+//      gold, a click, and the path the knights will take lights up along the
+//      roads. Looking away from it (or lowering the horn) unlocks it, and a
+//      steady look locks again, with no need to lower the horn. Near the face the horn fades to see-through
 //      (HORN.fade*), so the gold banner and the path stay in view.
-//   3. Blow: with the mic, only a real blow sends them (loudness over
-//      HORN.blowLevel for about 0.3 s, shown live on a bar in front of the
-//      eyes, the glass sign, src/ui/kit/glassSign.ts): holding it there never fires it, so
+//   3. Blow: with the mic, only a real blow sends them (the raw loudness of
+//      one frame over HORN.blowLevel is enough, shown live on a bar in front
+//      of the eyes, the glass sign, src/ui/kit/glassSign.ts): holding it there never fires it, so
 //      aiming is never cut short. With the quiet horn setting or no mic,
 //      keeping it at the lips for HORN.holdTime sends them (voice is never
 //      required, hard rule). The spot is locked by then, so a hold always
@@ -32,9 +33,8 @@ const mouthWorld = new Vector3();
 export class Horn extends HandTool {
   private mouthpieceLocal = new Vector3();
   private bellLocal = new Vector3();
-  /** Time locked at the lips, and the mic loudness over the blow level (seconds). */
+  /** Time locked at the lips (seconds), and the mic's raw loudness this frame. */
   private atMouth = 0;
-  private blowTime = 0;
   private level = 0;
   private hears = false;
   private puffTimer = 0;
@@ -43,11 +43,16 @@ export class Horn extends HandTool {
   readonly head = new Vector3();
   /** The horn sounded (`blown`: into the mic, louder). The game sends the knights. */
   onCall: (blown: boolean) => void = () => {};
-  /** True when a road spot is aimed at (src/ui/hornAim.ts). Without one it does not lock or blow. */
-  aimOk: () => boolean = () => true;
+  /**
+   * True while the aim has locked its spot (src/ui/hornAim.ts): at the lips,
+   * a steady look at a road locks it, a look away unlocks it. Only then can it blow.
+   */
+  aimLocked: () => boolean = () => true;
   /** Held and not yet sounded: the head aims it. */
   aiming = false;
-  /** At the lips with a spot aimed at: the spot is locked. */
+  /** The mouthpiece is at the lips (HORN.mouthDistance). The aim locks by the look then. */
+  atLips = false;
+  /** At the lips and the aim's spot is locked: a blow (or the quiet hold) sends the knights. */
   locked = false;
   /** How far the call is (0 to 1): the quiet hold, or the blow (the aim's pillar grows with it). */
   charge = 0;
@@ -73,7 +78,7 @@ export class Horn extends HandTool {
 
   protected resetMotion(): void {
     this.atMouth = 0;
-    this.blowTime = 0;
+    this.atLips = false;
     this.locked = false;
     this.charge = 0;
   }
@@ -98,6 +103,7 @@ export class Horn extends HandTool {
     this.aiming = false;
     super.update(dt);
     if (!this.aiming) {
+      this.atLips = false;
       this.locked = false;
       this.charge = 0;
       this.level = 0;
@@ -130,23 +136,32 @@ export class Horn extends HandTool {
     this.hears = hears;
     if (hears) {
       mic.ensureLive();
-      this.level += (mic.read() - this.level) * (1 - Math.exp(-dt / HORN.levelSmoothing));
+      // The raw loudness of this frame: the blow counts the moment it passes the line, even for one frame
+      // (no smoothing, no holding it), and the bar shows the same number.
+      this.level = mic.read();
     } else this.level = 0;
     this.bodyToWorld(this.mouthpieceLocal, mouthWorld);
     const distance = mouthWorld.distanceTo(this.head);
     // Near the face it fades to see-through.
     const t = Math.min(1, Math.max(0, (distance - HORN.fadeNear) / (HORN.fadeFar - HORN.fadeNear)));
     this.fade(HORN.fadeOpacity + (1 - HORN.fadeOpacity) * t);
-    // At the lips with a spot aimed at: locked. Lowered (or no spot): unlocked, and nothing counts.
-    if (distance >= HORN.mouthDistance || (!this.locked && !this.aimOk())) {
+    // Lowered: nothing counts.
+    if (distance >= HORN.mouthDistance) {
       this.resetMotion();
+      return;
+    }
+    // At the lips: the aim locks by the look (a steady look at a road), and unlocks when the look leaves it.
+    this.atLips = true;
+    if (!this.aimLocked()) {
+      this.locked = false;
+      this.atMouth = 0;
+      this.charge = 0;
       return;
     }
     this.locked = true;
     // The lesson's "spot set" beat: locked, but nothing counts yet (the quiet hold starts after it).
     if (this.waiting) {
       this.atMouth = 0;
-      this.blowTime = 0;
       this.charge = 0;
       return;
     }
@@ -154,9 +169,9 @@ export class Horn extends HandTool {
     // With the mic only a real blow sends them; the quiet horn (or no mic) sends them after a short hold.
     let blown = false;
     if (hears) {
-      this.blowTime = this.level > HORN.blowLevel ? this.blowTime + dt : 0;
-      blown = this.blowTime >= HORN.blowHold;
-      this.charge = Math.min(1, this.blowTime / HORN.blowHold);
+      // One frame over the line is a blow (headset test: holding it a while was too hard to hit).
+      blown = this.level >= HORN.blowLevel;
+      this.charge = Math.min(1, this.level / HORN.blowLevel);
     } else this.charge = Math.min(1, this.atMouth / HORN.holdTime);
     if (this.charge > 0) {
       this.puffTimer -= dt;
@@ -178,6 +193,8 @@ export class Horn extends HandTool {
     // The call goes out to the aimed spot first, then the aim is let go.
     this.onCall(blown);
     this.resetMotion();
+    // Done aiming from this frame on, so the aim shows the called spot instead (src/ui/hornAim.ts).
+    this.aiming = false;
     // Solid again for a moment as it sounds.
     this.fade(1);
     this.onUse(1);

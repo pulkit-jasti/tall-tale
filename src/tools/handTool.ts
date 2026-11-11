@@ -337,6 +337,11 @@ export abstract class HandTool {
     return this.holder?.hand === hand;
   }
 
+  /** The hand holding it, or null (for tools that read the hand's own motion, like the bell). */
+  protected get heldHand(): HandState | null {
+    return this.holder?.hand ?? null;
+  }
+
   grab(hand: HandState, viaPinch: boolean): void {
     this.body.updateMatrixWorld(true);
     this.handWorldMatrix(hand, viaPinch, handMatrix);

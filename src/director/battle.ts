@@ -509,7 +509,7 @@ export class Battle implements TutorialApi {
     const { spawner, flags, panel, goblins, stage } = this.parts;
     this.head.copy(head);
     this.forward.copy(forward);
-    // How far the player moved the board (the ring, or the debug keys).
+    // How far the player moved the board (the ring, or the debug page).
     this.spun += Math.abs(angleDelta(this.lastSpin, stage.spin)) / degToRad(1);
     this.moved += Math.abs(stage.height - this.lastHeight);
     this.lastSpin = stage.spin;
@@ -542,9 +542,13 @@ export class Battle implements TutorialApi {
       // No soldiers come out while something is taught: the lesson needs goblins, and the soldiers would knock them out first.
       const step = (this.director?.current ?? null) as TutorialStep | null;
       this.parts.troops.held = step?.hint?.kind === 'lesson';
+      // In the tutorial every horn call sends a full squad, so its fights are won.
+      this.parts.troops.fullSquads = this.teach;
       this.quietTools(step);
       // No new goblins while any are inside the castle (v2): the player has to deal with the intruders first.
-      spawner.rate = goblins.countMode('intruder') > 0 ? 0 : (this.director?.spawnRate ?? 1);
+      // And none at all while a lesson runs: only the lesson's own goblins are out (headset test: other goblins confused).
+      const inLesson = step?.hint?.kind === 'lesson';
+      spawner.rate = inLesson || goblins.countMode('intruder') > 0 ? 0 : (this.director?.spawnRate ?? 1);
       spawner.update(dt);
       if (this.state.phase !== 'playing') this.end();
     }
@@ -1179,6 +1183,11 @@ export class Battle implements TutorialApi {
 
   squadReady(): boolean {
     return this.parts.troops.calledSquadReady;
+  }
+
+  releaseSquadFoes(): void {
+    const left = this.squadFoes.filter(({ g, serial }) => g.serial === serial && g.mode !== 'dead').map(({ g }) => g);
+    this.parts.troops.releaseGroup(left);
   }
 
   squadFoesLeft(): number {

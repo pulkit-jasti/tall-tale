@@ -1,8 +1,8 @@
-// Debug actions, so features can be tested without a mic or a headset.
-// Each one runs from a keyboard key (desktop or emulator) and from a button on
-// the laptop debug page (https://<dev server>/__debug), which reaches the
-// headset live while `npm run dev` runs. The key list is also shown on the
-// start page. No Three.js here: vite.config.ts reads this file too.
+// Debug actions, so features can be tested without a mic or a headset. Each
+// one is a button on the laptop debug page (https://<dev server>/__debug),
+// which reaches every open game page (the headset too) live while
+// `npm run dev` runs. No keyboard keys (the headset has none, and the page
+// does everything). No Three.js here: vite.config.ts reads this file too.
 import { TUTORIAL_WAVES } from '../director/tutorial.js';
 
 export type DebugCommand =
@@ -44,6 +44,7 @@ export type DebugCommand =
   | 'triggersReset'
   | 'triggersFire'
   | 'fps'
+  | 'micPanel'
   | 'stress'
   | 'resetRun'
   | 'autoTest'
@@ -80,17 +81,15 @@ export interface DebugAction {
   group: DebugGroup;
   /** Emoji shown on the debug page button. */
   icon: string;
-  /** Keyboard key code, if the action has a single press key. */
-  code?: string;
-  /** Short name for buttons and the key list. */
+  /** Short name for the button. */
   label: string;
   does: string;
-  /** One button per value (debug page only, no key), sent along with the action. */
+  /** One button per value, sent along with the action. */
   args?: number[];
 }
 
 export const DEBUG_ACTIONS: DebugAction[] = [
-  { id: 'restartBattle', group: 'game', icon: '🔄', code: 'KeyA', label: 'Restart game', does: 'Start the whole tutorial again from the first lesson, and make Play start there again' },
+  { id: 'restartBattle', group: 'game', icon: '🔄', label: 'Restart game', does: 'Start the whole tutorial again from the first lesson, and make Play start there again' },
   {
     id: 'startWave',
     group: 'game',
@@ -106,7 +105,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     label: 'Measure reach again',
     does: 'Forget the saved reach (the board goes back to its normal size) and start the battle with the reach check ("Show me how big you are, giant!"), then the wave Play starts at',
   },
-  { id: 'skipStep', group: 'game', icon: '⏭️', code: 'KeyS', label: 'Skip step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
+  { id: 'skipStep', group: 'game', icon: '⏭️', label: 'Skip step', does: 'Skip the current tutorial step (lesson, banner or wave)' },
   {
     id: 'skipTutorial',
     group: 'game',
@@ -114,7 +113,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     label: 'Skip tutorial',
     does: 'Start a new battle without the tutorial: wave 1, every tool out, no lessons (like Skip tutorial on the welcome and pause panels)',
   },
-  { id: 'pause', group: 'game', icon: '⏸️', code: 'Space', label: 'Pause / resume', does: 'Pause the battle (like the pause button) or resume it' },
+  { id: 'pause', group: 'game', icon: '⏸️', label: 'Pause / resume', does: 'Pause the battle (like the pause button) or resume it' },
   {
     id: 'pauseAction',
     group: 'game',
@@ -123,36 +122,36 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     does: 'While paused, poke a pause panel button: 1 Resume, 2 Reset table, 3 Measure reach, 4 Restart',
     args: [1, 2, 3, 4],
   },
-  { id: 'skipWave', group: 'game', icon: '⏩', code: 'KeyW', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
-  { id: 'celebrate', group: 'castle', icon: '🎉', code: 'Semicolon', label: 'Celebrate', does: 'Show the wave cleared celebration now (confetti over the castle, soldiers cheer)' },
-  { id: 'damageCastle', group: 'castle', icon: '💥', code: 'KeyD', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
-  { id: 'loseCastle', group: 'castle', icon: '🏳️', code: 'KeyH', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
-  { id: 'grunts', group: 'goblins', icon: '👹', code: 'KeyG', label: 'Grunts', does: 'Send a group of grunts' },
-  { id: 'runners', group: 'goblins', icon: '💨', code: 'KeyR', label: 'Runners', does: 'Send a group of runners' },
-  { id: 'climberFront', group: 'goblins', icon: '🧗', code: 'KeyC', label: 'Climber in front', does: 'A bare handed grunt climbs the wall right in front of you (every goblin climbs now: bash, climb, rampart, courtyard)' },
-  { id: 'eatFront', group: 'goblins', icon: '😋', code: 'KeyB', label: 'Eat front goblin', does: 'Eat the goblin nearest the front of the wall' },
-  { id: 'balloonFront', group: 'goblins', icon: '🎈', code: 'Comma', label: 'Balloon in front', does: 'A balloon with two riders floats in right in front of you (pop it with the slingshot, or it drops them into the courtyard)' },
-  { id: 'popBalloons', group: 'goblins', icon: '💥', code: 'Period', label: 'Pop balloons', does: 'Pop every balloon in the air: the riders fall and poof' },
-  { id: 'helmetGrunts', group: 'goblins', icon: '⛑️', code: 'Slash', label: 'Helmet grunts', does: 'Send a group of grunts that all wear helmets (one extra hit from anything but a trigger, the helmet flies off)' },
-  { id: 'armoredGrunts', group: 'goblins', icon: '🛡️', code: 'Backslash', label: 'Armored grunts', does: 'Send a group of grunts with helmet, shield and sword (3 hits each: helmet off, then shield off, then out)' },
-  { id: 'auto', group: 'goblins', icon: '🔁', code: 'KeyT', label: 'Auto spawn on/off', does: 'Extra auto spawning on or off (on top of the waves)' },
-  { id: 'clear', group: 'goblins', icon: '🧹', code: 'KeyK', label: 'Remove all', does: 'Remove all goblins' },
-  { id: 'slingShot', group: 'slingshot', icon: '🎯', code: 'KeyL', label: 'Shoot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },
-  { id: 'slingLoad', group: 'slingshot', icon: '🪨', code: 'KeyO', label: 'Load pebble', does: 'Put a pebble in the slingshot pouch' },
-  { id: 'slingGoblin', group: 'slingshot', icon: '👺', code: 'KeyJ', label: 'Load goblin', does: 'Put the goblin nearest the castle in the slingshot pouch (then L shoots it)' },
-  { id: 'bowlEmpty', group: 'slingshot', icon: '🥣', code: 'KeyU', label: 'Empty bowl', does: 'Empty the pebble bowl (the bowl shows Locked until it refills)' },
-  { id: 'bowlFill', group: 'slingshot', icon: '🫙', code: 'KeyI', label: 'Fill bowl', does: 'Fill the pebble bowl' },
-  { id: 'rechargeTools', group: 'food', icon: '🔋', code: 'KeyY', label: 'Recharge tools', does: 'Every tool is ready at once (its recharge ring full)' },
-  { id: 'drainTools', group: 'food', icon: '🪫', code: 'Digit0', label: 'Drain tools', does: 'Every tool that is out ends its use and recharges from empty (dimmed, the ring on its platform filling)' },
-  { id: 'eatRefill', group: 'food', icon: '😋', code: 'KeyV', label: 'Eat refill', does: 'What eating one goblin does: every recharging ring jumps forward 10% of its full recharge' },
-  { id: 'showTools', group: 'food', icon: '🧰', code: 'Digit1', label: 'Show tools', does: 'The horn, fly swatter, pepper shaker and bell pop onto their platforms now (normally in waves 1, 3, 4 and 5)' },
-  { id: 'swat', group: 'food', icon: '🪰', code: 'Digit2', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (starts its 10 s use, then a 20 s recharge)' },
-  { id: 'pepper', group: 'food', icon: '🌶️', code: 'Digit3', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },
-  { id: 'horn', group: 'food', icon: '📯', code: 'Digit4', label: 'Blow horn', does: 'Horn: it sounds without hands or a mic and the field knights charge down the road in front of you (30 s recharge)' },
-  { id: 'bell', group: 'food', icon: '🔔', code: 'Digit5', label: 'Ring bell', does: 'Bell: a hard ring without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (35 s recharge)' },
-  { id: 'troops', group: 'army', icon: '🛡️', code: 'Digit6', label: 'Send knights', does: 'What the horn does, aimed at the road about 130 cm out in front of you: a new squad of 3 to 5 knights (up to 4 squads), or at the limit the nearest squad moves there' },
-  { id: 'troopsToggle', group: 'army', icon: '🚫', code: 'Digit9', label: 'Troops on/off', does: 'Troops on or off for testing: off, every soldier (knights and the wall garrison) is gone; on, the garrison is back on the walls' },
-  { id: 'thinGarrison', group: 'army', icon: '🏹', code: 'Minus', label: 'Thin garrison', does: 'Two soldiers of the wall garrison go down (archers first): one new one climbs up from the courtyard every 15 s' },
+  { id: 'skipWave', group: 'game', icon: '⏩', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
+  { id: 'celebrate', group: 'castle', icon: '🎉', label: 'Celebrate', does: 'Show the wave cleared celebration now (confetti over the castle, soldiers cheer)' },
+  { id: 'damageCastle', group: 'castle', icon: '💥', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
+  { id: 'loseCastle', group: 'castle', icon: '🏳️', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },
+  { id: 'grunts', group: 'goblins', icon: '👹', label: 'Grunts', does: 'Send a group of grunts' },
+  { id: 'runners', group: 'goblins', icon: '💨', label: 'Runners', does: 'Send a group of runners' },
+  { id: 'climberFront', group: 'goblins', icon: '🧗', label: 'Climber in front', does: 'A bare handed grunt climbs the wall right in front of you (every goblin climbs now: bash, climb, rampart, courtyard)' },
+  { id: 'eatFront', group: 'goblins', icon: '😋', label: 'Eat front goblin', does: 'Eat the goblin nearest the front of the wall' },
+  { id: 'balloonFront', group: 'goblins', icon: '🎈', label: 'Balloon in front', does: 'A balloon with two riders floats in right in front of you (pop it with the slingshot, or it drops them into the courtyard)' },
+  { id: 'popBalloons', group: 'goblins', icon: '💥', label: 'Pop balloons', does: 'Pop every balloon in the air: the riders fall and poof' },
+  { id: 'helmetGrunts', group: 'goblins', icon: '⛑️', label: 'Helmet grunts', does: 'Send a group of grunts that all wear helmets (one extra hit from anything but a trigger, the helmet flies off)' },
+  { id: 'armoredGrunts', group: 'goblins', icon: '🛡️', label: 'Armored grunts', does: 'Send a group of grunts with helmet, shield and sword (3 hits each: helmet off, then shield off, then out)' },
+  { id: 'auto', group: 'goblins', icon: '🔁', label: 'Auto spawn on/off', does: 'Extra auto spawning on or off (on top of the waves)' },
+  { id: 'clear', group: 'goblins', icon: '🧹', label: 'Remove all', does: 'Remove all goblins' },
+  { id: 'slingShot', group: 'slingshot', icon: '🎯', label: 'Shoot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },
+  { id: 'slingLoad', group: 'slingshot', icon: '🪨', label: 'Load pebble', does: 'Put a pebble in the slingshot pouch' },
+  { id: 'slingGoblin', group: 'slingshot', icon: '👺', label: 'Load goblin', does: 'Put the goblin nearest the castle in the slingshot pouch (then L shoots it)' },
+  { id: 'bowlEmpty', group: 'slingshot', icon: '🥣', label: 'Empty bowl', does: 'Empty the pebble bowl (the bowl shows Locked until it refills)' },
+  { id: 'bowlFill', group: 'slingshot', icon: '🫙', label: 'Fill bowl', does: 'Fill the pebble bowl' },
+  { id: 'rechargeTools', group: 'food', icon: '🔋', label: 'Recharge tools', does: 'Every tool is ready at once (its recharge ring full)' },
+  { id: 'drainTools', group: 'food', icon: '🪫', label: 'Drain tools', does: 'Every tool that is out ends its use and recharges from empty (dimmed, the ring on its platform filling)' },
+  { id: 'eatRefill', group: 'food', icon: '😋', label: 'Eat refill', does: 'What eating one goblin does: every recharging ring jumps forward 10% of its full recharge' },
+  { id: 'showTools', group: 'food', icon: '🧰', label: 'Show tools', does: 'The horn, fly swatter, pepper shaker and bell pop onto their platforms now (normally in waves 1, 3, 4 and 5)' },
+  { id: 'swat', group: 'food', icon: '🪰', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (starts its 10 s use, then a 20 s recharge)' },
+  { id: 'pepper', group: 'food', icon: '🌶️', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },
+  { id: 'horn', group: 'food', icon: '📯', label: 'Blow horn', does: 'Horn: it sounds without hands or a mic and the field knights charge down the road in front of you (30 s recharge)' },
+  { id: 'bell', group: 'food', icon: '🔔', label: 'Ring bell', does: 'Bell: a hard ring without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (35 s recharge)' },
+  { id: 'troops', group: 'army', icon: '🛡️', label: 'Send knights', does: 'What the horn does, aimed at the road about 130 cm out in front of you: a new squad of 3 to 5 knights (up to 4 squads), or at the limit the nearest squad moves there' },
+  { id: 'troopsToggle', group: 'army', icon: '🚫', label: 'Troops on/off', does: 'Troops on or off for testing: off, every soldier (knights and the wall garrison) is gone; on, the garrison is back on the walls' },
+  { id: 'thinGarrison', group: 'army', icon: '🏹', label: 'Thin garrison', does: 'Two soldiers of the wall garrison go down (archers first): one new one climbs up from the courtyard every 15 s' },
   {
     id: 'triggerLesson',
     group: 'army',
@@ -160,20 +159,19 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     label: 'Trigger lesson group',
     does: 'A small group of grunts walks to the powder keg nearest the front and waits beside it until it is set off (what the wave 2 keg lesson does)',
   },
-  { id: 'triggersReset', group: 'army', icon: '🛢️', code: 'Digit7', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
-  { id: 'triggersFire', group: 'army', icon: '💣', code: 'Digit8', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },
+  { id: 'triggersReset', group: 'army', icon: '🛢️', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
+  { id: 'triggersFire', group: 'army', icon: '💣', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },
   { id: 'spinLeft', group: 'board', icon: '↩️', label: 'Spin left', does: 'Turn the board left one step' },
   { id: 'spinRight', group: 'board', icon: '↪️', label: 'Spin right', does: 'Turn the board right one step' },
   { id: 'boardUp', group: 'board', icon: '⬆️', label: 'Board up', does: 'Raise the board one step' },
   { id: 'boardDown', group: 'board', icon: '⬇️', label: 'Board down', does: 'Lower the board one step' },
   { id: 'giantToggle', group: 'board', icon: '🧍', label: 'Giant body on/off', does: 'Show or hide the giant body under the head (the seat floor stays)' },
-  { id: 'place', group: 'board', icon: '📍', code: 'KeyP', label: 'Place again', does: 'Place the board again in front of you' },
+  { id: 'place', group: 'board', icon: '📍', label: 'Place again', does: 'Place the board again in front of you' },
   {
     id: 'nextTime',
     group: 'sky',
     icon: '🌗',
-    code: 'BracketRight',
-    label: 'Next time of day',
+       label: 'Next time of day',
     does: 'Change to the next time of day (morning, day, sunset, night), the same 8 s change as between waves. Kept until the next battle starts',
   },
   {
@@ -184,20 +182,18 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     does: 'Change to this time of day: 1 morning, 2 day, 3 sunset, 4 night (the same change as between waves). Kept until the next battle starts',
     args: [1, 2, 3, 4],
   },
-  { id: 'fps', group: 'performance', icon: '🖥️', code: 'KeyF', label: 'FPS panel on/off', does: 'FPS panel on or off (hidden by default; add ?fps to the URL on the hosted build)' },
-  { id: 'resetRun', group: 'performance', icon: '⏱️', code: 'KeyN', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },
-  { id: 'stress', group: 'performance', icon: '🏋️', code: 'KeyM', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },
+  { id: 'fps', group: 'performance', icon: '🖥️', label: 'FPS panel on/off', does: 'FPS panel on or off (hidden by default; add ?fps to the URL on the hosted build)' },
+  {
+    id: 'micPanel',
+    group: 'performance',
+    icon: '🎙️',
+    label: 'Mic panel on/off',
+    does: 'Live loudness panel on or off (right of front): the mic level now, the loudest in the last 3 s and since opened, and the horn blow line (HORN.blowLevel). Or add ?mic to the URL',
+  },
+  { id: 'resetRun', group: 'performance', icon: '⏱️', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },
+  { id: 'stress', group: 'performance', icon: '🏋️', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },
   { id: 'autoTest', group: 'performance', icon: '▶️', label: 'Run stress test', does: 'Automatic stress test: stops the battle, adds grunts step by step until FPS fails, then clears the board' },
   { id: 'stopTest', group: 'performance', icon: '⏹️', label: 'Stop stress test', does: 'Stop the automatic stress test and clear the board' },
-];
-
-/** The key list for the start page (single press actions plus the hold keys). */
-export const DEBUG_KEYS: { key: string; does: string }[] = [
-  ...DEBUG_ACTIONS.filter((a) => a.code).map((a) => ({ key: a.code!.replace('Key', '').replace('Digit', ''), does: a.does })),
-  { key: 'Q / E', does: 'Turn the board left / right (hold)' },
-  { key: 'Z / X', does: 'Board down / up (hold)' },
-  { key: 'Mouse', does: 'Drag to look around, scroll to zoom (browser only)' },
-  { key: 'Laptop', does: 'Open /__debug on the dev server for buttons that reach the headset live' },
 ];
 
 /** Event name for debug commands sent over the dev server's WebSocket. */
@@ -255,7 +251,7 @@ export interface PageInfo {
   notes?: string;
 }
 
-/** A debug command as it comes in from a key or the debug page. */
+/** A debug command as it comes in from the debug page. */
 export interface DebugRequest {
   id: DebugCommand;
   arg?: number;

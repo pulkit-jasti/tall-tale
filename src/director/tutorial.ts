@@ -94,12 +94,11 @@ export const TUTORIAL_TIMING = {
    * player has eaten this many goblins in it, or after this long (seconds).
    */
   // Fewer goblins before the horn (headset test): half the spawn rate meanwhile, 2 eaten or 30 s, then a
-  // breather with no new goblins until the board is clear (at most breatherMax seconds).
-  // Then only hornGoblins come out at all before the horn, and the breather waits longer for a clear board.
+  // breather with no new goblins until the board is clear.
+  // Then only hornGoblins come out at all before the horn, and the horn waits for a clear board.
   hornAfterEaten: 2,
   hornAfterSeconds: 30,
   hornGoblins: 3,
-  breatherMax: 25,
   /**
    * The horn lesson's pace (seconds): "look around" stays at least hornLookTime
    * after the grab (so the player finds out the flag follows the look before
@@ -280,6 +279,8 @@ export interface TutorialApi {
   /** The squad the horn called is in the field, and it has reached its spot. */
   hasSquad(): boolean;
   squadReady(): boolean;
+  /** Those goblins stop waiting in front of the squad and walk on (the squad is gone). */
+  releaseSquadFoes(): void;
   /** How many of those goblins are still on the board. */
   squadFoesLeft(): number;
   /** A tool appears on its platform with a poof and glows until grabbed. */
@@ -824,7 +825,11 @@ function squadFightStep(): TutorialStep {
       waited = 0;
     },
     tick: (api, dt) => {
-      if (sent) return;
+      // The squad broke after all: its goblins walk on to the wall, where the player deals with them (never stuck).
+      if (sent) {
+        if (!api.hasSquad()) api.releaseSquadFoes();
+        return;
+      }
       waited += dt;
       // No squad in the field (debug, or it broke): nothing to watch.
       if (!api.hasSquad()) {
@@ -967,10 +972,11 @@ export function buildTutorialSteps(
         slowSpawns: true,
         holdSpawnsWhen: (api) => api.spawnedInWave() >= TUTORIAL_TIMING.hornGoblins,
       });
-      // A breather before the tool: no new goblins, until the board is clear (or breatherMax).
+      // A breather before the tool: no new goblins, and the tool comes only once the board is clear
+      // (headset test: goblins left over confused the horn lesson). Skip tutorial is the way out.
       steps.push({
         id: `wave-${i + 1}-breather`,
-        done: (api, time) => api.goblinsLeft() === 0 || time > TUTORIAL_TIMING.breatherMax,
+        done: (api) => api.goblinsLeft() === 0,
         timeout: Infinity,
         holdSpawns: true,
       });

@@ -21,7 +21,6 @@ import {
 
 const actions = new Map<string, DebugAction>(DEBUG_ACTIONS.map((a) => [a.id, a]));
 
-const keyName = (code: string): string => code.replace('Key', '').replace('Digit', '');
 const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 /** One button, or a row of numbered buttons for an action with values (Start at wave 1 to 5). */
@@ -32,17 +31,17 @@ function actionHtml(a: DebugAction): string {
       .join('');
     return `<div class="multi" title="${escape(a.does)}"><span class="icon">${a.icon}</span><span class="label">${a.label}</span><span class="nums">${buttons}</span></div>`;
   }
-  const key = a.code ? `<kbd>${keyName(a.code)}</kbd>` : '';
-  return `<button data-id="${a.id}" title="${escape(a.does)}"><span class="icon">${a.icon}</span><span class="label">${a.label}</span>${key}</button>`;
+  return `<button data-id="${a.id}" title="${escape(a.does)}"><span class="icon">${a.icon}</span><span class="label">${a.label}</span></button>`;
 }
 
 function sectionsHtml(): string {
   return DEBUG_GROUPS.map((g) => {
     const items = DEBUG_ACTIONS.filter((a) => a.group === g.id);
     if (!items.length) return '';
-    return `<section><h3><span class="icon">${g.icon}</span>${g.title}</h3><div class="grid">${items.map(actionHtml).join('')}</div></section>`;
+    return `<section class="panel"><h3><span class="icon">${g.icon}</span>${g.title}</h3><div class="grid">${items.map(actionHtml).join('')}</div></section>`;
   }).join('\n');
 }
+
 /** Too short to trust, so not kept in the history (seconds). */
 const MIN_RUN_SECONDS = 5;
 const HISTORY_SIZE = 100;
@@ -62,73 +61,100 @@ function page(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tall Tale debug</title>
 <style>
-  body { font-family: system-ui, sans-serif; background: #1d1813; color: #eee6d8; margin: 0; padding: 24px; max-width: 1200px; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #1d1813; color: #eee6d8; margin: 0; }
+  main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
-  p { margin: 0 0 16px; color: #b9ae9c; font-size: 14px; }
-  .sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
-  section { background: #2a211a; border: 1px solid #4a372a; border-radius: 12px; padding: 12px 14px 14px; }
-  h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; color: #f2c14e; text-transform: uppercase; letter-spacing: 0.04em; }
+  h2 { font-size: 15px; margin: 0 0 6px; }
+  h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; color: #f2c14e; text-transform: uppercase; letter-spacing: 0.04em; }
   h3 .icon { margin-right: 8px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-  button { font: inherit; font-size: 14px; padding: 10px; border-radius: 9px; border: 1px solid #5a4330;
+  p { margin: 0 0 12px; color: #b9ae9c; font-size: 13px; line-height: 1.45; }
+  .panel { background: #2a211a; border: 1px solid #4a372a; border-radius: 12px; padding: 14px 16px; }
+  .stack { display: grid; gap: 16px; margin-top: 16px; }
+  .top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  .state { font-size: 13px; color: #b9ae9c; }
+  .state b { color: #f2e9da; }
+  #log { font-size: 13px; color: #7ddf64; min-height: 1.2em; }
+  /* The action sections: cards of equal width, each row as tall as its tallest card. */
+  .sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  button { font: inherit; font-size: 13px; min-height: 40px; padding: 8px 10px; border-radius: 9px; border: 1px solid #5a4330;
     background: #3b2b1f; color: #f2e9da; cursor: pointer; display: flex; align-items: center; gap: 8px; text-align: left; }
   button:hover { background: #4d3828; }
   button:active, button.sent { background: #f2c14e; color: #1d1813; }
   button .label { flex: 1; }
-  .icon { font-size: 17px; line-height: 1; }
-  kbd { font: 11px ui-monospace, Menlo, monospace; padding: 2px 6px; border-radius: 5px; background: #1d1813; color: #b9ae9c; border: 1px solid #5a4330; }
-  .multi { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9px;
-    border: 1px solid #5a4330; background: #33261b; }
-  .multi .label { flex: 1; font-size: 14px; }
+  .icon { font-size: 16px; line-height: 1; }
+  .multi { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 10px; border-radius: 9px;
+    border: 1px solid #5a4330; background: #33261b; font-size: 13px; }
+  .multi .label { flex: 1; }
   .nums { display: flex; gap: 6px; }
-  button.num { padding: 6px 12px; font-weight: 600; justify-content: center; }
-  .state { font-size: 13px; color: #b9ae9c; margin: 0 0 12px; }
-  .state b { color: #f2e9da; }
-  #log { margin: 12px 0 0; font-size: 13px; color: #b9ae9c; min-height: 1.2em; }
-  h2 { font-size: 16px; margin: 28px 0 8px; }
-  .live { display: flex; gap: 12px; flex-wrap: wrap; }
-  .card { background: #2a211a; border: 1px solid #5a4330; border-radius: 10px; padding: 12px 16px; min-width: 260px; }
-  .card b { font-size: 26px; display: block; }
-  .stats { display: grid; grid-template-columns: repeat(4, auto); gap: 4px 18px; font-size: 13px; color: #b9ae9c; }
-  table { border-collapse: collapse; font-size: 14px; }
-  th, td { padding: 6px 12px; text-align: right; border-bottom: 1px solid #3b2b1f; }
-  th { color: #b9ae9c; font-weight: 500; }
+  button.num { min-height: 30px; padding: 4px 12px; font-weight: 600; justify-content: center; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: 13px; width: 100%; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid #3b2b1f; text-align: left; vertical-align: top; }
+  th { color: #b9ae9c; font-weight: 500; white-space: nowrap; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.notes { white-space: pre-line; font-size: 12px; color: #d8cdb9; min-width: 280px; }
   .good { color: #7ddf64; } .ok { color: #f2c14e; } .bad { color: #ff5a4e; }
-  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
-  .row button { padding: 6px 10px; font-size: 13px; }
-  .result { background: #2a211a; border: 1px solid #5a4330; padding: 12px 16px; border-radius: 10px; margin: 8px 0;
-    white-space: pre; font-family: ui-monospace, Menlo, monospace; font-size: 13px; overflow-x: auto; }
-  .note { font-size: 15px; margin: 4px 0 8px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .row button { min-height: 30px; padding: 4px 10px; }
+  .live { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .run { background: #33261b; border: 1px solid #5a4330; border-radius: 10px; padding: 10px 14px; }
+  .run .meta { font-size: 12px; color: #b9ae9c; margin-bottom: 8px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tile span { display: block; font-size: 11px; color: #b9ae9c; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tile b { font-size: 24px; }
+  .result { background: #1d1813; border: 1px solid #4a372a; padding: 12px 14px; border-radius: 10px; margin: 8px 0;
+    white-space: pre; font-family: ui-monospace, Menlo, monospace; font-size: 12px; overflow-x: auto; }
+  .note { font-size: 14px; margin: 4px 0 8px; }
 </style>
 </head>
 <body>
-<h1>Tall Tale debug</h1>
-<p>Each button runs on every open game page (headset included) right away. Needs <code>npm run dev</code>. Hover a button to see what it does. Keys work in the browser game too.</p>
-<div class="state" id="state">No game page connected.</div>
+<main>
+<div class="top">
+  <div>
+    <h1>Tall Tale debug</h1>
+    <p>Each button runs on every open game page (the headset too) right away, while <code>npm run dev</code> runs. Hover a button to see what it does.</p>
+  </div>
+  <div>
+    <div class="state" id="state">No game page connected.</div>
+    <div id="log"></div>
+  </div>
+</div>
 <div class="sections">
 ${sectionsHtml()}
 </div>
-<div id="log"></div>
-<h2>Connected game pages</h2>
-<p>Every open game page checks in every 2 s. "laptop" pages run on localhost (the emulator fakes a Quest there), "headset" pages on the Mac's network address. Close laptop game tabs before testing.</p>
-<table>
-  <thead><tr><th>page</th><th>device</th><th>in VR</th><th>state</th><th>step</th><th>Play at</th><th>fps</th><th>target</th><th>units</th><th>mic</th><th>notes</th></tr></thead>
-  <tbody id="pages"><tr><td colspan="11">No game page connected.</td></tr></tbody>
-</table>
-<h2>Automatic stress test</h2>
-<p>Put on the headset and enter VR, press <b>Run stress test</b> above, then sit still and look at the board in front of you until it says Done. Only a page in VR runs it. Paste the result text.</p>
-<div id="test"><p>Not run yet.</p></div>
-<h2>Measured run (live)</h2>
-<div class="live" id="live"><p>No game page is sending numbers yet.</p></div>
-<h2>Finished runs</h2>
-<div class="row">
-  <button id="copy">Copy as CSV</button>
-  <button id="clear">Clear history</button>
+<div class="stack">
+  <section class="panel">
+    <h2>Connected game pages</h2>
+    <p>Each open game page checks in every 2 s. "laptop" pages run on localhost (the emulator fakes a Quest there), "headset" pages on the Mac's network address. Close laptop game tabs before testing. Notes are the game's last few messages (a stuck knight, what the bell did, what paused it).</p>
+    <div class="scroll"><table>
+      <thead><tr><th>page</th><th>device</th><th>in VR</th><th>state</th><th>step</th><th>Play at</th><th class="num">fps</th><th class="num">target</th><th class="num">units</th><th>mic</th><th>notes</th></tr></thead>
+      <tbody id="pages"><tr><td colspan="11">No game page connected.</td></tr></tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <h2>Automatic stress test</h2>
+    <p>Put on the headset and enter VR, press <b>Run stress test</b> above, then sit still and look at the board in front of you until it says Done. Only a page in VR runs it. Paste the result text.</p>
+    <div id="test"><p>Not run yet.</p></div>
+  </section>
+  <section class="panel">
+    <h2>Measured run (live)</h2>
+    <div class="live" id="live"><p>No game page is sending numbers yet.</p></div>
+  </section>
+  <section class="panel">
+    <h2>Finished runs</h2>
+    <div class="row">
+      <button id="copy">Copy as CSV</button>
+      <button id="clear">Clear history</button>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>time</th><th>page</th><th>device</th><th class="num">units</th><th class="num">seconds</th><th class="num">avg fps</th><th class="num">1% low</th><th class="num">missed</th></tr></thead>
+      <tbody id="history"></tbody>
+    </table></div>
+  </section>
 </div>
-<table>
-  <thead><tr><th>time</th><th>page</th><th>device</th><th>units</th><th>seconds</th><th>avg fps</th><th>1% low</th><th>missed</th></tr></thead>
-  <tbody id="history"></tbody>
-</table>
+</main>
 <script>
   const TARGET = ${FPS.target};
   const log = document.getElementById('log');
@@ -138,6 +164,8 @@ ${sectionsHtml()}
   };
   const missCls = (pct) => (pct < 1 ? 'good' : pct < 5 ? 'ok' : 'bad');
   const time = (at) => new Date(at).toLocaleTimeString();
+  const esc = (text) => String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const td = (text, cl) => '<td' + (cl ? ' class="' + cl + '"' : '') + '>' + text + '</td>';
   let rows = [];
   async function refresh() {
     try {
@@ -145,12 +173,11 @@ ${sectionsHtml()}
       document.getElementById('pages').innerHTML = data.pages.length
         ? data.pages
             .map(
-              (p) => '<tr><td>' + p.page + '</td><td>' + p.device + '</td><td>' + (p.immersive ? 'yes' : 'no') +
-                '</td><td>' + (p.testing ? 'stress test' : p.paused ? 'paused' : 'playing') + '</td><td>' + (p.step || '') +
-                '</td><td>wave ' + (p.playFrom || 1) + '</td><td class="' +
-                cls(p.liveFps, p.targetFps) + '">' + p.liveFps.toFixed(0) + '</td><td>' + p.targetFps + '</td><td>' +
-                p.units + '</td><td>' + (p.mic || '') + '</td><td style="white-space:pre-line;font-size:12px">' +
-                String(p.notes || '').replace(/</g, '&lt;') + '</td></tr>',
+              (p) =>
+                '<tr>' + td(esc(p.page)) + td(esc(p.device)) + td(p.immersive ? 'yes' : 'no') +
+                td(p.testing ? 'stress test' : p.paused ? 'paused' : 'playing') + td(esc(p.step)) + td('wave ' + (p.playFrom || 1)) +
+                td(p.liveFps.toFixed(0), 'num ' + cls(p.liveFps, p.targetFps)) + td(p.targetFps, 'num') + td(p.units, 'num') +
+                td(esc(p.mic)) + td(esc(p.notes), 'notes') + '</tr>',
             )
             .join('')
         : '<tr><td colspan="11">No game page connected.</td></tr>';
@@ -164,21 +191,23 @@ ${sectionsHtml()}
       live.innerHTML = data.live.length
         ? data.live
             .map(
-              (s) => '<div class="card"><div class="stats"><span>' + s.device + ' ' + s.page + '</span><span>' + s.units +
-                ' units</span><span>' + s.seconds.toFixed(0) + ' s</span><span>of ' + s.targetFps + ' fps</span></div>' +
-                '<div class="stats"><span>avg<b class="' + cls(s.avgFps, s.targetFps) + '">' + s.avgFps.toFixed(1) + '</b></span>' +
-                '<span>1% low<b class="' + cls(s.lowFps, s.targetFps) + '">' + s.lowFps.toFixed(0) + '</b></span>' +
-                '<span>missed<b class="' + missCls(s.missedPct) + '">' + s.missedPct.toFixed(1) + '%</b></span></div></div>',
+              (s) =>
+                '<div class="run"><div class="meta">' + esc(s.device) + ' ' + esc(s.page) + ' · ' + s.units + ' units · ' +
+                s.seconds.toFixed(0) + ' s · target ' + s.targetFps + ' fps</div><div class="tiles">' +
+                '<div class="tile"><span>avg</span><b class="' + cls(s.avgFps, s.targetFps) + '">' + s.avgFps.toFixed(1) + '</b></div>' +
+                '<div class="tile"><span>1% low</span><b class="' + cls(s.lowFps, s.targetFps) + '">' + s.lowFps.toFixed(0) + '</b></div>' +
+                '<div class="tile"><span>missed</span><b class="' + missCls(s.missedPct) + '">' + s.missedPct.toFixed(1) + '%</b></div>' +
+                '</div></div>',
             )
             .join('')
         : '<p>No game page is sending numbers yet.</p>';
       rows = data.history;
       document.getElementById('history').innerHTML = rows
         .map(
-          (s) => '<tr><td>' + time(s.at) + '</td><td>' + s.page + '</td><td>' + s.device + '</td><td>' + s.units + '</td><td>' +
-            s.seconds.toFixed(0) + '</td><td class="' + cls(s.avgFps, s.targetFps) + '">' + s.avgFps.toFixed(1) +
-            '</td><td class="' + cls(s.lowFps, s.targetFps) + '">' + s.lowFps.toFixed(0) + '</td><td class="' +
-            missCls(s.missedPct) + '">' + s.missedPct.toFixed(1) + '%</td></tr>',
+          (s) =>
+            '<tr>' + td(time(s.at)) + td(esc(s.page)) + td(esc(s.device)) + td(s.units, 'num') + td(s.seconds.toFixed(0), 'num') +
+            td(s.avgFps.toFixed(1), 'num ' + cls(s.avgFps, s.targetFps)) + td(s.lowFps.toFixed(0), 'num ' + cls(s.lowFps, s.targetFps)) +
+            td(s.missedPct.toFixed(1) + '%', 'num ' + missCls(s.missedPct)) + '</tr>',
         )
         .join('');
       renderTest(data.stressTest);

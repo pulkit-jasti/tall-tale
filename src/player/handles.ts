@@ -115,7 +115,7 @@ export class BoardHandles {
     this.ring.rotation.y = this.turn;
   }
 
-  /** Debug keys: turn the board and change its height without hands. */
+  /** Debug page: turn the board and change its height without hands. */
   nudge(spinRadians: number, heightCm: number): void {
     this.stage.spin += spinRadians;
     // The ring turns along, so its compass letters keep matching the board.

@@ -309,7 +309,7 @@ Built on `feat/day-night-cycle` too (2026-11-05 to 2026-11-10), after the day an
 - **Music:** check the battle loop point (32 s, taken from the file's name), and the music layers idea ([audio.md](audio.md)).
 - **Sound licenses:** check each Freesound file's license on its page (CC BY needs a credit line). InspectorJ (the sneeze) usually uses CC BY.
 - **Sound files still to prepare:** the sword hits (cut into single hits), the village ambience (20 MB, needs a short loop). Still missing: goblin chatter, burp, keg explosion, troop cheer, lose sound, ambience and night sounds.
-- **Debug keys:** safe to remove (the debug page does everything, the headset has no keyboard), not removed yet. The debug actions and their code stay for the page.
+- **Debug keys:** removed (v2): the debug page does everything, and the headset has no keyboard. The debug actions and their code stay for the page. Key names further up in this doc are history.
 - **Campfires at night:** the goblin camps' fires fade with the terrain; a small glow would help.
 - **Lighting the ground near torches** in the terrain shader, if night still looks flat (option 2 of the torch light ideas).
 

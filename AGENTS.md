@@ -97,7 +97,7 @@ Four times of day follow the waves (docs/mvp.md, "Day and night cycle"). Anythin
 - The developer works on a Mac and tests on a Quest 3S over Wi-Fi in the Quest browser.
 - Make as much as possible testable in desktop Chrome with the Immersive Web Emulator, so the developer only needs the headset for feel and hand tracking checks.
 - Add debug shortcuts, for example keys that trigger the megaphone, skip a wave or add food, so features can be tested without a mic or a headset.
-- Every debug action goes in `DEBUG_ACTIONS` in `src/debug/debugKeys.ts` (with its section `group` and an emoji `icon`) and gets a case in `GameSystem.runDebug`. It then works from a keyboard key and from the laptop debug page at `/__debug` on the dev server, which sends it live to the headset over Vite's hot reload WebSocket (`vite-plugins/debugPage.ts`, dev only). An action with `args` gets one button per value (for example "Start at wave 1 to 5").
+- Every debug action goes in `DEBUG_ACTIONS` in `src/debug/debugKeys.ts` (with its section `group` and an emoji `icon`) and gets a case in `GameSystem.runDebug`. It then works from a button on the laptop debug page at `/__debug` on the dev server (no keyboard keys: the headset has none), which sends it live to the headset over Vite's hot reload WebSocket (`vite-plugins/debugPage.ts`, dev only). An action with `args` gets one button per value (for example "Start at wave 1 to 5").
 - **Rapid testing:** "Start at wave N" on the debug page starts the battle at that wave (earlier lessons and waves left out, earlier tools already out). Play then starts there too, even after a reload in the same tab, until "Restart game". The pages table shows each page's current tutorial step.
 - Keep game rules data driven (unit stats, tool costs, food values in config files), so tuning does not need code changes.
 - Keep three parts separate: the map blueprint (static JSON), the director (code that decides what happens when, for example the scripted tutorial) and the game systems. Directors only call systems. See docs/map.md section 8.
@@ -115,7 +115,7 @@ When the developer starts a cloud session to build the MVP, these rules replace 
 - Use iwsdk-reference and the metavr docs and API tools for every API question, before writing the code.
 - Do not use iwsdk-runtime, browser screenshots, the emulator or the metavr device and performance tools. There is no headset or GPU in the cloud.
 - IWSDK skills (for example `iwsdk-dev`) ask for runtime checks and screenshots. Skip those parts and check with typecheck, build and tests instead.
-- End each step's commit message with a "Headset check:" list: what to test on the headset and the debug keys for it.
+- End each step's commit message with a "Headset check:" list: what to test on the headset and the debug page buttons for it.
 - Stop after step 1 and tell the developer it is ready for a headset test. (MVP build only. For the v2 runs, follow docs/v2-plan.md section 3: commit after every step, stop only at the end of the run.)
 - If anything in docs/ conflicts with these rules, these rules win.
 

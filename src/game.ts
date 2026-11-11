@@ -6,9 +6,9 @@ import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { BALLOONS, DEBUG, FPS, GLASS_SIGN, GOBLIN_RULES, HORN, JUICE, HANDLES, PAUSE, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TOOLS, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
+import { BALLOONS, DEBUG, FPS, GLASS_SIGN, GOBLIN_RULES, HORN, JUICE, PAUSE, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TOOLS, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
 import { eatShare } from './rules/recharge.js';
-import { DEBUG_ACTIONS, type DebugCommand } from './debug/debugKeys.js';
+import type { DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
 import tutorialMap from './maps/tutorial.json';
@@ -25,6 +25,7 @@ import { GlassSign, loadUiImages, type GlassBar } from './ui/kit/index.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';
+import { MicPanel } from './debug/micPanel.js';
 import { note, recentNotes } from './debug/notes.js';
 import { mark } from './debug/perfMarks.js';
 import { sendHeartbeat, sendRunStats, sendStressTest, takeRemoteCommands } from './debug/remote.js';
@@ -95,6 +96,9 @@ export class GameSystem extends createSystem({}) {
   private hornAim!: HornAim;
   /** The see-through sign that follows the look (glass lessons, the horn). */
   private glass!: GlassSign;
+  /** After a horn call: the full bar stays up this long yet (seconds), and if it was blown into the mic. */
+  private blowShown = 0;
+  private blownByMic = false;
   private bell!: Bell;
   private stun!: StunWave;
   private tools: HandTool[] = [];
@@ -124,6 +128,8 @@ export class GameSystem extends createSystem({}) {
   private battle!: Battle;
   private debugRng!: Random;
   private fps!: FpsCounter;
+  /** The live loudness panel (debug). */
+  private micPanel!: MicPanel;
   private stressTest!: StressTest;
   private placeTimer = -1;
   private wasImmersive = false;
@@ -141,6 +147,11 @@ export class GameSystem extends createSystem({}) {
   private lastFrameAt = 0;
   /** What paused the game last (the FPS panel shows it while paused). */
   private pauseReason = 'button';
+  /** The headset-off check: where the head was when it last moved, and how long it has been still since (seconds). */
+  private stillAt = new Vector3();
+  private stillQuat = new Quaternion();
+  private stillSet = false;
+  private stillTime = 0;
   /** How long each hand has held a pinch with its palm toward the eyes (the Quest menu gesture). */
   private menuPinch = [0, 0];
   /** Paused from the pause button (or auto-paused in VR): stays paused until Resume. */
@@ -191,6 +202,7 @@ export class GameSystem extends createSystem({}) {
     buildSeatFloor(this.stage.boardLift, createRandom(seed + 720));
     this.giant = new GiantBody(root);
     this.fps = new FpsCounter(this.stage.boardLift);
+    this.micPanel = new MicPanel(this.stage.boardLift);
 
     const ghost = new GhostHand();
     const [built] = await Promise.all([
@@ -211,7 +223,13 @@ export class GameSystem extends createSystem({}) {
     this.pepper = new PepperShaker(toolParts);
     this.stun = new StunWave(this.stage, this.goblins, this.audio, this.particles);
     this.horn = new Horn(toolParts);
-    this.bell = new Bell(toolParts, this.stun);
+    // The bell rings, the game stuns: every goblin dizzy, the shock ring across the board, the rampart goblins knocked down.
+    this.bell = new Bell(toolParts);
+    this.bell.stunning = () => this.stun.active;
+    this.bell.onRing = (where, seconds) => {
+      const stunned = this.stun.stun(seconds, where);
+      return stunned + this.goblins.knockOffRampart();
+    };
     this.tools = [this.swatter, this.pepper, this.bell, this.horn];
     this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
     // The wall garrison (v2): archers and guards on the rampart, run with the troops.
@@ -294,7 +312,9 @@ export class GameSystem extends createSystem({}) {
       bait: new LessonBait(this.goblins, built.network),
       pauseButton: (out) => this.pauseMenu.buttonWorld(out),
       // The horn lesson's beats: not held, aiming, a spot to lock, locked at the lips.
-      hornState: () => (!this.horn.aiming ? 'idle' : this.horn.locked ? 'blow' : this.hornAim.valid ? 'lift' : 'aim'),
+      // At the lips but not locked yet: "look at a road" (a steady look there locks it).
+      hornState: () =>
+        !this.horn.aiming ? 'idle' : this.horn.locked ? 'blow' : this.hornAim.valid && !this.horn.atLips ? 'lift' : 'aim',
       audio: this.audio,
       particles: this.particles,
       threat: this.threat,
@@ -325,11 +345,14 @@ export class GameSystem extends createSystem({}) {
     // The horn calls the field knights (v2) to the road spot the player looks at (src/ui/hornAim.ts).
     this.hornAim = new HornAim(this.stage, this.troops, this.audio);
     this.glass = new GlassSign(root);
-    this.horn.aimOk = () => this.hornAim.valid;
-    this.horn.onCall = () => {
+    this.horn.aimLocked = () => this.hornAim.locked;
+    this.horn.onCall = (blown) => {
+      // The full bar stays up a moment after the call (see updateGlass).
+      this.blowShown = GLASS_SIGN.blownHold;
+      this.blownByMic = blown;
       const target = this.hornAim.target;
       // Debug (no hands, no aim): the road in front.
-      if (target) this.troops.command(target);
+      if (target && this.troops.command(target)) this.hornAim.markCalled(target);
       else this.troops.charge(this.stage.spin);
     };
     // Their crash into the goblins: a hit stop, a ring and a pow star.
@@ -494,6 +517,7 @@ export class GameSystem extends createSystem({}) {
     // Aim for the rate the headset really runs at (72, 90 or 120 Hz).
     this.fps.target = Math.round(this.world.session?.frameRate ?? FPS.target);
     this.fps.update(delta, !paused);
+    this.micPanel.update(Math.min(delta, 0.1));
     this.heartbeatTimer -= delta;
     if (this.heartbeatTimer <= 0) {
       this.heartbeatTimer = DEBUG.heartbeatEvery;
@@ -512,14 +536,17 @@ export class GameSystem extends createSystem({}) {
     }
     if (hidden) return;
 
-    // The hands, the head and the debug keys run while paused too: the pause panel needs them.
+    // The hands, the head and the debug page's commands run while paused too: the pause panel needs them.
     const dt = Math.min(delta, 0.05);
     this.player.updateWorldMatrix(true, false);
     this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
     this.readHead();
     // The Quest menu gesture (a pinch with the palm toward the eyes) pauses at once, whatever the browser reports.
     if (immersive && this.battle.canPause && !this.menuPaused && this.metaGesture(dt)) this.pause('menu gesture');
-    this.debugKeys(dt);
+    // The headset taken off: the Quest 3S has no proximity sensor, so the system never says so (Meta's
+    // VRC.Quest.Functional.2). Both hands gone and the head perfectly still for a few seconds means it is off.
+    if (immersive && this.battle.canPause && !this.menuPaused && this.headsetOff(dt)) this.pause('headset off');
+    this.debugCommands();
     // The giant's body stays under the head, also while paused.
     this.giant.update(dt, headPosition, headForward, this.stage.boardLift.position.y);
     // Sounds behind the head are muffled, also while paused (the panel's clicks).
@@ -576,7 +603,7 @@ export class GameSystem extends createSystem({}) {
       if (this.placeTimer <= 0) this.placeBoard();
     }
     // Once the board is in place (in VR, after the auto placement), the welcome
-    // panel shows. Its Play button starts the battle (in the browser: key A).
+    // panel shows. Its Play button starts the battle (in the browser: the debug page's Restart game).
     if (pendingStart === 'browser' || (pendingStart === 'vr' && immersive && this.placeTimer <= 0)) {
       pendingStart = null;
       this.battle.welcome();
@@ -604,7 +631,7 @@ export class GameSystem extends createSystem({}) {
     for (const tool of this.tools) tool.update(dt);
     // The horn held: the head aims it (a glowing pool, a light pillar and a ghost banner on the road);
     // at the lips the spot locks (gold, the path along the roads).
-    this.hornAim.update(dt, this.horn.aiming, this.horn.locked, this.horn.charge, headPosition, headForward);
+    this.hornAim.update(dt, this.horn.aiming, this.horn.atLips, this.horn.charge, headPosition, headForward);
     this.updateGlass(dt, headPosition, headForward);
     this.stun.update(dt);
     this.threat.update(dt);
@@ -650,7 +677,16 @@ export class GameSystem extends createSystem({}) {
         : { share: horn.charge, line: null, over: false };
     }
     let text = this.battle.glassText;
-    if (!text && horn.aiming) text = horn.locked ? (horn.listening ? 'Blow!' : 'Hold it there') : this.hornAim.valid ? 'Lift it to your lips' : 'Look at a road';
+    if (!text && horn.aiming) {
+      text = horn.locked ? (horn.listening ? 'Blow!' : 'Hold it there') : this.hornAim.valid && !horn.atLips ? 'Lift it to your lips' : 'Look at a road';
+    }
+    // Just blown: the bar stays full and gold for a moment, so the player sees the blow was loud enough
+    // (headset test: it vanished the instant it passed the line).
+    if (this.blowShown > 0) {
+      this.blowShown -= dt;
+      bar = { share: 1, line: horn.listening || this.blownByMic ? 1 / GLASS_SIGN.hornBarMax : null, over: true };
+      text = text ?? 'Charge!';
+    }
     this.glass.show(dt, text, bar, head, forward);
   }
 
@@ -682,6 +718,35 @@ export class GameSystem extends createSystem({}) {
       }
     });
     return fired;
+  }
+
+  /**
+   * True once the headset looks taken off: no hand tracked, and the head has
+   * not moved more than PAUSE.headsetOff.moveCm nor turned more than turnDeg
+   * from where it was, for `seconds`. A worn headset always moves a little
+   * (breathing, small turns), one lying on a desk does not. Any movement or
+   * a hand starts the wait over.
+   */
+  private headsetOff(dt: number): boolean {
+    const S = PAUSE.headsetOff;
+    let hand = false;
+    for (const h of this.hands.hands) if (h.tracked) hand = true;
+    const moved =
+      !this.stillSet ||
+      headPosition.distanceTo(this.stillAt) > S.moveCm * 0.01 ||
+      headQuaternion.angleTo(this.stillQuat) > degToRad(S.turnDeg);
+    if (hand || moved) {
+      this.stillAt.copy(headPosition);
+      this.stillQuat.copy(headQuaternion);
+      this.stillSet = true;
+      this.stillTime = 0;
+      return false;
+    }
+    this.stillTime += dt;
+    if (this.stillTime < S.seconds) return false;
+    this.stillTime = 0;
+    this.stillSet = false;
+    return true;
   }
 
   /** Listens to the XR session's focus once per session: the Quest menu blurs or hides it. */
@@ -779,23 +844,9 @@ export class GameSystem extends createSystem({}) {
     }
   }
 
-  private debugKeys(dt: number): void {
-    const keys = this.input.keyboard;
-    for (const action of DEBUG_ACTIONS) {
-      if (action.code && keys.getKeyDown(action.code)) this.runDebug(action.id);
-    }
-    // Buttons on the laptop debug page (dev server only).
+  /** Buttons on the laptop debug page (dev server only). */
+  private debugCommands(): void {
     for (const { id, arg } of takeRemoteCommands()) this.runDebug(id, arg);
-    let spin = 0;
-    let height = 0;
-    // A bigger spin moves the board to the left as seen from the seat.
-    if (keys.getKeyPressed('KeyQ')) spin += 1;
-    if (keys.getKeyPressed('KeyE')) spin -= 1;
-    if (keys.getKeyPressed('KeyZ')) height -= 1;
-    if (keys.getKeyPressed('KeyX')) height += 1;
-    if (spin || height) {
-      this.handles.nudge(degToRad(spin * HANDLES.keyRotateDegPerSec * dt), height * HANDLES.keyHeightCmPerSec * dt);
-    }
   }
 
   private runDebug(id: DebugCommand, arg?: number): void {
@@ -956,6 +1007,9 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'fps':
         this.fps.toggle();
+        break;
+      case 'micPanel':
+        this.micPanel.toggle();
         break;
       case 'stress':
         // Raise the unit cap for this session so the real limit can be found.

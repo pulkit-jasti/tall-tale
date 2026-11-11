@@ -136,6 +136,9 @@ export class Goblin {
    */
   waitRoad = -1;
   waitAt = 0;
+  /** Sent at a knight squad: it stops at `holdAt` on this road and waits to be fought (not a lesson goblin: knights take it on). */
+  holdRoad = -1;
+  holdAt = 0;
   waiting = false;
   /** Lesson bait: the slingshot shoots past it (no aim bend, no hit), so shots reach the trigger behind it. */
   bait = false;
@@ -580,6 +583,7 @@ export class Goblins {
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
     goblin.nextRoad = -1;
     goblin.waitRoad = -1;
+    goblin.holdRoad = -1;
     goblin.waiting = false;
     goblin.bait = false;
     goblin.patrolRoad = -1;
@@ -1155,6 +1159,17 @@ export class Goblins {
               g.waiting = true;
               g.play('idle');
             }
+            break;
+          }
+        }
+        // Sent at a knight squad (the horn lesson's fight): it stops in front of the squad and waits for a
+        // knight, so none walks past (headset test: one did, and the lesson could never end). Knights do fight it.
+        if (g.holdRoad === g.step.road) {
+          const next = g.distance + g.speed * dt * dir;
+          if (dir === 1 ? next >= g.holdAt : next <= g.holdAt) {
+            g.distance = g.holdAt;
+            road.pointAt(g.distance, g.offset * dir, p);
+            g.play('idle');
             break;
           }
         }
