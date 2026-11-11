@@ -1,6 +1,6 @@
 # Tall Tale v2: Plan and Decisions
 
-Status: decided (2026-11-10). Run 1 built (2026-11-10) and tuned over 15 headset rounds (to 2026-11-11, build only, committed). Next: run 2, see "Before run 2 (handoff)" in section 3. Branch: `feat/v2`.
+Status: decided (2026-11-10). Run 1 built (2026-11-10) and tuned over 15 headset rounds (to 2026-11-11, build only, committed). Run 2 rescoped (2026-11-11) to the menus and the new UI only, designed in [menus.md](menus.md). Next: run 2, see "Before run 2 (handoff)" and "Run 2" in section 3. Branch: `feat/v2`.
 
 **This file wins over every other doc where they disagree.** The other docs describe the MVP as built. As each part below is built, update its topic doc (the "What this replaces" table says which) and tick it in the checklist here. When everything is folded in, this file is history.
 
@@ -15,11 +15,11 @@ Everything is optimized for judging (Meta VR Start Developer Competition 2026, t
 What judges actually see, in order:
 
 1. **The tutorial (about 8 to 10 minutes).** For most judges this is the whole game. It must be complete, polished and show the most fun parts: eating, the slingshot, the swatter, the horn calling the army, the bell. It is also the "Best First Five Minutes" prize.
-2. **The menus after the tutorial (about 1 minute of looking around).** This wins or loses "Best Reason to Come Back": a campaign path with 25 levels and tool unlock icons, the tool rack with locked tools, the trophy shelf with riddles, and "More coming soon" at the end of each.
+2. **The menus after the tutorial (about 1 minute of looking around).** This wins or loses "Best Reason to Come Back": a campaign of 15 levels (5 playable, 10 readable but locked) and tool unlock icons, the tool rack with locked tools, the trophy shelf with riddles, and "More coming soon" at the end of each.
 3. **The demo video (under 3 minutes).** Shows what judges never reach: later levels, night battles, a tool unlock, a new tool.
 4. **The Devpost write-up.**
 
-So: the tutorial and the menus come first. Levels 1 to 3 must be good (a judge may press Play once). Levels 4 to 25 can be cheap variations. Levels unlock in order, so nobody jumps ahead to a repetitive level.
+So: the tutorial and the menus come first. Levels 1 to 5 must be good (they are all open from the start, so a judge may play any of them). Levels 6 to 15 are text only for now: their cards can be read, but they stay locked (see [menus.md](menus.md#locked-levels)).
 
 ---
 
@@ -62,12 +62,14 @@ So: the tutorial and the menus come first. Levels 1 to 3 must be good (a judge m
   - The **mic permission stays** on the 2D start page, for the horn. The megaphone and its scream are gone.
   - The horn needs its own platform in the reach band (the bell and the megaphone used to share one). Sound: the existing `waveHorn` war horn can be reused.
 
-### 2.4 Loadout: slingshot plus 3
+### 2.4 Loadout: 4 tools, 2 fixed, 2 picked (changed 2026-11-11)
 
-- A battle has **the slingshot plus 3 tools**.
-- **The tutorial teaches slingshot, swatter, horn and bell** (proposed in section 4, confirm before run 2). **Pepper is the first unlock**, in the first campaign level with armored goblins, so it is learned when it is needed.
-- **First-use lessons:** a tool learned after the tutorial gets its lesson the first time it is on the platforms in a battle (a small "first use coach" that reuses the tutorial's lesson steps in any battle).
-- Open: does the player pick their 3 tools per level, or does each level set them? (section 5)
+- A battle has **exactly 4 tools: the slingshot and the horn are always in, and the player picks the other 2** (from swatter, pepper, bell and the new tools). So a battle has 4 tool platforms (was 5).
+- Why fixed: the slingshot sets off the triggers and pops balloons, and the horn is the only way to call the knights.
+- **The player picks**, by putting tools from the tool shelf on the loadout stand in the menu ([menus.md](menus.md#5-tools-the-shelf-and-the-loadout)).
+- **The bell leaves the tutorial** (its swing trigger does not work well yet). It becomes an unlock in levels 1 to 5 and gets fixed later.
+- **Every unlockable tool unlocks in levels 1 to 5.** Which tool in which level is decided once the tools are final.
+- **First-use lessons:** postponed until more tools exist (not in run 2).
 
 ### 2.5 Gear has real effects
 
@@ -121,12 +123,14 @@ Two clear jobs, so the army never looks dumb:
 
 ### 2.8 Campaign, unlocks and saving
 
-- **Campaign: 25 levels**, unlocking in order. 25 shows there is a lot of content; judges will not play them all.
-  - **Levels 1 to 3:** hand-made and polished.
-  - **Levels 4 to 25:** made with our own map generator, then tweaked.
-  - **Stars:** 1 to 3 per level from the castle health at the end (already designed in [castle-rules.md](castle-rules.md#star-rating)).
-  - **Tool unlocks** spread evenly over the levels (one every 2 to 3 levels, depending on how many tools exist). A level that unlocks a tool shows the tool's icon on its card, and a "New!" moment after the win.
-- **A level is data:** map blueprint + waves + loadout + tool unlock + twist (time of day, gear mix, triggers, enemy mix).
+- **Campaign: 15 levels (changed 2026-11-11, was 25).** Details in [menus.md](menus.md#8-campaign-panel).
+  - **Levels 1 to 5:** open from the start, hand-made and polished.
+  - **Levels 6 to 15:** locked, text only for now (name, flavor, skulls, enemies, reward), so their cards show the variety. Beating level 5 opens 6, then each win opens the next. Built later from the same data.
+  - **Every level has a twist** made from existing systems, and its name comes from the twist. Daily Battle gets rule-breaking twists that never appear in the campaign ([menus.md](menus.md#campaign-twists-vs-daily-twists)).
+  - **Difficulty** rises gently, with new problems, not tougher goblins, shown as 1 to 3 skulls.
+  - **Stars:** 3 at 70% health or more, 2 at 35% or more, 1 below; best kept; retry costs no stars; no points score ([menus.md](menus.md#stars)).
+  - **Tool unlocks** all in levels 1 to 5 (not yet assigned). An unlock level shows the tool's icon on its card, and a "New!" moment after the win.
+- **A level is data:** map blueprint + waves + tool unlock + twist (gear mix, triggers, enemy mix, camps). No time of day per level: every level has 4 waves, one time of day each.
 - **The map generator is our design tool, not a runtime feature:** seed and settings in, blueprint out (the rules in [map.md](map.md#the-level-generator-later-not-in-the-mvp)). We tweak the output and save each level as a fixed file, so every player gets the same tested level.
 - **The wave director** reads waves from the level file (planned in [map.md](map.md#directors)). The tutorial keeps its own scripted director.
 - **Saving:** localStorage, no backend. Levels done, stars, unlocked tools, achievements, riddle hint counts.
@@ -136,13 +140,14 @@ Two clear jobs, so the army never looks dumb:
 
 ### 2.9 Menus after the tutorial
 
-All on the board, in the giant's own giant-sized style ([modes-and-progression.md](modes-and-progression.md#2-the-menu-is-the-board-in-peacetime)):
+**Replaced by [menus.md](menus.md) (2026-11-11), which has the full design.** In short:
 
-- **Campaign path:** 25 level cards (locked ones visible), stars on done levels, a tool icon on unlock levels.
-- **Tool rack:** every tool, locked and unlocked. Grab an unlocked one and a small tag shows its name and one line, with its ghost demo looping beside it (reuse `src/ui/ghostDemos.ts`). A locked one is a grey silhouette with its unlock ("Beat level 6"). New tools glow until grabbed once.
-- **Trophy shelf:** achievements (2.10).
-- **"More coming soon"** as one locked card at the end of each list: levels, tools, achievements. One card per list, no more.
-- Built from the UI library (`src/ui/kit/`), inside the reach band.
+- The menu is the tutorial battleground: after the tutorial the castle, flags and battle things sink into the ground and the menu rises.
+- Front: the main menu panel with tile buttons in different sizes (Campaign big in the center, Daily and Custom beside it, Settings and Replay tutorial small below). Every option shown, none locked.
+- Campaign: a split panel, a level list scrolled by a vertical slider on the left, the selected level's detail card on the right, a red Fight button with a sword.
+- Right: the tool shelf. Left: the achievements shelf. Low in front: the loadout stand (slingshot and horn fixed, 2 slots to fill from the shelf).
+- **"More coming soon"** as one card at the end of each list: levels, tools, achievements.
+- Built only from the UI library (`src/ui/kit/`), inside the reach band, with two new kit parts (a tile button, a vertical slider).
 
 ### 2.10 Achievements as riddles
 
@@ -257,8 +262,8 @@ This is the current state. The step notes above and the round log below are hist
 - **Not yet checked on the headset:** the bell's swing trigger (read its "held ... farthest swing" note), the headset-off pause, the blow at 0.015 with the gaze lock, the knights' first fight, and the left-hand horn demo (the horn's curve was shaped for a right hand).
 - **Owed:** the stress test with 26 troops plus the garrison (`STRESS_TEST`), logged in [performance.md](performance.md). `npm run typecheck` has not run since run 1 started, so expect type errors. `npm test` is stale: `src/rules/director.test.ts` still expects the food jar, the megaphone and lesson timeouts.
 - **Known open bug:** knights now and then run in place beside a goblin. The safety nets recover it; the debug page notes give the knight's mode, leg and its goblin's mode and distance, to find the cause.
-- **Decide section 4** (the tutorial order is built as wave 1 horn, 2 slingshot, 3 swatter, 4 pepper, 5 bell; the proposal there differs).
-- A good first task for run 2: run typecheck and fix it, and bring the tests up to date, before the tutorial rebuild.
+- **Section 4 decided in part (2026-11-11):** the bell leaves the tutorial. Whether pepper stays in wave 4 is still open.
+- **Tests: skipped for now** (developer, 2026-11-11). No new tests and no fixing old ones in run 2. Only `npm run build` must pass before each commit.
 
 #### Headset rounds log (history)
 
@@ -347,21 +352,28 @@ This is the current state. The step notes above and the round log below are hist
 - [x] Horn aim 7 degrees below where the head points (`HORN_AIM.gazeDropDeg`): the eyes rest a little below the head's direction, so the spot sat too far out.
 - [x] Bell: one firm stroke stuns (and shows the shock ring); it needed two strokes within 0.7 s, so it often rang and did nothing.
 
-### Run 2: everything judges see
+### Run 2: the menus and the new UI (rescoped 2026-11-11)
 
-Decide section 4 first (after feeling run 1 on the headset).
+**Only the menus and the UI around them.** The full design is in [menus.md](menus.md); build from it. Not in run 2: the tutorial rebuild, the first-use coach, the wave director and real levels, the map generator, tests.
 
-- [ ] **2.1 Tutorial rebuilt** around the new mechanics and section 4, including the leftovers in 2.12 (pause lesson later, wave 5 text, about 8 to 10 minutes).
-- [ ] **2.2 First-use coach:** a tool's lesson the first time it is used in any battle.
-- [ ] **2.3 Wave director and level format:** a level file (map + waves + loadout + unlock + twist), the director that runs it. **Levels 1 to 3 hand-made** (the tutorial map with different camps, time of day and gear mix is fine), pepper unlocked by level 2 or 3.
-- [ ] **2.4 Saving and progress:** localStorage, levels done, stars, unlocked tools, the "Unlock all tools" switch, retry from the current wave.
-- [ ] **2.5 Menus:** the menu board after the tutorial, the campaign path (25 cards, levels 4 to 25 locked and filled in run 3), the tool rack, the trophy shelf (with the first few trophies or empty slots), "More coming soon" on each list.
-- [ ] **2.6 Docs** updated for run 2 (modes-and-progression, mvp, map, controls-and-ui).
+- [ ] **2.1 UI kit parts:** a rectangular tile button (same states, feedback and sounds as `PokeButton`, sizes from `BUTTON_SIZE`), an upright option for `Slider`, a red Fight tile with a sword icon. In `src/ui/kit/`, exported from its index ([menus.md](menus.md#7-new-ui-library-parts-built-first)).
+- [ ] **2.2 Level data:** the 15 level entries the menu reads (number, name, flavor, skulls, enemy icons, reward, open or locked), in a data file, rules in `src/rules/`. Levels 1 to 5 open, 6 to 15 text only. Tool rewards left empty (not decided yet).
+- [ ] **2.3 Saving:** localStorage, one key: tutorial done, stars per level, levels open, unlocked tools, the loadout. Plus the star rules (70% and 35%, best kept) and the "Unlock all tools" switch in settings.
+- [ ] **2.4 Tutorial to menu:** after the tutorial win, the battle (castle walls, towers, flags, battle-only things) sinks into the ground and the menu rises, both smooth. Fight plays it the other way. Later visits open on the menu. The bell is taken out of the tutorial (its wave and lesson), so the tutorial still runs to the end.
+- [ ] **2.5 Main menu:** the front panel with tiles in different sizes (Campaign big in the center, Daily and Custom beside it, Settings and Replay tutorial small below). Settings opens the settings panel; Replay tutorial starts the tutorial.
+- [ ] **2.6 Campaign panel:** the split panel, the scrolling level list with the vertical slider, the detail card (name, stars, skulls, flavor, enemies with "New!", reward, Fight), locked levels greyed with a lock, "Start here" on level 1, "More coming soon" at the end, a back button.
+- [ ] **2.7 Tool shelf and loadout stand:** every tool on the shelf (locked ones grey with their unlock text), grab one to read its tag, put it on one of the 2 free stand slots (slingshot and horn fixed). The battle then shows only those 4 tools, on 4 platforms. Every new spot in `reachSpots()`, every held tool keeps its `HOLD.poses` grip.
+- [ ] **2.8 Achievements shelf:** grey trophy slots, a "0 / 9" counter, a "???" tag on grab, "More coming soon".
+- [ ] **2.9 Docs** updated for run 2 (menus.md, controls-and-ui, modes-and-progression, mvp, README status).
+
+Before starting, settle the open items in [menus.md](menus.md#10-open) (what Daily, Custom and Fight do in run 2).
 
 ### Run 3: content, then fixes
 
-- [ ] **3.1 Map generator** as a dev tool (seed and settings in, blueprint JSON out), following map.md section 8.
-- [ ] **3.2 Levels 4 to 25** generated and tweaked, each with a twist, the tool unlocks spread evenly, unlock icons on their cards.
+Moved here from the old run 2 (2026-11-11): the tutorial rebuild around the new mechanics (bell out, the leftovers in 2.12: pause lesson later, wave 5 text, about 8 to 10 minutes), the wave director and level format, levels 1 to 5, retry from the current wave, and the first-use coach (only once more tools exist).
+
+- [ ] **3.1 Map generator** as a dev tool (seed and settings in, blueprint JSON out), following map.md section 8. Only if the levels need new maps.
+- [ ] **3.2 Levels 1 to 5** built and polished, each with its twist, every tool unlock in them (assigned once the tools are final). Levels 6 to 15 stay text only.
 - [ ] **3.3 One or two new tools** from 2.11, with their first-use lessons.
 - [ ] **3.4 Riddle achievements:** a first set (about 9, including pepper then eat), riddle hints as in 2.10.
 - [ ] **3.5 Fix list** from the developer's headset tests, sorted by what judges see first: tutorial, then menus, then levels.
@@ -369,7 +381,9 @@ Decide section 4 first (after feeling run 1 on the headset).
 
 ---
 
-## 4. Decide before run 2: tutorial order and lessons
+## 4. Tutorial order and lessons
+
+**Decided 2026-11-11:** the bell leaves the tutorial (it becomes an unlock). The tutorial then teaches the slingshot, the horn, the swatter and (still to confirm) the pepper: the 4 starting tools. The rest of this section is the older proposal.
 
 **Built in run 1 (so the tutorial plays now):** wave 1 hands and the horn (taught mid wave, then the knights' first fight), wave 2 slingshot with the trigger and balloon lessons, wave 3 swatter, wave 4 pepper, wave 5 bell. The lines "tools rest after use" and "eating fills them" are in the first tool's grab lesson.
 
@@ -388,9 +402,11 @@ Proposed, to confirm after the run 1 headset test:
 
 ## 5. Still open
 
-- Does the player pick their 3 tools per level, or does each level set them?
+- ~~Does the player pick their 3 tools per level, or does each level set them?~~ Decided 2026-11-11: 4 tools, slingshot and horn fixed, the player picks 2 (2.4).
 - ~~Do triggers ignore armor?~~ Decided in 1.1: yes.
-- Which levels unlock which tools (after run 1, once the tool count is known).
+- Which of levels 1 to 5 unlocks which tool (once the tools are final).
+- Pepper in the tutorial's wave 4 (section 4).
+- The open items in [menus.md](menus.md#10-open).
 - Which new tools to build in run 3.
 - Final numbers: use and recharge times, refund shares, climb speeds, garrison refill, knight squad size, the bell's swing line and the horn's blow line (set them from the debug notes and the mic panel).
 
@@ -407,6 +423,7 @@ Proposed, to confirm after the run 1 headset test:
 | Climbers as their own type; grunts and runners only hit the wall | Every goblin bashes, climbs, runs on the rampart, then jumps in | enemies.md, core-loop.md, castle-rules.md |
 | Squads every 14 s walk to the camp and back; archers in the field squads | Wall garrison (4 archers, 2 guards) on the rampart; field knights only by horn, holding the first junction | core-loop.md |
 | Castle machines on hold | Dropped | castle-machines.md (history), README |
-| Only the tutorial battle; modes later | Campaign of 25 levels, unlocks, saving, tool rack, riddle trophies | modes-and-progression.md, mvp.md, map.md |
-| No loadout, every tool always on its platform | Slingshot plus 3 per battle; tools unlock in the campaign | modes-and-progression.md, giant-tools.md |
+| Only the tutorial battle; modes later | Campaign of 15 levels (5 open), unlocks, saving, tool shelf, riddle trophies | menus.md, modes-and-progression.md, mvp.md, map.md |
+| No loadout, every tool always on its platform | 4 tools per battle: slingshot and horn fixed, 2 picked; tools unlock in levels 1 to 5 | menus.md, modes-and-progression.md, giant-tools.md |
+| A menu board with carved buttons; all modes open after the tutorial, no level unlocks | The battleground sinks into the menu; a kit panel with tile buttons; shelves left and right | menus.md, modes-and-progression.md |
 | Achievement hints for locked trophies | Riddles, with a hint after 2 battles since first read | modes-and-progression.md |
