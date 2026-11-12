@@ -77,7 +77,7 @@ The tutorial is a hand-written script in code (`src/director/tutorial.ts`), not 
   - **New things are taught before their wave**, so no enemies press the player while learning.
 - **The reach check comes first**, once per player: "Show me how big you are, giant!" sizes the board to their arms ([controls-and-ui.md](controls-and-ui.md#reach-check-show-me-how-big-you-are-giant)). It also runs before a debug "Start at wave" when the reach is not known yet.
 - **The lessons, in order:**
-  - Before wave 1: pause (poke the pause button in front, then Resume), spin the board, set its height, pinch the climber, eat it, then throw one away (a new climber comes; pinch, swing, let go: it waits for a real throw, `GOBLIN_RULES.tossLessonSpeed`). Then the two flags ("Your castle", Next each).
+  - Before wave 1: pause (poke the pause button, in front a little to the right since 2026-11-12, then Resume), spin the board, set its height, pinch the climber, eat it, then throw one away (a new climber comes; pinch, swing, let go: it waits for a real throw, `GOBLIN_RULES.tossLessonSpeed`). Then the two flags ("Your castle", Next each).
   - Before wave 2: grab the slingshot, take a pebble, load it. In wave 2: shoot the one goblin walking back and forth on the road in front (done on a hit). Then one lesson each for the keg, the boulder and the tree: each brings its kind onto the roads, and goblins wait right in what it does until the player sets it off. Then the wave plays on until 3 more knockouts (or 35 s), and the **balloon lesson**: one balloon floats in right in front and hovers outside the wall with its riders until the player pops it (no Next: the pop ends it; the wave waits; `TUTORIAL_TIMING.balloon*`, `BALLOONS.lessonWaitAt`). Balloons are taught here because the slingshot is the tool for them; after the pepper lesson they came too fast.
   - Before wave 3: the **food jar** ("This jar holds your food", Next, then a climber to eat), then grab the swatter. In wave 3: swat one goblin.
   - Before wave 4: grab the pepper. In wave 4: pepper the goblins, then eat a sneezing one (the lesson ends only then; peppered goblins sneeze for 10 s and do no castle damage meanwhile, `PEPPER.sneezeFor`). The wave's own balloons come as planned (they were taught in wave 2).
@@ -148,7 +148,7 @@ Each step should be playable on its own.
      - Confetti over the castle when a wave is won, and a fireworks show after the win.
      - Goblins pop out of their camp, squash and stretch when they land, and runners kick up dust. (Camps used to shake and puff dust while they rumble: removed after the step 7 and 8 test, it looked too cartoony for buildings.)
      - Shot trails, a ring where the swatter slaps, sparks when swords clash.
-     - The health flag jerks and flashes when the castle is hit, the wave flag pops when it climbs.
+     - The health flag jerks and flashes when the castle is hit (the wave flag that popped when it climbed was dropped 2026-11-12 for the compass).
    - **Still to do:** the **missing sounds** (most real sounds are in now, see "More on the same branch" below). New things reuse existing sounds for now.
    - Debug keys: `;` celebrate, 8 set off every trigger (keg blast), D damage the castle (flag jolt), B eat the front goblin (food label).
 

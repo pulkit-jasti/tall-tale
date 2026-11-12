@@ -17,7 +17,7 @@ Back to [GDD index](GDD.md). Related: [v2-plan.md](v2-plan.md), [controls-and-ui
 ## 2. From the tutorial to the menu
 
 - When the tutorial is won, the player goes to the main menu (after the win moment).
-- **The battle sinks:** the castle walls, towers, the two flags and every other battle-only thing slide down into the ground in a smooth animation.
+- **The battle sinks:** the castle walls, towers, the red flag, the compass and every other battle-only thing slide down into the ground in a smooth animation.
 - **The menu rises:** the main menu panel, the tool shelf, the achievements shelf and the loadout stand rise out of the ground in a smooth animation.
 - Pressing Fight on a level plays it the other way round: the menu sinks, the battle rises.
 - Animations move whole groups (a transform only), so they cost no frame time. No new materials, no lights.
@@ -49,7 +49,7 @@ A compact front panel (the existing `Panel`, 36 x 32 cm) with **round poke butto
 
 Rules:
 
-- **Every option is shown and pokeable, none is locked.** Daily is not built yet: a poke turns its word to "Coming soon" for a moment. Custom Game opens the Custom Game pages ([custom-mode.md](custom-mode.md#8-custom-game-menu-and-the-ui-kit), decided 2026-11-11).
+- **Every option is shown and pokeable, none is locked.** Daily is not built yet: a poke turns its word to "Coming soon" for a moment. Custom Game opens the Custom Game pages (their Fight plays the level since 2026-11-11) ([custom-mode.md](custom-mode.md#8-custom-game-menu-and-the-ui-kit), decided 2026-11-11).
 - Settings opens the existing settings panel. Tutorial starts the tutorial again.
 - Small enough that its edges are seen without turning the head (a first 50 cm wide panel was not).
 
@@ -104,6 +104,8 @@ Rules:
 - **Floating headers** (2026-11-11): every menu panel's title and Back float over its top edge (`PanelHeader`); tabs float under it. The panels hold only content and controls ([controls-and-ui.md](controls-and-ui.md#ui-library)).
 - **Height rail** (2026-11-11): a short piece of the ring handle in front of the home screen, height only (never spins): the board and the menu go up or down with the hand ([custom-mode.md](custom-mode.md#12-as-built-first-part-2026-11-11-not-tested-on-the-headset-yet)).
 - **Custom Game** (decided 2026-11-11): its pages, the floating rectangular tabs, the name field with the system keyboard and the delete question are in [custom-mode.md](custom-mode.md#8-custom-game-menu-and-the-ui-kit).
+- **Kenney art on panels** (2026-11-12, `drawIconCentered`, `drawStars`, `drawDivider` in the kit; the assets are listed in `public/ui/README.md`): the campaign card and list (above), the Custom Game card (a divider under the name, its best stars on the top line, a facts row over the buttons: camps, castle health, guards and archers with tower, heart, shield and bow icons), the empty Custom Game page (a flag), the settings rows (an icon before each name), and the trophy counter (a trophy). The round buttons keep their code-drawn icons (tested).
+- **Win panel:** Next level starts the next open campaign level at once; Menu goes back to the campaign or Custom Game page the battle came from ([castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp)).
 
 ---
 
@@ -119,8 +121,8 @@ Opens from the Campaign button, in the front panel's place (50 x 36 cm), with a 
 
 One padded column, every value with its own label:
 
-- "Level N" small, then the name big. **The name tells what is special about the level** (its twist).
-- Two blocks side by side: **Best** over the best stars (empty for an unbeaten level), **Difficulty** over 1 to 3 goblin skulls.
+- "Level N" small, then the name big. **The name tells what is special about the level** (its twist). A Fantasy UI Borders divider under it (2026-11-12).
+- Two blocks side by side: **Best** over the best stars (empty for an unbeaten level), **Difficulty** over 1 to 3 goblin skulls. Since 2026-11-12 the stars, skulls and the list rows' lock are Kenney icons (Game Icons star and lock, Board Game Icons skull; the code-drawn ones were removed), and each label has a small Kenney icon (a crown before Best, a skull before Difficulty, an award before Reward).
 - One line of flavor that explains the twist, for example "Every goblin brought a shield. Time for some spice."
 - No enemies list (removed: extra information nobody needs; the level data still has it).
 - **Reward:** only on unlock levels: a small copy of the real 3D tool (5.5 cm) standing on the card and slowly turning, with its name beside it, so it reads without knowing the word ("???" for one not decided yet).
@@ -199,7 +201,7 @@ Every level has one twist, built only from existing systems (data work, not new 
 - **Code:** `src/ui/menu/` (`menu.ts` holds the pages and the shelves; `mainMenu.ts`, `campaignPanel.ts`, `shelves.ts`), `src/world/sceneSwap.ts` (sink and rise), `src/config/levels.ts` (the 15 levels), `src/rules/campaign.ts` (progress, stars, open levels, unlocks, loadout), `src/player/progress.ts` (localStorage key `tallTale.progress`). Numbers: `MENU`.
 - **Changed after the first look (2026-11-11), decided with the developer:** round buttons only (the rectangular tile buttons are gone); more room between everything (at least about 2.4 cm between rims); the home screen moved out and up to about the rampart's distance (it was too close and low to grab); tools at 0.8 size (was 0.5), trophies 8 cm (the Kenney trophy model, was a grey cup); only the menu panel in front, the tools shelf and the loadout stand on the right, the trophies on the left; the stand is slingshot, horn, then 2 empty slots the player fills, and Fight stays locked until both are filled; tools go back and forth between the shelf and the slots; the bell unlocks at level 3; scrolling the level list no longer redraws anything (no blinking). The lines below are as built now.
 - **Flow:** first visit: the welcome panel. The tutorial won: the battleground sinks and the menu rises (no end panel). **Skip tutorial** (welcome or pause panel) now goes to the menu too (it used to start a battle without lessons). Later visits open straight on the menu. Fight: the menu sinks, the battle rises, then it starts. After a level: the end panel shows the stars; won, the big button goes to the menu (Play again small, bottom left); lost, Try again (Menu small, bottom left). Menu returns to the campaign page.
-- **What sinks:** the castle walls and towers, the two flags, the ring handle and its arrows, the tools and their platforms (18 cm, then hidden). The menu rises 60 cm. 1.1 s each way, one after the other. Goblins, troops and triggers are cleared as it starts.
+- **What sinks:** the castle walls and towers, the red flag, the compass, the ring handle and its arrows, the tools and their platforms (18 cm, then hidden). The menu rises 60 cm. 1.1 s each way, one after the other. Goblins, troops and triggers are cleared as it starts.
 - **Second look (2026-11-11), from Meta's hands UI guidance (no scroll bars, swipe the content, hover, press and select states with a sound, snap zones that glow):** the level list is a swipe list, the slider and row arrows are gone, the main menu and campaign panel are smaller, the level card was redone, the stand uses the battle platforms, tools go anywhere, trophies are smaller with more room.
 - **Third look (2026-11-11), decided with the developer:** swipe and tap on the same rows got mixed up, so the list is tap only and the upright slider is back as the only scroll (smooth); the shelves moved to square on the sides (90 degrees); the tags and cards no longer write depth (the clouds behind them blinked); no enemies on the level card; Fight is a bordered rectangle again (the only one); the empty slots message moved off the card to the glass sign with a red arrow for 5 s on a Fight poke; the reward shows a small turning 3D copy of the tool.
 - **Fourth look (2026-11-11), decided with the developer:** the shelves came back toward the front (between front and side); every tag is drawn and uploaded at the start and the home screen's shaders compiled (`Menu.warm`), since the first grab of each thing still flickered; the reward tool can be grabbed off the card; the pause panel got a Menu button and sizes itself to its buttons; battle tools stay on their own platforms (the picks had moved in front of the red flag) and the flags moved a little toward the front. The lines below are as built now.

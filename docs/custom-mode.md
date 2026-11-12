@@ -286,6 +286,12 @@ Build order steps 4 and 5 (section 11), then make Custom Game's Fight play a sav
 - **Debug page:** "Fight newest custom level" (from the menu). Each load writes a debug note with its time.
 - **Headset check:** the loading moment (how long, any hitch; the terrain swaps under the menu, open question in section 14), the camps rising (look, sound, arrow), a full level to the end, Menu back to the list, then the tutorial and a campaign level again (the tutorial map back, nothing doubled), and the FPS panel after a few loads (no leak).
 
+### After the first headset rounds (2026-11-12)
+
+- Custom Game's Fight works on the headset. Levels now keep their **best stars** (`best` in `tallTale.customLevels`, cleared when the level is edited); the win panel shows the level's name, its stars and "New best!" ([castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp)), and its Menu goes back to the Custom Game list.
+- The Custom Game card shows the best stars on its top line and a facts row with Kenney icons (camps, castle health, guards, archers); the empty page shows a Kenney flag ([menus.md](menus.md)).
+- Rising camps show on the new compass as tents on its lip, glowing amber while their drums play; the tutorial explains them with an "A new camp!" sign in wave 2.
+
 ## 14. Open
 
 - Which levels unlock which future tools (only the bell at level 3 is decided).

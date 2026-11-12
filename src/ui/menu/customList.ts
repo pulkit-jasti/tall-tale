@@ -20,8 +20,10 @@ import { saveCustomLevels } from '../../player/customLevels.js';
 import { duplicateLevel, isFull, removeLevel, type CustomLevels } from '../../rules/customLevels.js';
 import {
   armControls,
+  drawDivider,
+  drawIconCentered,
   drawLine,
-  drawMenuIcon,
+  drawStars,
   FightButton,
   Panel,
   layerPage,
@@ -38,6 +40,10 @@ import {
 } from '../kit/index.js';
 
 export type CustomListChoice = { kind: 'back' } | { kind: 'create' } | { kind: 'edit'; id: string } | { kind: 'fight'; id: string } | null;
+
+/** The card's divider line and the tint of its fact icons (Kenney, white). */
+const CARD_DIVIDER = 'rgba(138, 90, 52, 0.6)';
+const FACT_TINT = '#8a5a34';
 
 type Action = 'edit' | 'copy' | 'trash' | 'share';
 const ACTIONS: { id: Action; word: string }[] = [
@@ -313,7 +319,8 @@ export class CustomListPanel {
     c.beginPath();
     c.arc(at.x(0), at.y(E.iconY), 3.2 * at.px, 0, Math.PI * 2);
     c.fill();
-    drawMenuIcon(c, 'custom', at.x(0), at.y(E.iconY), 4.2 * at.px, UI_COLORS.note);
+    // A Kenney flag (Board Game Icons; the code-drawn icon went, 2026-11-12): your own battle.
+    drawIconCentered(c, 'flag', at.x(0), at.y(E.iconY), 3.6 * at.px, UI_COLORS.note);
     drawLine(c, 'No battles of your own yet.', at.x(0), at.y(E.lineY[0]), w - 4 * UI_SPACING.edge * at.px, 22, UI_COLORS.ink);
     drawLine(c, 'Pick the map, the waves and the rules.', at.x(0), at.y(E.lineY[1]), w - 4 * UI_SPACING.edge * at.px, 18, UI_COLORS.note);
     const word = this.soon?.at === 'create' ? this.soon.text : 'Create level';
@@ -380,7 +387,11 @@ export class CustomListPanel {
     }
     let y = cardTop - L.cardPad;
     drawLine(c, 'Your level', left, at.y(y - 0.6), width, 16, UI_COLORS.note, 'left');
+    // Its best stars (Kenney), at the right of the top line, once it was won.
+    if (level.best) drawStars(c, right - 2 * 30 - 13, at.y(y - 0.6), 26, 30, level.best);
     drawLine(c, level.name, left, at.y(y - 2.5), width, 28, UI_COLORS.ink, 'left');
+    // A Fantasy UI Borders divider under the name.
+    drawDivider(c, left + width / 2, at.y(y - 4.2), 0, width / 2, 8, CARD_DIVIDER);
     y -= 5.2;
     // The description: the player's own, or one made from the settings (wrapped to three lines).
     const description = this.description(this.selected);
@@ -394,6 +405,21 @@ export class CustomListPanel {
         c.textBaseline = 'middle';
         c.fillText(line, left, at.y(y - i * 1.6));
       });
+    // The level at a glance, in the room over the buttons: Kenney icons with its camps, castle health, guards and archers.
+    const s = level.level.meta.settings;
+    const facts: { icon: 'tower' | 'heart' | 'shield' | 'bow'; text: string }[] = [
+      { icon: 'tower', text: `${s.camps} ${s.camps === 1 ? 'camp' : 'camps'}` },
+      { icon: 'heart', text: `${Math.round(level.level.rules.startHealth * 100)}%` },
+      { icon: 'shield', text: `${level.level.rules.guards} guards` },
+      { icon: 'bow', text: `${level.level.rules.archers} archers` },
+    ];
+    const factY = at.y(L.factsY);
+    const column = width / facts.length;
+    facts.forEach((fact, i) => {
+      const x = left + i * column;
+      drawIconCentered(c, fact.icon, x + 12, factY, 24, FACT_TINT);
+      drawLine(c, fact.text, x + 30, factY, column - 34, 17, UI_COLORS.ink, 'left');
+    });
     // A word under each small button (Share's says "Coming soon" for a moment).
     const wordY = L.actionsY - BUTTON_SIZE_MIN * POKE.rimScale - UI_SPACING.labelGap - 0.6;
     ACTIONS.forEach(({ id, word }, i) => {

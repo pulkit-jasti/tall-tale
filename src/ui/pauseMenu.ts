@@ -25,6 +25,7 @@ import {
   type Control,
   armControls,
   bottomRowY,
+  drawIconCentered,
   drawLine,
   drawOnTop,
   drawTitleBanner,
@@ -41,7 +42,18 @@ import {
   UI_COLORS,
   uiCenterY,
   type ButtonIcon,
+  type UiImageName,
 } from './kit/index.js';
+
+/** The Kenney icon beside each sound row's name, and their tint. */
+const SOUND_ICONS: Record<SoundCategory, UiImageName> = {
+  music: 'music',
+  goblins: 'skull',
+  battle: 'sword',
+  tools: 'wrench',
+  voice: 'audioOn',
+};
+const ROW_ICON_TINT = '#8a5a34';
 
 export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart' | 'skipTutorial' | 'quitToMenu';
 
@@ -368,22 +380,26 @@ export class PauseMenu {
     const left = at.x(S.labelX);
     // Each row's name on the left, clear of its control.
     const labelRight = at.x(S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius - 1);
-    const name = (text: string, rowY: number, note: string, noteColor: string): void => {
+    // Each name after a small Kenney icon (2026-11-12), so the rows read at a glance. The controls are untouched.
+    const icon = 34;
+    const textLeft = left + icon + 12;
+    const name = (image: UiImageName, text: string, rowY: number, note: string, noteColor: string): void => {
       const y = at.y(rowY);
-      drawLine(c, text, left, y - 10, labelRight - left, 26, UI_COLORS.ink, 'left');
-      drawLine(c, note, left, y + 14, labelRight - left, 20, noteColor, 'left');
+      drawIconCentered(c, image, left + icon / 2, y, icon, ROW_ICON_TINT);
+      drawLine(c, text, textLeft, y - 10, labelRight - textLeft, 26, UI_COLORS.ink, 'left');
+      drawLine(c, note, textLeft, y + 14, labelRight - textLeft, 20, noteColor, 'left');
     };
     if (this.tab === 'sound') {
       for (const row of this.rows) {
         const level = this.audio.settings.level(row.category);
-        name(row.label, row.y, level <= 0 ? 'Off' : `${Math.round(level * 100)}%`, level <= 0 ? UI_COLORS.warn : UI_COLORS.accent);
+        name(SOUND_ICONS[row.category], row.label, row.y, level <= 0 ? 'Off' : `${Math.round(level * 100)}%`, level <= 0 ? UI_COLORS.warn : UI_COLORS.accent);
       }
       return;
     }
-    name('Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
-    name('Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
-    name('Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
-    name('Unlock all tools', S.firstRowY - 3 * S.accessRowGap, 'Tools only, not levels', UI_COLORS.note);
+    name('hand', 'Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
+    name('audioOff', 'Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
+    name('rotate', 'Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
+    name('unlocked', 'Unlock all tools', S.firstRowY - 3 * S.accessRowGap, 'Tools only, not levels', UI_COLORS.note);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {

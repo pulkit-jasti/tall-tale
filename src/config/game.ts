@@ -1375,6 +1375,8 @@ export const CUSTOM_GAME = {
     newAt: [-21.9, -13.3] as [number, number],
     cardLeft: -4.6,
     cardPad: 1.5,
+    /** The level's facts row (Kenney icons: camps, castle health, guards, archers), between the description and the buttons. */
+    factsY: 3.4,
     /** Edit, Duplicate, Delete, Share: small round buttons in a row, a word under each. */
     actionsY: -1.6,
     actionsX: [0.5, 6.9, 13.3, 19.7],

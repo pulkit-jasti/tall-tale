@@ -22,10 +22,10 @@ import type { HandState } from '../../player/hands.js';
 import { isOpen, type PickTool, type Progress } from '../../rules/campaign.js';
 import {
   armControls,
+  drawDivider,
+  drawIconCentered,
   drawLine,
-  drawMenuIcon,
-  drawSkull,
-  drawStar,
+  drawStars,
   FightButton,
   Panel,
   PanelHeader,
@@ -38,6 +38,11 @@ import {
 } from '../kit/index.js';
 
 export type CampaignChoice = { kind: 'back' } | { kind: 'fight'; level: number } | { kind: 'needTools' } | null;
+
+/** The card's Kenney skulls (difficulty: counted and not) and its divider line. */
+const SKULL_ON = '#4a3a2c';
+const SKULL_OFF = 'rgba(138, 90, 52, 0.28)';
+const CARD_DIVIDER = 'rgba(138, 90, 52, 0.6)';
 
 /** The list's entries: every level, then the "More coming soon" row. */
 const ENTRIES = LEVELS.length + 1;
@@ -220,11 +225,10 @@ export class CampaignPanel {
     c.stroke();
     const ink = open ? UI_COLORS.ink : UI_COLORS.note;
     drawLine(c, `${level.number}.  ${level.name}`, pad, h * 0.34, w - pad * 2, h * 0.3, ink, 'left');
-    if (open) {
-      const stars = this.progress.stars[level.number] ?? 0;
-      for (let s = 0; s < 3; s++) drawStar(c, pad + h * 0.14 + s * h * 0.32, h * 0.72, h * 0.26, s < stars);
-    } else {
-      drawMenuIcon(c, 'lock', pad + h * 0.12, h * 0.72, h * 0.26, UI_COLORS.note);
+    // Kenney icons (2026-11-12, were drawn in code): the best stars, or a lock.
+    if (open) drawStars(c, pad + h * 0.14, h * 0.72, h * 0.3, h * 0.32, this.progress.stars[level.number] ?? 0);
+    else {
+      drawIconCentered(c, 'locked', pad + h * 0.12, h * 0.72, h * 0.26, UI_COLORS.note);
       drawLine(c, 'Locked', pad + h * 0.34, h * 0.72, w, h * 0.2, UI_COLORS.note, 'left');
     }
   }
@@ -262,14 +266,18 @@ export class CampaignPanel {
     // The level and its name.
     drawLine(c, open ? `Level ${level.number}` : `Level ${level.number}  (locked)`, left, at.y(y - 0.6), width, 20, open ? UI_COLORS.note : UI_COLORS.warn, 'left');
     drawLine(c, level.name, left, at.y(y - 2.6), width, 34, ink, 'left');
+    // A Fantasy UI Borders divider under the name (the fading line toward the left).
+    drawDivider(c, left + width / 2, at.y(y - 4.4), 0, width / 2, 8, CARD_DIVIDER);
     y -= 5.2;
-    // Two labeled blocks side by side: the best stars, and the difficulty skulls.
+    // Two labeled blocks side by side, each label after a small Kenney icon: the best stars, and the difficulty skulls.
     const half = left + width / 2;
-    drawLine(c, 'Best', left, at.y(y), width / 2, 19, UI_COLORS.note, 'left');
-    drawLine(c, 'Difficulty', half, at.y(y), width / 2, 19, UI_COLORS.note, 'left');
-    const stars = this.progress.stars[level.number] ?? 0;
-    for (let s = 0; s < 3; s++) drawStar(c, left + 17 + s * 40, at.y(y - 2), 34, s < stars);
-    for (let s = 0; s < 3; s++) drawSkull(c, half + 17 + s * 40, at.y(y - 2), 36, s < level.skulls);
+    const iconX = (x: number): number => x + 11;
+    drawIconCentered(c, 'crown', iconX(left), at.y(y), 20, UI_COLORS.note);
+    drawLine(c, 'Best', left + 26, at.y(y), width / 2 - 26, 19, UI_COLORS.note, 'left');
+    drawIconCentered(c, 'skull', iconX(half), at.y(y), 20, UI_COLORS.note);
+    drawLine(c, 'Difficulty', half + 26, at.y(y), width / 2 - 26, 19, UI_COLORS.note, 'left');
+    drawStars(c, left + 17, at.y(y - 2), 34, 40, this.progress.stars[level.number] ?? 0);
+    for (let s = 0; s < 3; s++) drawIconCentered(c, 'skull', half + 17 + s * 40, at.y(y - 2), 32, s < level.skulls ? SKULL_ON : SKULL_OFF);
     y -= 4.4;
     // The twist, in one line of flavor (wrapped).
     c.font = 'italic 22px sans-serif';
@@ -285,7 +293,9 @@ export class CampaignPanel {
     // The reward: its label, the tool turning beside its name (the model stands at rewardAt), or "???".
     if (level.reward) {
       const [rx, ry] = C.rewardAt;
-      drawLine(c, 'Reward', left, at.y(ry + C.rewardHeight / 2 + 1), width, 19, UI_COLORS.note, 'left');
+      const rewardY = at.y(ry + C.rewardHeight / 2 + 1);
+      drawIconCentered(c, 'award', left + 11, rewardY, 20, UI_COLORS.note);
+      drawLine(c, 'Reward', left + 26, rewardY, width - 26, 19, UI_COLORS.note, 'left');
       const nameX = level.reward === 'mystery' ? left : at.x(rx + C.rewardHeight / 2 + 1.4);
       drawLine(c, TOOL_NAMES[level.reward], nameX, at.y(ry), right - nameX, 26, UI_COLORS.accent, 'left');
     }

@@ -223,6 +223,8 @@ The mechanics the tutorial will show. The tutorial must stay playable after this
 
 This is the current state. The step notes above and the round log below are history: where they differ, this list wins. Numbers are in `src/config/game.ts`.
 
+**Changed since (2026-11-12, branch `feat/custom-mode`):** the horn has no lock step and no lips (look, raise into a blow zone in front of the mouth, blow; [giant-tools.md](giant-tools.md)), the blue flag is gone (a 3D compass in front shows the wave and where goblins come from; [castle-rules.md](castle-rules.md#2-the-flag-and-the-compass-ring)), the pause and Next buttons stand 34 degrees right, the tools sit about 12% nearer the front, and the tutorial follows all of it ([mvp.md](mvp.md)). Where this list says otherwise about those, the linked docs win.
+
 - **Tutorial** (`src/director/tutorial.ts`, `src/director/battle.ts`), in order:
   - Before wave 1: reach check (only if the reach is not saved), pause, spin, height, pinch, eat, throw, then the red flag and the blue flag (one sign each).
   - Wave 1: its banner, then it plays at half rate with only 3 goblins (`hornGoblins`) until 2 are eaten (or 30 s), then a breather with no spawns until the board is clear.

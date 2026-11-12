@@ -24,6 +24,31 @@ const FILES = {
   target: 'icons/target.png',
   returnArrow: 'icons/return.png',
   next: 'icons/next.png',
+  // Board Game Icons (white, 128 px, tinted in code): the compass's goblin count, the end panel's stats, a best result.
+  skull: 'board/skull.png',
+  heart: 'board/suit_hearts.png',
+  hourglass: 'board/hourglass.png',
+  crown: 'board/crown_a.png',
+  // More Board Game Icons for the cards and the settings rows (white, tinted).
+  shield: 'board/shield.png',
+  bow: 'board/bow.png',
+  tower: 'board/structure_tower.png',
+  award: 'board/award.png',
+  flag: 'board/flag_triangle.png',
+  sword: 'board/sword.png',
+  hand: 'board/hand.png',
+  rotate: 'board/arrow_rotate.png',
+  // Game Icons (white, 100 px).
+  starIcon: 'icons/star.png',
+  locked: 'icons/locked.png',
+  unlocked: 'icons/unlocked.png',
+  music: 'icons/musicOn.png',
+  wrench: 'icons/wrench.png',
+  audioOn: 'icons/audioOn.png',
+  audioOff: 'icons/audioOff.png',
+  // Fantasy UI Borders (white): the glass sign's frame (9-slice) and a divider line (mirrored, tinted).
+  frame: 'borders/panel-border-010.png',
+  divider: 'borders/divider-fade-002.png',
 } as const;
 
 /** Long side of an SVG drawn into a texture of its own (pixels). */
@@ -106,6 +131,38 @@ export function drawIcon(c: CanvasRenderingContext2D, name: UiImageName, x: numb
   // Tint on a small scratch canvas, so the panel's own pixels are not touched.
   const scratch = tintCanvas(image, tint);
   c.drawImage(scratch, x, y, size, size);
+}
+
+/** An icon by its middle (`size` px square), optionally tinted. */
+export function drawIconCentered(c: CanvasRenderingContext2D, name: UiImageName, x: number, y: number, size: number, tint?: string): void {
+  drawIcon(c, name, x - size / 2, y - size / 2, size, tint);
+}
+
+/** Colors of the Kenney stars on the cards: won (gold) and not yet (faint brown). */
+const STAR_ON = '#e8b020';
+const STAR_OFF = 'rgba(138, 90, 52, 0.35)';
+
+/** A row of `total` Kenney stars (Game Icons), the first `count` gold, from the middle of the first at x, `gap` px apart. */
+export function drawStars(c: CanvasRenderingContext2D, x: number, y: number, size: number, gap: number, count: number, total = 3): void {
+  for (let s = 0; s < total; s++) drawIconCentered(c, 'starIcon', x + s * gap, y, size, s < count ? STAR_ON : STAR_OFF);
+}
+
+/**
+ * A Fantasy UI Borders divider on both sides of a gap (`gap` px wide around
+ * x): the fading line with its little cross toward the middle, mirrored on
+ * the right, tinted. `width` is each side's length, `height` its thickness.
+ */
+export function drawDivider(c: CanvasRenderingContext2D, x: number, y: number, gap: number, width: number, height: number, tint: string): void {
+  const image = uiImage('divider');
+  if (!image) return;
+  const line = tintCanvas(image, tint);
+  // The image fades out to its left and has its cross on the right: the left half as it is, the right half mirrored.
+  c.drawImage(line, x - gap / 2 - width, y - height / 2, width, height);
+  c.save();
+  c.translate(x + gap / 2 + width, y - height / 2);
+  c.scale(-1, 1);
+  c.drawImage(line, 0, 0, width, height);
+  c.restore();
 }
 
 const tinted = new Map<string, HTMLCanvasElement>();

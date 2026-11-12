@@ -14,7 +14,7 @@ Back to [GDD index](GDD.md). Related: [Castle rules](castle-rules.md), [Map](map
   1. **Warning:** camps rumble a few seconds before enemies come out.
   2. **Build:** small groups walk in.
   3. **Peak:** the big push and the combos.
-  4. **Release:** the last enemy falls. Big juice, a cheer, and the wave flag climbs a notch.
+  4. **Release:** the last enemy falls. Big juice, a cheer, and the compass's wave dot turns gold (the blue wave flag was dropped 2026-11-12).
 
 ### Short breathers, no long gaps
 

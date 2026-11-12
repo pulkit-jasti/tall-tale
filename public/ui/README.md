@@ -26,4 +26,15 @@ All CC0 from Kenney packs (license in each folder). Flat PNGs, drawn onto canvas
 
 | `vector/` | UI Pack Adventure (SVG) | `checkbox_beige_*`, `minimap_icon_exclamation_yellow`, `minimap_icon_star_yellow`, `banner_hanging`, `panel_brown` | Sign checkbox, tutorial marker "!", star, sharp versions of the banner and panel |
 
+| `board/` | Board Game Icons (white PNG, 128 px "Double"; their SVGs have no viewBox and draw off-canvas, so the PNGs are used) | `skull`, `suit_hearts`, `hourglass`, `crown_a` | The compass's goblin count (skull), the end panel's stats (heart, skull, hourglass), a new best and the card's "Best" (crown). Tinted in code |
+| | | `skull` | The campaign card's difficulty skulls and its "Difficulty" label, the Goblins sound row |
+| | | `structure_tower`, `shield`, `bow` | The Custom Game card's facts row (camps, guards, archers; castle health uses the heart) |
+| | | `award` | The campaign card's "Reward" |
+| | | `flag_triangle` | The Custom Game page with no levels yet |
+| | | `sword`, `hand`, `arrow_rotate` | Settings rows: Battle sounds, Your reach, Table |
+| `icons/` (added) | Game Icons (white, 100 px) | `musicOn`, `wrench` | Settings rows: Music, Tools (the Voice row uses `audioOn`, Quiet horn `audioOff`, Unlock all tools `unlocked`). `star` and `locked` now draw the campaign list's and cards' stars and lock, `trophy` the trophy counter |
+| `borders/` | Fantasy UI Borders (white PNG, "Double") | `panel-border-010` (thin frame, notched corners), `divider-fade-002` (fading line with a cross) | The glass sign's frame (9-slice); the divider beside the end panel's level name and under the campaign and Custom Game cards' names (mirrored, tinted) |
+
+More useful parts left in Downloads (2026-11-12 look): Board Game Icons also has crown_b, fire, campfire, resource_apple, pawns, dice and cards; Fantasy UI Borders has 32 frames in four styles (lines only, filled, transparent border, transparent center) and 12 dividers; Game Icons has about 130 more (white and black, 1x and 2x).
+
 Not copied (still in Downloads if needed): the other colors (blue, grey, red variants), the small "Default" sizes, black icons, spritesheets, vector files, minimap compass and rings, scrollbars and patterns. No font was downloaded. The panels use the browser's sans-serif until a Kenney font is added.

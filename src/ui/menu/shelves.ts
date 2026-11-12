@@ -51,7 +51,7 @@ import type { Stage } from '../../world/stage.js';
 import { canvasPlane, canvasTexture } from '../kit/canvas.js';
 import { drawOnTop } from '../kit/onTop.js';
 import { drawLine, UI_COLORS } from '../kit/text.js';
-import { drawNineSlice } from '../uiImages.js';
+import { drawIconCentered, drawNineSlice } from '../uiImages.js';
 import type { CampaignPanel } from './campaignPanel.js';
 
 export type DisplayName = PickTool | 'slingshot' | 'horn';
@@ -454,7 +454,10 @@ export class Shelves {
     const h = canvas.height;
     c.clearRect(0, 0, w, h);
     parchment(c, w, h);
-    drawLine(c, `Trophies  ${earned} / ${TROPHY_COUNT}`, w / 2, h / 2, w * 0.86, h * 0.42, UI_COLORS.ink);
+    // A Kenney trophy before the count.
+    const icon = h * 0.62;
+    drawIconCentered(c, 'trophy', w * 0.1 + icon / 2, h / 2, icon, '#b07a10');
+    drawLine(c, `Trophies  ${earned} / ${TROPHY_COUNT}`, w * 0.1 + icon + (w * 0.8 - icon) / 2, h / 2, w * 0.8 - icon, h * 0.42, UI_COLORS.ink);
     texture.needsUpdate = true;
   }
 

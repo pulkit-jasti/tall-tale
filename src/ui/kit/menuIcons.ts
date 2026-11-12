@@ -1,67 +1,13 @@
-// Small icons drawn in code for the menus (docs/menus.md): stars, goblin
-// skulls, the Fight sword, a lock, and the main menu's tile icons. Plain
-// canvas paths in the cream and brown of the other icons, drawn at any size,
-// so they stay sharp (no image files). Sizes are the icon's height (pixels).
+// Small icons drawn in code for the round buttons (docs/menus.md): the Fight
+// sword, a lock, and the main menu's tile icons. Plain canvas paths in cream,
+// drawn at any size, so they stay sharp. They are on the tested buttons, so
+// they stay; anything new uses a Kenney icon instead (AGENTS.md, "Never make
+// art by hand in code"). The card stars and skulls are Kenney icons now
+// (drawStars, drawIconCentered). Sizes are the icon's height (pixels).
 
 export type MenuIcon = 'sword' | 'lock' | 'campaign' | 'daily' | 'custom' | 'settings' | 'replay' | 'back' | 'home';
 
 const CREAM = '#f7e2b0';
-const BROWN = '#3b2b1f';
-
-/** A five pointed star, filled gold or an empty outline. */
-export function drawStar(c: CanvasRenderingContext2D, x: number, y: number, size: number, filled: boolean): void {
-  const outer = size / 2;
-  const inner = outer * 0.45;
-  c.save();
-  c.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const r = i % 2 === 0 ? outer : inner;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-  }
-  c.closePath();
-  c.lineJoin = 'round';
-  c.lineWidth = size * 0.08;
-  c.strokeStyle = filled ? '#8a5a14' : '#9a8a70';
-  if (filled) {
-    c.fillStyle = '#f2c230';
-    c.fill();
-  }
-  c.stroke();
-  c.restore();
-}
-
-/** A goblin skull (difficulty): a round head with pointy ears and two dark eyes. Grey when not counted. */
-export function drawSkull(c: CanvasRenderingContext2D, x: number, y: number, size: number, on: boolean): void {
-  const r = size * 0.36;
-  c.save();
-  c.fillStyle = on ? '#e9e2cf' : 'rgba(140, 130, 110, 0.35)';
-  c.strokeStyle = on ? BROWN : 'rgba(90, 80, 60, 0.4)';
-  c.lineWidth = size * 0.07;
-  c.lineJoin = 'round';
-  c.beginPath();
-  // The ears, then the head and the jaw.
-  c.moveTo(x - r * 0.8, y - r * 0.3);
-  c.lineTo(x - r * 1.45, y - r * 0.75);
-  c.lineTo(x - r * 0.6, y - r * 0.85);
-  c.arc(x, y - r * 0.1, r, Math.PI * 1.2, Math.PI * 1.8);
-  c.lineTo(x + r * 1.45, y - r * 0.75);
-  c.lineTo(x + r * 0.8, y - r * 0.3);
-  c.lineTo(x + r * 0.55, y + r * 0.75);
-  c.lineTo(x - r * 0.55, y + r * 0.75);
-  c.closePath();
-  c.fill();
-  c.stroke();
-  if (on) {
-    c.fillStyle = BROWN;
-    for (const side of [-1, 1]) {
-      c.beginPath();
-      c.ellipse(x + side * r * 0.4, y - r * 0.05, r * 0.24, r * 0.3, side * 0.4, 0, Math.PI * 2);
-      c.fill();
-    }
-  }
-  c.restore();
-}
 
 /** One of the menu icons, centered at x, y, `size` tall, in `color` (cream by default). */
 export function drawMenuIcon(c: CanvasRenderingContext2D, icon: MenuIcon, x: number, y: number, size: number, color = CREAM): void {

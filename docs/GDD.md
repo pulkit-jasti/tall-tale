@@ -29,7 +29,7 @@ Top level overview and index. Each topic gets its own file once its design is lo
 | Game modes, menu, progression, kingdom, achievements | [modes-and-progression.md](modes-and-progression.md) | Decided. Scoring and Endless difficulty to discuss. |
 | Core loop, pacing, troops, sound cues | [core-loop.md](core-loop.md) | Decided as a starting point |
 | Map: board, roads, triggers, environment, blueprints, directors, level generator | [map.md](map.md) | First pass decided, mockup in `maps/castle-3d.html` |
-| Castle rules: win, lose, the two flags, end screens | [castle-rules.md](castle-rules.md) | Decided for the first build |
+| Castle rules: win, lose, the red flag and the compass, end screens | [castle-rules.md](castle-rules.md) | Decided for the first build |
 | Castle machines | [castle-machines.md](castle-machines.md) | On hold until the first playtest |
 | Giant tools and food currency | [giant-tools.md](giant-tools.md) | First pass decided |
 | Enemies | [enemies.md](enemies.md) | First set decided |

@@ -99,6 +99,8 @@ All tests: grunts only, standing at the wall and hitting it, player sitting stil
 - **The first drops at 60 goblins came from outside our tagged code**, so the likely cause is garbage collection or the browser under load, not one feature.
 - **The rule is strict:** 2 dropped frames in 20 seconds already fails a step. Run the test twice before trusting a budget change.
 - The skinned goblin model is fine for now. The code-made goblin fallback in [assets.md](assets.md) is not needed yet.
+- **Garbage makes far things flicker** (headset test 2026-11-12): the horn's path, rebuilt as the look moved, called the terrain height about 1500 times per rebuild, each call making small arrays. The garbage collection dropped frames, and on the Quest a dropped frame shows as the sun and clouds shaking. Fixed by reading the road's own saved surface (`Road.surfaceAt`, no terrain calls, no garbage) and building the path at most every 0.12 s. Rule: anything rebuilt while the player moves (aim, drag, look) must not allocate in its loops and should be throttled. Its builds are marked `horn path`.
+- **A one-frame slip must not rebuild things:** the horn's spot used to drop the moment the look slid off a road for a frame, which rebuilt the path and redrew the glass sign's canvas each time. A short grace (`HORN_AIM.loseAfter`) stopped it. Same idea as the slider rule (never redraw a canvas while dragging).
 
 ---
 
@@ -126,6 +128,13 @@ Still to try if the frame rate drops, in order of expected gain:
 - **Road torches:** up to 40, sharing the torch meshes, plus one instanced mesh of ground pools (additive, see-through, so some fill where they cover the view); their matrices update every frame at night (cheap). The halos are much smaller now (2.8 to 3 cm), so they cost less fill.
 - **Pebbles:** the pebble is a code-made low-poly ball now, and a missed one rolls a moment before it lies still.
 - **Sound:** each placed sound voice (12) has a low pass and a gain node for the behind muffle, updated every frame only while it plays; two music tracks loop all the time (one silent).
+
+**New load from Custom Game, the compass and the win screen (branch `feat/custom-mode`, 2026-11-11 to 2026-11-12, not measured yet):**
+- **Map loading:** a level's map is built while the menu shows (a short hitch there, marked `map load`, its time in a debug note); the old map's geometry is freed. Never during a fight.
+- **Camps:** each camp is its own merged group now (so it can rise on its wave), about 8 draw calls per camp instead of 8 for all; a camp still under the ground is hidden.
+- **Compass:** about 8 draw calls (dish, face, boss, needle, post, one instanced mesh of 32 wedges, one of up to 12 tents, the label). The wedges and tents are written every frame (32 + 12 matrices and colors); the label redraws only when a number changes.
+- **Horn path:** built from saved road heights, no garbage, at most every 0.12 s.
+- **Win screen:** 3 star meshes, only on the end panel.
 
 If the stress test drops: lower `VILLAGERS.max`, then `NIGHT_LIGHTS.roadTorchMax`, then make the palisades lighter (`camp/survival/fence` instead of the spiked one, or fewer pieces with a bigger `CAMP_LOOK.fencePiece`), then fewer story scenes (`STORY_SPOTS.counts`).
 

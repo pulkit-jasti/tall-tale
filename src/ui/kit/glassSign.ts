@@ -13,7 +13,7 @@
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3, type CanvasTexture, type Object3D } from 'three';
 import { GLASS_SIGN, RENDER_ORDER } from '../../config/game.js';
 import { mark } from '../../debug/perfMarks.js';
-import { fitFont, wrapText } from '../uiImages.js';
+import { drawNineSlice, fitFont, wrapText } from '../uiImages.js';
 import { canvasPlane, canvasTexture } from './canvas.js';
 import { drawOnTop } from './onTop.js';
 import { UI_COLORS } from './text.js';
@@ -133,6 +133,10 @@ export class GlassSign {
     c.beginPath();
     c.roundRect(4, 4, w - 8, h - 8, 28);
     c.fill();
+    // A Fantasy UI Borders frame just inside the glass (thin white lines with notched corners, 2026-11-12).
+    c.globalAlpha = GLASS_SIGN.frameOpacity;
+    drawNineSlice(c, 'frame', 14, 14, w - 28, h - 28, 32, GLASS_SIGN.frameCorner);
+    c.globalAlpha = 1;
     // The text above the bar (or in the middle), at most two lines, shrunk to fit.
     const textHeight = withBar ? h * 0.62 : h;
     const maxWidth = w - 56;
