@@ -6,6 +6,7 @@
 // Web Audio API: the mic stream goes into an AnalyserNode (never to the
 // speakers), and each frame reads the RMS of the latest samples.
 import { AudioContext as ThreeAudioContext } from 'three';
+import { note } from '../debug/notes.js';
 
 export type MicState = 'unknown' | 'asking' | 'on' | 'denied' | 'unsupported';
 
@@ -119,14 +120,23 @@ export class Mic {
     const now = performance.now();
     if (this.reopening || now - this.lastReopen < MIC_REOPEN_GAP) return;
     this.lastReopen = now;
-    console.info(`[mic] ${why}: opening it again`);
+    // A debug note too (the headset has no console), so a mic that goes silent shows on the debug page.
+    note(`[mic] ${why}: opening it again (${this.health()})`);
     for (const t of this.stream?.getTracks() ?? []) t.stop();
     this.source?.disconnect();
     this.reopening = this.open().then((ok) => {
       this.reopening = null;
       this.silentSince = 0;
-      console.info(`[mic] reopened: ${ok ? 'on' : 'failed'}`);
+      note(`[mic] reopened: ${ok ? 'on' : 'failed'} (${this.health()})`);
     });
+  }
+
+  /** The audio and the mic track's state, for the debug notes. */
+  health(): string {
+    const context = ThreeAudioContext.getContext();
+    const track = this.stream?.getAudioTracks()[0];
+    const trackState = !track ? 'no track' : `track ${track.readyState}${track.muted ? ' muted' : ''}${track.enabled ? '' : ' disabled'}`;
+    return `${this.state}, audio ${context.state}, ${trackState}, level ${this.level.toFixed(4)}`;
   }
 
   /** Opens the mic stream into a silent analyser chain. False if the browser says no. */

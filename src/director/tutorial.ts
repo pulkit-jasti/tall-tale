@@ -10,6 +10,7 @@ import type { GoblinType } from '../config/game.js';
 import type { TriggerKind } from '../rules/blueprint.js';
 import type { DirectorStep } from '../rules/director.js';
 import type { GearShares } from '../rules/gear.js';
+import { risingByWave } from './levelDirector.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
 /** v2: the horn replaces the megaphone, and the bell is its own tool (docs/v2-plan.md 2.3). */
@@ -56,14 +57,14 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     toolMidWave: true,
   },
   {
-    intro: 'Two camps now. Shoot the far ones.',
+    intro: 'A new camp rises! Shoot the far ones.',
     camps: ['campNorth', 'campEast'],
     counts: { grunt: 12, runner: 0 },
     spawnTime: 50,
     newTool: 'slingshot',
   },
   {
-    intro: 'Runners! Small and fast.',
+    intro: 'Runners from a new camp! Small and fast.',
     camps: ['campNorth', 'campWest'],
     counts: { grunt: 11, runner: 12 },
     spawnTime: 55,
@@ -72,7 +73,7 @@ export const TUTORIAL_WAVES: WavePlan[] = [
   {
     // v2 run 2: 4 waves (was 5), like every campaign level (one time of day each). The old wave 5 had no
     // lesson left once the bell became a campaign unlock, so this is the final wave now.
-    intro: 'Final wave! Three camps. Spin the board to watch all sides.',
+    intro: 'Final wave! A camp rises behind you. Watch your compass and spin the board.',
     camps: ['campEast', 'campSouth', 'campWest'],
     counts: { grunt: 18, runner: 8 },
     spawnTime: 60,
@@ -102,14 +103,13 @@ export const TUTORIAL_TIMING = {
   hornGoblins: 3,
   /**
    * The horn lesson's pace (seconds): "look around" stays at least hornLookTime
-   * after the grab (so the player finds out the flag follows the look before
-   * being told to lift it), and "spot set" stays hornLockedTime once it locks,
-   * before "blow" (headset test: it went straight to lift and blow).
+   * after the grab (so the player finds out the flag and the path follow the
+   * look before being told to raise it and blow; headset test: it went
+   * straight to lift and blow). There is no "spot set" beat any more (no lock step).
    */
-  hornLookTime: 7,
+  hornLookTime: 6,
   /** Between tutorial waves the knight squads march home this long after the wave is cleared (after their cheer, seconds). */
   squadsHomeAfter: 1.8,
-  hornLockedTime: 2,
   /**
    * After the horn lesson the knights fight for the first time: this many
    * plain grunts start this far out on the squad's road (cm, `gap` apart) and
@@ -148,7 +148,7 @@ export type MarkerTarget =
   | 'ring'
   | 'lessonGoblin'
   | 'healthFlag'
-  | 'waveFlag'
+  | 'compass'
   | 'slingHandle'
   | 'bowl'
   | 'pouch'
@@ -212,14 +212,13 @@ export interface Hint {
 /**
  * The horn lesson's beats, in order (the battle picks one by what the player
  * does and how long): `aim` for at least TUTORIAL_TIMING.hornLookTime after
- * the grab (time to look around and see the flag follow), then `lift`, then
- * once locked `locked` for hornLockedTime (the path shows), then `blow`.
+ * the grab (time to look around and see the flag and the path follow), then
+ * `lift` (raise it in front of the face), then `blow`.
  */
 export interface HornSteps {
   idle: string;
   aim: string;
   lift: string;
-  locked: string;
   blow: string;
   blowQuiet: string;
 }
@@ -269,7 +268,7 @@ export interface TutorialApi {
   keepBait(dt: number, armored: boolean): void;
   /** Every frame of the shoot lesson: the moving target is topped up shortly after it is gone. */
   keepMovingBait(dt: number): void;
-  /** Where the horn lesson is: not held, aiming (no road spot yet), a spot to lock, locked at the lips. */
+  /** Where the horn lesson is: not held, aiming (no road spot yet), a spot (raise it), raised in front of the face with a spot. */
   hornState(): 'idle' | 'aim' | 'lift' | 'blow';
   /** The horn lesson's last beat: a few goblins walk down the road into the squad just called. False without a squad. */
   sendGroupAtSquad(): boolean;
@@ -438,7 +437,7 @@ function introLessons(): TutorialStep[] {
     // How to pause comes first, so a player who pauses by accident later knows the way back.
     lessonStep(
       'learn-pause',
-      lesson('Poke the pause button, then Resume.', 'info', 'pauseButton', {
+      lesson('Poke the pause button on your right, then Resume.', 'info', 'pauseButton', {
         doneText: 'Now you can pause!',
       }),
       (api, since) => api.pausedCount() > since,
@@ -702,11 +701,10 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     locked: `The horn is resting. ${RESTING}`,
     hornSteps: {
       idle: 'Grab the horn with your left hand.',
-      aim: 'Look around. The flag goes where you look.',
-      lift: 'Now lift the horn to your mouth.',
-      locked: 'Spot set! Your knights will walk this path.',
+      aim: 'Look around. The flag and your knights\' path go where you look.',
+      lift: 'Now raise the horn in front of your face.',
       blow: 'Blow into the horn!',
-      blowQuiet: 'Hold it at your mouth.',
+      blowQuiet: 'Hold it there.',
     },
     doneText: 'Charge! Your knights guard that spot.',
     // Watch the gate burst open and the knights charge.
@@ -932,6 +930,8 @@ export function buildTutorialSteps(
   const waveTitle = (i: number): string => `Wave ${i + 1} of ${waves.length}`;
   // The first hand tool also explains the recharge ring.
   let rechargeTaught = false;
+  // The first wave a camp rises in gets its own sign (docs/custom-mode.md section 7).
+  const firstRise = risingByWave(waves).findIndex((ids) => ids.length > 0);
   waves.forEach((wave, i) => {
     if (i === 0 && teach) steps.push(...introLessons());
     // A tool taught in the middle of its wave (wave 1's horn): the wave plays on its own first,
@@ -942,12 +942,22 @@ export function buildTutorialSteps(
       steps.push(toolGrabLesson(wave.newTool, !rechargeTaught, i === 0));
       rechargeTaught = true;
     }
-    // The two flags are explained before the first wave, while nothing attacks yet. One sign each, so the
-    // arrow points at each flag on its own and the player notices both (headset test: one sign for both was missed).
+    // The red flag and the compass ring are explained before the first wave, while nothing attacks yet. One sign
+    // each, so the arrow points at each on its own and the player notices both (headset test: one sign for two was missed).
     if (i === 0 && teach) {
       steps.push(
         infoStep('health-flag', banner('Red flag: your castle health. Goblins at the wall pull it down.', 'info', 'healthFlag', { header: 'Your castle' })),
-        infoStep('wave-flag', banner('Blue flag: it climbs for every wave you win.', 'star', 'waveFlag', { header: 'Your castle' })),
+        // The compass in two signs (one long sign was missed before): where and how many, then the middle.
+        infoStep(
+          'compass',
+          banner('Your compass: red marks show where goblins come from. Bigger marks, more goblins. The gold needle points ahead.', 'info', 'compass', {
+            header: 'Your compass',
+          }),
+        ),
+        infoStep(
+          'compass-count',
+          banner('Its middle shows the goblins left in this wave. The dots below are the waves.', 'info', 'compass', { header: 'Your compass' }),
+        ),
       );
     }
     // A wave whose new tool has a lesson starts straight into that lesson: the
@@ -987,6 +997,20 @@ export function buildTutorialSteps(
       // The first time the knights are out: goblins come at them, and the player watches them win.
       if (wave.newTool === 'horn') steps.push(squadFightStep());
     } else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolLesson(wave.newTool));
+    // The first wave a camp rises in (the tutorial's wave 2): once its lessons are done, what the new camp is and
+    // where it shows on the compass. Not earlier: the slingshot is taught by actions only, with no Next button
+    // before the first shot. No new goblins while it shows.
+    if (teach && i === firstRise) {
+      steps.push({
+        ...infoStep(
+          'camp-rises',
+          banner('A new goblin camp rose! Tents on your compass show every camp. A tent glows orange before its goblins come.', 'warning', 'compass', {
+            header: 'A new camp!',
+          }),
+        ),
+        holdSpawns: true,
+      });
+    }
     // While the wave is fought the sign stays away, so it never covers the enemies.
     // It comes back when the wave is cleared (the breather) or for a lesson.
     steps.push({

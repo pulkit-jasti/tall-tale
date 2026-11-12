@@ -22,7 +22,8 @@ export type PerfMark =
   | 'gear'
   | 'juice'
   | 'time of day'
-  | 'map load';
+  | 'map load'
+  | 'horn path';
 
 const marks = new Set<PerfMark>();
 

@@ -61,13 +61,14 @@ export class HintSign {
       canvasScale: 1.5,
       anisotropy: 4,
     });
-    // "Next" button straight in front, in reach, its face tilted up toward the eyes.
+    // "Next" button in front a little to the right (the pause button's spot), in reach, its face tilted up toward the eyes.
     this.next = new StandButton(parent, audio, {
       radius: HINT_SIGN.nextRadius,
       icon: 'next',
       at: HINT_SIGN.nextAt,
       y: HINT_SIGN.nextY,
       tiltDeg: HINT_SIGN.nextTiltDeg,
+      angleDeg: HINT_SIGN.nextAngleDeg,
     });
   }
 

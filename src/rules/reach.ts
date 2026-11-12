@@ -116,6 +116,21 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.
     { name: 'pause button', radius: PAUSE.button.at, y: PAUSE.button.y, rare: true },
     { name: 'end panel button', ...endButton },
+    // The win panel is taller (the stars and the stats): its big button and its Menu and Play again in the corners.
+    {
+      name: 'win panel big button',
+      ...onPanel(E.radius, uiCenterY(E.winHeight, E.tiltDeg), E.tiltDeg, -(E.winHeight / 2 - E.buttonRadius * POKE.rimScale - E.buttonMargin)),
+    },
+    {
+      name: 'win panel corner buttons',
+      ...onPanel(
+        E.radius,
+        uiCenterY(E.winHeight, E.tiltDeg),
+        E.tiltDeg,
+        -(E.winHeight / 2 - E.sideRadius * POKE.rimScale - E.buttonMargin),
+        E.endWidth / 2 - E.sideRadius * POKE.rimScale - E.buttonMargin,
+      ),
+    },
     {
       name: 'welcome panel Settings button',
       ...onPanel(

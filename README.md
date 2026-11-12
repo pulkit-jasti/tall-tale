@@ -116,7 +116,7 @@ All actions are simple grab, pull, shake, poke and release. No complex gestures.
 
 ### Win and lose
 
-- Two flags in front of the player: the red castle health flag slides down with damage, the blue wave flag climbs one notch per wave.
+- In front of the player: the red castle health flag slides down with damage, and a compass ring low in front shows where enemies come from, the wave and the goblins left (it replaced the blue wave flag, 2026-11-11).
 - Win by surviving all waves. Lose when the red flag reaches the bottom. Details in [docs/castle-rules.md](docs/castle-rules.md).
 
 ### Voice (optional, never required)
@@ -129,7 +129,7 @@ All actions are simple grab, pull, shake, poke and release. No complex gestures.
 
 - The battlefield wraps around you.
 - **Always a full 360 degree board.** One ring handle in front of you spins the board and sets its height, so you never need to turn around. Works in any chair.
-- **Comfort:** only the board spins. The sky, horizon, hills, your tools and the two flags stay still. A later comfort setting turns the board in snap steps instead of smoothly.
+- **Comfort:** only the board spins. The sky, horizon, hills, your tools, the red flag and the compass ring stay still. A later comfort setting turns the board in snap steps instead of smoothly.
 - **Threat cues:**
   1. Spatial audio from the real direction of the threat (main cue).
   2. Visual cues, on by default: the wall top flashes red with a dust puff where it is hit ([docs/controls-and-ui.md](docs/controls-and-ui.md#threat-cues)).

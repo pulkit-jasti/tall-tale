@@ -38,6 +38,12 @@ export class RisingCamps {
     for (const [id, group] of groups) this.camps.set(id, { group, baseY: group.position.y, share: 1, rising: false });
   }
 
+  /** True while a camp is up or coming up (the compass shows a tent for it). An unknown id counts as up. */
+  isUp(id: string): boolean {
+    const camp = this.camps.get(id);
+    return !camp || camp.share >= 1 || camp.rising;
+  }
+
   /** Every camp up at once (the menu, the welcome panel). */
   showAll(): void {
     this.unseen.length = 0;

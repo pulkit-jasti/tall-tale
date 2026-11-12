@@ -51,6 +51,7 @@ export {
   arrowCanvas,
   buttonIconCanvas,
   drawBanner,
+  drawDivider,
   drawIcon,
   drawNineSlice,
   fitFont,

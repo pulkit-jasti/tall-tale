@@ -131,6 +131,28 @@ export class WaveSpawner {
     return this.active;
   }
 
+  /**
+   * The camps sending right now (graph node indices, into `out`): a group's
+   * drums have started and some of it is still to come out. For the compass
+   * ring's early warning (src/ui/compass.ts). No garbage: `out` is reused.
+   */
+  sendingCamps(out: number[]): number[] {
+    out.length = 0;
+    if (!this.active) return out;
+    for (const g of this.groups) {
+      if (g.type === 'balloon' || !g.rumbled || g.out >= g.count || out.includes(g.camp)) continue;
+      out.push(g.camp);
+    }
+    return out;
+  }
+
+  /** Enemies of this wave still to come out (a balloon counts its `riders`). */
+  waiting(riders: number): number {
+    let n = 0;
+    for (const g of this.groups) n += (g.count - g.out) * (g.type === 'balloon' ? riders : 1);
+    return n;
+  }
+
   update(dt: number): void {
     if (!this.active) return;
     this.time += dt * this.rate;

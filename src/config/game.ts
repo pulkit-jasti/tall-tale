@@ -769,21 +769,114 @@ export const RISING_CAMPS = {
   arrowFor: 12,
 };
 
+/**
+ * The compass (src/ui/compass.ts, decided 2026-11-11, replaces the blue wave
+ * flag; 3D since 2026-11-12): a brass compass dish on a short post straight
+ * in front, out by the wall (where the pause button stood; it moved right),
+ * nearly flat like a compass on a table. Directions are relative to the
+ * player (a gold needle points straight ahead).
+ *   - Rim wedges: their color is how close the worst thing in that direction
+ *     is (a camp about to send amber, goblins far dim red, near red, at the
+ *     wall, climbing or inside bright red and blinking), their height is how
+ *     many goblins are there.
+ *   - Little tents on the lip: every camp that is up, dim while quiet, amber
+ *     and bobbing while its drums play.
+ *   - The middle: the wave and the goblins left, on a raised brass boss.
+ * Only looked at, never touched. In boardLift (cm): it rises with the board, never turns.
+ */
+export const COMPASS = {
+  /**
+   * Straight in front, this far out and this high (cm: the dish's floor),
+   * tipped this much toward the player (degrees). Was 31.5 out, 2 up and
+   * steeply tilted: from the seat it hid under the ring (headset test
+   * 2026-11-12). Out here the eyes see it over the ring, and the goblins at
+   * the front wall still show over it.
+   */
+  at: 37,
+  y: 7,
+  /** Tipped toward the eyes (was 8, nearly flat: hard to read from the seat, headset test 2026-11-12). */
+  tiltDeg: 35,
+  radius: 5.5,
+  /** The dish: its wall height and how far its lip stands out over the face (cm). */
+  dishDepth: 0.9,
+  lipWidth: 0.55,
+  brassColor: 0xb8862e,
+  /** A little glow of its own, so it still reads at night. */
+  brassGlow: 0x2a1c08,
+  faceColor: 0x1f1a16,
+  /** Rim wedges around (each one pointing in). */
+  segments: 32,
+  /** A wedge's length and width (cm), and its tip this far in from the lip. */
+  arrowLength: 1.1,
+  arrowWidth: 0.95,
+  arrowInset: 0.2,
+  /**
+   * More goblins in a direction, a bigger wedge: its height (cm) with none,
+   * then barPer more per goblin, and it grows sizePer longer and wider per
+   * goblin (its tail stays at the lip, so it reaches in), up to barMax goblins.
+   * Size reads better than height now that the dish is tipped toward the eyes.
+   */
+  barBase: 0.2,
+  barPer: 0.32,
+  sizePer: 0.1,
+  barMax: 6,
+  /** Wedges grow to their new height with this smoothing (seconds), so a count change never jumps. */
+  barGlide: 0.15,
+  /** Colors by level: none, camp about to send, far, near, at the wall. */
+  levelColors: [0x3a332d, 0xffb030, 0x8a2a20, 0xe0402c, 0xff5a3c],
+  /** A goblin on the board closer than this to the middle (cm) is "near". */
+  near: 150,
+  /** The top level blinks this often (per second), the amber one pulses slower. */
+  blinkHz: 1.6,
+  pulseHz: 0.6,
+  /** The wedges beside a threat light one level lower (at the base height), so a group reads as a wide arrow. */
+  spread: true,
+  /** Camp tents on the lip: most shown, their size (cm), how high a sending one bobs, and their colors. */
+  maxCamps: 12,
+  tentRadius: 0.5,
+  tentHeight: 0.9,
+  tentBob: 0.35,
+  tentColor: 0x6b5a48,
+  tentSendingColor: 0xffb030,
+  /** The gold needle pointing straight ahead (cm): its length out from the boss (short of the wedges' tips) and its width. */
+  needleLength: 0.75,
+  needleWidth: 0.7,
+  needleColor: 0xf2c14e,
+  /**
+   * The raised boss in the middle: the goblins left in the wave as one big
+   * number (the main information), a gold tick between waves, and a row of
+   * dots under it, one per wave (gold: won, white: this one, hollow: to come).
+   * Canvas size (cm) and colors. Was three lines of small text (too small, headset test 2026-11-12).
+   */
+  bossRadius: 2.8,
+  bossHeight: 0.7,
+  textWidth: 5.2,
+  textHeight: 4.4,
+  numberColor: '#ffffff',
+  /** The skull icon in front of the number (Kenney Board Game Icons; a bare number read as random), tinted. */
+  iconColor: '#e8dcc0',
+  tickColor: '#f2c14e',
+  dotDoneColor: '#f2c14e',
+  dotNowColor: '#ffffff',
+  dotLaterColor: '#8a7a62',
+};
+
 /** Map loading (docs/custom-mode.md section 11, step 5): the map key of the tutorial map. */
 export const MAPS = {
   tutorialKey: 'tutorial',
 };
 
 /**
- * The two flags (docs/castle-rules.md section 2). They live in boardLift:
- * they rise with the board but never spin. Just behind the tool platforms,
- * between the front ones and the middle ones, one on each side (cm, degrees).
+ * The red castle health flag (docs/castle-rules.md section 2). It lives in
+ * boardLift: it rises with the board but never spins. Just behind the tool
+ * platforms, between the front ones and the middle ones, on the left (cm,
+ * degrees). The blue wave flag on the right is gone (2026-11-11): the
+ * compass ring (COMPASS) shows the wave instead.
  */
 export const FLAGS = {
   radius: 38.5,
-  /** Red castle health flag on the left, blue wave flag on the right. A little nearer the front (was 43), clear of the tools behind them. */
-  healthAngleDeg: -39,
-  waveAngleDeg: 39,
+  /** A little nearer the front (was 43), clear of the tools behind it. */
+  healthAngleDeg: -34,
   poleHeight: 26,
   poleRadius: 0.35,
   poleColor: 0x5a4330,
@@ -792,7 +885,6 @@ export const FLAGS = {
   clothWidth: 6,
   clothHeight: 4,
   healthColor: 0xd23c28,
-  waveColor: 0x2f6fd8,
   /** Lowest and highest cloth top on the pole (cm above the board). */
   clothBottom: 5,
   clothTop: 25,
@@ -804,7 +896,6 @@ export const FLAGS = {
   /** Below this health share the red cloth darkens and hangs limp: it flies this share of its length, its edge on the pole. */
   lowShare: 0.3,
   limpLength: 0.8,
-  notchColor: 0xddd6c8,
 };
 
 /** Win and lose panels, and the poke buttons on them (docs/castle-rules.md section 4). */
@@ -873,6 +964,62 @@ export const END_PANEL = {
   settingsRadius: BUTTON_SIZE.medium,
   /** The panel appears this long after the battle ends, after the last poofs (seconds). */
   showDelay: 1.2,
+  /**
+   * The win and loss panels (revamped 2026-11-12): taller, for the level's
+   * name, the 3D stars, a row of stats (castle health, goblins eaten, time)
+   * and a line under them ("New best!", or what the next star needs). Three
+   * buttons along the bottom: Menu (left), the big one in the middle (Next
+   * level when there is one, else Play again; Try again when lost), and Play
+   * again (right) when the middle one is Next. The welcome panel keeps width x height.
+   */
+  endWidth: 38,
+  winHeight: 32,
+  lostHeight: 27,
+  /** The small buttons beside the big one (Menu, Play again). */
+  sideRadius: BUTTON_SIZE.large,
+  /** The Kenney icons over the stats (white, tinted) and the divider beside the level's name. */
+  statColors: { castle: '#c8392b', eaten: '#5b4a3a', time: '#8a5a34' },
+  dividerColor: '#8a5a34',
+  /** Where things sit, down from the panel's top (cm): the level's name, the stars' middle, the stats, the line under them. */
+  subtitleFromTop: 6.6,
+  statsFromTop: 15.2,
+  noteFromTop: 18.2,
+  /** Lost: no stars, so the stats sit higher. */
+  lostStatsFromTop: 10.4,
+  /** The 3D stars (src/ui/winStars.ts). Sizes in cm (a star's outer radius), times in seconds. */
+  stars: {
+    fromTop: 10.6,
+    /** In front of the panel, so they float. */
+    z: 1.6,
+    spacing: 5.4,
+    size: 1.8,
+    middleSize: 2.3,
+    middleLift: 0.8,
+    /** The side stars lean out a little (radians). */
+    leanRad: 0.28,
+    depth: 0.5,
+    bevel: 0.18,
+    goldColor: 0xf2c230,
+    goldGlow: 0x6a4400,
+    stoneColor: 0x5c564c,
+    /** A missed star is this much smaller. */
+    missedScale: 0.82,
+    /** The first pops in this long after the panel, then one every `gap`; each pop takes popTime, a won one spins once over spinTime. */
+    firstAt: 0.45,
+    gap: 0.42,
+    popTime: 0.45,
+    spinTime: 0.7,
+    /** The gentle bob (cm) and its speed, and how far they turn to and fro (radians). */
+    bob: 0.25,
+    bobSpeed: 2.2,
+    sway: 0.25,
+    /** A glint runs across the gold stars this often (seconds), this bright. */
+    glintEvery: 3,
+    glintStrength: 2.2,
+    /** Sparkles on each won star's pop. */
+    sparkles: 14,
+    sparkleColors: [0xffffff, 0xffe9a8, 0xf2c230],
+  },
 };
 
 /**
@@ -1311,6 +1458,12 @@ export const PAUSE = {
     at: 38.5,
     y: 9,
     tiltDeg: 40,
+    /**
+     * Round to the right, on the blue wave flag's old spot (2026-11-12): the
+     * compass ring took the spot straight in front. Same distance, so the same reach.
+     * 34 since 2026-11-12 (was 39): everything nearer the front.
+     */
+    angleDeg: 34,
   },
   /**
    * The Quest menu can stop the frames without the page ever seeing a
@@ -1645,6 +1798,8 @@ export const HINT_SIGN = {
   /** Same height as the pause button (was 15: the two did not line up). */
   nextY: PAUSE.button.y,
   nextTiltDeg: 40,
+  /** On the pause button's spot, round to the right (2026-11-12: the compass ring is straight in front now). */
+  nextAngleDeg: PAUSE.button.angleDeg,
 };
 
 /** Ghost hands that show how to do each lesson (src/ui/ghostHand.ts). */
@@ -1756,15 +1911,17 @@ export const FEEDBACK = {
 export const TOOL_SPOTS = {
   // Moved back twice (v2 run 2 headset tests): the front ones stood in front of the flags (at 39 degrees).
   // Were 30 (slingshot, pepper), 56 to 58 (bell, pebble bowl), 82 (horn, swatter), then 50, 68 to 70, 86 to 90.
-  slingshot: { angleDeg: 60, radius: 33.5 },
+  // 2026-11-12: everything about 12% nearer the front (was 60, 96, -78, -56, -100), so the head turns less.
+  // At least 17 degrees between platforms (about 10 cm), so a hand still fits between two tools.
+  slingshot: { angleDeg: 53, radius: 33.5 },
   /** The horn (v2, the megaphone's old spot). */
-  rightSide: { angleDeg: 96, radius: 33.5 },
+  rightSide: { angleDeg: 86, radius: 33.5 },
   /** The bell (v2: its own platform, where the food jar was). */
-  leftMiddle: { angleDeg: -78, radius: 33.5 },
+  leftMiddle: { angleDeg: -68, radius: 33.5 },
   /** Pepper shaker. The left side has room (no bowl), so its three are spread wider (were -60 and -96). */
-  leftFront: { angleDeg: -56, radius: 33.5 },
+  leftFront: { angleDeg: -50, radius: 33.5 },
   /** Fly swatter. */
-  leftSide: { angleDeg: -100, radius: 33.5 },
+  leftSide: { angleDeg: -88, radius: 33.5 },
   /** Platform top above the board (cm). Low, so the hand reaches it without lifting the arm. */
   platformTop: 6,
   /** Platform width (cm). */
@@ -1906,8 +2063,8 @@ export const AIM_ASSIST = {
 
 /** The pebble bowl beside the slingshot, on a post like the platforms. Soldiers keep topping it up. */
 export const PEBBLE_BOWL = {
-  /** Between the slingshot (60) and the horn (96). Was 58, then 70. */
-  angleDeg: 78,
+  /** Between the slingshot (53) and the horn (86). Was 58, 70, then 78 (2026-11-12: everything nearer the front). */
+  angleDeg: 70,
   radius: 33.5,
   /** Rim height above the board (cm). A little above the platforms, so it stays in the reach band now that the board sits lower. */
   rimY: 9,
@@ -2211,12 +2368,30 @@ export const HORN = {
   gripTo: 6,
   grabRadius: 0.06,
   /**
-   * The mouthpiece counts as at the lips (the spot locks) this close to the
-   * head (meters, measured from the eyes; the mouth is about 10 to 12 cm
-   * below them). Was 0.24, which a horn just held at rest in front of the
-   * chest sometimes reached, so it locked by accident (headset test).
+   * The blow zone (meters, fixed 2026-11-12): a ball of zoneRadius around a
+   * point zoneForward ahead of the eyes (the look kept level) and zoneDown
+   * below them, in front of the mouth. The lips (about 3 cm ahead, 11 below)
+   * and a horn raised a hand's length out (30 ahead) both count; one resting
+   * at the chest (about 25 ahead, 40 below) or held to the side does not.
+   * Once in, it stays in out to zoneRadius + zoneExitMargin, and leaving for
+   * less than zoneGrace seconds (a tracking dropout) does not count. The
+   * first try (a 32 cm cone from the eyes) left out the mouth itself.
    */
-  mouthDistance: 0.17,
+  zoneForward: 0.12,
+  zoneDown: 0.1,
+  zoneRadius: 0.2,
+  zoneExitMargin: 0.05,
+  zoneGrace: 0.3,
+  /** A loud frame still counts as a blow this long after it (seconds), so one just before the horn is in place is not lost. */
+  blowMemory: 0.25,
+  /**
+   * A live mic always hears a little room noise (about 0.001 and up). Under
+   * silentLevel for silentFallback seconds while held, it counts as broken:
+   * the horn falls back to the quiet hold (hold it raised to send), and a
+   * debug note says so with the mic's state.
+   */
+  silentLevel: 0.00002,
+  silentFallback: 1,
   /**
    * Near the face it fades: fully solid farther than fadeFar, down to
    * fadeOpacity at fadeNear (meters from the mouthpiece to the head).
@@ -2225,9 +2400,9 @@ export const HORN = {
   fadeNear: 0.13,
   fadeOpacity: 0.15,
   /**
-   * The quiet horn (or no mic): kept at the lips this long, it sounds
-   * (seconds). With the mic only a blow sounds it: a hold never does, so
-   * aiming is never cut short (headset test: it went off while still aiming).
+   * The quiet horn (or no mic): kept in the blow zone with a spot this long,
+   * it sounds (seconds). With the mic only a blow sounds it: a hold never
+   * does, so aiming is never cut short (headset test: it went off while still aiming).
    */
   holdTime: 1.2,
   /**
@@ -2589,12 +2764,16 @@ export const HORN_AIM = {
   pillarRadius: 0.9,
   pillarGrow: 0.8,
   pillarOpacity: 0.6,
-  /** The path along the roads once locked (cm): ribbon width, a point every pathStep, just above the road, and its opacity. */
+  /**
+   * The path along the roads (cm): ribbon width, a point every pathStep
+   * (finer than the road's own 4 cm, so it never cuts under a bump), this
+   * far above the road top (each edge on the ground where it is), and its opacity.
+   */
   pathWidth: 1.6,
-  pathStep: 3,
-  pathLift: 0.35,
+  pathStep: 2,
+  pathLift: 0.5,
   pathOpacity: 0.7,
-  /** Locked at the lips: everything turns gold. */
+  /** Raised into the blow zone with a spot: everything turns gold. */
   lockColor: 0xffc23a,
   /** The glowing pool on the road: radius (cm) and its strongest opacity. A slow breathing pulse. */
   poolRadius: 7,
@@ -2610,15 +2789,17 @@ export const HORN_AIM = {
    * ring, nudging arrowBob that way. Drawn over the hills.
    */
   /**
-   * The lock follows the look (headset test: a spot locked while looking
-   * elsewhere was lost from view): at the lips, the look resting on a road
-   * spot for lockDwell seconds locks it; locked, the look more than unlockDeg
-   * degrees from the spot for unlockGrace seconds unlocks it (a soft click),
-   * and the spot follows the look again until it rests and locks once more.
+   * No lock step (changed 2026-11-11): the spot follows the look the whole
+   * time, and a call goes to the spot looked at callLookBack seconds before
+   * it (blowing moves the head a little). The path is built again when the
+   * spot moves to another road or this far along it (cm).
    */
-  lockDwell: 0.4,
-  unlockDeg: 30,
-  unlockGrace: 0.3,
+  callLookBack: 0.3,
+  pathRebuild: 6,
+  /** While the look slides along one road, the path is built again at most this often (seconds). */
+  pathEvery: 0.12,
+  /** The spot (and its path) stays this long after the look slips off the roads (seconds), so a slip never rebuilds it. */
+  loseAfter: 0.3,
   /** After a call the spot stays marked (gold) until the squad arrives, at most this long (seconds). */
   calledMax: 30,
   offRoad: { radius: 4.5, color: 0xffffff, edgeColor: 0x1a1410, arrowSize: 3, arrowGap: 2, arrowBob: 1.5 },
@@ -2645,6 +2826,9 @@ export const GLASS_SIGN = {
   /** Text size on its 512 px wide canvas (shrinks to fit two lines). */
   fontPx: 40,
   glass: 'rgba(30, 22, 16, 0.55)',
+  /** The Fantasy UI Borders frame inside the glass: its corner size (canvas px) and how strong it shows. */
+  frameCorner: 22,
+  frameOpacity: 0.7,
   /** Follows the look with this smoothing. */
   smoothing: 0.12,
   bar: {

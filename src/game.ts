@@ -13,6 +13,7 @@ import {
   GLASS_SIGN,
   GOBLIN_RULES,
   HORN,
+  COMPASS,
   JUICE,
   MAPS,
   MENU,
@@ -37,7 +38,9 @@ import { parseBlueprint, type Blueprint } from './rules/blueprint.js';
 import type { Level } from './level/level.js';
 import type { RoadNetwork } from './world/roads.js';
 import { RisingCamps } from './world/risingCamps.js';
-import { EndPanel } from './ui/endPanel.js';
+import { Compass } from './ui/compass.js';
+import { EndPanel, type EndExtras } from './ui/endPanel.js';
+import { LEVELS } from './config/levels.js';
 import { PauseMenu, type PauseAction } from './ui/pauseMenu.js';
 import { GhostAim } from './ui/ghostAim.js';
 import { PointerArrow } from './ui/pointerArrow.js';
@@ -46,7 +49,7 @@ import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { ThreatCues } from './ui/threatCues.js';
 import { GlassSign, isTyping, loadUiImages, useKeyboardSession, type GlassBar } from './ui/kit/index.js';
-import { customLevels, resetCustomLevels } from './player/customLevels.js';
+import { customLevels, resetCustomLevels, saveCustomLevels } from './player/customLevels.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';
@@ -93,7 +96,7 @@ import { SceneSwap } from './world/sceneSwap.js';
 import { loadTemplate } from './world/models.js';
 import { Menu } from './ui/menu/menu.js';
 import { progress, resetProgress, saveProgress } from './player/progress.js';
-import { battleTools, recordTutorial, recordWin, starsFor } from './rules/campaign.js';
+import { battleTools, isOpen, recordTutorial, recordWin, starsFor } from './rules/campaign.js';
 
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
@@ -105,8 +108,9 @@ const slotAt = new Vector3();
 const menuFront = new Vector3();
 /** Session storage key for the debug "Start at wave" choice. */
 const PLAY_FROM_KEY = 'tallTale.playFromWave';
-/** Where the threat arrow points at a camp that just rose. */
+/** Where the threat arrow points at a camp that just rose, and a camp's spot for the compass. */
 const campArrowAt = new Vector3();
+const compassAt = new Vector3();
 
 /**
  * Frees an old map's GPU memory: every geometry under `root`, and its
@@ -238,6 +242,11 @@ export class GameSystem extends createSystem({}) {
   /** A map is being built: no battle starts, the menu takes no choice. */
   private loading = false;
   private camps!: RisingCamps;
+  /** The Custom Game level being fought (its id), for its name and best stars on the win panel. */
+  private customId: string | null = null;
+  private compass!: Compass;
+  /** The camps sending now, reused each frame for the compass. */
+  private sending: number[] = [];
   private waves!: WaveSpawner;
   private bait!: LessonBait;
 
@@ -375,13 +384,15 @@ export class GameSystem extends createSystem({}) {
     this.balloons.onThreat = (rider) => this.threat.wallHit(rider, false);
     this.sign = new HintSign(this.stage.boardLift, this.audio);
     // The welcome panel's Settings button opens the settings page on its own (there is no battle to pause).
-    this.endPanel = new EndPanel(this.stage.boardLift, this.audio);
+    this.endPanel = new EndPanel(this.stage.boardLift, this.audio, this.particles);
     this.endPanel.onSettings = () => {
       this.endPanel.hide();
       this.titleSettings = true;
       this.pauseMenu.showSettings(headPosition, headForward, this.stage.boardScale);
     };
-    const flags = new Flags(this.stage.boardLift, TUTORIAL_WAVES.length);
+    const flags = new Flags(this.stage.boardLift);
+    // The compass in front, out by the wall (replaces the blue wave flag): where enemies come from, how many, the camps, the wave and the goblins left.
+    this.compass = new Compass(this.stage.boardLift);
     this.bait = new LessonBait(this.goblins, built.network);
     this.battle = new Battle({
       stage: this.stage,
@@ -401,10 +412,8 @@ export class GameSystem extends createSystem({}) {
       pointer: new PointerArrow(root),
       bait: this.bait,
       pauseButton: (out) => this.pauseMenu.buttonWorld(out),
-      // The horn lesson's beats: not held, aiming, a spot to lock, locked at the lips.
-      // At the lips but not locked yet: "look at a road" (a steady look there locks it).
-      hornState: () =>
-        !this.horn.aiming ? 'idle' : this.horn.locked ? 'blow' : this.hornAim.valid && !this.horn.atLips ? 'lift' : 'aim',
+      // The horn lesson's beats: not held, aiming (no road spot), a spot (raise it), raised with a spot (blow).
+      hornState: () => (!this.horn.aiming ? 'idle' : !this.hornAim.valid ? 'aim' : this.horn.inZone ? 'blow' : 'lift'),
       audio: this.audio,
       particles: this.particles,
       threat: this.threat,
@@ -412,6 +421,7 @@ export class GameSystem extends createSystem({}) {
       isHeld: (goblin) => this.grabEat.isHolding(goblin),
       celebrate: (won) => this.juice.celebrate(won, this.boardCenter(), this.stage.boardScale),
       camps: this.camps,
+      compass: this.compass,
       setGarrison: (rules) => garrison.setRules(rules),
     });
     this.grabEat.onEat = (goblin) => {
@@ -437,12 +447,13 @@ export class GameSystem extends createSystem({}) {
     // The horn calls the field knights (v2) to the road spot the player looks at (src/ui/hornAim.ts).
     this.hornAim = new HornAim(this.stage, this.troops, this.audio);
     this.glass = new GlassSign(root);
-    this.horn.aimLocked = () => this.hornAim.locked;
+    this.horn.aimValid = () => this.hornAim.valid;
     this.horn.onCall = (blown) => {
       // The full bar stays up a moment after the call (see updateGlass).
       this.blowShown = GLASS_SIGN.blownHold;
       this.blownByMic = blown;
-      const target = this.hornAim.target;
+      // The spot looked at a moment before the blow (blowing moves the head a little).
+      const target = this.hornAim.callTarget();
       // Debug (no hands, no aim): the road in front.
       if (target && this.troops.command(target)) this.hornAim.markCalled(target);
       else this.troops.charge(this.stage.spin);
@@ -487,6 +498,8 @@ export class GameSystem extends createSystem({}) {
     this.swap = new SceneSwap();
     this.swap.addBattle(castle);
     for (const o of [...flags.roots, ...this.handles.groups]) this.swap.addBattle(o);
+    // The compass sinks too; it shows itself only while a battle is fought.
+    this.swap.addBattle(this.compass.group, false);
     for (const o of [...this.slingshot.groups, ...this.tools.flatMap((t) => t.groups)]) this.swap.addBattle(o, false);
     this.swap.addMenu(this.menu.group);
     this.pauseMenu.onUnlockAll = (on) => {
@@ -497,6 +510,7 @@ export class GameSystem extends createSystem({}) {
     this.battle.onEnd = (won, share) => this.battleOver(won, share);
     // The end panel's Menu button: back to the page the battle was started from.
     this.battle.onMenu = () => this.goToMenu(this.menuAfterBattle());
+    this.battle.onNext = () => this.nextLevel();
     this.battle.onSkip = () => this.skipToMenu();
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
@@ -574,7 +588,7 @@ export class GameSystem extends createSystem({}) {
    * its stars and opens the next level; its end panel shows the stars and a
    * Menu button.
    */
-  private battleOver(won: boolean, share: number): 'menu' | { stars?: number; menu: boolean } {
+  private battleOver(won: boolean, share: number): 'menu' | EndExtras {
     if (this.battle.teaching) {
       if (!won) return { menu: false };
       recordTutorial(progress, true);
@@ -582,14 +596,46 @@ export class GameSystem extends createSystem({}) {
       this.goToMenu('main');
       return 'menu';
     }
-    const level = this.battle.level;
-    if (level === null) return { menu: progress.tutorialDone };
-    if (!won) return { menu: true };
+    // Every win shows its stars now (2026-11-12, the revamped win panel), from the red flag's share left.
     const stars = starsFor(share, MENU.stars.threeAt, MENU.stars.twoAt);
+    // A Custom Game level: its name under the title, and its best stars kept with it.
+    if (this.battle.playingLevel) {
+      const entry = customLevels.levels.find((l) => l.id === this.customId);
+      const subtitle = entry?.name;
+      if (!won || !entry) return { menu: true, subtitle, stars: won ? stars : undefined };
+      const before = entry.best ?? 0;
+      if (stars > before) {
+        entry.best = stars;
+        saveCustomLevels();
+      }
+      return { stars, menu: true, best: before > 0 && stars > before, subtitle };
+    }
+    const level = this.battle.level;
+    // A debug battle or Skip tutorial: stars, but nothing saved.
+    if (level === null) return won ? { stars, menu: progress.tutorialDone } : { menu: progress.tutorialDone };
+    const card = LEVELS.find((l) => l.number === level);
+    const subtitle = card ? `Level ${level}: ${card.name}` : `Level ${level}`;
+    if (!won) return { menu: true, subtitle };
+    const before = progress.stars[level] ?? 0;
     const opened = recordWin(progress, level, stars);
     saveProgress();
     console.info(`[campaign] level ${level} won: ${stars} stars${opened ? `, level ${level + 1} is open` : ''}`);
-    return { stars, menu: true };
+    const next = LEVELS.some((l) => l.number === level + 1) && isOpen(progress, level + 1);
+    // "New best!" only when it beats an earlier win.
+    return { stars, menu: true, best: before > 0 && stars > before, next, subtitle };
+  }
+
+  /** The win panel's Next level: the next campaign level starts right away (the same map for now, so no swap). */
+  private nextLevel(): void {
+    const level = this.battle.level;
+    if (level === null || !isOpen(progress, level + 1)) {
+      this.goToMenu('campaign');
+      return;
+    }
+    this.battle.level = level + 1;
+    this.battle.loadout = this.pickedTools();
+    console.info(`[campaign] next: level ${level + 1}`);
+    this.battle.start(0, false);
   }
 
   /** Skip tutorial (welcome or pause panel): the tutorial counts as done, and the menu comes up. */
@@ -728,6 +774,7 @@ export class GameSystem extends createSystem({}) {
     // The key changes when the level is saved again, so an edited level is built again.
     if (!(await this.loadMap(`custom:${entry.id}:${entry.changed}`, level.map))) return;
     this.battle.level = null;
+    this.customId = entry.id;
     this.battle.loadout = this.pickedTools();
     this.battle.useLevel(level);
     this.battle.hideLaterCamps();
@@ -775,6 +822,8 @@ export class GameSystem extends createSystem({}) {
   /** The menu's frame: the shelves, the panels, the settings page from it, and the living board around (no battle). */
   private tickMenu(dt: number): void {
     this.stage.update(dt);
+    // No battle: the compass is hidden.
+    this.compass.group.visible = false;
     this.villagers.update(dt);
     this.particles.update(dt);
     this.juice.update(dt, headPosition);
@@ -1046,18 +1095,20 @@ export class GameSystem extends createSystem({}) {
     this.camps.update(dt);
     // The horn blows when its mouthpiece is at the head.
     this.horn.head.copy(headPosition);
-    // The horn lesson's "spot set" beat: the horn locks but waits for the "blow" sign.
+    this.horn.headForward.copy(headForward);
+    // The horn lesson's "look around" beat: the horn waits for the "blow" sign.
     this.horn.waiting = this.battle.hornWaiting;
     this.grabEat.update(dt, headPosition, headForward);
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
-    // The horn held: the head aims it (a glowing pool, a light pillar and a ghost banner on the road);
-    // at the lips the spot locks (gold, the path along the roads).
-    this.hornAim.update(dt, this.horn.aiming, this.horn.atLips, this.horn.charge, headPosition, headForward);
+    // The horn held: the head aims it (a glowing pool, a light pillar, a ghost banner and the path along the roads);
+    // raised into the blow zone it turns gold.
+    this.hornAim.update(dt, this.horn.aiming, this.horn.ready, this.horn.charge, headPosition, headForward);
     this.updateGlass(dt, headPosition, headForward);
     this.stun.update(dt);
     this.threat.update(dt);
     // The red arrow only while a battle is fought, and not while a lesson's yellow arrow points the way.
+    this.updateCompass(dt);
     // A camp that just rose gets the arrow too, until the player looks at it (docs/custom-mode.md section 7).
     if (this.battle.canPause && !this.battle.lessonPointing) {
       const camp = this.camps.unseenWorld(dt, headPosition, headForward, campArrowAt);
@@ -1070,6 +1121,42 @@ export class GameSystem extends createSystem({}) {
     this.windmill.update(dt);
     this.fog.near = SKY.fogNear * this.stage.boardScale;
     this.fog.far = SKY.fogFar * this.stage.boardScale;
+  }
+
+  /**
+   * The compass (src/ui/compass.ts), while a battle is fought: camps whose
+   * drums have started (amber), goblins on the board by how close they are
+   * (far, near, at the wall or inside: the color) and how many (the height),
+   * a tent for every camp that is up, the wave and the goblins left.
+   */
+  private updateCompass(dt: number): void {
+    const compass = this.compass;
+    const on = this.battle.canPause;
+    compass.begin(this.stage.spin);
+    if (on) {
+      const sending = this.waves.sendingCamps(this.sending);
+      for (const node of sending) {
+        this.network.nodePosition(node, compassAt);
+        compass.add(compassAt.x, compassAt.z, 1);
+      }
+      // A tent on the compass's lip for every camp that is up (amber while its drums play).
+      const graph = this.network.graph;
+      for (const node of graph.camps) {
+        if (!this.camps.isUp(graph.nodes[node].id)) continue;
+        this.network.nodePosition(node, compassAt);
+        compass.camp(compassAt.x, compassAt.z, sending.includes(node));
+      }
+      for (const g of this.goblins.list) {
+        const mode = g.mode;
+        if (mode === 'dead' || mode === 'held') continue;
+        const p = g.root.position;
+        const danger = mode === 'atWall' || mode === 'climbing' || mode === 'rampart' || mode === 'intruder';
+        compass.add(p.x, p.z, danger ? 4 : Math.hypot(p.x, p.z) < COMPASS.near ? 3 : 2);
+      }
+    }
+    const fighting = this.battle.fightingWave;
+    const left = fighting ? this.waves.waiting(BALLOONS.riders) + this.goblins.aliveCount : null;
+    compass.end(dt, on, this.battle.waveNumber, this.battle.totalWaves, left);
   }
 
   /**
@@ -1096,14 +1183,24 @@ export class GameSystem extends createSystem({}) {
   private updateGlass(dt: number, head: Vector3, forward: Vector3): void {
     const horn = this.horn;
     let bar: GlassBar | null = null;
-    if (horn.aiming && horn.locked && !horn.waiting) {
+    if (horn.aiming && horn.ready && !horn.waiting) {
       bar = horn.listening
         ? { share: horn.loudness / (HORN.blowLevel * GLASS_SIGN.hornBarMax), line: 1 / GLASS_SIGN.hornBarMax, over: horn.loudness > HORN.blowLevel }
         : { share: horn.charge, line: null, over: false };
     }
     let text = this.battle.glassText;
     if (!text && horn.aiming) {
-      text = horn.locked ? (horn.listening ? 'Blow!' : 'Hold it there') : this.hornAim.valid && !horn.atLips ? 'Lift it to your lips' : 'Look at a road';
+      text = !this.hornAim.valid
+        ? 'Look at a road'
+        : horn.ready
+          ? horn.listening
+            ? 'Blow!'
+            : horn.micSilent
+              ? 'No mic sound: hold it there'
+              : 'Hold it there'
+          : horn.listening
+            ? 'Raise it and blow'
+            : 'Raise it in front of you';
     }
     // Just blown: the bar stays full and gold for a moment, so the player sees the blow was loud enough
     // (headset test: it vanished the instant it passed the line).

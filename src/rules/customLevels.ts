@@ -16,6 +16,8 @@ export interface CustomLevel {
   changed: number;
   /** The level itself, with the seed and settings it was made from in its meta. */
   level: Level;
+  /** The best stars won on it (1 to 3), missing until it is won once. */
+  best?: number;
 }
 
 export interface CustomLevels {
@@ -41,6 +43,7 @@ export function parseCustomLevels(data: unknown): CustomLevels {
         created: Number(entry.created) || 0,
         changed: Number(entry.changed) || 0,
         level: parseLevel(entry.level),
+        ...(Number(entry.best) >= 1 ? { best: Math.min(3, Math.round(Number(entry.best))) } : {}),
       });
     } catch {
       // A level that no longer reads (an old format) is left out.
@@ -121,6 +124,8 @@ export function updateLevel(list: CustomLevels, id: string, name: string, descri
   entry.description = cleanDescription(description);
   entry.level = level;
   entry.changed = now;
+  // A changed level is a new challenge: its best stars start over.
+  delete entry.best;
   return true;
 }
 

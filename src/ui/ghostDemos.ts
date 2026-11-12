@@ -91,9 +91,9 @@ const SWATTER_GRIP = {
   palm: [-Math.cos(lean), -Math.sin(lean), 0] as Dir,
 };
 /**
- * Left fist holding the horn up at the mouth: thumb up along the grip, palm
- * facing in (right), so the horn points straight ahead and its mouthpiece is
- * at the lips. The palm never faces the headset (Quest menu).
+ * Left fist holding the horn up in front of the face: thumb up along the
+ * grip, palm facing in (right), so the horn points straight ahead with its
+ * mouthpiece toward the face. The palm never faces the headset (Quest menu).
  */
 const BLOW_GRIP = { rod: [0, 1, 0] as Dir, palm: [1, 0, 0] as Dir };
 /** Right hand around the upright bell handle on the left platform: thumb up, palm facing in (left) and a little forward. */
@@ -250,11 +250,11 @@ export const GHOST_DEMOS = {
     ],
   },
   /**
-   * Aim, then lift (v2): grab the horn, hold it low in front of the chest
-   * while looking out (the head aims it), then bring it up to the lips (the
-   * fist a little below and to the left, so the mouthpiece on top of the
-   * grip is at the lips: the spot locks) and hold it there for the blow.
-   * The left hand (the horn is on the right).
+   * Aim, then raise (no lock step, 2026-11-11): grab the horn, hold it low in
+   * front of the chest while looking out (the head aims it), then raise it in
+   * front of the face, a hand's length out and not at the lips (the blow
+   * zone, HORN.zoneRadius: tracking holds there), and hold it there for
+   * the blow. The left hand (the horn is on the right).
    */
   hornBlow: {
     hand: 'left',
@@ -264,8 +264,8 @@ export const GHOST_DEMOS = {
       key(0.9, 'hornHandle', [0, 0, 0], 'fist', LEFT_HANDLE_GRIP),
       key(1.5, 'mouth', [-5, -24, 10], 'fist', BLOW_GRIP),
       key(2.7, 'mouth', [-5, -24, 10], 'fist', BLOW_GRIP),
-      key(3.5, 'mouth', [-3, -9, 4], 'fist', BLOW_GRIP),
-      key(4.8, 'mouth', [-3, -9, 4], 'fist', BLOW_GRIP),
+      key(3.5, 'mouth', [-4, -13, 16], 'fist', BLOW_GRIP),
+      key(4.8, 'mouth', [-4, -13, 16], 'fist', BLOW_GRIP),
     ],
   },
   /** Grab the bell with the right hand (it is on the left), lift it, ring it with a hard swing side to side. */

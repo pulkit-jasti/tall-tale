@@ -1,12 +1,12 @@
-// A poke button on a post standing on the board, straight in front of the
-// player, its face tilted up toward the eyes (the tutorial's Next button,
-// the pause button). It rises with the board but never turns. Coming out it
+// A poke button on a post standing on the board in front of the player
+// (straight ahead, or round to `angleDeg`), its face tilted up toward the
+// eyes (the tutorial's Next button, the pause button). It rises with the board but never turns. Coming out it
 // starts fresh and ignores pokes for a moment, and it can blink while it
 // waits to be poked. Sizes in cm (boardLift).
 import { Group, type Object3D, type Vector3 } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
 import type { HandState } from '../../player/hands.js';
-import { degToRad } from '../../rules/boardMath.js';
+import { degToRad, polarX, polarZ } from '../../rules/boardMath.js';
 import { post } from '../../world/shapes.js';
 import { PokeButton } from '../pokeButton.js';
 import type { ButtonIcon } from '../uiImages.js';
@@ -20,6 +20,8 @@ export interface StandOptions {
   y: number;
   /** Its face tilted back toward the eyes (degrees). */
   tiltDeg: number;
+  /** Round from straight ahead (degrees, positive to the right); 0 when missing. It faces the player there. */
+  angleDeg?: number;
   /** Blinks while it waits (an emissive pulse). */
   blink?: { color: number; intensity: number; speed: number };
 }
@@ -40,7 +42,10 @@ export class StandButton implements Control {
     const stem = post(y - radius);
     stem.position.y -= radius;
     this.stand.add(this.button.group, stem);
-    this.stand.position.set(0, y, -at);
+    const a = degToRad(options.angleDeg ?? 0);
+    this.stand.position.set(polarX(at, a), y, polarZ(at, a));
+    // Turned to face the middle (the player).
+    this.stand.rotation.y = -a;
     this.stand.visible = false;
     parent.add(this.stand);
   }

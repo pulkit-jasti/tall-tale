@@ -16,8 +16,8 @@ Read README.md and docs/GDD.md for the full design before making gameplay decisi
 ## Hard rules (never break these)
 
 1. **Hands only.** The entire game must be playable with hand tracking. No controller is ever required. Controller support is optional and low priority.
-2. **Voice is never required.** Every voice action (the war horn blow, later troop orders) must also have a hand-based way to do the same thing (for the horn: holding it at the lips, the Quiet horn setting, always on without a mic).
-3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius, and every grab, pinch and poke target sits in the reach band (below). The board is always a full 360 degree circle that the player spins and raises or lowers with the ring handle, so nothing ever requires turning around. Only the board rotates. The sky, horizon, hills, the player's tool platforms and the two flags never turn (comfort); the platforms and flags rise and fall with the board. A later comfort setting turns the board in snap steps instead of smoothly. See docs/controls-and-ui.md.
+2. **Voice is never required.** Every voice action (the war horn blow, later troop orders) must also have a hand-based way to do the same thing (for the horn: holding it raised in front of the face, the Quiet horn setting, always on without a mic).
+3. **Seated.** Every interaction must work from a chair within about a 2 ft (60 cm) radius, and every grab, pinch and poke target sits in the reach band (below). The board is always a full 360 degree circle that the player spins and raises or lowers with the ring handle, so nothing ever requires turning around. Only the board rotates. The sky, horizon, hills, the player's tool platforms, the red flag and the compass ring never turn (comfort); they rise and fall with the board. A later comfort setting turns the board in snap steps instead of smoothly. See docs/controls-and-ui.md.
 4. **Performance first.** The game must hold a stable frame rate on a Meta Quest 3S. If a feature hurts frame rate, simplify it.
 5. **No copyrighted IP.** No names, logos, characters or lore from existing games, comics or films.
 6. **Cartoon violence only.** Enemies are non-human (goblins, orcs, etc.). No blood or gore. Eating enemies must stay funny, not disturbing.
@@ -30,6 +30,7 @@ Read README.md and docs/GDD.md for the full design before making gameplay decisi
 - **War horn blow detection:** Web Audio API mic loudness (one frame over `HORN.blowLevel`; tune it with the debug mic panel). No speech recognition needed. Mic permission is asked on the 2D start page.
 - **Speech (later, not in the MVP):** vosk-browser (offline, runs in a Web Worker) with a small fixed command list, for voice troop orders.
 - **Assets:** low-poly CC0 models in `public/gltf/` and sounds in `public/audio/`. docs/assets.md says which model and sound to use for each thing. Use only those. Anything without a model is a simple shape from docs/placeholder-shapes.md. If you add a new shape, list it there.
+- **Never make art by hand in code** (decided 2026-11-12, after a code-drawn goblin head looked bad and wasted tokens): no icons, logos, pictures or decor drawn with canvas paths or built from code shapes. In this order: (1) use an asset already in `public/` (`public/ui/` icons, borders and panels, `public/gltf/` models; `public/ui/README.md` lists them); (2) look in the Kenney packs in the developer's Downloads folder (the `kenney_*` folders and "Kenny Models": board game icons, game icons, emotes, fantasy UI borders, UI packs, castle, town, nature, survival and arena kits) and copy what fits, with its license; (3) suggest a pack to download. Only if none of those work, build it in code, and say so. Text, layout, bars and the tested interactive controls (buttons, sliders, switches) stay as they are.
 - **Hosting:** GitHub Pages (static). Players open a link in the Quest browser. Vite uses a relative base (`./`), which works under the repo path. Keep it. PWA and Store packaging come later.
 - **No backend** unless a feature truly needs one. Ask before adding one.
 
@@ -69,7 +70,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - Two hand actions: **pinch** (thumb and index) for small things like goblins, pebbles and the slingshot pouch, and **grab** (fist) for big things like the slingshot handle, swatter, pepper shaker, war horn and bell. The ring handle and the slingshot handle accept both, because a fist with the back of the hand toward the headset tracks poorly. See "Pinch and grab" in docs/controls-and-ui.md.
 - Goblins are tiny (about 3.9 cm, runners 3.35). The pinch zone is about 5 to 6 cm and snaps to the nearest goblin. See docs/controls-and-ui.md.
 - Hand tracking gets unreliable very close to the headset. The "eat" action triggers when a held goblin stays within about 22 cm of the face for a moment. No letting go and no head tilt, because a pinch with the palm toward the headset opens the Quest menu. It must not require touching the mouth.
-- Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a button on a stand straight in front, outside the ring (on the Next button's spot, at the same height).
+- Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a button on a stand in front, outside the ring, 34 degrees to the right (on the Next button's spot, at the same height; moved there 2026-11-12, the compass is straight in front).
 
 ## Ghost hand demos (tutorial)
 

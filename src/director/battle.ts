@@ -39,7 +39,7 @@ import type { Troops } from '../units/troops.js';
 import type { Balloons } from '../units/balloons.js';
 import type { TriggerKind } from '../rules/blueprint.js';
 import type { Trigger, Triggers } from '../world/triggers.js';
-import type { EndPanel } from '../ui/endPanel.js';
+import type { EndExtras, EndPanel } from '../ui/endPanel.js';
 import { endAnchor, type GhostAnchor, type GhostDemoName } from '../ui/ghostDemos.js';
 import type { GhostAim } from '../ui/ghostAim.js';
 import type { PointerArrow } from '../ui/pointerArrow.js';
@@ -52,6 +52,7 @@ import type { Goblin, Goblins } from '../units/goblins.js';
 import type { WaveSpawner } from '../units/waveSpawner.js';
 import type { Flags } from '../world/flags.js';
 import type { RisingCamps } from '../world/risingCamps.js';
+import type { Compass } from '../ui/compass.js';
 import type { Level, LevelRules } from '../level/level.js';
 import { buildLevelSteps, hiddenAtStart, levelWavePlans, risingByWave } from './levelDirector.js';
 import type { Stage } from '../world/stage.js';
@@ -142,6 +143,8 @@ export interface BattleParts {
   celebrate: (won: boolean) => void;
   /** The camps that wait under the ground and rise with their wave. */
   camps: RisingCamps;
+  /** The compass ring in front (where enemies come from, the wave and the goblins left). */
+  compass: Compass;
   /** The wall garrison's size and refill: a level's rules, or null for the usual (GARRISON). */
   setGarrison: (rules: LevelRules | null) => void;
 }
@@ -188,9 +191,13 @@ export class Battle implements TutorialApi {
    * game answers 'menu' (no end panel, it goes to the menu: the tutorial
    * won), or how the end panel shows (stars, a Menu button).
    */
-  onEnd: (won: boolean, healthShare: number) => 'menu' | { stars?: number; menu: boolean } = () => ({ menu: false });
+  onEnd: (won: boolean, healthShare: number) => 'menu' | EndExtras = () => ({ menu: false });
   /** The end panel's Menu button. */
   onMenu: () => void = () => {};
+  /** The win panel's Next level button (the game starts the next level). */
+  onNext: () => void = () => {};
+  /** How long this battle has been fought (seconds, not counting pauses), for the end panel. */
+  private fightTime = 0;
   /** The welcome panel's Skip tutorial (the game: to the menu). */
   onSkip: () => void = () => this.skipTutorial();
   /** The reach check at the start (only until the player's reach is known). */
@@ -219,12 +226,11 @@ export class Battle implements TutorialApi {
   private lastSpin = 0;
   private lastHeight = 0;
   private lessonGoblin: Goblin | null = null;
-  /** The horn lesson's pace: how long the horn has been held (looking around), and how long it has been locked (seconds). */
+  /** The horn lesson's pace: how long the horn has been held (looking around, seconds). */
   private hornLookTime = 0;
-  private hornLockTime = 0;
   /**
-   * The horn lesson shows "spot set" right now: the horn waits (no bar, no
-   * call) until the sign says to blow. The game passes it to the horn.
+   * The horn lesson is still on "look around": the horn waits (no bar, no
+   * call) until the sign says to raise it and blow. The game passes it to the horn.
    */
   hornWaiting = false;
   /** The goblins sent at the knights after the horn lesson (with their serials, as goblins are reused). */
@@ -359,12 +365,14 @@ export class Battle implements TutorialApi {
     this.parts.camps.setHidden(hiddenAtStart(this.waves, from));
     // The flag starts one notch below: the first step clears the wave before `from`.
     this.state.wavesCleared = Math.max(0, from - 1);
-    flags.show(1, this.state.wavesCleared / this.state.totalWaves, true);
+    // A level may start with the castle already damaged.
+    flags.show(healthShare(this.state), true);
     this.wave = from - 1;
     this.inWave = false;
     this.starts++;
     this.endTimer = -1;
     this.eatenCount = this.pepperedEatenCount = this.pickedCount = this.tossedCount = this.slingHits = this.spun = this.moved = 0;
+    this.fightTime = 0;
     this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
@@ -467,9 +475,18 @@ export class Battle implements TutorialApi {
     return this.levelRules !== null;
   }
 
-  /** How many waves this battle has (the blue flag's notches, the times of day). */
+  /** How many waves this battle has (the compass, the times of day). */
   get totalWaves(): number {
     return this.waves.length;
+  }
+
+  /** For the compass: the wave being fought or last fought (1 based, 0 before the first), and whether one is being fought now. */
+  get waveNumber(): number {
+    return this.wave + 1;
+  }
+
+  get fightingWave(): boolean {
+    return this.inWave;
   }
 
   /** A fresh battle state: a level may start with the castle already damaged. */
@@ -507,7 +524,7 @@ export class Battle implements TutorialApi {
     this.resetTools();
     this.state = createBattle(this.waves.length, CASTLE_HEALTH);
     this.parts.camps.showAll();
-    this.parts.flags.show(1, 0, true);
+    this.parts.flags.show(1, true);
     this.parts.panel.show('welcome');
   }
 
@@ -524,7 +541,7 @@ export class Battle implements TutorialApi {
     this.state = createBattle(this.waves.length, CASTLE_HEALTH);
     // The living board around the menu has every camp up.
     this.parts.camps.showAll();
-    this.parts.flags.show(1, 0, true);
+    this.parts.flags.show(1, true);
   }
 
   /** Stops everything (stress test, leaving VR). The board is left empty. */
@@ -644,6 +661,7 @@ export class Battle implements TutorialApi {
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     if (this.running && this.state.phase === 'playing') {
+      this.fightTime += dt;
       // Stunned intruders smash nothing.
       const intruders = goblins.countMode('intruder', true);
       damageCastle(this.state, intruders * CASTLE_HEALTH.intruderDamagePerSec * dt);
@@ -681,7 +699,7 @@ export class Battle implements TutorialApi {
       spawner.update(dt);
       if (this.state.phase !== 'playing') this.end();
     }
-    flags.show(healthShare(this.state), this.state.wavesCleared / this.state.totalWaves);
+    flags.show(healthShare(this.state));
     flags.update(dt);
     this.updateHint(dt, hands, head);
     if (this.endTimer > 0) {
@@ -690,13 +708,16 @@ export class Battle implements TutorialApi {
         // v2 run 2: the game says what comes next (the tutorial won goes to the menu; a campaign level shows its stars).
         const won = this.state.phase === 'won';
         const next = this.onEnd(won, healthShare(this.state));
-        if (next !== 'menu') panel.show(won ? 'won' : 'lost', next);
+        // The stats row (2026-11-12): the castle's health left, goblins eaten, how long it took.
+        const stats = { health: healthShare(this.state), eaten: this.eatenCount, seconds: this.fightTime };
+        if (next !== 'menu') panel.show(won ? 'won' : 'lost', { ...next, stats });
       }
     }
     // Welcome panel: Play is the tutorial, Skip tutorial the game's (the menu). Play again keeps the last choice.
     const choice = panel.update(hands, dt);
     if (choice === 'skip') this.onSkip();
     else if (choice === 'menu') this.onMenu();
+    else if (choice === 'next') this.onNext();
     else if (choice === 'play') this.start(this.playFromWave, panel.kindShown === 'welcome' ? true : this.teach);
   }
 
@@ -804,26 +825,24 @@ export class Battle implements TutorialApi {
   }
 
   /**
-   * The horn lesson's text, one beat at a time: look around (at least
-   * hornLookTime of holding it), lift it, "spot set" for hornLockedTime once
-   * it locks, then blow. Lowering it goes back to lift (the look time is kept).
+   * The horn lesson's text, one beat at a time (no lock step, 2026-11-11):
+   * look around (at least hornLookTime of holding it: the flag and the path
+   * follow the look, and the horn does not call yet), raise it in front of
+   * the face, then blow (or hold it there with the quiet horn). Lowering it
+   * goes back to raise (the look time is kept).
    */
   private hornBeat(steps: HornSteps, dt: number): string {
     const state = this.parts.hornState();
-    this.hornWaiting = state === 'blow';
     if (state === 'idle') {
       this.hornLookTime = 0;
-      this.hornLockTime = 0;
+      this.hornWaiting = false;
       return steps.idle;
     }
-    if (state !== 'blow') {
-      this.hornLockTime = 0;
-      this.hornLookTime += dt;
-      return state === 'aim' || this.hornLookTime < TUTORIAL_TIMING.hornLookTime ? steps.aim : steps.lift;
-    }
-    this.hornLockTime += dt;
-    if (this.hornLockTime < TUTORIAL_TIMING.hornLockedTime) return steps.locked;
-    this.hornWaiting = false;
+    this.hornLookTime += dt;
+    const looking = this.hornLookTime < TUTORIAL_TIMING.hornLookTime;
+    this.hornWaiting = looking;
+    if (looking || state === 'aim') return steps.aim;
+    if (state === 'lift') return steps.lift;
     return hornHearsMic() ? steps.blow : steps.blowQuiet;
   }
 
@@ -905,9 +924,9 @@ export class Battle implements TutorialApi {
         return out;
       }
       case 'healthFlag':
-        return flags.clothWorld('health', out);
-      case 'waveFlag':
-        return flags.clothWorld('wave', out);
+        return flags.clothWorld(out);
+      case 'compass':
+        return this.parts.compass.centerWorld(out);
       case 'swatterHandle':
         return this.parts.tools.swatter.handleWorld(out);
       case 'pepperHandle':

@@ -12,16 +12,20 @@
 //   - a see-through ghost banner planted there.
 // The spot only moves to a new place once the head has pointed there for
 // HORN_AIM.consensusTime (Meta's gaze consensus window), so it never flickers.
-// Grey and no banner when no road is in sight: the horn will not lock or blow.
+// Grey and no banner when no road is in sight: the horn will not blow.
 //
-// Lifted to the lips, the spot locks: everything turns gold with a click, the
-// pillar grows as the call charges, and the path the knights will take lights
-// up along the roads (from the wall entry, or from the squad that will move).
+// The path the knights will take lights up along the roads as soon as there
+// is a spot (from the wall entry, or from the squad that will move). No lock
+// step (changed 2026-11-11): raised into the blow zone (src/tools/horn.ts),
+// everything turns gold with a click and the pillar grows as the call
+// charges. The call goes to the spot looked at HORN_AIM.callLookBack before
+// it (callTarget), so a head that moves while blowing does not move it.
 //
 // Off the road the soft pool is replaced by a clear white ring with a dark
 // edge, and an arrow on the ground toward the nearest road.
 //
-// A few meshes, shown only while aiming. The path is rebuilt only when it locks.
+// A few meshes, shown only while aiming. The path is rebuilt only when the
+// spot moves to another road or HORN_AIM.pathRebuild along it.
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -40,6 +44,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HORN_AIM, KNIGHTS, RENDER_ORDER } from '../config/game.js';
+import { mark } from '../debug/perfMarks.js';
 import { groundAt } from '../rules/boardMath.js';
 import type { RoadPoint } from '../rules/roadRoute.js';
 import type { Troops } from '../units/troops.js';
@@ -78,7 +83,20 @@ function fadeAlongY(geometry: CylinderGeometry | CircleGeometry, radial: boolean
 }
 
 /** Most points along the path (one ribbon segment between two). */
-const PATH_POINTS = 360;
+const PATH_POINTS = 480;
+/** Frames of spot history kept for the call's look back (about 0.5 s at 72 Hz). */
+const HISTORY = 40;
+const prevL = new Vector3();
+const prevR = new Vector3();
+const edgeL = new Vector3();
+const edgeR = new Vector3();
+
+/** Writes a point into a flat array at `o` (no garbage, unlike an array literal). */
+function writePoint(p: Float32Array, o: number, v: Vector3): void {
+  p[o] = v.x;
+  p[o + 1] = v.y;
+  p[o + 2] = v.z;
+}
 
 export class HornAim {
   private pillar: Mesh;
@@ -99,11 +117,14 @@ export class HornAim {
   /** The spot the horn called the knights to, marked until they arrive, and for how long (seconds). */
   private called: RoadPoint | null = null;
   private calledTime = 0;
-  /** Locked now (at the lips, the spot looked at): the click plays when it locks. */
-  private wasLocked = false;
-  /** At the lips, how long the look has rested on the current spot, and (locked) how long it has been away from it (seconds). */
-  private dwell = 0;
-  private awayTime = 0;
+  /** Ready now (raised into the blow zone with a spot): the click plays when it gets ready. */
+  private wasReady = false;
+  /** The spot the path was built for (null: no path). */
+  private pathFor: RoadPoint | null = null;
+  /** The spot each recent frame (a ring, reused, no garbage), for the call's look back. */
+  private history = Array.from({ length: HISTORY }, () => ({ time: -Infinity, valid: false, road: 0, along: 0 }));
+  private historyAt = 0;
+  private lookBack: RoadPoint = { road: 0, along: 0 };
   /** The spot the knights would go to (committed), and where it shows (glides to it). */
   private spot: RoadPoint | null = null;
   private shown = new Vector3();
@@ -134,7 +155,18 @@ export class HornAim {
     const attribute = new BufferAttribute(this.pathPositions, 3);
     attribute.setUsage(DynamicDrawUsage);
     pathGeometry.setAttribute('position', attribute);
-    this.pathMaterial = new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, color: HORN_AIM.lockColor });
+    // Both sides (a triangle facing down was skipped: invisible stretches), and pulled toward the eye over the road
+    // (the road's own offset is -2), so it never sinks into it.
+    this.pathMaterial = new MeshBasicMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      color: HORN_AIM.lockColor,
+      side: DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
+    });
     this.path = new Mesh(pathGeometry, this.pathMaterial);
     this.path.frustumCulled = false;
     this.path.visible = false;
@@ -218,10 +250,12 @@ export class HornAim {
     this.offArrow.visible = true;
   }
 
-  /** The horn sounded: the called spot stays marked until the squad arrives (see showCalled). */
+  /** The horn sounded: the called spot stays marked, with its path, until the squad arrives (see showCalled). */
   markCalled(point: RoadPoint): void {
     this.called = { road: point.road, along: point.along };
     this.calledTime = 0;
+    // The look back may have picked a spot a little off the one shown: the path goes to the called one.
+    this.buildPath(this.called);
   }
 
   /**
@@ -269,26 +303,46 @@ export class HornAim {
     return this.valid ? this.spot : null;
   }
 
+  /**
+   * Where a call made now sends the knights: the spot looked at
+   * HORN_AIM.callLookBack ago (blowing moves the head a little), or the
+   * spot now when there was none then. Null without a spot.
+   */
+  callTarget(): RoadPoint | null {
+    const want = this.time - HORN_AIM.callLookBack;
+    let best: (typeof this.history)[number] | null = null;
+    for (const h of this.history) {
+      if (h.time > want || h.time === -Infinity) continue;
+      if (!best || h.time > best.time) best = h;
+    }
+    if (!best || !best.valid) return this.target;
+    this.lookBack.road = best.road;
+    this.lookBack.along = best.along;
+    return this.lookBack;
+  }
+
   /** Not aiming: everything hidden, and the next aim starts fresh. */
   hide(): void {
     this.pillar.visible = this.pool.visible = this.ghost.visible = this.path.visible = false;
     this.offRing.visible = this.offArrow.visible = false;
     this.spot = null;
+    this.pathFor = null;
+    this.missTime = 0;
+    this.pathAt = -Infinity;
     this.hasShown = false;
     this.candidateTime = 0;
-    this.wasLocked = false;
-    this.dwell = 0;
-    this.awayTime = 0;
+    this.wasReady = false;
+    for (const h of this.history) h.time = -Infinity;
     this.troops.answering = null;
   }
 
   /**
    * Every frame. `aiming`: the horn is held and has not sounded yet.
-   * `locked`: it is at the lips with a spot aimed at (the spot stays put).
+   * `ready`: it is raised into the blow zone (gold, a click when it gets there).
    * `charge`: how far the call is (0 to 1, the pillar grows with it).
    * `head` and `forward` are the head's pose (world).
    */
-  update(dt: number, aiming: boolean, atLips: boolean, charge: number, head: Vector3, forward: Vector3): void {
+  update(dt: number, aiming: boolean, ready: boolean, charge: number, head: Vector3, forward: Vector3): void {
     if (!aiming) {
       // After a call: the spot stays marked (gold, with its path) until the squad gets there.
       if (this.called) {
@@ -302,96 +356,119 @@ export class HornAim {
     this.called = null;
     this.time += dt;
     const hit = this.lookHit(head, forward);
-    // Locked: the spot stays put, until the horn leaves the lips or the look leaves the spot
-    // (headset test: a spot locked by accident while looking elsewhere was lost from view).
-    if (this.wasLocked) {
-      this.awayTime = this.degreesFromSpot() > HORN_AIM.unlockDeg ? this.awayTime + dt : 0;
-      if (!atLips || !this.valid || this.awayTime >= HORN_AIM.unlockGrace) this.unlock(atLips);
-    }
-    if (!this.wasLocked) {
-      const near = hit ? this.troops.roadPointNear(hit.x, hit.z) : null;
-      if (near && near.distance <= HORN_AIM.snapRadius) this.consider(near.point, dt);
-      else {
-        // Nothing to send them to: grey, no banner.
+    // The spot follows the look the whole time it is held (no lock step).
+    const near = hit ? this.troops.roadPointNear(hit.x, hit.z) : null;
+    if (near && near.distance <= HORN_AIM.snapRadius) {
+      this.missTime = 0;
+      this.consider(near.point, dt);
+    } else {
+      // Nothing to send them to: grey, no banner, no path. Only after the look stays off the roads a moment
+      // (HORN_AIM.loseAfter): a one frame slip off a road edge rebuilt the path and redrew the glass sign's
+      // text each time, and those redraws made the view flicker (2026-11-12).
+      this.missTime += dt;
+      if (this.missTime >= HORN_AIM.loseAfter || !this.spot) {
         this.spot = null;
         this.canGo = false;
         this.troops.answering = null;
       }
-      // At the lips, a steady look at a road locks it (no need to lower and lift the horn again).
-      this.dwell = atLips && this.valid ? this.dwell + dt : 0;
-      if (this.dwell >= HORN_AIM.lockDwell) {
-        this.dwell = 0;
-        this.wasLocked = true;
-        this.lock();
-      }
     }
-    this.show(dt, hit, this.wasLocked, charge);
+    this.updatePath();
+    this.remember();
+    // Raised into the blow zone with a spot: gold, and a click as it gets there.
+    const isReady = ready && this.valid;
+    if (isReady && !this.wasReady && this.spot) {
+      this.audio.play('readyTick', this.stage.boardSpin.localToWorld(this.troops.roadPointPosition(this.spot, at)), 1);
+    }
+    this.wasReady = isReady;
+    this.show(dt, hit, isReady, charge);
   }
 
-  /** True while the spot is locked (at the lips, looked at): the horn may blow. */
-  get locked(): boolean {
-    return this.wasLocked;
+  /** This frame's spot into the history ring (for callTarget). */
+  private remember(): void {
+    const h = this.history[this.historyAt];
+    this.historyAt = (this.historyAt + 1) % HISTORY;
+    h.time = this.time;
+    h.valid = this.valid;
+    if (this.spot) {
+      h.road = this.spot.road;
+      h.along = this.spot.along;
+    }
   }
 
-  /** How far the locked spot is from where the look points (degrees). lookHit set `origin` and `dir` this frame. */
-  private degreesFromSpot(): number {
-    if (!this.spot) return 180;
-    this.troops.roadPointPosition(this.spot, at);
-    tangent.subVectors(at, origin);
-    const length = tangent.length();
-    if (length < 1e-4) return 0;
-    const cos = Math.min(1, Math.max(-1, tangent.dot(dir) / length));
-    return (Math.acos(cos) * 180) / Math.PI;
+  /** The path shows as soon as there is a spot, built again only when the spot moves to another road or far enough along it. */
+  private updatePath(): void {
+    const spot = this.valid ? this.spot : null;
+    if (!spot) {
+      this.path.visible = false;
+      this.pathFor = null;
+      return;
+    }
+    const built = this.pathFor;
+    if (built && built.road === spot.road && Math.abs(built.along - spot.along) < HORN_AIM.pathRebuild) return;
+    // At most every HORN_AIM.pathEvery while the look slides along a road (a new road shows at once).
+    if (built && built.road === spot.road && this.time - this.pathAt < HORN_AIM.pathEvery) return;
+    this.pathAt = this.time;
+    if (built) {
+      built.road = spot.road;
+      built.along = spot.along;
+    } else this.pathFor = { road: spot.road, along: spot.along };
+    this.buildPath(spot);
   }
 
-  /** Unlocked: the path goes, and the spot follows the look again (a soft click if still at the lips). */
-  private unlock(atLips: boolean): void {
-    this.wasLocked = false;
-    this.path.visible = false;
-    this.awayTime = 0;
-    this.dwell = 0;
-    if (atLips && this.spot) this.audio.play('readyTick', this.stage.boardSpin.localToWorld(this.troops.roadPointPosition(this.spot, at)), 0.35);
-  }
+  /** When the path was last built (this.time, seconds), and how long the look has been off the roads (seconds). */
+  private pathAt = -Infinity;
+  private missTime = 0;
 
-  /** It locks: a click, and the path the knights will take lights up along the roads. */
-  private lock(): void {
-    const spot = this.spot;
-    if (!spot) return;
-    this.audio.play('readyTick', this.stage.boardSpin.localToWorld(this.troops.roadPointPosition(spot, at)), 1);
+  /** The path the knights will take to `spot`, lit up along the roads as a flat ribbon. */
+  private buildPath(spot: RoadPoint): void {
     const legs = this.troops.previewLegs(spot);
-    if (!legs) return;
-    // Points every pathStep cm along each stretch of road, as a flat ribbon just above it.
+    if (!legs) {
+      this.path.visible = false;
+      return;
+    }
+    // Points every pathStep cm along each stretch of road, as a flat ribbon just above it, read from the road's
+    // own saved surface (Road.surfaceAt): exactly on the drawn road (it sank under it on slopes), and with no
+    // terrain lookups (fixed 2026-11-12: some 1500 of them per rebuild, each making garbage, cost frames, and
+    // the dropped frames made the sun and clouds flicker). The sides follow the way the knights walk, so a leg
+    // walked against the road's direction never twists the ribbon. No allocations in the loop.
+    mark('horn path');
     let n = 0;
     const half = HORN_AIM.pathWidth / 2;
     const p = this.pathPositions;
     let hasPrev = false;
-    const prevL = new Vector3();
-    const prevR = new Vector3();
     for (const leg of legs) {
       const road = this.troops.road(leg.road);
       const length = Math.abs(leg.to - leg.from);
+      const way = leg.to >= leg.from ? 1 : -1;
       const steps = Math.max(1, Math.ceil(length / HORN_AIM.pathStep));
       for (let i = 0; i <= steps && n < PATH_POINTS; i++) {
         const d = leg.from + ((leg.to - leg.from) * i) / steps;
-        road.pointAt(d, 0, at);
-        road.directionAt(d, tangent);
-        // Across the road: the flat perpendicular of its direction.
-        const sx = -tangent.z * half;
-        const sz = tangent.x * half;
-        const y = at.y + HORN_AIM.pathLift;
+        road.surfaceAt(d, -half * way, edgeL);
+        road.surfaceAt(d, half * way, edgeR);
+        edgeL.y += HORN_AIM.pathLift;
+        edgeR.y += HORN_AIM.pathLift;
         if (hasPrev) {
           // Two triangles from the last pair of points to this one.
-          p.set([prevL.x, prevL.y, prevL.z, prevR.x, prevR.y, prevR.z, at.x + sx, y, at.z + sz], n * 18);
-          p.set([prevR.x, prevR.y, prevR.z, at.x - sx, y, at.z - sz, at.x + sx, y, at.z + sz], n * 18 + 9);
+          const o = n * 18;
+          writePoint(p, o, prevL);
+          writePoint(p, o + 3, prevR);
+          writePoint(p, o + 6, edgeL);
+          writePoint(p, o + 9, prevR);
+          writePoint(p, o + 12, edgeR);
+          writePoint(p, o + 15, edgeL);
           n++;
         }
-        prevL.set(at.x + sx, y, at.z + sz);
-        prevR.set(at.x - sx, y, at.z - sz);
+        prevL.copy(edgeL);
+        prevR.copy(edgeR);
         hasPrev = true;
       }
     }
     const geometry = this.path.geometry;
-    geometry.attributes.position.needsUpdate = true;
+    const attribute = geometry.attributes.position as BufferAttribute;
+    // Only the part in use goes to the GPU.
+    attribute.clearUpdateRanges();
+    attribute.addUpdateRange(0, Math.max(1, n * 18));
+    attribute.needsUpdate = true;
     geometry.setDrawRange(0, n * 6);
     this.path.visible = n > 0;
   }
@@ -434,15 +511,13 @@ export class HornAim {
       if (this.candidateTime < HORN_AIM.consensusTime) return;
     }
     this.candidateTime = 0;
-    // A new spot: the steady look that locks it starts over.
-    this.dwell = 0;
     this.spot = { road: point.road, along: point.along };
     const plan = this.troops.plan(this.spot);
     this.canGo = plan !== null;
     this.troops.answering = plan?.kind === 'move' ? plan.squad : null;
   }
 
-  /** The pool, the pillar and the ghost banner at the spot (grey without one, gold when locked), and the path's pulse. */
+  /** The pool, the pillar and the ghost banner at the spot (grey without one, gold when ready to blow), and the path's pulse. */
   private show(dt: number, hit: Vector3 | null, locked: boolean, charge: number): void {
     const color = locked ? HORN_AIM.lockColor : this.valid ? HORN_AIM.color : HORN_AIM.noneColor;
     this.pillarMaterial.color.setHex(color);
