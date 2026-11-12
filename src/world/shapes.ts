@@ -60,6 +60,25 @@ export function ringArc(material: MeshStandardMaterial): Group {
   return group;
 }
 
+/**
+ * A short piece of the ring handle in front (the home screen's height rail,
+ * src/player/heightRail.ts): the same tube at the same spot, `halfSpanDeg`
+ * each way from the front, with round ends and a pole under each end.
+ */
+export function railArc(material: MeshStandardMaterial, halfSpanDeg: number): Group {
+  const { radius, ringY, ringRadius, poleRadius } = HANDLES;
+  const group = new Group();
+  group.add(new Mesh(new TubeGeometry(arc(radius, -halfSpanDeg, halfSpanDeg, ringY), 16, ringRadius, 8, false), material));
+  for (const end of [-halfSpanDeg, halfSpanDeg]) {
+    const cap = new Mesh(new SphereGeometry(ringRadius, 8, 6), material);
+    cap.position.copy(polar(radius, end, ringY));
+    const pole = new Mesh(new CylinderGeometry(poleRadius, poleRadius, ringY, 6), flatMaterial(HANDLES.trackColor));
+    pole.position.copy(polar(radius, end, ringY / 2));
+    group.add(cap, pole);
+  }
+  return group;
+}
+
 /** Short poles that hold the ring up from the board, spread evenly from the front. */
 export function ringPoles(): Group {
   const { radius, ringY, poleRadius, poleCount } = HANDLES;

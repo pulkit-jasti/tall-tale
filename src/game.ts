@@ -41,7 +41,8 @@ import { LessonBait } from './units/lessonBait.js';
 import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { ThreatCues } from './ui/threatCues.js';
-import { GlassSign, loadUiImages, type GlassBar } from './ui/kit/index.js';
+import { GlassSign, isTyping, loadUiImages, useKeyboardSession, type GlassBar } from './ui/kit/index.js';
+import { resetCustomLevels } from './player/customLevels.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';
@@ -96,6 +97,8 @@ const headForward = new Vector3();
 const toHead = new Vector3();
 const boardAt = new Vector3();
 const slotAt = new Vector3();
+/** The board's front in the world (the settings page from the home screen opens there). */
+const menuFront = new Vector3();
 /** Session storage key for the debug "Start at wave" choice. */
 const PLAY_FROM_KEY = 'tallTale.playFromWave';
 
@@ -169,6 +172,9 @@ export class GameSystem extends createSystem({}) {
   private blurSeen = false;
   /** The XR session whose visibility events are watched. */
   private watchedSession: XRSession | null = null;
+  /** The XR reference space whose recenter ('reset') is listened to, and a recenter seen since the last frame. */
+  private watchedSpace: XRReferenceSpace | null = null;
+  private recenterSeen = false;
   /** When the last frame ran (performance.now, ms), to notice frames that stopped (the Quest menu). */
   private lastFrameAt = 0;
   /** What paused the game last (the FPS panel shows it while paused). */
@@ -543,7 +549,7 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** The battleground sinks, the menu rises (`instant`: a later visit opens straight on the menu). */
-  private goToMenu(page: 'main' | 'campaign', instant = false): void {
+  private goToMenu(page: 'main' | 'campaign' | 'customList', instant = false): void {
     this.endPanel.hide();
     this.sign.show(null);
     this.grabEat.releaseAll();
@@ -642,7 +648,9 @@ export class GameSystem extends createSystem({}) {
     if (choice.kind === 'settings') {
       this.menu.hidePanels();
       this.menuSettings = true;
-      this.pauseMenu.showSettings(headPosition, headForward, this.stage.boardScale);
+      // Straight in front of the board, where the menu panels are, and it stays put (it only follows the head in a battle).
+      const front = this.stage.fixedRig.getWorldDirection(menuFront).negate();
+      this.pauseMenu.showSettings(headPosition, front, this.stage.boardScale, this.stage.boardLift.getWorldPosition(boardAt));
     } else if (choice.kind === 'replay') this.replayTutorial();
     else if (choice.kind === 'fight') this.fight(choice.level);
     else if (choice.kind === 'needTools') this.slotsHintLeft = MENU.shelves.emptySlotsHint.seconds;
@@ -698,6 +706,14 @@ export class GameSystem extends createSystem({}) {
     // The Quest menu can stop the frames without any hidden frame showing up here, so its focus events
     // and a long gap between frames pause the battle too (headset test: it did not always pause).
     this.watchSession();
+    if (this.recenterSeen) {
+      // A recenter: the board faces where the head faces now (in the battle, the menu or paused alike).
+      this.recenterSeen = false;
+      if (immersive) {
+        this.placeBoard();
+        note('Recentered: the board was placed again in front of the head');
+      }
+    }
     const now = performance.now();
     const gap = this.lastFrameAt > 0 ? (now - this.lastFrameAt) / 1000 : 0;
     this.lastFrameAt = now;
@@ -978,10 +994,24 @@ export class GameSystem extends createSystem({}) {
   /** Listens to the XR session's focus once per session: the Quest menu blurs or hides it. */
   private watchSession(): void {
     const session = this.world.session ?? null;
+    // Recentering (holding the Meta button, or the headset on its own after it was taken off) moves the reference
+    // space's origin to where the head faces now. The board was placed turned to the head at that time, so any few
+    // degrees the head was off then stayed as a turn (headset test 2026-11-11: everything a little to the right).
+    // On the reset the board is placed again from the head, which now faces straight ahead; its height is kept.
+    const space = session ? this.renderer.xr.getReferenceSpace() : null;
+    if (space && space !== this.watchedSpace) {
+      this.watchedSpace = space;
+      space.addEventListener('reset', () => {
+        this.recenterSeen = true;
+      });
+    }
     if (!session || session === this.watchedSession) return;
     this.watchedSession = session;
+    // The name field's system keyboard needs the session (and blurs it while open: that is no reason to pause).
+    useKeyboardSession(session);
+    session.addEventListener('end', () => useKeyboardSession(null));
     session.addEventListener('visibilitychange', () => {
-      if (session.visibilityState !== 'visible') this.blurSeen = true;
+      if (session.visibilityState !== 'visible' && !isTyping()) this.blurSeen = true;
     });
   }
 
@@ -1090,6 +1120,14 @@ export class GameSystem extends createSystem({}) {
     switch (id) {
       case 'openMenu':
         this.goToMenu('main');
+        break;
+      case 'openCustom':
+        this.goToMenu('customList');
+        break;
+      case 'resetCustom':
+        resetCustomLevels();
+        if (this.swap.shown === 'menu') this.goToMenu('customList', true);
+        console.info('[debug] saved Custom Game levels forgotten');
         break;
       case 'resetSave':
         resetProgress();

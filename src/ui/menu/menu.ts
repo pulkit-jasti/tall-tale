@@ -11,18 +11,29 @@ import { progress, saveProgress } from '../../player/progress.js';
 import { moveTool, type PickTool } from '../../rules/campaign.js';
 import type { ModelTemplate } from '../../world/models.js';
 import type { Stage } from '../../world/stage.js';
+import { customLevels } from '../../player/customLevels.js';
+import { HeightRail } from '../../player/heightRail.js';
 import { CampaignPanel } from './campaignPanel.js';
+import { CustomEditPage } from './customEdit.js';
+import { CustomListPanel } from './customList.js';
 import { MainMenu } from './mainMenu.js';
 import { Shelves, type DisplayModel, type DisplayName } from './shelves.js';
 
 export type MenuChoice = { kind: 'settings' } | { kind: 'replay' } | { kind: 'fight'; level: number } | { kind: 'needTools' } | null;
+
+/** The front panel's pages: the main menu, the campaign, and Custom Game's list and its create and edit page. */
+type Page = 'main' | 'campaign' | 'customList' | 'customEdit';
 
 export class Menu {
   readonly group = new Group();
   private main: MainMenu;
   private campaign: CampaignPanel;
   private shelves: Shelves;
-  private page: 'main' | 'campaign' = 'main';
+  private rail: HeightRail;
+  private freeHands: HandState[] = [];
+  private customList: CustomListPanel;
+  private customEdit: CustomEditPage;
+  private page: Page = 'main';
 
   constructor(
     stage: Stage,
@@ -38,6 +49,11 @@ export class Menu {
     stage.boardLift.add(this.group);
     this.main = new MainMenu(this.group, audio);
     this.campaign = new CampaignPanel(this.group, audio, progress, rewardModels);
+    // A short piece of the ring in front: raise or lower the board (and the menu) here too, never spin it.
+    this.rail = new HeightRail(stage);
+    this.group.add(this.rail.group);
+    this.customList = new CustomListPanel(this.group, audio, customLevels);
+    this.customEdit = new CustomEditPage(this.group, audio, customLevels);
     this.shelves = new Shelves(this.group, stage, audio, particles, models, templates, progress);
     this.shelves.addPreviews(previewModels);
     this.shelves.rewardSource = () => this.campaign.rewardShown();
@@ -57,7 +73,7 @@ export class Menu {
   }
 
   /** The menu opens on the main page (or the campaign, after a campaign battle). */
-  open(page: 'main' | 'campaign' = 'main'): void {
+  open(page: Page = 'main'): void {
     this.shelves.layout();
     this.campaign.refresh();
     this.showPage(page);
@@ -66,14 +82,16 @@ export class Menu {
   /** Closing (Fight, Replay tutorial, settings): nothing stays held. */
   close(): void {
     this.shelves.releaseAll();
-    this.main.hide();
-    this.campaign.hide();
+    this.rail.release();
+    this.hidePanels();
   }
 
   /** The panels step away while the settings page is open (the shelves stay). */
   hidePanels(): void {
     this.main.hide();
     this.campaign.hide();
+    this.customList.hide();
+    this.customEdit.hide();
   }
 
   /**
@@ -104,12 +122,30 @@ export class Menu {
   }
 
   update(hands: HandState[], dt: number, head: Vector3): MenuChoice {
-    this.shelves.update(hands, dt, head);
+    this.rail.update(hands, dt);
+    // A hand on the rail grabs nothing on the shelves (one array reused, no garbage each frame).
+    this.freeHands.length = 0;
+    for (const h of hands) if (!this.rail.isHeldBy(h)) this.freeHands.push(h);
+    this.shelves.update(this.freeHands, dt, head);
     if (this.page === 'main') {
       const choice = this.main.update(hands, dt);
       if (choice === 'campaign') this.showPage('campaign');
+      else if (choice === 'custom') this.showPage('customList');
       else if (choice === 'settings') return { kind: 'settings' };
       else if (choice === 'replay') return { kind: 'replay' };
+      return null;
+    }
+    if (this.page === 'customList') {
+      const choice = this.customList.update(hands, dt);
+      if (choice?.kind === 'back') this.showPage('main');
+      else if (choice?.kind === 'create') this.showPage('customEdit', null);
+      else if (choice?.kind === 'edit') this.showPage('customEdit', choice.id);
+      return null;
+    }
+    if (this.page === 'customEdit') {
+      const choice = this.customEdit.update(hands, dt);
+      if (choice?.kind === 'back') this.showPage('customList', this.editId);
+      else if (choice?.kind === 'saved') this.showPage('customList', choice.id);
       return null;
     }
     const choice = this.campaign.update(hands, dt);
@@ -118,14 +154,17 @@ export class Menu {
     return null;
   }
 
-  private showPage(page: 'main' | 'campaign'): void {
+  /** The Custom Game level being edited (or selected, coming back to the list); null for a new one. */
+  private editId: string | null = null;
+
+  /** One front page shows at a time. `id`: the Custom Game level to edit or to select. */
+  private showPage(page: Page, id: string | null = this.editId): void {
     this.page = page;
-    if (page === 'main') {
-      this.campaign.hide();
-      this.main.show();
-    } else {
-      this.main.hide();
-      this.campaign.show();
-    }
+    this.editId = id;
+    this.hidePanels();
+    if (page === 'main') this.main.show();
+    else if (page === 'campaign') this.campaign.show();
+    else if (page === 'customList') this.customList.show(id);
+    else this.customEdit.open(id);
   }
 }

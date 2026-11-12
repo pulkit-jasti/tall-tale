@@ -15,7 +15,7 @@
 // or loadout.
 import { Box3, Group, Vector3, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
-import { MENU, POKE, UI_SPACING } from '../../config/game.js';
+import { MENU, UI_SPACING } from '../../config/game.js';
 import { LEVELS, type LevelEntry, type LevelReward } from '../../config/levels.js';
 import { mark } from '../../debug/perfMarks.js';
 import type { HandState } from '../../player/hands.js';
@@ -26,15 +26,14 @@ import {
   drawMenuIcon,
   drawSkull,
   drawStar,
-  drawTitleBanner,
   FightButton,
   Panel,
+  PanelHeader,
   panelMap,
-  PokeButton,
   ScrollList,
   Slider,
   UI_COLORS,
-  uiCenterY,
+  menuCenterY,
   wrapText,
 } from '../kit/index.js';
 
@@ -47,7 +46,7 @@ const TOOL_NAMES: Record<string, string> = { swatter: 'Fly swatter', pepper: 'Pe
 
 export class CampaignPanel {
   private panel: Panel;
-  private back: PokeButton;
+  private back: PanelHeader;
   private list: ScrollList;
   private slider: Slider;
   private fight: FightButton;
@@ -69,13 +68,14 @@ export class CampaignPanel {
       width: C.width,
       height: C.height,
       radius: M.radius,
-      centerY: uiCenterY(C.height, M.tiltDeg),
+      centerY: menuCenterY(C.height, M.tiltDeg),
       tiltDeg: M.tiltDeg,
       layoutWidth: Math.round(C.width * C.pxPerCm),
       canvasScale: 2,
     });
-    this.back = new PokeButton(audio, { radius: C.backRadius, icon: 'back' });
-    this.back.group.position.set(C.backAt[0], C.backAt[1], 0);
+    // The title and Back float over the panel (navigation outside, content inside).
+    this.back = new PanelHeader(audio, 'Campaign', { back: true });
+    this.back.placeAbove(C.height);
     this.panel.root.add(this.back.group);
     this.list = new ScrollList(audio, {
       width: C.listRight - C.listLeft,
@@ -97,7 +97,7 @@ export class CampaignPanel {
     };
     this.panel.root.add(this.list.group);
     // The upright slider: the only way to scroll the list (1, its top, shows the first levels). Smooth, no row steps.
-    this.slider = new Slider(audio, { length: C.sliderLength, steps: ENTRIES - 4, value: 1, vertical: true });
+    this.slider = new Slider(audio, { length: C.sliderLength, steps: ENTRIES - 4, value: 1, vertical: true, scrollbar: true });
     this.slider.group.position.set(C.sliderX, listY, 0);
     this.slider.onChange = (value) => this.list.scrollToShare(1 - value);
     this.panel.root.add(this.slider.group);
@@ -243,10 +243,6 @@ export class CampaignPanel {
   private draw(c: CanvasRenderingContext2D, w: number, h: number, level: LevelEntry, open: boolean): void {
     const C = MENU.campaign;
     const at = panelMap(C.width, C.height, w, h);
-    // The title beside Back, over the list.
-    const titleLeft = at.x(C.backAt[0] + C.backRadius * POKE.rimScale + UI_SPACING.labelGap * 2);
-    const titleRight = at.x(C.sliderX + 1.6);
-    drawTitleBanner(c, 'Campaign', titleLeft, UI_SPACING.top * at.px, titleRight - titleLeft, 56, 32);
     // The card: a soft board from cardLeft to the right edge, its content cardPad inside.
     const cardTop = C.height / 2 - UI_SPACING.edge;
     const cardBottom = -C.height / 2 + UI_SPACING.edge;

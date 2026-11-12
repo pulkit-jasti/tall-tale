@@ -10,6 +10,7 @@ import { popIn } from '../fx/ease.js';
 import { degToRad } from '../rules/boardMath.js';
 import { uiCenterY } from '../rules/reach.js';
 import { canvasPlane, canvasTexture } from './kit/canvas.js';
+import { afterDrag } from './kit/controls.js';
 import { drawNineSlice } from './uiImages.js';
 
 /** Dark brown ink for text on the light panel. */
@@ -107,8 +108,16 @@ export class Panel {
     if (this.zoned) this.root.position.y = uiCenterY(height, this.tiltDeg);
   }
 
-  /** Redraws the panel: the parchment, then the user's content, in layout pixels. */
+  /**
+   * Redraws the panel: the parchment, then the user's content, in layout
+   * pixels. While something is dragged it waits for the drag to end
+   * (src/ui/kit/controls.ts afterDrag: a redraw mid-drag made panels flicker).
+   */
   paint(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
+    afterDrag(this, () => this.paintNow(draw));
+  }
+
+  private paintNow(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
     const c = this.canvas.getContext('2d')!;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, this.canvas.width, this.canvas.height);

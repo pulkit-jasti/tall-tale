@@ -7,6 +7,7 @@
 // versions (public/ui/vector/), drawn at any size. PNGs are only used where
 // they are big enough (panels, the banner, the 100 px game icons).
 import { drawMenuIcon } from './kit/menuIcons.js';
+import { ACTION_ICONS, drawActionIcon, type ActionIcon } from './kit/actionIcons.js';
 
 const FILES = {
   panel: 'rpg/panel_beige.png',
@@ -210,7 +211,9 @@ export type ButtonIcon =
   | 'daily'
   | 'custom'
   // Back to the home screen (the pause panel's and end panel's Menu): a little castle keep.
-  | 'home';
+  | 'home'
+  // Custom Game (src/ui/kit/actionIcons.ts): yes, no, edit, duplicate, delete, share, the seed's dice, an unpicked choice.
+  | ActionIcon;
 
 /**
  * A crisp button icon drawn in code (256 px), in the same look as the arrows:
@@ -382,6 +385,8 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
   } else if (icon === 'sword' || icon === 'lock' || icon === 'campaign' || icon === 'daily' || icon === 'custom' || icon === 'home') {
     // v2 run 2 menu icons: the menus' own drawings (src/ui/kit/menuIcons.ts), in the same cream.
     drawMenuIcon(c, icon, 0, 0, s * 0.72, ICON_FILL);
+  } else if ((ACTION_ICONS as readonly string[]).includes(icon)) {
+    drawActionIcon(c, icon as ActionIcon, s);
   } else if (icon === 'reach') {
     // Measure reach: a double arrow between two end bars, like a tape measure.
     c.lineWidth = s * 0.06;

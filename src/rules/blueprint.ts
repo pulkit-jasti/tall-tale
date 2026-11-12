@@ -15,6 +15,11 @@ export interface BlueprintNode {
   at: Polar;
   /** Camps only: hill width (cm). Bigger camp, more enemies. */
   size?: number;
+  /**
+   * Camps only: the wave it rises in (1 based, docs/custom-mode.md section
+   * 7). Missing: there from the start. Generated levels always set it.
+   */
+  wave?: number;
 }
 
 export interface BlueprintRoad {
@@ -24,7 +29,9 @@ export interface BlueprintRoad {
   via: Polar[];
 }
 
-export type TriggerKind = 'keg' | 'boulder' | 'tree';
+/** The kinds come from the registry (src/config/registries.ts). */
+export type { TriggerKind } from '../config/registries.js';
+import type { TriggerKind } from '../config/registries.js';
 
 export interface BlueprintTrigger {
   kind: TriggerKind;
@@ -68,6 +75,7 @@ export function parseBlueprint(data: unknown): Blueprint {
     if (!['camp', 'junction', 'wall'].includes(node.kind)) fail(`${b.name}: node ${node.id} has kind ${node.kind}`);
     if (!isPolar(node.at)) fail(`${b.name}: node ${node.id} has a bad position`);
     if (node.kind === 'camp' && !(typeof node.size === 'number' && node.size > 0)) fail(`${b.name}: camp ${node.id} needs a size`);
+    if (node.wave !== undefined && !(Number.isInteger(node.wave) && node.wave >= 1)) fail(`${b.name}: camp ${node.id} has a bad wave`);
   }
   for (const road of b.roads!) {
     if (!ids.has(road.from) || !ids.has(road.to)) fail(`${b.name}: road ${road.from} to ${road.to} has an unknown end`);

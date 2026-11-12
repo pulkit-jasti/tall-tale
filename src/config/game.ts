@@ -545,6 +545,8 @@ export const HANDLES = {
   woodColor: 0x5a4330,
   trackColor: 0x3b2b1f,
   arrowColor: 0xf2c14e,
+  /** The home screen's height rail (src/player/heightRail.ts): a short piece of the ring in front, height only. */
+  menuRail: { halfSpanDeg: 26 },
 };
 
 export const HANDS = {
@@ -792,11 +794,14 @@ export const FLAGS = {
  * the dev build above max. Keep at least 1.2 cm between any two targets.
  */
 export const BUTTON_SIZE = {
+  /** Setting rows only (steppers, choices, the seed dice): 15% under medium, still over Meta's 22 mm (3.2 cm cap, 4.2 cm rim). */
+  compact: 1.6,
   medium: 1.9,
   standard: 2.4,
   large: 2.9,
   primary: 3.5,
-  min: 1.9,
+  /** The smallest any button may be (the compact size; everything else keeps medium or bigger). */
+  min: 1.6,
   max: 3.5,
 };
 /**
@@ -855,22 +860,29 @@ export const END_PANEL = {
  * choice after the first look), at least 2.4 cm between any two rims.
  */
 export const MENU = {
+  /**
+   * The home screen's panels sit this much lower than the UI_ZONE spot (cm),
+   * nearer the ground (headset test 2026-11-11: with the floating titles they
+   * were too high). The settings page opened from the home screen too.
+   */
+  drop: 6,
   /** The main menu panel in front (docs/menus.md section 4), at the end panel's spot. */
   main: {
     radius: 41,
     tiltDeg: 20,
     // A compact grid (was 50 x 30, with wide empty sides: the eyes had to turn to its edges), the same
     // UI_SPACING.edge on every side, each word right under its button, rows at least 2.5 cm apart.
+    // 30 tall (was 32): the title floats over it now (HEADER).
     width: 36,
-    height: 32,
+    height: 30,
     /** Top row: Daily, Campaign (the biggest, middle), Custom. Bottom row: Settings and Tutorial (cm from the panel's middle). */
-    heroAt: [0, 4.3] as [number, number],
+    heroAt: [0, 4] as [number, number],
     heroRadius: BUTTON_SIZE.primary,
     sideX: 11.3,
-    sideY: 4.3,
+    sideY: 4,
     sideRadius: BUTTON_SIZE.large,
     smallX: 6.5,
-    smallY: -8.2,
+    smallY: -7.8,
     smallRadius: BUTTON_SIZE.standard,
     /** How long "Coming soon" replaces the word over Daily or Custom after a poke (seconds). */
     soonTime: 2.5,
@@ -881,7 +893,7 @@ export const MENU = {
     width: 50,
     height: 36,
     pxPerCm: 15,
-    backRadius: BUTTON_SIZE.min,
+    backRadius: BUTTON_SIZE.medium,
     /** Back, top left (UI_SPACING.edge from both edges). */
     backAt: [-20.3, 13.3] as [number, number],
     /**
@@ -892,14 +904,15 @@ export const MENU = {
      * (sliderX, sliderLength) scrolls it (touch scrolling mixed up taps and
      * swipes on the headset).
      */
+    // The list reaches to the top now: the title and Back float over the panel (HEADER).
     listLeft: -22.8,
     listRight: -6.6,
-    listTop: 9.5,
+    listTop: 15.8,
     listBottom: -15.8,
     rowHeight: 5,
     rowGap: 0.8,
     sliderX: -3.7,
-    sliderLength: 21,
+    sliderLength: 27,
     /** The detail card, from cardLeft to the panel's right edge (less UI_SPACING.edge), its content `cardPad` inside. */
     cardLeft: -0.8,
     cardPad: 1.5,
@@ -996,6 +1009,242 @@ export const MENU = {
 };
 
 /**
+ * The level generator (docs/custom-mode.md, src/level/generate.ts): where it
+ * puts things and the checks every level must pass. Polar spots are cm from
+ * the board's middle and degrees (0 = front). The settings it reads are in
+ * src/config/levelSettings.ts.
+ */
+export const LEVEL_GEN = {
+  /** Bumped whenever the generator changes what a seed gives (saved in each level's meta). */
+  version: 1,
+  /** Seeds tried after the asked one when a check fails, before giving up. */
+  tries: 24,
+  /** Wall entries: one per wall stretch (like the tutorial map), at this distance. */
+  wallRadius: 58,
+  wallAngles: [0, 60, 120, 180, 240, 300],
+  /** The troop gate (kept for later gate mechanics). */
+  gate: [52, 180] as [number, number],
+  /** The inner junctions (one per outer junction, near the wall) and the outer ring of junctions (cm). */
+  innerRadius: [86, 96] as [number, number],
+  outerRadius: [124, 148] as [number, number],
+  /** Outer junctions keep this far apart (degrees): up to the most, less when many share the circle, never under the least. */
+  junctionGapDeg: { least: 24, most: 48 },
+  /**
+   * Two roads may not run on top of each other: no more than `overlapMax`
+   * cm of one within `overlapNear` cm of another (away from the points they
+   * share, `overlapEnds` cm). Crossings cross at one spot, which is fine.
+   */
+  overlapNear: 9,
+  overlapMax: 24,
+  overlapEnds: 18,
+  /** How far a camp's road may turn around the castle at full wiggle before it reaches its junction (degrees). */
+  maxTurnDeg: 110,
+  /** In-between points: about one every this many cm of road, and their sideways sway at full wiggle (cm). */
+  viaEvery: 40,
+  swayCm: 26,
+  /** A fork splits a camp road at this share of the way in; its long branch bulges out this far in its middle (cm). */
+  forkAt: 0.5,
+  forkBulge: 30,
+  /** Ring roads bulge out this far in their middle (cm), so they read as a ring, not a chord. */
+  ringBulge: 8,
+  /** Camps keep at least this far apart (cm, flat) and their hills this far from any other road (cm). */
+  campGap: 110,
+  campRoadClear: 12,
+  /** Camps of the same side keep at least this far apart (degrees). */
+  campGapDeg: 34,
+  /** Camps of "one side" fit in this arc (degrees). */
+  oneSideArc: 150,
+  /** No road point comes closer than this to the castle's middle, except wall entries (cm), or past maxRoadRadius. */
+  minRoadRadius: 60,
+  maxRoadRadius: 520,
+  /** Triggers sit between these shares of a camp road (from the castle end), at least `triggerGap` cm apart. */
+  triggerFrom: 0.25,
+  triggerTo: 0.8,
+  triggerGap: 30,
+  /** A main road "passes" a trigger within this of its line (cm). */
+  triggerNear: 8,
+  /**
+   * The unit budget (docs/performance.md): goblins on the board at once.
+   * A wave's goblins are capped so its estimate stays in it.
+   */
+  unitBudget: 50,
+  /** Of a wave's goblins, about this share is on the board at once (they come out over the wave and walk in). */
+  atOnceShare: 0.75,
+  /** Rising camps: share of the camps up from the start, by difficulty (the rest rise in waves 2 to 4). */
+  startCamps: { easy: 0.34, normal: 0.5, hard: 0.67 },
+  waves: 4,
+};
+
+/**
+ * A menu panel's header (src/ui/kit/panelHeader.ts), cm: the title on a
+ * floating plate `above` the panel's top edge, sized to the title (at least
+ * minWidth), Back `backGap` to its left. Navigation floats outside panels.
+ */
+export const HEADER = {
+  height: 4.4,
+  depth: 0.8,
+  above: 1.4,
+  pad: 2.4,
+  minWidth: 14,
+  textSize: 2,
+  backGap: 1.4,
+  // A warm coral, drawn unlit (was a dark red 0xa8492c lit, then 0xff6a45: too vivid).
+  color: 0xe0644a,
+  ink: '#fff4dc',
+};
+
+/** Floating rectangular tabs outside a panel's border, under it (src/ui/kit/tabs.ts), cm. */
+export const TABS = {
+  width: 9,
+  height: 3.6,
+  gap: 1.4,
+  /** How far under the panel's bottom edge the tabs' top edge floats. */
+  below: 1.4,
+  onColor: 0x6fae4a,
+  offColor: 0x8a847a,
+  onInk: '#fff4dc',
+  offInk: '#ece6da',
+};
+
+/** The text field typed with the system keyboard (src/ui/kit/textField.ts), cm and seconds. */
+export const TEXT_FIELD = {
+  /** The field's cap (its sides; the face is drawn white on top, unlit: dark text on white reads best). */
+  color: 0xffffff,
+  typingColor: 0xffffff,
+  face: '#ffffff',
+  /** Thin, so it hardly stands out of the panel (cm). */
+  depth: 0.45,
+  /** The message line under it. */
+  messageHeight: 1.5,
+  messageGap: 0.35,
+  /** No keyboard this long after a poke: ask for a pinch (the keyboard may need a gesture). */
+  keyboardWait: 1.5,
+};
+
+/** Number stepper, choice picker and seed control (src/ui/kit/pickers.ts), cm. */
+export const PICKERS = {
+  stepperWidth: 14,
+  /** A button that cannot do more (a stepper at its limit) or a choice not picked. */
+  offColor: 0x8a847a,
+  /** From one choice button's middle to the next, and the words under them. */
+  choiceGap: 5.6,
+  choiceWordHeight: 1.6,
+  /** A stepper's number and the seed (text height, cm). */
+  numberSize: 1.3,
+};
+
+/**
+ * One setting row (src/ui/kit/settingRow.ts), cm. Inline rows: name left,
+ * control middle, value right, `height` tall. Stacked rows (a choice, a
+ * range, a text field): the name and value on a `lineHeight` line, the
+ * control under it. Text sizes are cm (smaller after the first headset look:
+ * everything read too big that close).
+ */
+export const SETTING_ROW = {
+  // 5 (was 5.6): the row buttons are the compact size now.
+  height: 5,
+  lineHeight: 2.4,
+  /** Room left under a stacked row's control (was 1: more rows fit now). */
+  padding: 0.4,
+  nameShare: 0.36,
+  valueShare: 0.18,
+  gap: 0.6,
+  nameSize: 1.15,
+  valueSize: 0.95,
+  /** A slider's value starts this far after the slider's end (cm), so it reads as that slider's. */
+  valueGap: 0.5,
+  /** The short hint under each name (smaller, lighter), the gap over it, and a stacked row's line when it has one. */
+  hintSize: 0.9,
+  hintGap: 0.35,
+  hintLineHeight: 3.2,
+  stepperWidth: 13,
+  /** A range slider's track (stacked, across the row) and the height it takes. */
+  spanLength: 24,
+  spanHeight: 3.6,
+  /** A text field row: the field's height, the gap over it (it stands out of the panel), the room under it for its message. */
+  // 2.9 (was 3.6): 20% smaller after a headset test.
+  fieldHeight: 2.9,
+  fieldGap: 0.5,
+  fieldMessage: 1.9,
+};
+
+/**
+ * The Custom Game pages (docs/custom-mode.md section 8, src/ui/menu/custom*.ts),
+ * in the main menu's spot. Cm from each panel's middle, like MENU.campaign.
+ */
+export const CUSTOM_GAME = {
+  /** Name and description rules (src/rules/customLevels.ts). */
+  nameMax: 20,
+  descriptionMax: 60,
+  maxLevels: 20,
+  /** How long "Coming soon" shows for Fight and Share (seconds). */
+  soonTime: 2.5,
+  /** The empty state: a smaller panel with the icon, two lines and Create level. */
+  empty: {
+    width: 40,
+    height: 30,
+    iconY: 7.5,
+    lineY: [2.2, 0] as [number, number],
+    createAt: [0, -6] as [number, number],
+    createRadius: BUTTON_SIZE.large,
+  },
+  /** The list page: the levels left, the card right. */
+  list: {
+    width: 54,
+    height: 36,
+    pxPerCm: 15,
+    listLeft: -24.8,
+    listRight: -9.8,
+    listTop: 15.8,
+    listBottom: -9.4,
+    rowHeight: 5,
+    rowGap: 0.8,
+    scrollbarX: -7.2,
+    /** New (round, under the list) and its word beside it. */
+    newAt: [-21.9, -13.3] as [number, number],
+    cardLeft: -4.6,
+    cardPad: 1.5,
+    /** Edit, Duplicate, Delete, Share: small round buttons in a row, a word under each. */
+    actionsY: -1.6,
+    actionsX: [0.5, 6.9, 13.3, 19.7],
+    fightAt: [10.1, -11.6] as [number, number],
+    /** The delete question: yes (green tick) and no (red cross), no words. */
+    confirmY: -2,
+    confirmX: [5.1, 15.1] as [number, number],
+    confirmRadius: BUTTON_SIZE.large,
+    yesColor: 0x5fae4a,
+    noColor: 0xc8402e,
+  },
+  /**
+   * The create and edit page: narrow and tall (rows stack, headset test
+   * 2026-11-11). Back and the title at the top, the rows scrolling below
+   * (the name and description are the Map tab's first rows), a status line
+   * at the bottom; under the panel, the tabs on the left and Save on the right.
+   */
+  edit: {
+    // 34 tall: the title and Back float over it (HEADER), the tabs and Save under it; the rows get the rest.
+    width: 42,
+    height: 34,
+    /** The scroll window (top, bottom, left, right) and its scrollbar's x. */
+    // The same room over and under the rows (UI_SPACING.edge); the status line is outside, under Save.
+    windowTop: 14.8,
+    windowBottom: -14.8,
+    windowLeft: -18.8,
+    windowRight: 14.6,
+    scrollbarX: 16.9,
+    rowGap: 0.4,
+    /** The status line (why it could not save): outside the panel, under the tabs and Save, this tall. */
+    statusHeight: 1.3,
+    /** Save: the rectangular call to action under the panel's right end, in its own gold. */
+    saveSize: [10, 3.6] as [number, number],
+    // A bright warm orange (was a dull gold), with white text like every button.
+    saveColor: 0xf58a1f,
+    /** White text and icon, like every other button. */
+    saveInk: '#ffffff',
+  },
+};
+
+/**
  * The draw order of everything drawn on top or in a fixed order (higher
  * draws later, over the lower ones), all in one place so layers never
  * fight: ghost hands and aim dots, "+1" labels, the stun
@@ -1003,6 +1252,8 @@ export const MENU = {
  * drawOnTop (src/ui/kit/onTop.ts).
  */
 export const RENDER_ORDER = {
+  /** Menu pages drawn on top in their own order (layerPage, src/ui/kit/onTop.ts), all between this and the next whole number. */
+  menu: 3,
   ghost: 5,
   ghostGlow: 6,
   labels: 20,
@@ -1118,32 +1369,14 @@ export const PAUSE = {
   // the tabs moved below everything (floating them out of the panel's top was tried: it looked bad).
   // The tab row made it taller (39.8 cm), so UI_ZONE grew a little and the rows are 4.4 cm apart.
   settings: {
+    // 29 tall (was 39.8): the title and Back float over it (HEADER), the tabs (Access first, then Sound) under it (TABS).
     width: 52,
-    height: 39.8,
+    height: 29,
     pxPerCm: 15,
-    /** Back, top left. */
-    backRadius: BUTTON_SIZE.min,
-    backAt: [-21.3, 16] as [number, number],
-    /** The tabs, in the bottom row (its y: bottomRowY, UI_SPACING.edge from the bottom edge). */
-    tabRadius: BUTTON_SIZE.standard,
     /** Measure reach, in the Access tab (smaller, so the bell switch below keeps its gap). */
-    reachRadius: BUTTON_SIZE.min,
-    /**
-     * The tabs (Sound, Access), below everything, each name to the right of
-     * its button: the chosen one's cap green with its name bold and
-     * underlined, the others' caps this grey (color, text and a line, so it
-     * reads without relying on color alone). Measure reach moved into the
-     * Access tab, with the bell switch, then Reset table too. Access comes
-     * first (open by default), then Sound, the pair centered across the
-     * panel (each button with its name to the right, about 12 cm, 3 cm apart).
-     */
-    tabX: [-10.6, 4.6] as number[],
-    tabOffColor: 0x9a948a,
-    /** The title banner, at the top beside Back (its middle and width). */
-    titleX: -6,
-    titleWidth: 16,
+    reachRadius: BUTTON_SIZE.medium,
     labelX: -23.8,
-    firstRowY: 9,
+    firstRowY: 10.4,
     rowGap: 4.4,
     /**
      * The Access tab's rows (Measure reach, Quiet horn, Reset table, Unlock all tools): farther apart,
@@ -1220,6 +1453,15 @@ export const SLIDER = {
   readyDistance: 6,
   touchAt: 2.1,
   releaseOut: 4,
+  /**
+   * The scrollbar look (every page that scrolls, docs/custom-mode.md): a long
+   * block wrapped around the rail (`wall` cm thick on every side), a light
+   * wood color, no filled track, so it never looks like a value slider. Long
+   * enough to grab, about 26 mm across.
+   */
+  // `rail`: the scrollbar's own thin rail (cm across and deep; a value slider's track is 1.6), so the two never look alike.
+  // The block is about 21 mm across (rail plus a wall on each side) and 3.8 cm long (smaller after a headset test).
+  scrollbar: { pillLength: 3.8, rail: 0.7, wall: 0.7, handleColor: 0xd8b778 },
 };
 
 /**
@@ -1266,12 +1508,16 @@ export const POKE = {
   /** Ready when the fingertip is this close in front of the button face, and no longer Ready once past readyDistance times readyOut (a gap, so it never flickers). */
   readyDistance: 5,
   readyOut: 1.35,
-  /** The cap follows the fingertip in at this rate (per second): slower than the finger's own shake, so it does not vibrate. */
-  capFollow: 14,
+  /**
+   * The cap follows the fingertip in at this rate (per second): slower than
+   * the finger's own shake, so it does not vibrate. Was 14: the cap lagged so
+   * far behind that round buttons clicked while they looked half pushed.
+   */
+  capFollow: 26,
   /** How far the cap sinks into its rim. It follows the fingertip. */
   travel: 1,
-  /** It clicks when pushed this share of the way down. */
-  fireShare: 0.85,
+  /** It clicks when pushed this share of the way down (was 0.85: it clicked before the cap reached the rim). */
+  fireShare: 0.95,
   /** After a click, the fingertip must come back out this far in front of the face before another press... */
   releaseDistance: 2,
   /** ...and this long must pass (seconds). Was 0.6: quick pokes in a row felt ignored (Meta uses 0.25). */
@@ -1295,6 +1541,14 @@ export const POKE = {
   iconShare: 0.8,
   /** Cap thickness as a share of its radius, unless a button sets its own. */
   depthShare: 0.4,
+  /**
+   * The dark rim's height as a share of the cap's depth (1.08: 20% taller
+   * than the 0.9 before, headset test 2026-11-11), and how far the cap's face
+   * stays over the rim's top when pushed all the way in (cm): it ends level
+   * with the rim and never hides inside it.
+   */
+  rimHeight: 1.08,
+  capAboveRim: 0.04,
 };
 
 /**

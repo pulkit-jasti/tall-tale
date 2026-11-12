@@ -5,8 +5,12 @@
 //
 //   Controls:  PokeButton (`locked`: it only buzzes), Slider (also upright: `vertical`), Switch (on and off:
 //              knob side, color and the word), StandButton, ScrollList (swipe to scroll, tap to select,
-//              or tap only and scrolled by a slider), FightButton (the one rectangular button),
-//              armControls, changeTouch
+//              or tap only and scrolled by a slider), FightButton (rectangular, like the Tabs),
+//              Tabs (floating over a panel's top border), TextField (the system keyboard; isTyping),
+//              NumberStepper, ChoicePicker, SeedControl, RangeSlider (two handles), SettingRow (name,
+//              control, value from a spec), ScrollArea (a column of items and the scrollbar: every
+//              page that scrolls; Slider `scrollbar` is its pill-handle look), armControls, changeTouch
+//   Labels:    CanvasLabel (a small canvas on a panel, redrawn only when asked)
 //   Panels:    Panel (a parchment board with a canvas), LazyFollow (menus that follow the head), centerAbove,
 //              GlassSign (the see-through hint sign that follows the look, with an optional live bar),
 //              uiCenterY (every menu panel's height: in front of the eyes, inside UI_ZONE)
@@ -21,6 +25,16 @@ export { PokeButton, type ButtonOptions } from '../pokeButton.js';
 export { drawMenuIcon, drawSkull, drawStar, type MenuIcon } from './menuIcons.js';
 export { ScrollList, type ScrollListOptions } from './scrollList.js';
 export { FightButton } from './fightButton.js';
+export { Tabs } from './tabs.js';
+export { TextField, isTyping, useKeyboardSession, type TextFieldOptions } from './textField.js';
+export { ChoicePicker, NumberStepper, SeedControl } from './pickers.js';
+export { RangeSlider } from './rangeSlider.js';
+export { FieldRow, SettingRow, type RowSpec, type RowValue } from './settingRow.js';
+export { ActionButton } from './actionButton.js';
+export { PanelHeader } from './panelHeader.js';
+export { ScrollArea, type ScrollItem, type ScrollAreaOptions } from './scrollArea.js';
+export { CanvasLabel } from './label.js';
+export { type ActionIcon } from './actionIcons.js';
 export { Slider, type SliderOptions } from '../slider.js';
 export { Switch, type SwitchOptions } from '../switch.js';
 export { StandButton, type StandOptions } from './standButton.js';
@@ -28,11 +42,11 @@ export { LazyFollow, type FollowOptions } from './lazyFollow.js';
 export { GlassSign, type GlassBar } from './glassSign.js';
 export { armControls, changeTouch, type Control } from './controls.js';
 export { angleTo, bottomRowY, clamp01, panelMap, rowPanelWidth, rowX, stepValue, type PanelMap } from './layout.js';
-export { drawLine, drawOutlined, drawTitleBanner, UI_COLORS } from './text.js';
+export { drawLine, drawOutlined, drawTitleBanner, truncate, UI_COLORS } from './text.js';
 export { canvasPlane, canvasTexture } from './canvas.js';
-export { drawOnTop } from './onTop.js';
+export { drawOnTop, layerPage } from './onTop.js';
 // Where panels sit up and down: right in front of the eyes, inside UI_ZONE (config).
-export { fitsUiZone, uiCenterY } from '../../rules/reach.js';
+export { fitsUiZone, menuCenterY, uiCenterY } from '../../rules/reach.js';
 export {
   arrowCanvas,
   buttonIconCanvas,

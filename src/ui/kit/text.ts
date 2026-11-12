@@ -43,6 +43,17 @@ export function drawLine(
   c.fillText(text, x, y);
 }
 
+/** The text as it fits `maxWidth` in the context's font now: whole if it fits, else cut at a word (or letter) with "..." after it. */
+export function truncate(c: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (c.measureText(text).width <= maxWidth) return text;
+  let cut = text;
+  while (cut.length > 0 && c.measureText(`${cut}...`).width > maxWidth) {
+    const space = cut.lastIndexOf(' ');
+    cut = space > cut.length * 0.6 ? cut.slice(0, space) : cut.slice(0, -1);
+  }
+  return `${cut.trimEnd()}...`;
+}
+
 /** Bold text with a dark outline (`size` px, outline `outline` share of it), centered on (x, y). */
 export function drawOutlined(c: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, fill: string, outline = 0.1, outlineColor = UI_COLORS.outline): void {
   c.font = `bold ${Math.round(size)}px sans-serif`;

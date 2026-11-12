@@ -44,7 +44,41 @@ export function takeDrag(owner: object): void {
 }
 
 export function endDrag(owner: object): void {
-  if (dragging === owner) dragging = null;
+  if (dragging !== owner) return;
+  dragging = null;
+  flushAfterDrag();
+}
+
+/**
+ * True while something is dragged (a slider, a switch, a range). No canvas
+ * is redrawn then (headset test 2026-11-11: redrawing and uploading a canvas
+ * on every slider step made the panel flicker and then vanish while
+ * sliding; the sound sliders never did, since they only repaint when let
+ * go). CanvasLabel and Panel ask this and wait (afterDrag).
+ */
+export function isDragging(): boolean {
+  return dragging !== null && performance.now() - draggedAt <= DRAG_STALE_MS;
+}
+
+/** Redraws held back while dragging, by owner (a later one replaces an earlier one of the same owner). */
+const waiting = new Map<object, () => void>();
+
+/** Runs `draw` now, or once the drag ends if something is dragged. */
+export function afterDrag(owner: object, draw: () => void): void {
+  if (!isDragging()) {
+    waiting.delete(owner);
+    draw();
+    return;
+  }
+  waiting.set(owner, draw);
+}
+
+/** Runs the held back redraws (the drag ended). Also safe to call every frame: it does nothing while dragging or when none wait. */
+export function flushAfterDrag(): void {
+  if (waiting.size === 0 || isDragging()) return;
+  const draws = [...waiting.values()];
+  waiting.clear();
+  for (const draw of draws) draw();
 }
 
 /** A control's new touch look (emissive only), with a tick when a finger first comes near. Returns the new state. */

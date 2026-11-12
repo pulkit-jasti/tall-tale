@@ -7,7 +7,10 @@ import {
   BELL,
   BOARD,
   BUTTON_SIZE,
+  HEADER,
   CASTLE,
+  CUSTOM_GAME,
+  TABS,
   MENU,
   END_PANEL,
   HANDLES,
@@ -21,7 +24,6 @@ import {
   SLINGSHOT,
   SWATTER,
   TOOL_SPOTS,
-  UI_SPACING,
   UI_ZONE,
 } from '../config/game.js';
 
@@ -56,10 +58,19 @@ export function uiCenterY(height: number, tiltDeg: number): number {
   return center;
 }
 
-/** The settings page's tab row, below everything: its y on the panel (cm from its middle). */
-export function settingsTabRowY(): number {
-  const S = PAUSE.settings;
-  return -S.height / 2 + S.tabRadius * POKE.rimScale + UI_SPACING.edge;
+/** A home screen panel's middle height: the UI_ZONE spot, MENU.drop lower (nearer the ground). */
+export function menuCenterY(height: number, tiltDeg: number): number {
+  return uiCenterY(height, tiltDeg) - MENU.drop;
+}
+
+/** A panel's floating header's Back (src/ui/kit/panelHeader.ts): [x, y] from the panel's middle (the plate at its least width). */
+export function headerBackAt(panelHeight: number): [number, number] {
+  return [-(HEADER.minWidth / 2 + HEADER.backGap + BUTTON_SIZE.medium * POKE.rimScale), panelHeight / 2 + HEADER.above + HEADER.height / 2];
+}
+
+/** A panel's floating tabs under it, from its left edge: the first tab's [x, y] from the panel's middle. */
+export function tabsAt(panelWidth: number, panelHeight: number): [number, number] {
+  return [-panelWidth / 2 + TABS.width / 2, -panelHeight / 2 - TABS.below - TABS.height / 2];
 }
 
 /** True if a panel this tall fits inside UI_ZONE at all. */
@@ -88,8 +99,10 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
   const S = PAUSE.settings;
   const settingsCenter = uiCenterY(S.height, P.tiltDeg);
   const lowestRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.firstRowY - 4 * S.rowGap, S.sliderX + S.sliderLength / 2);
-  const backButton = onPanel(P.radius, settingsCenter, P.tiltDeg, S.backAt[1], S.backAt[0]);
-  const tabRow = onPanel(P.radius, settingsCenter, P.tiltDeg, settingsTabRowY(), Math.max(...S.tabX.map(Math.abs)));
+  const [sbx, sby] = headerBackAt(S.height);
+  const backButton = onPanel(P.radius, settingsCenter, P.tiltDeg, sby, sbx);
+  const [stx, sty] = tabsAt(S.width, S.height);
+  const tabRow = onPanel(P.radius, settingsCenter, P.tiltDeg, sty, stx);
   return [
     { name: 'ring handle', radius: HANDLES.radius, y: HANDLES.ringY },
     { name: 'slingshot handle', radius: TOOL_SPOTS.slingshot.radius, y: top + SLINGSHOT.handleHeight / 2 },
@@ -117,8 +130,8 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pause panel middle buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, P.buttonGap / 2) },
     { name: 'pause panel outer buttons', ...onPanel(P.radius, pauseCenter, P.tiltDeg, pauseDown, 1.5 * P.buttonGap) },
     { name: 'settings lowest row (slider end)', ...lowestRow, rare: true },
-    { name: 'settings Back (top left)', ...backButton, rare: true },
-    { name: 'settings tabs (bottom row)', ...tabRow, rare: true },
+    { name: 'settings Back (over the page)', ...backButton, rare: true },
+    { name: 'settings tabs (under the page)', ...tabRow, rare: true },
     ...menuSpots(onPanel),
     { name: 'climber on the rampart', radius: CASTLE.rampartRadius, y: CASTLE.wallHeight + 2, rare: true },
     { name: 'intruder at the courtyard edge', radius: CASTLE.courtyardMax, y: 2, rare: true },
@@ -139,9 +152,13 @@ type OnPanel = (panelRadius: number, centerY: number, tiltDeg: number, y: number
 function menuSpots(onPanel: OnPanel): { name: string; radius: number; y: number; rare?: boolean }[] {
   const M = MENU.main;
   const C = MENU.campaign;
-  const mainY = uiCenterY(M.height, M.tiltDeg);
+  const mainY = menuCenterY(M.height, M.tiltDeg);
   const smallY = M.smallY;
-  const campY = uiCenterY(C.height, M.tiltDeg);
+  const campY = menuCenterY(C.height, M.tiltDeg);
+  const CG = CUSTOM_GAME;
+  const emptyY = menuCenterY(CG.empty.height, M.tiltDeg);
+  const listY = menuCenterY(CG.list.height, M.tiltDeg);
+  const editY = menuCenterY(CG.edit.height, M.tiltDeg);
   const listX = (C.listLeft + C.listRight) / 2;
   const S = MENU.shelves;
   const grip = 3;
@@ -151,11 +168,21 @@ function menuSpots(onPanel: OnPanel): { name: string; radius: number; y: number;
     { name: 'main menu Campaign button', ...onPanel(M.radius, mainY, M.tiltDeg, M.heroAt[1], M.heroAt[0]) },
     { name: 'main menu Daily and Custom buttons', ...onPanel(M.radius, mainY, M.tiltDeg, M.sideY, M.sideX) },
     { name: 'main menu Settings and Tutorial buttons', ...onPanel(M.radius, mainY, M.tiltDeg, smallY, M.smallX) },
-    { name: 'campaign Back (top left)', ...onPanel(M.radius, campY, M.tiltDeg, C.backAt[1], C.backAt[0]), rare: true },
+    { name: 'campaign Back (over the panel)', ...onPanel(M.radius, campY, M.tiltDeg, headerBackAt(C.height)[1], headerBackAt(C.height)[0]), rare: true },
+    { name: 'custom game edit Back (over the panel)', ...onPanel(M.radius, editY, M.tiltDeg, headerBackAt(CG.edit.height)[1], headerBackAt(CG.edit.height)[0]), rare: true },
     { name: 'campaign list top (left end)', ...onPanel(M.radius, campY, M.tiltDeg, C.listTop - 2, C.listLeft + 2), rare: true },
     { name: 'campaign list bottom', ...onPanel(M.radius, campY, M.tiltDeg, C.listBottom + 2, listX) },
     { name: 'campaign slider top', ...onPanel(M.radius, campY, M.tiltDeg, C.listTop - 1, C.sliderX) },
     { name: 'campaign Fight button', ...onPanel(M.radius, campY, M.tiltDeg, C.fightAt[1], C.fightAt[0]) },
+    // Custom Game (docs/custom-mode.md section 8): the list page's corners and buttons, the edit page's tabs (over its top), field and rows.
+    { name: 'custom game Create level (empty state)', ...onPanel(M.radius, emptyY, M.tiltDeg, CG.empty.createAt[1], CG.empty.createAt[0]) },
+    { name: 'custom game New level (bottom left)', ...onPanel(M.radius, listY, M.tiltDeg, CG.list.newAt[1], CG.list.newAt[0]), rare: true },
+    { name: 'custom game card buttons (right end)', ...onPanel(M.radius, listY, M.tiltDeg, CG.list.actionsY, CG.list.actionsX[3]) },
+    { name: 'custom game Fight button', ...onPanel(M.radius, listY, M.tiltDeg, CG.list.fightAt[1], CG.list.fightAt[0]) },
+    { name: 'custom game tabs and Save (under the edit page)', ...onPanel(M.radius, editY, M.tiltDeg, -CG.edit.height / 2 - TABS.below - TABS.height / 2, -CG.edit.width / 2 + TABS.width / 2), rare: true },
+    { name: 'custom game name field (top row)', ...onPanel(M.radius, editY, M.tiltDeg, CG.edit.windowTop - 5, 0) },
+    { name: 'custom game lowest row (left end)', ...onPanel(M.radius, editY, M.tiltDeg, CG.edit.windowBottom + 2, CG.edit.windowLeft + 4), rare: true },
+    { name: 'custom game scrollbar', ...onPanel(M.radius, editY, M.tiltDeg, CG.edit.windowTop - 2, CG.edit.scrollbarX), rare: true },
     { name: 'tool shelf things', ...flat(S.tools.radius, S.tools.y) },
     { name: 'trophies, low row', ...flat(S.trophies.lowRadius, S.trophies.lowY) },
     { name: 'trophies, high row', ...flat(S.trophies.highRadius, S.trophies.highY) },

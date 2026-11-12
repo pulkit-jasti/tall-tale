@@ -123,8 +123,8 @@ Decided with the developer (2026-11-11). The Custom Game button on the main menu
 
 - **Empty state** (no saved levels, so the first visit): one short friendly line in the middle of the panel, for example "No battles yet. Make your own: pick the map, the waves and the rules.", with a small drawn icon above it (the `custom` menu icon), and a big round **Create level** button below it. Nothing else.
 - **With levels:** a split panel like the campaign panel (section 8 of [menus.md](menus.md)):
-  - **Left: the player's levels**, a tap only `ScrollList` scrolled by the scrollbar slider (below). Each row: the name and the difficulty skulls. Tap selects; the selected row is gold. A round **New** button under the list creates another level.
-  - **Right: the detail card** of the selected level: the name big, then the **description**, made from its settings (for example "3 camps, winding roads, hard"; never typed), the difficulty skulls, a row of small round buttons **Edit, Duplicate, Delete, Share**, and the big rectangular red **Fight** button (`FightButton`, the same as on the campaign card) centered at the bottom.
+  - **Left: the player's levels**, a tap only `ScrollList` scrolled by the scrollbar slider (below). Each row: the name and, under it, the description (cut short with "..." only when it does not fit). No difficulty: the player decides how hard a level is. Tap selects; the selected row is gold. A round **New** button under the list creates another level.
+  - **Right: the detail card** of the selected level: the name big, then the **description** (the player's own, typed on the edit page; when empty, one made from its settings, for example "3 camps, winding roads, hard"), a row of small round buttons **Edit, Duplicate, Delete, Share**, and the big rectangular red **Fight** button (`FightButton`, the same as on the campaign card) centered at the bottom.
 - When the page opens, the newest level is selected; after a save, the saved level is selected.
 - **Edit** opens the create page filled in with that level's values (the name and every setting). There is no separate rename: one Edit button for both.
 - **Duplicate** makes a copy named "<name> copy" (cut to fit the name limit, then "copy 2", "copy 3" while taken), adds it to the list and selects it.
@@ -135,10 +135,10 @@ Decided with the developer (2026-11-11). The Custom Game button on the main menu
 ### The create and edit page
 
 - One page for both. **Create** starts from the defaults and a free name ("Level 1", "Level 2", the lowest number not taken). **Edit** starts from the level's values; Save writes over the same level (it keeps its place and id).
-- **Top:** Back (top left: leave without saving), then the **name field** (section "Naming" below) with its validation message right under it.
-- **Tabs: Map, Waves, Rules**, floating rectangular buttons standing **outside the panel's top border** (not drawn on the parchment). The chosen one is green, the others grey (color, text and an underline, never color alone). Difficulty (easy, normal, hard) is on the Waves tab.
-- **The chosen tab's rows:** one setting row per setting in that group, built from the settings list (section 4). The seed control is on the Map tab. The rows scroll with the scrollbar slider.
-- **Save** at the bottom of each tab's rows (scroll down to reach it). Save checks the name first: when it is not valid, Save buzzes, the rows scroll back to the top and the message shows under the field. A valid save runs the generator (`generateLevel(seed, settings)` with its checks, section 5), stores the level and goes back to the list with it selected. If no seed passes the checks, a message shows under Save ("Could not make a level with these settings. Try changing them.").
+- **A narrow, tall panel** (changed after the first headset look, 2026-11-11: the rows stack, so it was too wide and too short). **Top:** Back (top left: leave without saving) and the title ("New level" or "Edit level").
+- **The chosen tab's rows**, scrolling with the scrollbar. The **Map tab starts with the name and the description**, each a regular row: its name on a line, a white text field under it (section "Naming" below), its message under the field. The description is optional, 60 characters at most. Then the seed, then the tab's settings, one row per setting, built from the settings list (section 4). Narrow controls (counts, sliders, switches, the seed) sit in one line with the name and value; wide ones (choices, the camp distance range) stack under their name. Difficulty is on the Waves tab.
+- **Under the panel, one line:** the **tabs (Map, Waves, Rules)** from its left edge, floating rectangular buttons (the chosen one green, the others grey: color, text and an underline, never color alone), and **Save** at its right edge, a rectangular gold call to action with a tick and "Save" (always there, no scrolling to reach it).
+- **Save** checks the name first: when it is not valid, it goes back to the Map tab's top, the message shows under the field, and a status line along the panel's bottom says "Check the name first." A valid save runs the generator (`generateLevel(seed, settings)` with its checks, section 5), stores the level and goes back to the list with it selected. If no seed passes the checks, the status line says "Could not make a level with these settings. Try changing them."
 - Debug: a save also writes the generator's summary (section 5) as a debug note, so a level can be checked on the debug page before the loader exists.
 
 ### Naming (the system keyboard)
@@ -170,13 +170,14 @@ For it, **the UI kit grows** (every part in `src/ui/kit/`, built first, then use
 | Choice picker | A row of round buttons, one selected (easy, normal, hard) |
 | Number stepper | A value with round minus and plus buttons, for small counts (camps, junctions). Counts only: the sound settings keep their one slider |
 | Seed control | The seed as a number and a dice button to reroll |
-| Tabs | Floating rectangular buttons outside a panel's top border (with `FightButton`, the only rectangular buttons) |
+| Tabs | Floating rectangular buttons outside a panel's border, under it (rectangular like `FightButton` and `ActionButton`) |
+| Action button | A rectangular call to action in its own color, an icon and a word (Save) |
 | Setting row | A name, its control and its value in one row, used by every setting |
 | Text field | A field poked to type with the system keyboard, the text mirrored on it, and a validation message line under it |
 | Scrollbar | `Slider`'s scrollbar look: an upright track with a long pill-shaped handle instead of the round one, so it never looks like a value slider. **Every page that scrolls uses it**, the campaign list too |
 | Confirm icons | A tick and a cross for round buttons (green yes, red no), no words |
 
-All of them follow the kit's rules: Idle, Ready, Held and Locked looks with a sound, Meta's 22 mm targets 12 mm apart, panels sized to their content (`Panel.resize`). Every button is round except `FightButton` and the tabs.
+All of them follow the kit's rules: Idle, Ready, Held and Locked looks with a sound, Meta's 22 mm targets 12 mm apart, panels sized to their content (`Panel.resize`). Every button is round except `FightButton`, `ActionButton` and the tabs.
 
 ---
 
@@ -229,10 +230,45 @@ Changed 2026-11-11 with the developer: the generator and the menu come first and
 
 ---
 
-## 12. Open
+## 12. As built (first part, 2026-11-11, not tested on the headset yet)
+
+Build order steps 1 to 3 (the generator and the Custom Game menu). Tests pass for the generator and the saved levels; typecheck and build are clean apart from older errors in the bell and the tutorial director tests (they were there before).
+
+- **Level format:** `src/level/level.ts` (`Level`: map, waves, rules, meta; `parseLevel`). Camps in a blueprint now have `wave` (the wave they rise in, `src/rules/blueprint.ts`).
+- **Settings list:** `src/config/levelSettings.ts` (`LEVEL_SETTINGS`: 13 map, 11 wave and 4 rule settings, each with its kind, limits, default and label; `fixSettings`, `formatValue`, `describeSettings` for the card's description, `DIFFICULTY`).
+- **Registries:** `src/config/registries.ts` for triggers (`TriggerKind` now comes from it), enemies and gear. Tools and decor move in with the director and the loader.
+- **Generator:** `src/level/generate.ts` (`generateLevel(seed, settings)`, `summarize`), `src/level/checks.ts` (section 5, plus "no two roads run on top of each other"), `src/level/geometry.ts`. Numbers in `LEVEL_GEN`. It makes the map (camps by spread, a ring of outer junctions where camp roads come in, an inner junction each near the wall, one or two wall entries each, winding camp roads that may turn up to 110 degrees around the castle, forks with a long bulging branch, ring roads, crossings, triggers on the camp roads), the rising camps, the 4 waves (capped to the unit budget) and the rules. **Villages, story spots, decor and trigger ground are not planned in the generator:** the existing planners already plan them from any map when it is built, so they run at load time (step 5).
+- **Command line:** `npm run gen -- --seed 42 [--set key=value] [--settings file.json] [--out file.json] [--svg map.svg]`, and `--help` lists every setting. It loads the TypeScript through Vite (no new dependency), prints the summary and can draw a top view of the map as an SVG picture.
+- **UI kit:** `Tabs`, `TextField` (+ `isTyping`, `useKeyboardSession`), `NumberStepper`, `ChoicePicker`, `SeedControl`, `RangeSlider`, `SettingRow`, `ScrollArea`, `CanvasLabel`, the action icons, and `Slider`'s `scrollbar` look (the campaign list uses it now). Numbers: `TABS`, `TEXT_FIELD`, `PICKERS`, `SETTING_ROW`, `SLIDER.scrollbar`.
+- **Pages:** `src/ui/menu/customList.ts` (empty state, list, card, delete question), `src/ui/menu/customEdit.ts` (create and edit), wired in `src/ui/menu/menu.ts`. Saving: `src/rules/customLevels.ts` (name rules, free and copy names, add, update, duplicate, remove) and `src/player/customLevels.ts` (`tallTale.customLevels`). Numbers: `CUSTOM_GAME`.
+- **Keyboard:** the game hands each XR session to the field and skips auto-pause while typing. If the keyboard does not come up 1.5 s after a poke (it may need a user gesture), the field asks for a pinch and the next pinch opens it. **First thing to check on the headset.**
+- **Debug page:** "Open Custom Game" and "Forget custom levels". Every save writes the level's summary as a debug note.
+- **After the first headset look (2026-11-11):**
+  - The edit page is 42 x 36 cm (was 54 x 30); the tabs and Save sit under it (about 51 cm from the eyes, marked rare in the reach check, still in reach); the name and description are rows on the Map tab; the typed description is saved with the level (`description` in `tallTale.customLevels`).
+  - **No flicker:** a row's name is drawn once, and only its small value label is redrawn, at most every 0.12 s while a slider moves (`SETTING_ROW.redrawEvery`). Before, every slider tick redrew and uploaded a canvas as wide as the row, lying under the controls.
+  - **The name field is white** (its face drawn white, unlit) and thin (`TEXT_FIELD.depth`), with a clear gap under its name, so it never hides the line above it.
+  - **Buttons pushed deep no longer turn black:** the dark rim is now lower than the cap (`POKE.capShowShare` of the cap always stands out), and the cap's side reaches into the rim at rest. This changes every round and box button in the game.
+  - Smaller text on the Custom Game pages: row names 1.15 cm, values 0.95 cm, numbers 1.3 cm, the card and list a step smaller.
+- **Second headset look (2026-11-11):**
+  - The flicker came back worse (the panel vanished while sliding): the status line redrew on every slider step. Fixed for good in the kit: no canvas redraws while anything is dragged (docs/controls-and-ui.md, "Rules learned on the headset").
+  - Rows are cut at the scroll window's edges instead of hiding early; less padding under stacked rows and text fields.
+  - No difficulty on the card or the list rows (the player decides how hard a level is, not the game); each list row shows the description under the name, cut short with "..." only when it does not fit; the card shows up to three lines of it.
+  - The title and Back float over every page (`PanelHeader`); the edit page is 42 x 34 and its rows start at the top. The settings page uses the same floating tabs.
+  - The scrollbar handle is a block around its rail; round buttons press as deep as box buttons.
+- **Third headset look (2026-11-11):**
+  - Taps, slider releases and tab changes still flickered on the Custom Game pages, never on the settings page: the pages are now drawn the same way (`layerPage`).
+  - Rows showed or hid depending on the head: three.js clipping planes break under multiview; the cut is now done in the shader by world position. A row works while its middle is in the window.
+  - The settings header had no title (its plate was drawn over it); its tabs are centered; opened from the home screen it stays put in front of the board (it follows the head only in a battle).
+  - The edit page is 30 cm tall (was 34).
+  - **Share, decided direction (not built):** no native share sheet for web apps on Quest is documented (Meta's share intents are Unity and Android only). Since a level is its seed plus its settings plus the generator version, a share is a short link: the game's URL with the level packed into it (only the settings that differ from the defaults), opened in any browser. In the headset: a QR code on the card (a friend's phone scans it) and the link copied to the clipboard; on a phone or computer, Meta's Web Launch (`https://www.oculus.com/open_url/?url=...`) sends the link to the Quest browser. Opening a shared link adds the level to Custom Game. No backend needed.
+- **Fourth headset look (2026-11-11):** no flicker left. Tabs have no underline (the green cap is enough); the edit page is 34 cm tall again with no lines on it; the home screen panels (and settings opened from it) sit 6 cm lower (`MENU.drop`, `menuCenterY`); the setting rows' round buttons use the new compact size (`BUTTON_SIZE.compact` 1.6, 15% smaller; rows 5 cm). Open: the hand outline turns solid white for a frame on some taps (IWSDK's hand is an invisible depth mask with a white outline; solid white means the mask was missed that frame, likely a slow frame from a redraw on the tap: check the FPS panel's missed frame marks).
+- **Fifth headset look (2026-11-11):** tabs keep one bold word (only the cap color changes); Save's word and tick are white; the text fields are plain white to the edge (`box.plain`: no dark border, the face over the whole cap) with less room around them; the rows have the same room over and under them (the status line moved outside, under Save); every row has a short hint under its name (`SETTING_HINTS`, wrapped to two lines); only sliders and the camp distance range show a value on the right (steppers, choices, switches and the seed show their own); the settings page opened from the home screen is placed from the board like the menu panels (`menuCenterY`), so every menu sits the same height over the ground and moves with the height rail.
+  - **Height rail on the home screen** (`src/player/heightRail.ts`, `HANDLES.menuRail`): a short piece of the ring in front (52 degrees) with an up and down arrow, at the ring's spot. Grab it (fist or pinch) and move up or down to raise or lower the board and the menu; it never spins the board.
+
+## 13. Open
 
 - Which levels unlock which future tools (only the bell at level 3 is decided).
 - ~~Saving Custom Game levels: how many, and how they are named~~ Decided 2026-11-11: up to 20, named with the system keyboard (section 8).
 - Whether the settings page's tabs switch to the new floating rectangular tabs too.
-- What Share does (a placeholder for now).
+- What Share does (a placeholder for now; the direction is in section 12, third headset look: a link with the level packed in, a QR code, Web Launch).
 - How long the loading moment may be, and what shows meanwhile (the sink and rise already hides some of it).

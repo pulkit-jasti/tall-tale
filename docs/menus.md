@@ -101,6 +101,8 @@ Rules:
 - **FightButton** (`src/ui/kit/fightButton.ts`): the one rectangular button, a bordered box (`PokeButton`'s `box` option: the same poke, looks and sounds) with a sword and "Fight!" on its face, red; locked, grey with a lock and "Locked". A round Fight did not look right.
 - **ScrollList** (`src/ui/kit/scrollList.ts`): a list drawn once into one canvas, a window moving over it (no redraw while scrolling); hover, press and selected looks, a tick and a click; edge rows show cut off. It can scroll by swiping (Meta's guidance), but the campaign uses it **tap only** (`swipe: false`) with the upright slider scrolling it (`scrollToShare`, gliding smoothly): on the headset, swipes and taps on the same rows got mixed up.
 - **Upright slider** (`Slider` `vertical`): the campaign list's scroll, smooth (no row steps). Decided 2026-11-11: every page that scrolls uses it, in a scrollbar look with a long pill-shaped handle instead of the round one, so it never looks like a value slider ([custom-mode.md](custom-mode.md#ui-kit-parts)).
+- **Floating headers** (2026-11-11): every menu panel's title and Back float over its top edge (`PanelHeader`); tabs float under it. The panels hold only content and controls ([controls-and-ui.md](controls-and-ui.md#ui-library)).
+- **Height rail** (2026-11-11): a short piece of the ring handle in front of the home screen, height only (never spins): the board and the menu go up or down with the hand ([custom-mode.md](custom-mode.md#12-as-built-first-part-2026-11-11-not-tested-on-the-headset-yet)).
 - **Custom Game** (decided 2026-11-11): its pages, the floating rectangular tabs, the name field with the system keyboard and the delete question are in [custom-mode.md](custom-mode.md#8-custom-game-menu-and-the-ui-kit).
 
 ---

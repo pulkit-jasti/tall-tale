@@ -2,16 +2,17 @@
 // buttons in different sizes, a word over each. Campaign is the biggest, in
 // the middle; Daily Battle and Custom Game beside it; Settings and Tutorial
 // (replay it) smaller, below. Every option shows and can be poked, none is
-// locked. Daily and Custom are not built yet: a poke shows "Coming soon"
-// over the button for a moment (decided 2026-11-11). Built from the UI
+// locked. Daily is not built yet: a poke shows "Coming soon" over the
+// button for a moment (decided 2026-11-11); Custom Game opens its pages
+// (docs/custom-mode.md section 8). Built from the UI
 // library only. The panel is redrawn only when a word changes.
 import type { Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
 import { MENU, POKE, UI_SPACING } from '../../config/game.js';
 import type { HandState } from '../../player/hands.js';
-import { armControls, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY, type ButtonIcon } from '../kit/index.js';
+import { armControls, drawLine, Panel, PanelHeader, panelMap, PokeButton, UI_COLORS, menuCenterY, type ButtonIcon } from '../kit/index.js';
 
-export type MainChoice = 'campaign' | 'settings' | 'replay' | null;
+export type MainChoice = 'campaign' | 'custom' | 'settings' | 'replay' | null;
 type Id = 'campaign' | 'daily' | 'custom' | 'settings' | 'replay';
 
 interface Entry {
@@ -37,11 +38,15 @@ export class MainMenu {
       width: M.width,
       height: M.height,
       radius: M.radius,
-      centerY: uiCenterY(M.height, M.tiltDeg),
+      centerY: menuCenterY(M.height, M.tiltDeg),
       tiltDeg: M.tiltDeg,
       layoutWidth: Math.round(M.width * 15),
       canvasScale: 2,
     });
+    // The title floats over the panel (navigation outside, content inside).
+    const header = new PanelHeader(audio, 'Tall Tale', { back: false });
+    header.placeAbove(M.height);
+    this.panel.root.add(header.group);
     // Each word sits under its row's biggest rim, so a row's words line up.
     const topLabel = M.heroAt[1] - M.heroRadius * POKE.rimScale - UI_SPACING.labelGap;
     const bottomLabel = M.smallY - M.smallRadius * POKE.rimScale - UI_SPACING.labelGap;
@@ -85,7 +90,7 @@ export class MainMenu {
     }
     for (const e of this.entries) {
       if (!e.button.update(hands, dt)) continue;
-      if (e.id === 'daily' || e.id === 'custom') {
+      if (e.id === 'daily') {
         // Not built yet: the word over it says so for a moment.
         this.soon = { id: e.id, left: MENU.main.soonTime };
         this.paint();
@@ -107,7 +112,6 @@ export class MainMenu {
     const M = MENU.main;
     this.panel.paint((c, w, h) => {
       const at = panelMap(M.width, M.height, w, h);
-      drawTitleBanner(c, 'Tall Tale', w * 0.25, UI_SPACING.top * at.px, w * 0.5, 56, 34);
       for (const e of this.entries) {
         const soon = this.soon?.id === e.id;
         const size = e.id === 'campaign' ? 26 : 22;

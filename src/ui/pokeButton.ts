@@ -39,7 +39,13 @@ export interface ButtonOptions {
    * face (the Fight button only, src/ui/kit/fightButton.ts; every other
    * button is round). Same poke, looks and sounds.
    */
-  box?: { width: number; height: number; face: CanvasTexture };
+  box?: {
+    width: number;
+    height: number;
+    face: CanvasTexture;
+    /** The face over the whole cap (a text field: white to the edge inside its dark border, headset test 2026-11-11). */
+    plain?: boolean;
+  };
 }
 
 /** A rounded rectangle, w by h, centered, corners `r`. */
@@ -66,6 +72,21 @@ function slab(w: number, h: number, r: number, depth: number): ExtrudeGeometry {
 
 const local = new Vector3();
 
+/** The dark rim's height: POKE.rimHeight of the cap's depth (20% taller after the headset test, 2026-11-11). */
+function rimDepthFor(capDepth: number): number {
+  return capDepth * POKE.rimHeight;
+}
+
+/**
+ * How far the cap may sink: it stops with its face just over the rim's top,
+ * so it never disappears inside the rim and only the dark rim shows
+ * (headset test 2026-11-11: it did, at a deep push). Pushed in, the cap
+ * sits from `travel - press` to that plus its depth.
+ */
+function pressMaxFor(capDepth: number): number {
+  return Math.max(0, POKE.travel + capDepth - rimDepthFor(capDepth) - POKE.capAboveRim);
+}
+
 export class PokeButton implements Control {
   /** Place and turn this group. Its +z is the button's face. */
   readonly group = new Group();
@@ -86,8 +107,9 @@ export class PokeButton implements Control {
   private armed = false;
   /** Fired this push. It fires again only after the finger leaves. */
   private fired = false;
-  /** How far the cap is pushed in (0 to POKE.travel). */
+  /** How far the cap is pushed in (0 to POKE.travel), and how far it may show it (pressMaxFor: never inside the rim). */
   private press = 0;
+  private pressMax = POKE.travel;
   /** No new press until this runs out (seconds): after a click, or a lock. */
   private cooldown = 0;
   /** Each hand's fingertip depth in front of the face last frame (while over the button), to catch quick pokes. */
@@ -110,11 +132,16 @@ export class PokeButton implements Control {
       this.radius = Math.min(w, h) / 2;
       this.depth = options.depth ?? this.radius * POKE.depthShare;
       this.icon = options.icon;
-      this.group.add(new Mesh(slab(w + border * 2, h + border * 2, corner + border, travel + this.depth * 0.4), flatMaterial(POKE.rimColor)));
+      const plain = !!options.box.plain;
+      this.group.add(new Mesh(slab(w + border * 2, h + border * 2, corner + border, rimDepthFor(this.depth)), flatMaterial(POKE.rimColor)));
+      this.pressMax = pressMaxFor(this.depth);
       this.material = flatMaterial(POKE.color);
-      this.cap.add(new Mesh(slab(w, h, corner, this.depth), this.material));
+      // Like the round cap: its side reaches `travel` lower, so no gap shows over the rim at rest.
+      const body = new Mesh(slab(w, h, corner, this.depth + travel), this.material);
+      body.position.z = -travel;
+      this.cap.add(body);
       this.faceMaterial = new MeshBasicMaterial({ map: options.box.face, transparent: true, fog: false, toneMapped: false });
-      const face = new Mesh(new PlaneGeometry(w * 0.94, h * 0.88), this.faceMaterial);
+      const face = new Mesh(plain ? new PlaneGeometry(w, h) : new PlaneGeometry(w * 0.94, h * 0.88), this.faceMaterial);
       face.position.z = this.depth + 0.02;
       this.cap.add(face);
       this.cap.position.z = travel;
@@ -131,7 +158,8 @@ export class PokeButton implements Control {
     this.depth = depth;
     this.icon = options.icon;
     // Dark rim the cap sinks into.
-    const rimDepth = travel + depth * 0.4;
+    const rimDepth = rimDepthFor(depth);
+    this.pressMax = pressMaxFor(depth);
     const rim = new Mesh(
       new CylinderGeometry(radius * POKE.rimScale * 0.96, radius * POKE.rimScale, rimDepth, segments),
       flatMaterial(POKE.rimColor),
@@ -142,9 +170,11 @@ export class PokeButton implements Control {
     // Smooth shading on the cap, so its round side looks round, not faceted.
     this.material = flatMaterial(POKE.color);
     this.material.flatShading = false;
-    const mesh = new Mesh(new CylinderGeometry(radius, radius, depth, segments), this.material);
+    // The cap's side reaches `travel` below its face's depth, so at rest it still goes down into the rim (no gap shows
+    // under it); pushed in, that part hides behind the panel.
+    const mesh = new Mesh(new CylinderGeometry(radius, radius, depth + travel, segments), this.material);
     mesh.rotation.x = Math.PI / 2;
-    mesh.position.z = depth / 2;
+    mesh.position.z = (depth - travel) / 2;
     this.cap.add(mesh);
     // The icon on its face.
     this.faceMaterial = new MeshBasicMaterial({ map: iconTexture(this.icon), transparent: true, premultipliedAlpha: true, fog: false });
@@ -268,7 +298,7 @@ export class PokeButton implements Control {
       // Springs back once the finger leaves.
       this.press += (0 - this.press) * Math.min(1, dt * 18);
     }
-    this.cap.position.z = travel - this.press;
+    this.cap.position.z = travel - Math.min(this.press, this.pressMax);
     this.setTouch(push >= 0 && (this.armed || this.fired) ? 'held' : near && !this.fired ? 'ready' : 'idle');
     if (this.blink && this.touch === 'idle') {
       this.blinkTime += dt;

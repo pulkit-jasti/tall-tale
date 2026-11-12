@@ -36,6 +36,13 @@ export interface SliderOptions {
   value: number;
   /** Upright (v2 run 2, the campaign list's scroll): the track runs up and down, 1 at the top. */
   vertical?: boolean;
+  /**
+   * The scrollbar look (docs/custom-mode.md "UI kit parts"): a long block
+   * wrapped around the rail instead of the round handle and no filled track,
+   * so a scroll never looks like a value slider. Every page that scrolls
+   * uses it.
+   */
+  scrollbar?: boolean;
 }
 
 const local = new Vector3();
@@ -62,6 +69,10 @@ export class Slider implements Control {
   private lastZ = new Map<HandState, number>();
   /** No grab until this runs out (seconds), after a panel opens. */
   private cooldown = 0;
+  /** The handle's half length and half height along and across the track (the pill's; a round handle's radius both ways). */
+  private halfLong: number;
+  private halfShort: number;
+  private scrollbar: boolean;
 
   constructor(
     private audio: GameAudio,
@@ -71,16 +82,30 @@ export class Slider implements Control {
     this.length = options.length ?? S.length;
     this.steps = options.steps;
     this.value = clamp01(options.value);
-    // The track: a dark groove, with the filled part on top of it up to the handle.
-    const track = new Mesh(new BoxGeometry(this.length + S.trackHeight, S.trackHeight, S.trackDepth), flatMaterial(POKE.rimColor));
-    track.position.z = S.trackDepth / 2;
+    this.scrollbar = !!options.scrollbar;
+    // The track: a dark groove, with the filled part on top of it up to the handle. A scrollbar's rail is thinner (its own look).
+    const rail = this.scrollbar ? S.scrollbar.rail : S.trackHeight;
+    const railDepth = this.scrollbar ? S.scrollbar.rail : S.trackDepth;
+    const track = new Mesh(new BoxGeometry(this.length + rail, rail, railDepth), flatMaterial(POKE.rimColor));
+    track.position.z = railDepth / 2;
     this.fill = new Mesh(new BoxGeometry(1, S.trackHeight * 0.62, S.trackDepth * 0.4), flatMaterial(S.fillColor));
     this.fill.position.z = S.trackDepth + 0.05;
-    this.handleMaterial = flatMaterial(S.handleColor);
+    this.handleMaterial = flatMaterial(this.scrollbar ? S.scrollbar.handleColor : S.handleColor);
     this.handleMaterial.flatShading = false;
-    this.handle = new Mesh(new CylinderGeometry(S.handleRadius, S.handleRadius, S.handleDepth, POKE.segments), this.handleMaterial);
-    this.handle.rotation.x = Math.PI / 2;
-    this.handle.position.z = S.trackDepth + S.handleDepth / 2;
+    if (this.scrollbar) {
+      // A block wrapped around the rail (headset test 2026-11-11: a pill lying on top of it looked loose), long along it.
+      const B = S.scrollbar;
+      this.halfLong = B.pillLength / 2;
+      this.halfShort = rail / 2 + B.wall;
+      this.handle = new Mesh(new BoxGeometry(B.pillLength, rail + 2 * B.wall, railDepth + 2 * B.wall), this.handleMaterial);
+      this.fill.visible = false;
+    } else {
+      this.halfLong = this.halfShort = S.handleRadius;
+      this.handle = new Mesh(new CylinderGeometry(S.handleRadius, S.handleRadius, S.handleDepth, POKE.segments), this.handleMaterial);
+      this.handle.rotation.x = Math.PI / 2;
+    }
+    // The block sits around the rail (same middle); the round handle on top of it.
+    this.handle.position.z = this.scrollbar ? railDepth / 2 : S.trackDepth + S.handleDepth / 2;
     this.frame.add(track, this.fill, this.handle);
     // Upright: the whole frame turned a quarter, so its +x (toward 1) points up. The touch code reads the frame, so it is the same.
     if (options.vertical) this.frame.rotation.z = Math.PI / 2;
@@ -90,7 +115,16 @@ export class Slider implements Control {
 
   /** Width from end to end, the handle at either end included (for laying it out). */
   get width(): number {
-    return this.length + 2 * SLIDER.handleRadius;
+    return this.length + 2 * this.halfLong;
+  }
+
+  /** True if a fingertip (in the slider's frame) is over the handle at `handleX`, with the touch margin. */
+  private overHandle(local: Vector3, handleX: number): boolean {
+    const m = SLIDER.handleMargin;
+    const dx = local.x - handleX;
+    if (this.scrollbar) return Math.abs(dx) <= this.halfLong + m && Math.abs(local.y) <= this.halfShort + m;
+    const reach = this.halfLong + m;
+    return dx * dx + local.y * local.y <= reach * reach;
   }
 
   get current(): number {
@@ -141,7 +175,6 @@ export class Slider implements Control {
     // Ready while a fingertip is over the handle, in front of it; grabbed when it touches it.
     let ready = false;
     const handleX = (this.value - 0.5) * this.length;
-    const reach = S.handleRadius + S.handleMargin;
     for (const hand of hands) {
       if (!hand.tracked) {
         this.lastZ.delete(hand);
@@ -149,8 +182,7 @@ export class Slider implements Control {
       }
       this.frame.updateWorldMatrix(true, false);
       this.frame.worldToLocal(local.copy(hand.indexTip));
-      const dx = local.x - handleX;
-      if (dx * dx + local.y * local.y > reach * reach || local.z < -S.zoneBehind) {
+      if (!this.overHandle(local, handleX) || local.z < -S.zoneBehind) {
         this.lastZ.delete(hand);
         continue;
       }
@@ -176,12 +208,10 @@ export class Slider implements Control {
   /** True if some finger is over the handle, in front of its face (past where a touch starts). */
   private frontOf(hands: HandState[]): boolean {
     const handleX = (this.value - 0.5) * this.length;
-    const reach = SLIDER.handleRadius + SLIDER.handleMargin;
     for (const hand of hands) {
       if (!hand.tracked) continue;
       this.frame.worldToLocal(local.copy(hand.indexTip));
-      const dx = local.x - handleX;
-      if (dx * dx + local.y * local.y <= reach * reach && local.z > SLIDER.touchAt + 0.3) return true;
+      if (this.overHandle(local, handleX) && local.z > SLIDER.touchAt + 0.3) return true;
     }
     return false;
   }
@@ -203,6 +233,8 @@ export class Slider implements Control {
   private show(): void {
     const x = (this.value - 0.5) * this.length;
     this.handle.position.x = x;
+    // A scrollbar keeps its color (0 is just the bottom of the page).
+    if (this.scrollbar) return;
     // Green while on, grey at 0 (off): the state shows in color, not just in where the handle is.
     this.handleMaterial.color.setHex(this.value <= 0 ? SLIDER.offColor : SLIDER.handleColor);
     const filled = Math.max(0.001, this.value * this.length + SLIDER.trackHeight / 2);

@@ -14,13 +14,12 @@
 import { Group, type Object3D, type Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mic } from '../audio/mic.js';
-import { BOARD, PAUSE, POKE, SLIDER, SWITCH, UI_SPACING } from '../config/game.js';
+import { BOARD, MENU, PAUSE, POKE, SLIDER, SWITCH, TABS, UI_SPACING } from '../config/game.js';
 import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
 import { access, hornHearsMic } from '../player/accessSettings.js';
 import { progress } from '../player/progress.js';
 import type { HandState } from '../player/hands.js';
-import { settingsTabRowY } from '../rules/reach.js';
 import {
   Switch,
   type Control,
@@ -31,8 +30,10 @@ import {
   drawTitleBanner,
   LazyFollow,
   Panel,
+  PanelHeader,
   panelMap,
   PokeButton,
+  Tabs,
   rowPanelWidth,
   rowX,
   Slider,
@@ -96,14 +97,14 @@ export class PauseMenu {
   private page: 'main' | 'settings' = 'main';
   /** Opened from the welcome panel: only the settings page, Back closes it. */
   private settingsOnly = false;
-  private back: PokeButton;
+  private back: PanelHeader;
   private reach: PokeButton;
   /** Reset table, in the Access tab under Quiet horn. */
   private table: PokeButton;
   private rows: SoundRow[] = [];
-  /** The settings' categories: one tab button each, and a group with its controls (only the chosen one shows). */
+  /** The settings' categories: the floating tabs, and a group with each one's controls (only the chosen one shows). */
   private tab: SettingsTab = 'access';
-  private tabButtons: PokeButton[] = [];
+  private tabs: Tabs;
   private tabGroups: Record<SettingsTab, Group> = { sound: new Group(), access: new Group() };
   private bellSwitch: Switch;
   /** "Unlock all tools" (Access tab, v2 run 2). */
@@ -149,17 +150,18 @@ export class PauseMenu {
       o.position.set(x, y, 0);
       parent.add(o);
     };
-    // Back at the top left, beside the title.
-    this.back = new PokeButton(audio, { radius: S.backRadius, icon: 'back' });
-    add(this.back.group, S.backAt[0], S.backAt[1]);
-    // The tabs, below everything: one category of settings at a time, the chosen one green.
-    const tabY = settingsTabRowY();
-    for (const [i, tab] of SETTINGS_TABS.entries()) {
-      const button = new PokeButton(audio, { radius: S.tabRadius, icon: tab.icon });
-      add(button.group, S.tabX[i], tabY);
-      this.tabButtons.push(button);
-      this.settings.root.add(this.tabGroups[tab.id]);
-    }
+    // The title and Back float over the page (navigation outside, content inside).
+    this.back = new PanelHeader(audio, 'Settings', { back: true });
+    this.back.placeAbove(S.height);
+    this.settings.root.add(this.back.group);
+    // The tabs under the page, centered (the same floating tabs as Custom Game): one category at a time.
+    this.tabs = new Tabs(
+      audio,
+      SETTINGS_TABS.map((t) => t.label),
+    );
+    add(this.tabs.group, 0, -S.height / 2 - TABS.below - TABS.height / 2);
+    this.tabs.onChange = (i) => this.showTab(SETTINGS_TABS[i].id);
+    for (const tab of SETTINGS_TABS) this.settings.root.add(this.tabGroups[tab.id]);
     // Accessibility: measure the reach again, and a quiet horn (it never listens to the mic: hold it at the mouth), an on and off switch.
     const controlLeft = S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius;
     this.reach = new PokeButton(audio, { radius: S.reachRadius, icon: 'reach' });
@@ -216,6 +218,7 @@ export class PauseMenu {
   show(head: Vector3, forward: Vector3, boardScale: number, teaching = false): void {
     this.open = true;
     this.settingsOnly = false;
+    this.fixed = false;
     this.pauseButton.show(false);
     this.layoutButtons(teaching);
     this.follow.snap(head, forward, BOARD.eyeToBoard * boardScale, CM * boardScale);
@@ -248,11 +251,20 @@ export class PauseMenu {
    * Only the settings page, from the welcome panel (no battle to pause): it
    * opens in front of the head like the pause panel, and Back closes it.
    */
-  showSettings(head: Vector3, forward: Vector3, boardScale: number): void {
+  /** `board`: opened from the home screen, the board's middle (world): the page sits exactly like the menu panels and stays put. */
+  showSettings(head: Vector3, forward: Vector3, boardScale: number, board: Vector3 | null = null): void {
     this.show(head, forward, boardScale);
     this.settingsOnly = true;
+    // From the home screen it is placed from the board, at the menu panels' height (menuCenterY: MENU.drop under the
+    // UI_ZONE spot), so every menu sits the same height over the ground, and it never follows the head (the player is
+    // looking right at it). In a battle it follows the head.
+    this.fixed = board !== null;
+    if (board) this.follow.snap(board, forward, MENU.drop * CM * boardScale, CM * boardScale);
     this.showPage('settings');
   }
+
+  /** Opened from the home screen: placed once, never follows the head. */
+  private fixed = false;
 
   /** One page shows, its buttons reset and locked a moment (the finger that opened it must not press one at once). */
   private showPage(page: 'main' | 'settings'): void {
@@ -275,13 +287,13 @@ export class PauseMenu {
     this.tab = tab;
     SETTINGS_TABS.forEach((t, i) => {
       this.tabGroups[t.id].visible = t.id === tab;
-      this.tabButtons[i].setColor(t.id === tab ? POKE.color : PAUSE.settings.tabOffColor);
+      if (t.id === tab) this.tabs.select(i);
     });
     // Without a mic the quiet horn is the only choice: the switch shows On, locked.
     this.bellSwitch.set(!hornHearsMic());
     this.bellSwitch.setLocked(!mic.on);
     this.unlockSwitch.set(progress.unlockAll);
-    armControls([this.back, ...this.tabButtons, ...this.tabControls()]);
+    armControls([this.back, this.tabs, ...this.tabControls()]);
     this.repaintSettings();
   }
 
@@ -308,8 +320,8 @@ export class PauseMenu {
   /** The panel while paused. Returns the action of the button poked this frame, if any. */
   update(dt: number, hands: HandState[], head: Vector3, forward: Vector3): PauseAction | null {
     if (!this.open) return null;
-    // A player who paused by accident and turned around still finds it.
-    this.follow.update(dt, head, forward);
+    // A player who paused by accident and turned around still finds it (not from the home screen: it stays put there).
+    if (!this.fixed) this.follow.update(dt, head, forward);
     if (this.page === 'settings') return this.updateSettings(dt, hands);
     this.panel.update(dt);
     let action: PauseAction | 'settings' | null = null;
@@ -331,12 +343,10 @@ export class PauseMenu {
       else this.showPage('main');
       return null;
     }
-    for (const [i, button] of this.tabButtons.entries()) {
-      if (button.update(hands, dt) && SETTINGS_TABS[i].id !== this.tab) {
-        this.showTab(SETTINGS_TABS[i].id);
-        return null;
-      }
-    }
+    // A poked tab calls showTab (onChange).
+    const before = this.tab;
+    this.tabs.update(hands, dt);
+    if (this.tab !== before) return null;
     if (this.tab === 'sound') {
       for (const row of this.rows) row.slider.update(hands, dt);
       return null;
@@ -349,30 +359,13 @@ export class PauseMenu {
   }
 
   /**
-   * The settings page: Back and the title at the top, the chosen tab's
-   * rows, each with its name on the left, then below everything the tabs,
-   * each name beside its button (the chosen one bold green and
-   * underlined, the others light).
+   * The settings page: only the chosen tab's rows, each with its name on the
+   * left (the title, Back and the tabs float outside the page).
    */
   private drawSettings(c: CanvasRenderingContext2D, w: number, h: number): void {
     const S = PAUSE.settings;
     const at = panelMap(S.width, S.height, w, h);
     const left = at.x(S.labelX);
-    drawTitleBanner(c, 'Settings', at.x(S.titleX) - (S.titleWidth / 2) * at.px, UI_SPACING.top * at.px, S.titleWidth * at.px, 56, 34);
-    // Back's label under it, a little gap below its rim.
-    const under = at.y(S.backAt[1] - S.backRadius * POKE.rimScale) + UI_SPACING.labelGap * at.px + 9;
-    drawLine(c, 'Back', at.x(S.backAt[0]), under, 110, 18, UI_COLORS.accent);
-    // Each tab's name to the right of its button (the chosen one underlined).
-    const tabY = at.y(settingsTabRowY());
-    SETTINGS_TABS.forEach((t, i) => {
-      const chosen = t.id === this.tab;
-      const x = at.x(S.tabX[i] + S.tabRadius * POKE.rimScale + UI_SPACING.labelGap);
-      drawLine(c, t.label, x, tabY, 5 * at.px, chosen ? 24 : 21, chosen ? UI_COLORS.accent : UI_COLORS.note, 'left');
-      if (chosen) {
-        c.fillStyle = UI_COLORS.accent;
-        c.fillRect(x, tabY + 14, 64, 3);
-      }
-    });
     // Each row's name on the left, clear of its control.
     const labelRight = at.x(S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius - 1);
     const name = (text: string, rowY: number, note: string, noteColor: string): void => {
