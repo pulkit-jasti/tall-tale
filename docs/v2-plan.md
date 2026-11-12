@@ -377,6 +377,10 @@ Decided before the build (2026-11-11): Daily and Custom show "Coming soon"; Figh
 - [x] **2.9 Docs** updated for run 2 (menus.md, controls-and-ui, modes-and-progression, mvp, README status).
 - Known, not from run 2: `npm run typecheck` reports the Bell's private `ring` method clashing with `HandTool`'s private `ring` field (from run 1), and `director.test.ts` is stale.
 
+### Next: the level generator and Custom Game ([custom-mode.md](custom-mode.md))
+
+Decided 2026-11-11, **what we build next**, in place of the map generator and levels items of run 3 below (3.1, 3.2): one level generator for every level (headless, from the command line), winding roads as gameplay, the wave director, each level's own map loaded at Fight, rising camps (the tutorial too), all 15 campaign levels made with it (levels 1, 5, 6, 9, 14 and 15 reworked), registries instead of hardcoded kinds, self-describing settings, and the Custom Game menu with new UI kit parts. The full plan and build order are in [custom-mode.md](custom-mode.md).
+
 ### Run 3: content, then fixes
 
 Moved here from the old run 2 (2026-11-11): the tutorial rebuild around the new mechanics (bell out, the leftovers in 2.12: pause lesson later, wave 5 text, about 8 to 10 minutes), the wave director and level format, levels 1 to 5, retry from the current wave, and the first-use coach (only once more tools exist).

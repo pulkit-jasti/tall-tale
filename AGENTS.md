@@ -11,6 +11,8 @@ Read README.md and docs/GDD.md for the full design before making gameplay decisi
 
 **v2 (branch `feat/v2`): read docs/v2-plan.md first.** It holds the new design (free tools with recharge, all goblins climb, the horn and the wall garrison, the campaign) and the three build runs. Where it disagrees with any other doc, docs/v2-plan.md wins.
 
+**Next up: docs/custom-mode.md.** v2 run 2 (the menus) is done and tested. What we build next is the level generator (headless, run from the command line, winding roads that are part of the gameplay), the wave director, loading a level's own map, rising camps, the 15 campaign levels made with the generator, and the Custom Game menu with new UI kit parts. Read it before working on levels, maps, waves or Custom Game. Its rules: every level has its own map, nothing is hardcoded (registries for triggers, tools, enemies, gear and decor), settings describe themselves so the menu builds itself, and the generator reuses the planners that already exist (listed there).
+
 ## Hard rules (never break these)
 
 1. **Hands only.** The entire game must be playable with hand tracking. No controller is ever required. Controller support is optional and low priority.

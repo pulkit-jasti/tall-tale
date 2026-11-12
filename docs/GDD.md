@@ -22,9 +22,10 @@ Top level overview and index. Each topic gets its own file once its design is lo
 
 | Topic | File | Status |
 |---|---|---|
-| **v2 plan: new design and the three build runs (wins over every other doc)** | [v2-plan.md](v2-plan.md) | Decided, not built |
+| **v2 plan: new design and the three build runs (wins over every other doc)** | [v2-plan.md](v2-plan.md) | Runs 1 and 2 built and tested on the headset; next is custom-mode.md |
 | **MVP scope (first build), tutorial director and waves, build order** | [mvp.md](mvp.md) | Decided |
-| **Menus after the tutorial, tool shelf and loadout, campaign screen, stars (v2 run 2)** | [menus.md](menus.md) | Decided, not built |
+| **Menus after the tutorial, tool shelf and loadout, campaign screen, stars (v2 run 2)** | [menus.md](menus.md) | Built, tested on the headset |
+| **Next: level generator (CLI), winding roads, wave director, rising camps, the 15 levels, Custom Game** | [custom-mode.md](custom-mode.md) | Decided, not built |
 | Game modes, menu, progression, kingdom, achievements | [modes-and-progression.md](modes-and-progression.md) | Decided. Scoring and Endless difficulty to discuss. |
 | Core loop, pacing, troops, sound cues | [core-loop.md](core-loop.md) | Decided as a starting point |
 | Map: board, roads, triggers, environment, blueprints, directors, level generator | [map.md](map.md) | First pass decided, mockup in `maps/castle-3d.html` |
