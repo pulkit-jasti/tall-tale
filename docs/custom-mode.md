@@ -1,6 +1,6 @@
 # Level Generator, Custom Game and the Campaign Levels (next)
 
-Status: decided with the developer (2026-11-11). **This is what we build next** (after v2 run 2). Not started. **First part (decided 2026-11-11): the generator and the Custom Game menu**, tested on the headset before the wave director and the map loading (section 11). Where it disagrees with [map.md](map.md) section 8 or [modes-and-progression.md](modes-and-progression.md), this file wins. [v2-plan.md](v2-plan.md) still wins over this file.
+Status: decided with the developer (2026-11-11). **First part done and tested on the headset (2026-11-11):** the generator, its command line, the new UI kit parts and the Custom Game menu (section 12). **Next: the wave director and the map loading** (build order steps 4 and 5, section 11; the handoff for them is section 13). Where it disagrees with [map.md](map.md) section 8 or [modes-and-progression.md](modes-and-progression.md), this file wins. [v2-plan.md](v2-plan.md) still wins over this file.
 
 Back to [GDD index](GDD.md). Related: [menus.md](menus.md) (the campaign panel and the 15 level cards), [map.md](map.md) (blueprints, the road graph, triggers), [controls-and-ui.md](controls-and-ui.md#ui-library) (the UI kit).
 
@@ -230,7 +230,7 @@ Changed 2026-11-11 with the developer: the generator and the menu come first and
 
 ---
 
-## 12. As built (first part, 2026-11-11, not tested on the headset yet)
+## 12. As built (first part, 2026-11-11, tested on the headset: the menus and the whole UI work well)
 
 Build order steps 1 to 3 (the generator and the Custom Game menu). Tests pass for the generator and the saved levels; typecheck and build are clean apart from older errors in the bell and the tutorial director tests (they were there before).
 
@@ -265,7 +265,19 @@ Build order steps 1 to 3 (the generator and the Custom Game menu). Tests pass fo
 - **Fifth headset look (2026-11-11):** tabs keep one bold word (only the cap color changes); Save's word and tick are white; the text fields are plain white to the edge (`box.plain`: no dark border, the face over the whole cap) with less room around them; the rows have the same room over and under them (the status line moved outside, under Save); every row has a short hint under its name (`SETTING_HINTS`, wrapped to two lines); only sliders and the camp distance range show a value on the right (steppers, choices, switches and the seed show their own); the settings page opened from the home screen is placed from the board like the menu panels (`menuCenterY`), so every menu sits the same height over the ground and moves with the height rail.
   - **Height rail on the home screen** (`src/player/heightRail.ts`, `HANDLES.menuRail`): a short piece of the ring in front (52 degrees) with an up and down arrow, at the ring's spot. Grab it (fist or pinch) and move up or down to raise or lower the board and the menu; it never spins the board.
 
-## 13. Open
+## 13. Handoff: the wave director and the map loading (next)
+
+Build order steps 4 and 5 (section 11), then make Custom Game's Fight play a saved level. What exists and where it hooks in:
+
+- **The level:** `Level` in `src/level/level.ts` (map: a `Blueprint` whose camps have `wave`, the wave they rise in; `waves`: 4 `LevelWave`s with `camps`, `rising`, `counts`, `spawnTime`, `balloons`, `gear`; `rules`: archers, guards, refill times, starting health; `meta`). Saved Custom Game levels: `customLevels` in `src/player/customLevels.ts`, each `entry.level`. Make one from the command line: `npm run gen -- --seed 42 --out some.json --svg map.svg`.
+- **Fight:** Custom Game's Fight shows "Coming soon" (`CustomListPanel.update` in `src/ui/menu/customList.ts`). It should return a choice like the campaign's (`{ kind: 'fight', ... }` through `Menu.update` in `src/ui/menu/menu.ts`) and the game starts the level (`fight()` in `src/game.ts` is the campaign's path: `goToBattle`, sink and rise).
+- **Map loading (the riskiest part):** today the board is built once at start from the tutorial map (`parseBlueprint(tutorialMap)` in `GameSystem.setup`, `src/game.ts`): terrain, roads (`RoadNetwork`, `RoadGraph`), camps, settlements, story spots, decor, triggers, villagers, torches. The loader tears that down and builds the level's map, and every system holding the road network or the graph gets the new one (goblins, troops and knights, triggers, the horn's routing, balloons, villagers). No leaks, no doubles; the menu's sink and rise can hide the build. Going back to the menu (or the tutorial) builds the tutorial map again. The planners already work from any blueprint (section 6 table). Check it on the headset on its own before the director.
+- **Wave director:** battles now play the fixed `TUTORIAL_WAVES` through the tutorial director (`src/director/battle.ts`, `src/director/tutorial.ts`; campaign levels play the normal battle with `teach = false`). The new director plays a level's 4 waves: breather, banner, the wave's rising camps come up (`src/world/sceneSwap.ts` slide, drum from its direction, dust, the red threat arrow), groups from `camps` with `counts` over `spawnTime`, balloons, the gear shares (`src/rules/gear.ts` `rollGear`), cleared, next; the time of day per wave as today. It only calls systems (docs/map.md section 8). The tutorial keeps its own director.
+- **Rules:** garrison size and refill (`GARRISON` in config today) and the castle's starting health (`CASTLE_HEALTH`) come from `level.rules` for a level battle.
+- **Rising camps in the tutorial too** (section 7): each tutorial wave's new camp rises as it starts.
+- **Rules to keep:** the UI rules in AGENTS.md and docs/controls-and-ui.md ("Rules learned on the headset"); never run typecheck (AGENTS.md); `npm run build` is the check, `npm test` when tested code changes.
+
+## 14. Open
 
 - Which levels unlock which future tools (only the bell at level 3 is decided).
 - ~~Saving Custom Game levels: how many, and how they are named~~ Decided 2026-11-11: up to 20, named with the system keyboard (section 8).
