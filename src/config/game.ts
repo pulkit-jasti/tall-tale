@@ -751,6 +751,30 @@ export const WAVES = {
 };
 
 /**
+ * Rising camps (docs/custom-mode.md section 7): a camp that is not there yet
+ * waits under the ground (hidden), and slides up as its wave starts, with
+ * the drum from its direction, a dust burst and the red threat arrow
+ * pointing at it until the player looks (POINTER.showDeg).
+ */
+export const RISING_CAMPS = {
+  /** How deep a camp waits (cm, board size 1), and how long it takes to come up (seconds). */
+  depth: 28,
+  riseTime: 2.2,
+  /** Dust puffs at its start and at its end, and their speed. */
+  dustStart: 14,
+  dustEnd: 8,
+  dustSpeed: 0.18,
+  dustColors: [0xc9b79a, 0xa8957a, 0xe0d4bd],
+  /** The arrow gives up on a camp nobody looked at after this long (seconds). */
+  arrowFor: 12,
+};
+
+/** Map loading (docs/custom-mode.md section 11, step 5): the map key of the tutorial map. */
+export const MAPS = {
+  tutorialKey: 'tutorial',
+};
+
+/**
  * The two flags (docs/castle-rules.md section 2). They live in boardLift:
  * they rise with the board but never spin. Just behind the tool platforms,
  * between the front ones and the middle ones, one on each side (cm, degrees).

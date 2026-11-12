@@ -496,6 +496,13 @@ export class Troops {
   /** Called when every soldier was cleared away (the garrison stops). */
   onClear: () => void = () => {};
 
+  /** A new map (src/game.ts loadMap): everyone goes (squads walk the old roads), and routes use the new roads. */
+  setNetwork(network: RoadNetwork): void {
+    this.clear();
+    this.network = network;
+    this.lengths = network.roads.map((r) => r.length);
+  }
+
   /** A battle starts: the wall garrison stands on the rampart (full). */
   manWalls(): void {
     if (this.on) this.onMan();

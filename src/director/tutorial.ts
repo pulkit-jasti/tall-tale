@@ -9,6 +9,7 @@
 import type { GoblinType } from '../config/game.js';
 import type { TriggerKind } from '../rules/blueprint.js';
 import type { DirectorStep } from '../rules/director.js';
+import type { GearShares } from '../rules/gear.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
 /** v2: the horn replaces the megaphone, and the bell is its own tool (docs/v2-plan.md 2.3). */
@@ -28,6 +29,13 @@ export interface WavePlan {
   toolMidWave?: boolean;
   /** Balloons with riders this wave (build step 7). The first wave with balloons shows a banner when they come. */
   balloons?: number;
+  /**
+   * Camp ids that rise as this wave starts (docs/custom-mode.md section 7).
+   * Missing (the tutorial): a camp rises in the first wave that sends from it.
+   */
+  rising?: string[];
+  /** A level wave's gear shares (every piece handed out from wave 1). Missing: GOBLIN_GEAR from its waves on. */
+  gear?: GearShares;
 }
 
 /**

@@ -764,9 +764,12 @@ export class Triggers {
   private nextDebris = 0;
   private cueTimer = 0;
 
+  /** The trigger models, loaded once (place() puts them on each map). */
+  private models: { keg: ModelTemplate; rock: ModelTemplate; tree: ModelTemplate; hills: ModelTemplate[] } | null = null;
+
   constructor(
     private board: Object3D,
-    readonly network: RoadNetwork,
+    public network: RoadNetwork,
     private goblins: Goblins,
     private audio: GameAudio,
     private particles: Particles,
@@ -775,7 +778,7 @@ export class Triggers {
     board.add(this.group);
   }
 
-  /** The triggers of the blueprint, each on the road nearest its spot. */
+  /** Loads the models and puts the triggers of the blueprint on the map, each on the road nearest its spot. */
   async load(spots: BlueprintTrigger[]): Promise<void> {
     const [keg, rock, tree, planks, wood, ...hills] = await Promise.all([
       loadTemplate('props/survival/barrel.glb', { height: TRIGGERS.keg.height }),
@@ -785,20 +788,41 @@ export class Triggers {
       loadTemplate('props/survival/resource-wood.glb', { width: TRIGGERS.debris.size }),
       ...['A', 'B', 'C', 'D'].map((v) => loadTemplate(`rocks/nature/rock_large${v}.glb`, { width: TRIGGERS.boulder.hillWidth })),
     ]);
-    for (const spot of placeTriggers(this.network, spots)) {
-      const { road, along } = spot;
-      let trigger: Trigger;
-      if (spot.kind === 'keg') trigger = new Keg(this, spot.wave, road, along, keg);
-      else if (spot.kind === 'boulder') trigger = new Boulder(this, spot.wave, road, along, rock, this.rng.pick(hills));
-      else trigger = new Tree(this, spot.wave, road, along, tree);
-      this.group.add(trigger.root);
-      this.list.push(trigger);
-    }
+    this.models = { keg, rock, tree, hills };
+    this.place(this.network, spots);
     for (let i = 0; i < TRIGGERS.debris.pool; i++) {
       const object = cloneStatic(i % 2 === 0 ? planks : wood);
       object.visible = false;
       this.group.add(object);
       this.debrisPool.push({ object, alive: false, age: 0, velocity: new Vector3(), spin: 0, bounced: false });
+    }
+  }
+
+  /**
+   * Puts a map's triggers on its roads (after load(); again for each new
+   * map, src/game.ts loadMap). The old map's triggers go: unregister their
+   * slingshot targets before, register the new ones after.
+   */
+  place(network: RoadNetwork, spots: BlueprintTrigger[]): void {
+    const models = this.models;
+    if (!models) return;
+    // Everything but the debris pool goes (the triggers, and the boulders' hills).
+    const keep = new Set<Object3D>(this.debrisPool.map((d) => d.object));
+    for (const child of [...this.group.children]) if (!keep.has(child)) this.group.remove(child);
+    this.list = [];
+    for (const d of this.debrisPool) {
+      d.alive = false;
+      d.object.visible = false;
+    }
+    this.network = network;
+    for (const spot of placeTriggers(network, spots)) {
+      const { road, along } = spot;
+      let trigger: Trigger;
+      if (spot.kind === 'keg') trigger = new Keg(this, spot.wave, road, along, models.keg);
+      else if (spot.kind === 'boulder') trigger = new Boulder(this, spot.wave, road, along, models.rock, this.rng.pick(models.hills));
+      else trigger = new Tree(this, spot.wave, road, along, models.tree);
+      this.group.add(trigger.root);
+      this.list.push(trigger);
     }
   }
 

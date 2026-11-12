@@ -57,6 +57,14 @@ export class WaveSpawner {
     this.campIds = new Map(network.graph.camps.map((i) => [network.graph.nodes[i].id, i]));
   }
 
+  /** A new map (src/game.ts loadMap): its roads, its camps and their hills. Stops any wave first. */
+  setMap(network: RoadNetwork, hills: Map<string, Object3D>): void {
+    this.stop();
+    this.network = network;
+    this.hills = hills;
+    this.campIds = new Map(network.graph.camps.map((i) => [network.graph.nodes[i].id, i]));
+  }
+
   /** Plans and starts a wave. */
   start(plan: WavePlan): void {
     this.stop();

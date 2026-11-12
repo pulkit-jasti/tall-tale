@@ -3,7 +3,7 @@
 // waves, flags, end panel), goblins, troops, triggers, grab and eat,
 // slingshot, food tools, food jar, effects, sky.
 import { createSystem, VisibilityState } from '@iwsdk/core';
-import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
+import { DirectionalLight, Fog, Group, Object3D, Quaternion, Vector3, type BufferGeometry, type Mesh } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
 import {
@@ -14,6 +14,7 @@ import {
   GOBLIN_RULES,
   HORN,
   JUICE,
+  MAPS,
   MENU,
   PAUSE,
   POINTER,
@@ -32,7 +33,10 @@ import type { DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
 import tutorialMap from './maps/tutorial.json';
-import { parseBlueprint } from './rules/blueprint.js';
+import { parseBlueprint, type Blueprint } from './rules/blueprint.js';
+import type { Level } from './level/level.js';
+import type { RoadNetwork } from './world/roads.js';
+import { RisingCamps } from './world/risingCamps.js';
 import { EndPanel } from './ui/endPanel.js';
 import { PauseMenu, type PauseAction } from './ui/pauseMenu.js';
 import { GhostAim } from './ui/ghostAim.js';
@@ -42,7 +46,7 @@ import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { ThreatCues } from './ui/threatCues.js';
 import { GlassSign, isTyping, loadUiImages, useKeyboardSession, type GlassBar } from './ui/kit/index.js';
-import { resetCustomLevels } from './player/customLevels.js';
+import { customLevels, resetCustomLevels } from './player/customLevels.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
 import { FpsCounter } from './debug/fpsCounter.js';
@@ -81,7 +85,7 @@ import { DayNight } from './world/dayNight.js';
 import { NightLights } from './world/nightLights.js';
 import { Sky } from './world/sky.js';
 import { Triggers } from './world/triggers.js';
-import { buildBoard } from './world/boardBuilder.js';
+import { buildBoard, buildCastle } from './world/boardBuilder.js';
 import { buildSeatFloor, GiantBody } from './world/giant.js';
 import { Windmill } from './world/settlements.js';
 import { Stage } from './world/stage.js';
@@ -101,6 +105,23 @@ const slotAt = new Vector3();
 const menuFront = new Vector3();
 /** Session storage key for the debug "Start at wave" choice. */
 const PLAY_FROM_KEY = 'tallTale.playFromWave';
+/** Where the threat arrow points at a camp that just rose. */
+const campArrowAt = new Vector3();
+
+/**
+ * Frees an old map's GPU memory: every geometry under `root`, and its
+ * materials too when `materials` (only for things that own theirs, like the
+ * night lights; the map's materials come from the model cache and are shared).
+ * Textures are left alone (shared).
+ */
+function disposeTree(root: Object3D, materials: boolean): void {
+  root.traverse((o) => {
+    const mesh = o as Mesh;
+    (mesh.geometry as BufferGeometry | undefined)?.dispose();
+    if (!materials || !mesh.material) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) m.dispose();
+  });
+}
 
 /** Set by the start page button: start a battle in the browser now, or in VR once the board is placed. */
 let pendingStart: 'browser' | 'vr' | null = null;
@@ -204,6 +225,21 @@ export class GameSystem extends createSystem({}) {
   /** The empty tool slots hint (Fight poked with an empty slot): time left (seconds), and its red arrow. */
   private slotsHintLeft = 0;
   private slotsArrow!: PointerArrow;
+  /**
+   * The map (docs/custom-mode.md section 11, step 5): its group in the board
+   * (ground, roads, camps, villages, decor), the night lights' group, its
+   * road network, and which map it is (MAPS.tutorialKey, or a level's key).
+   * loadMap replaces them; every system holding the roads gets the new ones.
+   */
+  private mapGroup = new Group();
+  private lightsGroup = new Group();
+  private network!: RoadNetwork;
+  private mapKey: string = MAPS.tutorialKey;
+  /** A map is being built: no battle starts, the menu takes no choice. */
+  private loading = false;
+  private camps!: RisingCamps;
+  private waves!: WaveSpawner;
+  private bait!: LessonBait;
 
   init(): void {
     // The page hidden (the headset off, the Quest browser in the background): pause on the next frame.
@@ -246,16 +282,26 @@ export class GameSystem extends createSystem({}) {
     this.micPanel = new MicPanel(this.stage.boardLift);
 
     const ghost = new GhostHand();
-    const [built] = await Promise.all([
-      buildBoard(this.stage.boardSpin, blueprint),
+    // The map (ground, roads, camps, villages, decor) lives in its own group, so another map can replace it
+    // (loadMap); the castle is the same on every map and is built once.
+    this.stage.boardSpin.add(this.mapGroup, this.lightsGroup);
+    const [built, castle] = await Promise.all([
+      buildBoard(this.mapGroup, blueprint),
+      buildCastle(),
       this.audio.load(),
       loadUiImages(),
       ghost.load(root),
     ]);
+    this.stage.boardSpin.add(castle);
+    this.network = built.network;
     // Only the board so far (ground, castle, roads, camps, villages, decor): units, triggers and tools come later and keep their colors.
-    fadeAtNight(this.stage.boardSpin);
+    fadeAtNight(castle);
+    fadeAtNight(this.mapGroup);
     // After the fade, so the lights keep their colors: glowing windows, torches on the towers, lantern glows.
-    this.nightLights = new NightLights(this.stage.boardSpin, built.windows, built.lanterns, built.lanternHeight, built.roadTorches);    this.windmill = new Windmill(built.sails);
+    this.nightLights = new NightLights(this.lightsGroup, built.windows, built.lanterns, built.lanternHeight, built.roadTorches);
+    this.windmill = new Windmill(built.sails);
+    this.camps = new RisingCamps(this.audio, this.particles);
+    this.camps.setCamps(built.camps);
     this.goblins = new Goblins(this.stage.boardSpin, built.network, createRandom(seed + 200), this.audio);
     this.goblins.particles = this.particles;
     this.slingshot = new Slingshot(this.stage, this.goblins, this.audio, this.particles);
@@ -318,10 +364,11 @@ export class GameSystem extends createSystem({}) {
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
     this.debugRng = createRandom(seed + 400);
     const waves = new WaveSpawner(this.stage.boardSpin, built.network, this.goblins, built.hills, this.audio, createRandom(seed + 500));
+    this.waves = waves;
     // A wave's balloons float straight in from their camp's direction.
     const campAt = new Vector3();
     waves.onBalloon = (camp) => {
-      built.network.nodePosition(camp, campAt);
+      this.network.nodePosition(camp, campAt);
       return this.balloons.spawn(angleOf(campAt.x, campAt.z)) !== null;
     };
     // The threat cue: the wall under a carrying balloon flashes red.
@@ -335,6 +382,7 @@ export class GameSystem extends createSystem({}) {
       this.pauseMenu.showSettings(headPosition, headForward, this.stage.boardScale);
     };
     const flags = new Flags(this.stage.boardLift, TUTORIAL_WAVES.length);
+    this.bait = new LessonBait(this.goblins, built.network);
     this.battle = new Battle({
       stage: this.stage,
       goblins: this.goblins,
@@ -351,7 +399,7 @@ export class GameSystem extends createSystem({}) {
       ghost,
       ghostAim: new GhostAim(root),
       pointer: new PointerArrow(root),
-      bait: new LessonBait(this.goblins, built.network),
+      bait: this.bait,
       pauseButton: (out) => this.pauseMenu.buttonWorld(out),
       // The horn lesson's beats: not held, aiming, a spot to lock, locked at the lips.
       // At the lips but not locked yet: "look at a road" (a steady look there locks it).
@@ -363,6 +411,8 @@ export class GameSystem extends createSystem({}) {
       rng: createRandom(seed + 600),
       isHeld: (goblin) => this.grabEat.isHolding(goblin),
       celebrate: (won) => this.juice.celebrate(won, this.boardCenter(), this.stage.boardScale),
+      camps: this.camps,
+      setGarrison: (rules) => garrison.setRules(rules),
     });
     this.grabEat.onEat = (goblin) => {
       this.battle.noteEaten(goblin.seasoned);
@@ -435,7 +485,7 @@ export class GameSystem extends createSystem({}) {
     this.slotsArrow = new PointerArrow(root, { ...POINTER.threat, flies: true });
     // What sinks into the ground for the menu: the castle, the flags, the ring handle, the tools and their platforms.
     this.swap = new SceneSwap();
-    this.swap.addBattle(built.castle);
+    this.swap.addBattle(castle);
     for (const o of [...flags.roots, ...this.handles.groups]) this.swap.addBattle(o);
     for (const o of [...this.slingshot.groups, ...this.tools.flatMap((t) => t.groups)]) this.swap.addBattle(o, false);
     this.swap.addMenu(this.menu.group);
@@ -445,7 +495,8 @@ export class GameSystem extends createSystem({}) {
       this.menu.refresh();
     };
     this.battle.onEnd = (won, share) => this.battleOver(won, share);
-    this.battle.onMenu = () => this.goToMenu('campaign');
+    // The end panel's Menu button: back to the page the battle was started from.
+    this.battle.onMenu = () => this.goToMenu(this.menuAfterBattle());
     this.battle.onSkip = () => this.skipToMenu();
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
@@ -559,10 +610,129 @@ export class GameSystem extends createSystem({}) {
     this.battle.stop();
     this.menu.open(page);
     this.swap.toMenu(
-      () => this.battle.clearForMenu(),
+      () => {
+        this.battle.clearForMenu();
+        // Back on the menu the tutorial map comes back (docs/custom-mode.md section 13), while the battleground is down.
+        this.withTutorialMap(() => {});
+      },
       () => console.info('[menu] open'),
       instant,
     );
+  }
+
+  /** The menu page a battle goes back to: Custom Game's list after one of its levels, else the campaign. */
+  private menuAfterBattle(): 'campaign' | 'customList' {
+    return this.battle.playingLevel ? 'customList' : 'campaign';
+  }
+
+  /** The loadout's 2 picked hand tools for a battle (the slingshot and the horn are always out). */
+  private pickedTools(): ('swatter' | 'pepper' | 'bell' | 'horn')[] {
+    return battleTools(progress.loadout).filter((t) => t !== 'slingshot') as ('swatter' | 'pepper' | 'bell' | 'horn')[];
+  }
+
+  // ---- Map loading (docs/custom-mode.md section 11, step 5) ----
+
+  /** The tutorial's map (the campaign plays on it too until its level files exist). */
+  private readonly tutorialBlueprint = parseBlueprint(tutorialMap);
+
+  /**
+   * The tutorial's waves and map (the tutorial, the campaign for now and the
+   * debug battles play on them), then `then`. Builds the tutorial map again
+   * first when another map is up.
+   */
+  private withTutorialMap(then: () => void): void {
+    this.battle.useTutorialWaves();
+    if (this.mapKey === MAPS.tutorialKey) {
+      then();
+      return;
+    }
+    void this.loadMap(MAPS.tutorialKey, this.tutorialBlueprint).then((ok) => {
+      if (ok) then();
+    });
+  }
+
+  /**
+   * Replaces the map: the old one is torn down and the blueprint's is built
+   * (terrain, roads, camps, villages, triggers, decor, night lights), and
+   * every system holding the roads gets the new ones (goblins, troops and
+   * knights, the wave spawner, triggers, lesson bait, the debug spawner,
+   * balloons, villagers). Nothing may walk the old roads, so every unit goes
+   * first. Same `key` as the map up: nothing to do. Resolves false when it
+   * could not (already loading, or the build failed: the tutorial map is
+   * built again then).
+   */
+  private async loadMap(key: string, blueprint: Blueprint): Promise<boolean> {
+    if (key === this.mapKey) return true;
+    if (this.loading) return false;
+    this.loading = true;
+    const startedAt = performance.now();
+    mark('map load');
+    let ok = false;
+    try {
+      // Nothing walks the old roads: the battle stops, the hands let go, every unit, queued spawn and trigger goes.
+      this.battle.stop();
+      this.grabEat.releaseAll();
+      this.spawner.clear();
+      this.goblins.killAll();
+      this.balloons.clear();
+      for (const target of this.triggers.targets) this.slingshot.removeTarget(target);
+      this.threat.hideArrow();
+      // The old map goes. Its own geometry is freed; materials and model parts are shared with the model cache and stay.
+      disposeTree(this.mapGroup, false);
+      this.mapGroup.clear();
+      disposeTree(this.lightsGroup, true);
+      this.lightsGroup.clear();
+      const built = await buildBoard(this.mapGroup, blueprint);
+      // From here on nothing waits, so no frame sees half a map.
+      fadeAtNight(this.mapGroup);
+      this.nightLights = new NightLights(this.lightsGroup, built.windows, built.lanterns, built.lanternHeight, built.roadTorches);
+      this.windmill = new Windmill(built.sails);
+      this.camps.setCamps(built.camps);
+      this.network = built.network;
+      this.goblins.setNetwork(built.network);
+      this.troops.setNetwork(built.network);
+      this.waves.setMap(built.network, built.hills);
+      this.bait.setNetwork(built.network);
+      this.spawner.setRoadCount(built.network.graph.camps.length);
+      this.triggers.place(built.network, blueprint.triggers);
+      this.triggers.hideAll();
+      for (const target of this.triggers.targets) this.slingshot.addTarget(target);
+      this.villagers.setVillages(built.villages);
+      this.mapKey = key;
+      ok = true;
+      const ms = performance.now() - startedAt;
+      console.info(`[map] ${blueprint.name} loaded in ${ms.toFixed(0)} ms`);
+      note(`Map loaded: ${blueprint.name} (${built.network.graph.camps.length} camps, ${built.network.roads.length} roads) in ${ms.toFixed(0)} ms`);
+    } catch (error) {
+      console.error('[map] load failed', error);
+      note(`Map load failed: ${String(error)}`);
+      // Whatever was half built is not a map: the tutorial map comes back.
+      this.mapKey = '';
+    } finally {
+      this.loading = false;
+    }
+    if (!ok && key !== MAPS.tutorialKey) await this.loadMap(MAPS.tutorialKey, this.tutorialBlueprint);
+    return ok;
+  }
+
+  /**
+   * Fight on a saved Custom Game level: its map is built while the menu
+   * still shows, then the menu sinks, the battle rises and the level's own
+   * wave director plays its waves with its rules (docs/custom-mode.md
+   * section 11, steps 4 and 5).
+   */
+  private async fightCustom(id: string): Promise<void> {
+    const entry = customLevels.levels.find((l) => l.id === id);
+    if (!entry || this.loading) return;
+    const level: Level = entry.level;
+    // The key changes when the level is saved again, so an edited level is built again.
+    if (!(await this.loadMap(`custom:${entry.id}:${entry.changed}`, level.map))) return;
+    this.battle.level = null;
+    this.battle.loadout = this.pickedTools();
+    this.battle.useLevel(level);
+    this.battle.hideLaterCamps();
+    console.info(`[custom] ${entry.name}: ${battleTools(progress.loadout).join(', ')}`);
+    this.goToBattle(() => this.battle.playLevel(level));
   }
 
   /** The menu sinks, the battle rises, then `start` starts the battle. */
@@ -577,17 +747,23 @@ export class GameSystem extends createSystem({}) {
 
   /** Fight on a campaign level: the normal battle without the tutorial, with the loadout (decided 2026-11-11 for run 2). */
   private fight(level: number): void {
-    this.battle.level = level;
-    this.battle.loadout = battleTools(progress.loadout).filter((t) => t !== 'slingshot') as ('swatter' | 'pepper' | 'bell' | 'horn')[];
-    console.info(`[campaign] level ${level}: ${battleTools(progress.loadout).join(', ')}`);
-    this.goToBattle(() => this.battle.start(0, false));
+    this.withTutorialMap(() => {
+      this.battle.level = level;
+      this.battle.loadout = this.pickedTools();
+      this.battle.hideLaterCamps();
+      console.info(`[campaign] level ${level}: ${battleTools(progress.loadout).join(', ')}`);
+      this.goToBattle(() => this.battle.start(0, false));
+    });
   }
 
   /** Replay tutorial (main menu): the whole tutorial again, every tool on its own spot. */
   private replayTutorial(): void {
-    this.battle.level = null;
-    this.battle.loadout = null;
-    this.goToBattle(() => this.battle.start(0, true));
+    this.withTutorialMap(() => {
+      this.battle.level = null;
+      this.battle.loadout = null;
+      this.battle.hideLaterCamps();
+      this.goToBattle(() => this.battle.start(0, true));
+    });
   }
 
   /** A debug action that starts a battle while the menu shows: the battleground comes back at once first. */
@@ -619,6 +795,8 @@ export class GameSystem extends createSystem({}) {
       this.slotsArrow.hide();
     }
     if (this.swap.shown !== 'menu') return;
+    // A map is being built (Fight on a Custom Game level): the menu waits, so nothing is chosen twice.
+    if (this.loading) return;
     if (this.menuSettings) {
       // The settings page from the main menu: Back brings the panels again, Measure reach runs the reach check.
       const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
@@ -653,6 +831,7 @@ export class GameSystem extends createSystem({}) {
       this.pauseMenu.showSettings(headPosition, front, this.stage.boardScale, this.stage.boardLift.getWorldPosition(boardAt));
     } else if (choice.kind === 'replay') this.replayTutorial();
     else if (choice.kind === 'fight') this.fight(choice.level);
+    else if (choice.kind === 'customFight') void this.fightCustom(choice.id);
     else if (choice.kind === 'needTools') this.slotsHintLeft = MENU.shelves.emptySlotsHint.seconds;
   }
 
@@ -864,6 +1043,7 @@ export class GameSystem extends createSystem({}) {
     this.balloons.update(unitDt);
     this.gearDebris.update(unitDt);
     this.triggers.update(unitDt);
+    this.camps.update(dt);
     // The horn blows when its mouthpiece is at the head.
     this.horn.head.copy(headPosition);
     // The horn lesson's "spot set" beat: the horn locks but waits for the "blow" sign.
@@ -878,8 +1058,11 @@ export class GameSystem extends createSystem({}) {
     this.stun.update(dt);
     this.threat.update(dt);
     // The red arrow only while a battle is fought, and not while a lesson's yellow arrow points the way.
-    if (this.battle.canPause && !this.battle.lessonPointing) this.threat.updateArrow(dt, this.goblins, headPosition, headForward);
-    else this.threat.hideArrow();
+    // A camp that just rose gets the arrow too, until the player looks at it (docs/custom-mode.md section 7).
+    if (this.battle.canPause && !this.battle.lessonPointing) {
+      const camp = this.camps.unseenWorld(dt, headPosition, headForward, campArrowAt);
+      this.threat.updateArrow(dt, this.goblins, headPosition, headForward, camp);
+    } else this.threat.hideArrow();
     this.particles.update(unitDt);
     this.juice.update(dt, headPosition);
     this.sky?.update(dt);
@@ -899,7 +1082,7 @@ export class GameSystem extends createSystem({}) {
     const fresh = starts !== this.battleStarts;
     this.battleStarts = starts;
     if (fresh) this.timeOverride = null;
-    this.dayNight.show(this.timeOverride ?? timeOfWave(this.battle.timeWave, TUTORIAL_WAVES.length), fresh);
+    this.dayNight.show(this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves), fresh);
     this.dayNight.update(dt);
     this.nightLights.update(dt, this.dayNight.lights);
   }
@@ -1072,9 +1255,9 @@ export class GameSystem extends createSystem({}) {
         this.skipToMenu();
         break;
       case 'quitToMenu':
-        // Out of a battle back to the home screen (the battle is not saved, no stars).
+        // Out of a battle back to the home screen (the battle is not saved, no stars); a Custom Game level goes back to its list.
         this.resume();
-        this.goToMenu('main');
+        this.goToMenu(this.battle.playingLevel ? 'customList' : 'main');
         break;
     }
   }
@@ -1113,6 +1296,11 @@ export class GameSystem extends createSystem({}) {
   private runDebug(id: DebugCommand, arg?: number): void {
     // These start a tutorial battle: the battleground comes back from the menu first, without a level or loadout.
     if (id === 'restartBattle' || id === 'startWave' || id === 'skipTutorial' || id === 'measureReach') {
+      // On another map (a Custom Game level), the tutorial map is built first, then the action runs.
+      if (this.mapKey !== MAPS.tutorialKey || this.battle.playingLevel) {
+        if (!this.loading) this.withTutorialMap(() => this.runDebug(id, arg));
+        return;
+      }
       this.battleSceneNow();
       this.battle.level = null;
       this.battle.loadout = null;
@@ -1124,6 +1312,14 @@ export class GameSystem extends createSystem({}) {
       case 'openCustom':
         this.goToMenu('customList');
         break;
+      case 'fightCustom': {
+        // The newest saved Custom Game level (the list is newest first), with the loadout as it is.
+        const newest = customLevels.levels[0];
+        if (!newest) console.info('[debug] no saved Custom Game level: make one first');
+        else if (this.swap.shown !== 'menu') console.info('[debug] open the menu first (Open Custom Game)');
+        else void this.fightCustom(newest.id);
+        break;
+      }
       case 'resetCustom':
         resetCustomLevels();
         if (this.swap.shown === 'menu') this.goToMenu('customList', true);
@@ -1275,7 +1471,7 @@ export class GameSystem extends createSystem({}) {
         this.garrison.thin(2);
         break;
       case 'triggersReset':
-        this.triggers.setWave(TUTORIAL_WAVES.length);
+        this.triggers.setWave(this.battle.totalWaves);
         break;
       case 'triggerLesson': {
         // What the keg lesson does: a small group waits by the keg nearest the front until it is set off.

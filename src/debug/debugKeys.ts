@@ -62,6 +62,7 @@ export type DebugCommand =
   | 'timeOfDay'
   | 'openMenu'
   | 'openCustom'
+  | 'fightCustom'
   | 'resetCustom'
   | 'resetSave'
   | 'unlockAll'
@@ -143,6 +144,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'winBattle', group: 'menu', icon: '🏆', label: 'Win battle', does: 'Win the battle now, with the castle health as it is (a campaign level saves its stars)' },
   { id: 'unlockAll', group: 'menu', icon: '🔓', label: 'Unlock all tools', does: 'Flip the "Unlock all tools" setting (the bell can be put on the loadout stand)' },
   { id: 'openCustom', group: 'menu', icon: '🛠️', label: 'Open Custom Game', does: 'Go to the Custom Game page (the empty state, or the list of saved levels). A save writes the level summary as a debug note' },
+  { id: 'fightCustom', group: 'menu', icon: '⚔️', label: 'Fight newest custom level', does: 'From the menu: load the newest saved Custom Game level\'s map and play its waves (a debug note says how long the map took)' },
   { id: 'resetCustom', group: 'menu', icon: '🗑️', label: 'Forget custom levels', does: 'Delete every saved Custom Game level (the page shows the empty state again)' },
   { id: 'resetSave', group: 'menu', icon: '🧹', label: 'Forget progress', does: 'Forget the saved tutorial, stars, open levels, unlocks and loadout (the next start shows the welcome panel)' },
   { id: 'celebrate', group: 'castle', icon: '🎉', label: 'Celebrate', does: 'Show the wave cleared celebration now (confetti over the castle, soldiers cheer)' },

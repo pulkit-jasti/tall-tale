@@ -67,8 +67,29 @@ export class Garrison {
     return n;
   }
 
-  private roleOf(slot: number): Role {
-    return slot < GARRISON.guards ? 'guard' : 'archer';
+  /** Guards and archers on the rampart, and their refill times: GARRISON, or a level's rules (setRules). */
+  private guards = GARRISON.guards;
+  private archers = GARRISON.archers;
+  private refillEvery = GARRISON.refillEvery;
+  private guardRefillEvery = GARRISON.guardRefillEvery;
+
+  /**
+   * A level's garrison (docs/custom-mode.md section 2, rules), or null for
+   * GARRISON's. Set before a battle starts (fill() mans the walls with it).
+   * There are only GARRISON.homesDeg stretches: guards take theirs first.
+   */
+  setRules(rules: { archers: number; guards: number; refillEvery: number; guardRefillEvery: number } | null): void {
+    const slots = GARRISON.homesDeg.length;
+    this.guards = Math.max(0, Math.min(slots, Math.round(rules?.guards ?? GARRISON.guards)));
+    this.archers = Math.max(0, Math.min(slots - this.guards, Math.round(rules?.archers ?? GARRISON.archers)));
+    this.refillEvery = rules?.refillEvery ?? GARRISON.refillEvery;
+    this.guardRefillEvery = rules?.guardRefillEvery ?? GARRISON.guardRefillEvery;
+  }
+
+  /** The role of a stretch: guards first, then archers, then none (left empty). */
+  private roleOf(slot: number): Role | null {
+    if (slot < this.guards) return 'guard';
+    return slot < this.guards + this.archers ? 'archer' : null;
   }
 
   /** A battle starts: every stretch is manned at once, and the refill runs. */
@@ -77,7 +98,7 @@ export class Garrison {
     this.refill.timer = 0;
     this.guardRefill.timer = 0;
     this.volleyTimer = GARRISON.volleyEvery;
-    for (let i = 0; i < this.slots.length; i++) if (!this.slots[i]) this.recruit(i, false);
+    for (let i = 0; i < this.slots.length; i++) if (!this.slots[i] && this.roleOf(i)) this.recruit(i, false);
   }
 
   /** Every soldier was cleared away (Troops.clear): no refill until fill(). */
@@ -121,6 +142,7 @@ export class Garrison {
   /** A new soldier for a slot: standing on the rampart, or climbing up from the courtyard. */
   private recruit(slot: number, climb: boolean): void {
     const role = this.roleOf(slot);
+    if (!role) return;
     const troop = this.troops.take(role === 'archer' ? 'archer' : 'sword');
     if (!troop) return;
     this.troops.prepare(troop);
@@ -166,8 +188,8 @@ export class Garrison {
     // One new archer climbs up every so often until they are full again; a fallen guard takes longer to
     // come back (GARRISON.guardRefillEvery), so helping the guards matters.
     if (this.troops.enabled) {
-      if (refillTick(this.refill, archers, GARRISON.archers, dt, GARRISON.refillEvery)) this.recruitRole('archer');
-      if (refillTick(this.guardRefill, guards, GARRISON.guards, dt, GARRISON.guardRefillEvery)) this.recruitRole('guard');
+      if (refillTick(this.refill, archers, this.archers, dt, this.refillEvery)) this.recruitRole('archer');
+      if (refillTick(this.guardRefill, guards, this.guards, dt, this.guardRefillEvery)) this.recruitRole('guard');
     }
     // The volley: every archer with a target looses an arrow, a little staggered.
     this.volleyTimer -= dt;

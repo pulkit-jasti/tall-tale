@@ -27,6 +27,12 @@ export class LessonBait {
     private network: RoadNetwork,
   ) {}
 
+  /** A new map (src/game.ts loadMap): bait walks its roads from now on. */
+  setNetwork(network: RoadNetwork): void {
+    this.list.length = 0;
+    this.network = network;
+  }
+
   /** Bait goblins still in the game. */
   private alive(): Goblin[] {
     this.list = this.list.filter((g) => g.mode !== 'dead' && (g.calm || g.patrolRoad >= 0));

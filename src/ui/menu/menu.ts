@@ -19,7 +19,13 @@ import { CustomListPanel } from './customList.js';
 import { MainMenu } from './mainMenu.js';
 import { Shelves, type DisplayModel, type DisplayName } from './shelves.js';
 
-export type MenuChoice = { kind: 'settings' } | { kind: 'replay' } | { kind: 'fight'; level: number } | { kind: 'needTools' } | null;
+export type MenuChoice =
+  | { kind: 'settings' }
+  | { kind: 'replay' }
+  | { kind: 'fight'; level: number }
+  | { kind: 'customFight'; id: string }
+  | { kind: 'needTools' }
+  | null;
 
 /** The front panel's pages: the main menu, the campaign, and Custom Game's list and its create and edit page. */
 type Page = 'main' | 'campaign' | 'customList' | 'customEdit';
@@ -140,6 +146,11 @@ export class Menu {
       if (choice?.kind === 'back') this.showPage('main');
       else if (choice?.kind === 'create') this.showPage('customEdit', null);
       else if (choice?.kind === 'edit') this.showPage('customEdit', choice.id);
+      else if (choice?.kind === 'fight') {
+        // Like the campaign: empty tool slots first get the hint at the stand. The list keeps the level selected.
+        this.editId = choice.id;
+        return progress.loadout.includes(null) ? { kind: 'needTools' } : { kind: 'customFight', id: choice.id };
+      }
       return null;
     }
     if (this.page === 'customEdit') {

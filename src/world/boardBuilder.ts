@@ -16,7 +16,7 @@ import {
 import { BOARD, CAMP_LOOK, CASTLE, DECOR, NIGHT_LIGHTS, ROADS, SETTLEMENTS } from '../config/game.js';
 import type { Blueprint } from '../rules/blueprint.js';
 import { RoadGraph, type GraphNode } from '../rules/roadGraph.js';
-import { boardHeight, degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
+import { boardHeight, degToRad, groundAt, polarX, polarZ, setBumps } from '../rules/boardMath.js';
 import { createRandom, type Random } from '../rules/random.js';
 import { cloneStatic, InstancedModel, loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
 import { RoadNetwork } from './roads.js';
@@ -63,8 +63,8 @@ function buildBoardMesh(terrain: Terrain, meadow: Meadow): Group {
   return group;
 }
 
-/** Round stone wall with crenellations (code shape) and towers (models). */
-async function buildCastle(): Promise<Group> {
+/** Round stone wall with crenellations (code shape) and towers (models). Built once: the same castle stands on every map. */
+export async function buildCastle(): Promise<Group> {
   const group = new Group();
   const { wallIn, wallOut, wallHeight } = CASTLE;
   const stone = flatMaterial(CASTLE.stoneColor);
@@ -123,12 +123,14 @@ async function buildCastle(): Promise<Group> {
 /**
  * Goblin war camps at the start of each road (CAMP_LOOK): the camp hill in
  * the middle (its own object, it sinks as goblins come out), and around it,
- * merged into one mesh per material for all camps, a spiked palisade with
+ * merged into one mesh per material for each camp, a spiked palisade with
  * its gate toward the castle (where the road leaves), red banners at the
  * gate, a war tent at the back, tents, a catapult, a weapon rack, a fire,
- * and tall rocks behind the fence.
+ * and tall rocks behind the fence. Each camp is its own group (in `groups`,
+ * its middle in userData.center), so it can rise on its own wave
+ * (src/world/risingCamps.ts).
  */
-async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Object3D>): Promise<Group> {
+async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Object3D>, groups: Map<string, Object3D>): Promise<Group> {
   const L = CAMP_LOOK;
   const group = new Group();
   const fit = (path: string, f: Parameters<typeof loadTemplate>[1]): Promise<ModelTemplate> => loadTemplate(`${path}.glb`, f);
@@ -150,8 +152,9 @@ async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Ob
   );
   const fires = await Promise.all(['camp/nature/campfire_logs', 'camp/nature/campfire_stones'].map((p) => fit(p, { width: L.fireWidth })));
   const totem = await fit('camp/goblin/stone_1', { height: L.totemHeight });
-  const batch = new StaticBatch();
   for (const [index, camp] of camps.entries()) {
+    const batch = new StaticBatch();
+    const campGroup = new Group();
     const fence = fences[index % fences.length];
     const banner = banners[index % banners.length];
     const warTent = warTents[index % warTents.length];
@@ -168,7 +171,10 @@ async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Ob
     const hillObject = cloneStatic(hill);
     hillObject.scale.set(size, size * 0.8, size);
     hillObject.position.set(cx, cy - 0.3, cz);
-    group.add(hillObject);
+    campGroup.add(hillObject);
+    campGroup.userData.center = new Vector3(cx, cy, cz);
+    group.add(campGroup);
+    groups.set(camp.id, campGroup);
     hills.set(camp.id, hillObject);
     // Spots around the camp's middle, by angle (the board's frame: x = sin, z = -cos) and distance. The gate looks at the castle.
     const gateAt = ca + Math.PI;
@@ -231,8 +237,8 @@ async function buildCamps(camps: GraphNode[], rng: Random, hills: Map<string, Ob
       const a = back + rng.range(-0.9, 0.9);
       put(rng.pick(tallRocks), a, R + rng.range(3, 7), rng.range(0, Math.PI * 2), rng.range(...L.rockHeight));
     }
+    campGroup.add(batch.build());
   }
-  group.add(batch.build());
   return group;
 }
 
@@ -292,12 +298,12 @@ async function buildDecor(terrain: Terrain, camps: CampSpot[], built: Spot[], fo
 
 export interface BuiltBoard {
   network: RoadNetwork;
-  /** The castle walls and towers (the menu sinks them, src/world/sceneSwap.ts). */
-  castle: Object3D;
   /** The windmill's sails, which turn (decor), or null without a windmill. */
   sails: Object3D | null;
   /** Camp hills by camp id, so a camp can sink as its enemies come out. */
   hills: Map<string, Object3D>;
+  /** Each camp's whole group by camp id (its hill in it), so it can rise on its wave. */
+  camps: Map<string, Object3D>;
   /** Every window tile and lantern on the board (their placements), for the night lights, and a lantern's height (cm). */
   windows: Matrix4[];
   lanterns: Matrix4[];
@@ -308,9 +314,15 @@ export interface BuiltBoard {
   villages: Spot[];
 }
 
-/** Builds everything in a map blueprint that turns with the board into `parent`. */
+/**
+ * Builds everything in a map blueprint that turns with the board into
+ * `parent` (not the castle: buildCastle, once). Called again for each new
+ * map (src/game.ts loadMap), after the old map's group was emptied.
+ */
 export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promise<BuiltBoard> {
   const seed = blueprint.seed;
+  // A smooth board while this map is planned: the last map's hills must never move its villages or triggers.
+  setBumps(() => 0);
   const network = new RoadNetwork(new RoadGraph(blueprint));
   const campNodes = network.graph.nodes.filter((n) => n.kind === 'camp');
   const campSpots = campNodes.map((c) => {
@@ -338,18 +350,18 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   const built = [...builtSpots(plan), ...triggerSpots.clear];
   const stories = planStorySpots(roadField, campSpots, built, createRandom(seed + 9));
   // The courtyard stays empty until the main gameplay is done (houses and stalls come back with the polish).
-  const [castle, camps, decor, settlements, storyScenes] = await Promise.all([
-    buildCastle(),
-    buildCamps(campNodes, createRandom(seed + 2), hills),
+  const campGroups = new Map<string, Object3D>();
+  const [camps, decor, settlements, storyScenes] = await Promise.all([
+    buildCamps(campNodes, createRandom(seed + 2), hills, campGroups),
     buildDecor(terrain, campSpots, [...built, ...stories], plan.forests, createRandom(seed + 3)),
     buildSettlements(plan, network.roads, createRandom(seed + 8)),
     buildStorySpots(stories, createRandom(seed + 10)),
   ]);
-  parent.add(castle, camps, decor, settlements, storyScenes);
+  parent.add(camps, decor, settlements, storyScenes);
   return {
     network,
-    castle,
     hills,
+    camps: campGroups,
     sails: (settlements.userData.sails as Object3D | undefined) ?? null,
     // For the night lights: every window tile and lantern (in the settlements' frame, the board's), and a lantern's height.
     windows: settlements.userData.windows as Matrix4[],

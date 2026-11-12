@@ -277,6 +277,15 @@ Build order steps 4 and 5 (section 11), then make Custom Game's Fight play a sav
 - **Rising camps in the tutorial too** (section 7): each tutorial wave's new camp rises as it starts.
 - **Rules to keep:** the UI rules in AGENTS.md and docs/controls-and-ui.md ("Rules learned on the headset"); never run typecheck (AGENTS.md); `npm run build` is the check, `npm test` when tested code changes.
 
+### As built (steps 4 and 5, 2026-11-11, build and tests only, not checked on the headset yet)
+
+- **Wave director:** `src/director/levelDirector.ts` (`levelWavePlans`, `buildLevelSteps`, `risingByWave`, `hiddenAtStart`). Per wave: the banner (the wave starts with it), fought until cleared, the breather; after the last the win panel. Same step ids as the tutorial, so Skip wave works. `Battle.playLevel(level)` plays a level, `Battle.useTutorialWaves()` goes back; a level never teaches. A level wave's gear shares go to `goblins.gearShares` (every piece from wave 1); its rules set the castle's starting health and the garrison (`Garrison.setRules`: guards take their stretches first, at most 6 in all).
+- **Rising camps:** each camp is its own group now (`buildCamps`, `userData.center`), run by `src/world/risingCamps.ts` (`RISING_CAMPS`): hidden under the ground at the start, they slide up with their wave's banner, with the drum and dust, and the red threat arrow points at a risen camp until it is looked at. The tutorial does it too (a camp rises in the first wave that sends from it). The menu and the welcome panel show every camp.
+- **Map loading:** `GameSystem.loadMap(key, blueprint)` in `src/game.ts`. The map lives in its own group (the castle is built once, `buildCastle`); the loader stops the battle, removes every unit, frees the old map's geometry, builds the new one (bumps reset first), and hands the new roads to goblins, troops, the wave spawner, triggers (`Triggers.place`), lesson bait, the debug spawner and villagers (`setVillages`); night lights are built again. Going back to the menu (or any tutorial or campaign battle) builds the tutorial map again (`withTutorialMap`).
+- **Fight:** Custom Game's Fight builds the level's map while the menu shows (the menu takes no choice meanwhile), then the menu sinks and the level plays with the loadout (empty slots get the same hint as the campaign). Menu on the end panel, and Quit from pause, go back to the Custom Game list.
+- **Debug page:** "Fight newest custom level" (from the menu). Each load writes a debug note with its time.
+- **Headset check:** the loading moment (how long, any hitch; the terrain swaps under the menu, open question in section 14), the camps rising (look, sound, arrow), a full level to the end, Menu back to the list, then the tutorial and a campaign level again (the tutorial map back, nothing doubled), and the FPS panel after a few loads (no leak).
+
 ## 14. Open
 
 - Which levels unlock which future tools (only the bell at level 3 is decided).

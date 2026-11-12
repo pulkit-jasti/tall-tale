@@ -66,9 +66,12 @@ export class Villagers {
     private rng: Random,
   ) {}
 
+  /** Their rigged models, loaded once (setVillages() places them again on each map). */
+  private templates: ModelTemplate[] = [];
+
   async load(): Promise<void> {
-    if (!VILLAGERS.enabled || this.villages.length === 0) return;
-    const templates = await Promise.all(
+    if (!VILLAGERS.enabled) return;
+    this.templates = await Promise.all(
       VILLAGERS.kinds.map(async (kind) => {
         const template = await loadTemplate(kind.body, { height: 1 }, true);
         await rigTemplate(template, [], kind.recolor);
@@ -80,6 +83,19 @@ export class Villagers {
         return template;
       }),
     );
+    this.setVillages(this.villages);
+  }
+
+  /** A new map (src/game.ts loadMap): the old villagers go, new ones walk about in its villages. */
+  setVillages(villages: Spot[]): void {
+    for (const v of this.list) {
+      v.mixer.stopAllAction();
+      this.board.remove(v.root);
+    }
+    this.list = [];
+    this.villages = villages;
+    const templates = this.templates;
+    if (templates.length === 0) return;
     for (const [v, home] of this.villages.entries()) {
       for (let k = 0; k < VILLAGERS.perVillage && this.list.length < VILLAGERS.max; k++) {
         const template = templates[(v + k) % templates.length];

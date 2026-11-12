@@ -78,7 +78,8 @@ export class ThreatCues {
    * while it is in view (the arrow just hides then). Only then the next one.
    * So it never jumps between goblins and confuses the player.
    */
-  updateArrow(dt: number, goblins: Goblins, head: Vector3, forward: Vector3): void {
+  /** `camp`: a camp that just rose and was not looked at yet (world): the arrow points there while no goblin needs it. */
+  updateArrow(dt: number, goblins: Goblins, head: Vector3, forward: Vector3, camp: Vector3 | null = null): void {
     if (!THREAT.enabled) return;
     let keep = false;
     let best: Goblin | null = null;
@@ -103,7 +104,7 @@ export class ThreatCues {
     }
     if (!keep) this.pointed = best;
     const target = this.pointed;
-    this.arrow.update(dt, head, forward, target ? goblins.centerWorld(target, arrowAt) : null);
+    this.arrow.update(dt, head, forward, target ? goblins.centerWorld(target, arrowAt) : camp);
   }
 
   hideArrow(): void {

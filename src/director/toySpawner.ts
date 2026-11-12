@@ -23,6 +23,12 @@ export class ToySpawner {
     private rng: Random,
   ) {}
 
+  /** A new map (src/game.ts loadMap): the queue is dropped (its roads are gone). */
+  setRoadCount(count: number): void {
+    this.queue.length = 0;
+    this.roadCount = count;
+  }
+
   /** Queues a small group walking in from one camp. */
   sendGroup(type: GoblinType, road = this.rng.int(this.roadCount)): void {
     const size = type === 'runner' ? TOY_SPAWN.runnerGroup : TOY_SPAWN.gruntGroup;

@@ -51,6 +51,9 @@ import type { UiImageName } from '../ui/kit/index.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import type { WaveSpawner } from '../units/waveSpawner.js';
 import type { Flags } from '../world/flags.js';
+import type { RisingCamps } from '../world/risingCamps.js';
+import type { Level, LevelRules } from '../level/level.js';
+import { buildLevelSteps, hiddenAtStart, levelWavePlans, risingByWave } from './levelDirector.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
@@ -62,6 +65,7 @@ import {
   type ToolName,
   type TutorialApi,
   type TutorialStep,
+  type WavePlan,
 } from './tutorial.js';
 
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
@@ -136,6 +140,10 @@ export interface BattleParts {
   isHeld: (goblin: Goblin) => boolean;
   /** A wave was won (juice: confetti over the castle; `won`: the whole battle, with fireworks). */
   celebrate: (won: boolean) => void;
+  /** The camps that wait under the ground and rise with their wave. */
+  camps: RisingCamps;
+  /** The wall garrison's size and refill: a level's rules, or null for the usual (GARRISON). */
+  setGarrison: (rules: LevelRules | null) => void;
 }
 
 export class Battle implements TutorialApi {
@@ -164,6 +172,15 @@ export class Battle implements TutorialApi {
   loadout: HandToolName[] | null = null;
   /** The campaign level being fought (its number), or null (the tutorial, or a debug battle). */
   level: number | null = null;
+  /**
+   * The waves this battle plays: the tutorial's, or a level's (playLevel).
+   * With a level, its own wave director plays them (src/director/levelDirector.ts)
+   * and its rules set the garrison and the castle's starting health.
+   */
+  private waves: WavePlan[] = TUTORIAL_WAVES;
+  private levelRules: LevelRules | null = null;
+  /** The camps that rise at each wave (0 based), for the waves above. */
+  private rising: string[][] = risingByWave(TUTORIAL_WAVES);
   /** Each tool's own spot, from when it was built. */
   private homeSpots = new Map<HandTool, ToolSpot>();
   /**
@@ -321,8 +338,10 @@ export class Battle implements TutorialApi {
    */
   start(fromWave = this.playFromWave, teach = this.teach): void {
     const { goblins, spawner, slingshot, flags, panel, stage } = this.parts;
+    // A level never teaches (its own director plays it).
+    if (this.levelRules) teach = false;
     // Without the tutorial (Skip tutorial) the battle starts at wave 1 with every tool out.
-    const from = teach ? Math.max(0, Math.min(fromWave, TUTORIAL_WAVES.length - 1)) : 0;
+    const from = teach ? Math.max(0, Math.min(fromWave, this.waves.length - 1)) : 0;
     this.teach = teach;
     spawner.stop();
     goblins.killAll();
@@ -332,9 +351,12 @@ export class Battle implements TutorialApi {
     slingshot.setVisible(false);
     slingshot.beckon = false;
     this.resetTools();
-    // The wall garrison stands on the rampart from the start (v2).
+    // The wall garrison stands on the rampart from the start (v2), as big as the level says.
+    this.parts.setGarrison(this.levelRules);
     this.parts.troops.manWalls();
-    this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
+    this.state = this.newState();
+    // Camps that rise at this wave or later wait under the ground (docs/custom-mode.md section 7).
+    this.parts.camps.setHidden(hiddenAtStart(this.waves, from));
     // The flag starts one notch below: the first step clears the wave before `from`.
     this.state.wavesCleared = Math.max(0, from - 1);
     flags.show(1, this.state.wavesCleared / this.state.totalWaves, true);
@@ -365,7 +387,7 @@ export class Battle implements TutorialApi {
     } else {
       // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
       // Without the tutorial and without a loadout (debug): every tool.
-      for (const wave of teach ? TUTORIAL_WAVES.slice(0, from) : TUTORIAL_WAVES) {
+      for (const wave of teach ? this.waves.slice(0, from) : this.waves) {
         const tool = wave.newTool;
         if (tool === 'slingshot') slingshot.setVisible(true);
         else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
@@ -373,7 +395,8 @@ export class Battle implements TutorialApi {
       if (!teach) for (const t of Object.values(this.parts.tools)) t.setVisible(true);
     }
     this.reach.stop();
-    const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from, !this.reachKnown, teach), this);
+    const steps = this.levelRules ? buildLevelSteps(this.waves) : buildTutorialSteps(BUILT_TOOLS, this.waves, from, !this.reachKnown, teach);
+    const director = new Director<TutorialApi>(steps, this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
       const step = this.shownStep?.id === id ? this.shownStep : null;
@@ -399,7 +422,62 @@ export class Battle implements TutorialApi {
     };
     this.director = director;
     this.running = true;
-    console.info(!teach ? '[battle] started without the tutorial' : from > 0 ? `[battle] tutorial started at wave ${from + 1}` : '[battle] tutorial started');
+    console.info(
+      this.levelRules
+        ? `[battle] level started (${this.waves.length} waves)`
+        : !teach
+          ? '[battle] started without the tutorial'
+          : from > 0
+            ? `[battle] tutorial started at wave ${from + 1}`
+            : '[battle] tutorial started',
+    );
+  }
+
+  /**
+   * A level battle (Custom Game now, the campaign files later): its waves,
+   * played by the level's director, with its rules. The game loads the
+   * level's map first. Restart and Play again play the same level.
+   */
+  playLevel(level: Level): void {
+    this.useLevel(level);
+    this.start(0, false);
+  }
+
+  /** A level's waves and rules from now on (playLevel starts it). */
+  useLevel(level: Level): void {
+    this.waves = levelWavePlans(level);
+    this.rising = risingByWave(this.waves);
+    this.levelRules = level.rules;
+  }
+
+  /** The camps that rise later go under the ground now (Fight poked: before the battle rises, so none pops away). */
+  hideLaterCamps(): void {
+    this.parts.camps.setHidden(hiddenAtStart(this.waves, 0));
+  }
+
+  /** Back to the tutorial's waves and the usual rules (the tutorial, the campaign until its level files exist, debug battles). */
+  useTutorialWaves(): void {
+    this.waves = TUTORIAL_WAVES;
+    this.rising = risingByWave(TUTORIAL_WAVES);
+    this.levelRules = null;
+  }
+
+  /** True while the waves are a level's (playLevel). */
+  get playingLevel(): boolean {
+    return this.levelRules !== null;
+  }
+
+  /** How many waves this battle has (the blue flag's notches, the times of day). */
+  get totalWaves(): number {
+    return this.waves.length;
+  }
+
+  /** A fresh battle state: a level may start with the castle already damaged. */
+  private newState(): BattleState {
+    const state = createBattle(this.waves.length, CASTLE_HEALTH);
+    const start = this.levelRules?.startHealth ?? 1;
+    state.health = state.maxHealth * Math.max(0.05, Math.min(1, start));
+    return state;
   }
 
   /**
@@ -427,7 +505,8 @@ export class Battle implements TutorialApi {
     this.clearBoard();
     this.parts.slingshot.setVisible(false);
     this.resetTools();
-    this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
+    this.state = createBattle(this.waves.length, CASTLE_HEALTH);
+    this.parts.camps.showAll();
     this.parts.flags.show(1, 0, true);
     this.parts.panel.show('welcome');
   }
@@ -442,7 +521,9 @@ export class Battle implements TutorialApi {
     this.parts.goblins.killAll();
     this.parts.slingshot.setVisible(false);
     this.resetTools();
-    this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
+    this.state = createBattle(this.waves.length, CASTLE_HEALTH);
+    // The living board around the menu has every camp up.
+    this.parts.camps.showAll();
     this.parts.flags.show(1, 0, true);
   }
 
@@ -946,17 +1027,20 @@ export class Battle implements TutorialApi {
     // A lesson goblin still waiting from before becomes an ordinary goblin, so it never holds the wave up.
     const old = this.lessonGoblin;
     if (old && old.mode !== 'dead') this.parts.goblins.makeOrdinary(old);
-    const plan = TUTORIAL_WAVES[index];
-    // Helmets from their wave on. The first balloon wave holds its balloons until the balloon banner shows.
-    this.parts.goblins.helmetsOn = index + 1 >= GOBLIN_GEAR.helmetFromWave;
-    this.parts.goblins.shieldsOn = index + 1 >= GOBLIN_GEAR.shieldFromWave;
+    const plan = this.waves[index];
+    // A level wave hands out its own gear shares from wave 1; the tutorial's helmets and shields come from their wave on.
+    this.parts.goblins.gearShares = plan.gear ?? GOBLIN_GEAR;
+    this.parts.goblins.helmetsOn = !!plan.gear || index + 1 >= GOBLIN_GEAR.helmetFromWave;
+    this.parts.goblins.shieldsOn = !!plan.gear || index + 1 >= GOBLIN_GEAR.shieldFromWave;
+    // This wave's new camps rise with its banner (docs/custom-mode.md section 7).
+    this.parts.camps.raise(this.rising[index] ?? []);
     // Balloons are taught in the slingshot wave now, so a wave's own balloons never wait for a banner.
     this.parts.spawner.balloonsHeld = false;
     this.parts.spawner.start(plan);
     // The army marches out toward the attacking camps, and the triggers of this wave stand ready.
     this.parts.troops.deploy(plan.camps);
     this.parts.triggers.setWave(index + 1);
-    const last = index === TUTORIAL_WAVES.length - 1;
+    const last = index === this.waves.length - 1;
     this.parts.audio.play('waveHorn');
     this.parts.audio.play(last ? 'finalRound' : WAVE_VOICES[index] ?? 'finalRound');
     console.info(`[battle] wave ${index + 1} started`);
@@ -972,7 +1056,7 @@ export class Battle implements TutorialApi {
    * cleared. After the last wave it stays at the last wave's time.
    */
   get timeWave(): number {
-    return Math.max(0, Math.min(TUTORIAL_WAVES.length - 1, this.inWave ? this.wave : this.wave + 1));
+    return Math.max(0, Math.min(this.waves.length - 1, this.inWave ? this.wave : this.wave + 1));
   }
 
   endWave(): void {

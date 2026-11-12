@@ -24,7 +24,7 @@ import { CASTLE, DAY_NIGHT, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS,
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
-import { armorHit, rollGear, type GoblinWeapon } from '../rules/gear.js';
+import { armorHit, rollGear, type GearShares, type GoblinWeapon } from '../rules/gear.js';
 import { bashSeconds, climbSpeed } from '../rules/climb.js';
 import { popIn } from '../fx/ease.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
@@ -307,6 +307,8 @@ export class Goblins {
   /** Helmets and shields are handed out from their wave on (GOBLIN_GEAR, set by the battle per wave). */
   helmetsOn = false;
   shieldsOn = false;
+  /** The shares of grunts with each piece of gear: GOBLIN_GEAR, or a level wave's own (set by the battle per wave). */
+  gearShares: GearShares = GOBLIN_GEAR;
   /** Debug: this many next grunts wear a helmet whatever the wave. */
   helmetNext = 0;
   /** Debug: this many next grunts wear a helmet, carry a shield and a sword (3 hits). */
@@ -555,7 +557,7 @@ export class Goblins {
     goblin.setType(type);
     // Runners need their hands. Grunts carry a spear, a sword or nothing, some wear a helmet or carry a shield.
     if (type === 'grunt') {
-      const roll = rollGear(GOBLIN_GEAR, this.helmetsOn, this.shieldsOn, this.gearRng.next(), this.gearRng.next(), this.gearRng.next());
+      const roll = rollGear(this.gearShares, this.helmetsOn, this.shieldsOn, this.gearRng.next(), this.gearRng.next(), this.gearRng.next());
       if (this.armoredNext > 0) {
         this.armoredNext--;
         roll.weapon = 'sword';
@@ -850,6 +852,17 @@ export class Goblins {
 
   killAll(): void {
     for (const g of this.list) if (g.mode !== 'dead' && g.mode !== 'held') this.kill(g);
+  }
+
+  /**
+   * A new map (src/game.ts loadMap): every goblin goes (they walk the old
+   * roads), and from now on they come out of the new map's camps.
+   */
+  setNetwork(network: RoadNetwork): void {
+    for (const g of this.list) if (g.mode !== 'dead') this.kill(g);
+    this.aimed = null;
+    this.network = network;
+    this.camps = network.graph.camps;
   }
 
   setTouch(goblin: Goblin, state: TouchState): void {

@@ -7,7 +7,7 @@
 // its settings, its skulls, the small round Edit, Duplicate, Delete and Share
 // buttons with a word under each, and the big red Fight. Delete asks first,
 // in the card's place: a green tick (yes) and a red cross (no), no words.
-// Share and, until the loader exists, Fight say "Coming soon" for a moment.
+// Share says "Coming soon" for a moment; Fight plays the level (the game loads its map).
 // Nothing pops over anything. Redrawn only when something changes.
 import { Group, type Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
@@ -37,7 +37,7 @@ import {
   type Control,
 } from '../kit/index.js';
 
-export type CustomListChoice = { kind: 'back' } | { kind: 'create' } | { kind: 'edit'; id: string } | null;
+export type CustomListChoice = { kind: 'back' } | { kind: 'create' } | { kind: 'edit'; id: string } | { kind: 'fight'; id: string } | null;
 
 type Action = 'edit' | 'copy' | 'trash' | 'share';
 const ACTIONS: { id: Action; word: string }[] = [
@@ -185,8 +185,8 @@ export class CustomListPanel {
       else if (id === 'trash') this.setConfirming(true);
       else this.say('share', 'Coming soon');
     }
-    // Fight: the wave director and the map loading come next (docs/custom-mode.md section 11).
-    if (this.fight.update(hands, dt)) this.say('fight', 'Coming soon');
+    // Fight: the game loads the level's map and plays its waves (docs/custom-mode.md section 11).
+    if (this.fight.update(hands, dt) && level) return { kind: 'fight', id: level.id };
     return null;
   }
 
