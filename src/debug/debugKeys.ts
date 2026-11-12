@@ -59,13 +59,19 @@ export type DebugCommand =
   | 'armoredGrunts'
   | 'celebrate'
   | 'nextTime'
-  | 'timeOfDay';
+  | 'timeOfDay'
+  | 'openMenu'
+  | 'resetSave'
+  | 'unlockAll'
+  | 'winBattle'
+  | 'fightLevel';
 
 /** Sections of the laptop debug page, in page order. */
-export type DebugGroup = 'game' | 'castle' | 'goblins' | 'army' | 'slingshot' | 'food' | 'board' | 'sky' | 'performance';
+export type DebugGroup = 'game' | 'menu' | 'castle' | 'goblins' | 'army' | 'slingshot' | 'food' | 'board' | 'sky' | 'performance';
 
 export const DEBUG_GROUPS: { id: DebugGroup; title: string; icon: string }[] = [
   { id: 'game', title: 'Game and tutorial', icon: '🎮' },
+  { id: 'menu', title: 'Menus and campaign', icon: '📜' },
   { id: 'castle', title: 'Castle', icon: '🏰' },
   { id: 'goblins', title: 'Goblins', icon: '👺' },
   { id: 'army', title: 'Troops and triggers', icon: '⚔️' },
@@ -111,7 +117,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     group: 'game',
     icon: '⏩',
     label: 'Skip tutorial',
-    does: 'Start a new battle without the tutorial: wave 1, every tool out, no lessons (like Skip tutorial on the welcome and pause panels)',
+    does: 'Start a new battle without the tutorial: wave 1, every tool out, no lessons (Skip tutorial on the welcome and pause panels now goes to the menu instead)',
   },
   { id: 'pause', group: 'game', icon: '⏸️', label: 'Pause / resume', does: 'Pause the battle (like the pause button) or resume it' },
   {
@@ -123,6 +129,18 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     args: [1, 2, 3, 4],
   },
   { id: 'skipWave', group: 'game', icon: '⏩', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
+  { id: 'openMenu', group: 'menu', icon: '📜', label: 'Open menu', does: 'The battleground sinks and the main menu rises (the shelves and the loadout stand too)' },
+  {
+    id: 'fightLevel',
+    group: 'menu',
+    icon: '⚔️',
+    label: 'Fight level',
+    does: 'Start this campaign level (the normal battle with the saved loadout), like its Fight button. Works for locked levels too',
+    args: [1, 2, 3, 4, 5, 6],
+  },
+  { id: 'winBattle', group: 'menu', icon: '🏆', label: 'Win battle', does: 'Win the battle now, with the castle health as it is (a campaign level saves its stars)' },
+  { id: 'unlockAll', group: 'menu', icon: '🔓', label: 'Unlock all tools', does: 'Flip the "Unlock all tools" setting (the bell can be put on the loadout stand)' },
+  { id: 'resetSave', group: 'menu', icon: '🧹', label: 'Forget progress', does: 'Forget the saved tutorial, stars, open levels, unlocks and loadout (the next start shows the welcome panel)' },
   { id: 'celebrate', group: 'castle', icon: '🎉', label: 'Celebrate', does: 'Show the wave cleared celebration now (confetti over the castle, soldiers cheer)' },
   { id: 'damageCastle', group: 'castle', icon: '💥', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
   { id: 'loseCastle', group: 'castle', icon: '🏳️', label: 'Lose castle', does: 'The castle falls right away (lose panel)' },

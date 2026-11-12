@@ -6,7 +6,19 @@
 // the finger leaves, so a press can be seen and felt without haptics. Its
 // face points along the group's local +z. Sizes are in the parent's units
 // (cm in the rigs).
-import { CircleGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Vector3, type CanvasTexture, type MeshStandardMaterial } from 'three';
+import {
+  CircleGeometry,
+  CylinderGeometry,
+  ExtrudeGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  Shape,
+  Vector3,
+  type CanvasTexture,
+  type MeshStandardMaterial,
+} from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { BUTTON_SIZE, POKE } from '../config/game.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
@@ -17,11 +29,39 @@ import { changeTouch, type Control } from './kit/controls.js';
 import { buttonIconCanvas, type ButtonIcon } from './uiImages.js';
 
 export interface ButtonOptions {
-  /** Cap radius. */
+  /** Cap radius (a box button ignores it). */
   radius: number;
   /** Cap thickness. Defaults to POKE.depthShare of the radius. */
   depth?: number;
   icon: ButtonIcon;
+  /**
+   * A bordered rectangle instead of a round cap, with this picture on its
+   * face (the Fight button only, src/ui/kit/fightButton.ts; every other
+   * button is round). Same poke, looks and sounds.
+   */
+  box?: { width: number; height: number; face: CanvasTexture };
+}
+
+/** A rounded rectangle, w by h, centered, corners `r`. */
+function roundedRect(w: number, h: number, r: number): Shape {
+  const s = new Shape();
+  const x = -w / 2;
+  const y = -h / 2;
+  s.moveTo(x + r, y);
+  s.lineTo(x + w - r, y);
+  s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r);
+  s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h);
+  s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r);
+  s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+
+/** A slab of a rounded rectangle, from z 0 to `depth`, its face toward +z. */
+function slab(w: number, h: number, r: number, depth: number): ExtrudeGeometry {
+  return new ExtrudeGeometry(roundedRect(w, h, r), { depth, bevelEnabled: false, curveSegments: 4 });
 }
 
 const local = new Vector3();
@@ -34,7 +74,13 @@ export class PokeButton implements Control {
   private faceMaterial: MeshBasicMaterial;
   private icon: ButtonIcon;
   private radius: number;
+  /** A box button's half width and half height (null for a round one). */
+  private half: { x: number; y: number } | null = null;
   private depth: number;
+  /** A poke on it while locked (it buzzed): for a hint on why (the Fight button's empty slots). */
+  onRefuse: () => void = () => {};
+  /** Locked: it goes down and buzzes, but never clicks (a locked Fight). The caller greys it with setColor. */
+  locked = false;
   private touch: TouchState = 'idle';
   /** The finger came from the front, so pushing in counts. */
   private armed = false;
@@ -55,6 +101,26 @@ export class PokeButton implements Control {
     options: ButtonOptions,
   ) {
     const { segments, travel } = POKE;
+    if (options.box) {
+      // The same parts as the round button (a dark rim border, a cap that sinks, a face), as rounded rectangles.
+      const { width: w, height: h } = options.box;
+      const corner = Math.min(w, h) * 0.18;
+      const border = Math.min(w, h) * (POKE.rimScale - 1) * 0.5;
+      this.half = { x: w / 2, y: h / 2 };
+      this.radius = Math.min(w, h) / 2;
+      this.depth = options.depth ?? this.radius * POKE.depthShare;
+      this.icon = options.icon;
+      this.group.add(new Mesh(slab(w + border * 2, h + border * 2, corner + border, travel + this.depth * 0.4), flatMaterial(POKE.rimColor)));
+      this.material = flatMaterial(POKE.color);
+      this.cap.add(new Mesh(slab(w, h, corner, this.depth), this.material));
+      this.faceMaterial = new MeshBasicMaterial({ map: options.box.face, transparent: true, fog: false, toneMapped: false });
+      const face = new Mesh(new PlaneGeometry(w * 0.94, h * 0.88), this.faceMaterial);
+      face.position.z = this.depth + 0.02;
+      this.cap.add(face);
+      this.cap.position.z = travel;
+      this.group.add(this.cap);
+      return;
+    }
     // Never smaller than the minimum (easy to hit with a fingertip), whatever size was asked for.
     const radius = Math.max(options.radius, BUTTON_SIZE.min);
     if (import.meta.env.DEV && radius > BUTTON_SIZE.max + 1e-6) {
@@ -96,7 +162,7 @@ export class PokeButton implements Control {
 
   /** Changes the icon on the face (for example Play on the welcome panel, restart on the end panel). */
   setIcon(icon: ButtonIcon): void {
-    if (icon === this.icon) return;
+    if (icon === this.icon || this.half) return;
     this.icon = icon;
     this.faceMaterial.map?.dispose();
     this.faceMaterial.map = iconTexture(icon);
@@ -154,8 +220,12 @@ export class PokeButton implements Control {
         continue;
       }
       this.group.worldToLocal(local.copy(hand.indexTip));
-      // Generous zone around the round face, and not from far behind it (a quick poke may land deep).
-      if (Math.hypot(local.x, local.y) > this.radius * zoneScale || local.z < -(this.depth + travel + POKE.quickBehind)) {
+      // Generous zone around the face (round, or a box's rectangle), and not from far behind it (a quick poke may land deep).
+      const margin = this.radius * (zoneScale - 1);
+      const outside = this.half
+        ? Math.abs(local.x) > this.half.x + margin || Math.abs(local.y) > this.half.y + margin
+        : Math.hypot(local.x, local.y) > this.radius * zoneScale;
+      if (outside || local.z < -(this.depth + travel + POKE.quickBehind)) {
         this.lastZ.delete(hand);
         continue;
       }
@@ -186,8 +256,10 @@ export class PokeButton implements Control {
         this.fired = true;
         this.armed = false;
         this.cooldown = cooldown;
-        fired = true;
-        this.audio.play('buttonClick');
+        // Locked: it goes down and buzzes, but does nothing.
+        fired = !this.locked;
+        this.audio.play(this.locked ? 'locked' : 'buttonClick');
+        if (this.locked) this.onRefuse();
       }
     } else if (this.fired && push >= 0) {
       // Held down after the click: stays down until the finger leaves.

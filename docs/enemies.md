@@ -68,7 +68,7 @@ So the player always knows the order: deal with the ones on top first. Goblins c
 ### Runner imps
 
 - **Question:** "Can you react fast?"
-- **Behavior:** tiny, fast, in big swarms. Rush past troops toward the wall (they dodge past the horn's knights with a quick hop), bash it, then climb fast (4 cm/s).
+- **Behavior:** tiny, fast, in big swarms. Rush toward the wall, bash it, then climb fast (4 cm/s). Like every goblin, one that comes within 16 cm of a field knight stops and fights it (v2 run 2: they used to hop past).
 - **Toughness:** one hit.
 - **Best answer:** fly swatter.
 - **Also works:** the garrison's arrows, the bell, hands when they reach the rampart.
@@ -124,7 +124,7 @@ v2: castle machines are dropped; the horn (knights) and the bell take their colu
 |---|---|---|---|---|---|---|
 | Grunt | ✓ | ★ | ✓ | ✓ | ★ (a group on a road) | ✓ |
 | Armored grunt (helmet, shield) | ✓ (slow) | ✓ (3 swats) | ★ | ✓ | ✓ | ✓ |
-| Runners | ✗ | ★ | ✓ | ✓ | ✗ (they hop past) | ✓ (on the rampart) |
+| Runners | ✗ | ★ | ✓ | ✓ | ✓ (they stop and fight, slowed by nothing else) | ✓ (on the rampart) |
 | Balloons | ★ | ✓ (when close) | ✗ | ✓ | ✗ | ✓ (when close) |
 | Goblins on the rampart | ✗ | ✓ | ✓ | ★ (knocked down) | ✗ | ★ |
 | Boom goblin | ★ | ✗ (explodes at the wall) | ✓ | ✓ | ✓ | ✓ (at the wall) |

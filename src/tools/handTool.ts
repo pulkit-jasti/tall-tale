@@ -93,10 +93,13 @@ const targetPosition = new Vector3();
 const targetQuaternion = new Quaternion();
 const targetScale = new Vector3();
 const wobbleQuaternion = new Quaternion();
+const turnTemp = new Quaternion();
 
 export abstract class HandTool {
-  /** Platform, post, price tag and rope (never move). */
+  /** Platform, post, ring and rope (they move only with the tool's spot, between battles). */
   readonly root = new Group();
+  /** The platform and its post, at the tool's spot. */
+  private platform = new Group();
   /** The tool itself. Origin at the end the hand holds, the tool along +y. */
   protected readonly body = new Group();
   /** The tool's materials (touch states, dimming). Filled by build(). */
@@ -239,47 +242,119 @@ export abstract class HandTool {
 
   async load(): Promise<void> {
     const top = TOOL_SPOTS.platformTop;
-    const a = degToRad(this.spot.angleDeg);
-    const x = polarX(this.spot.radius, a);
-    const z = polarZ(this.spot.radius, a);
-    const spot = this.options.platform === undefined ? this.spot : this.options.platform;
-    if (spot) {
+    if (this.options.platform !== null) {
       const width = this.options.platformWidth ?? TOOL_SPOTS.platformWidth;
       const platform = await loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width });
-      const pa = degToRad(spot.angleDeg);
-      const px = polarX(spot.radius, pa);
-      const pz = polarZ(spot.radius, pa);
+      // Built at the middle of its own group, so the group moves with the tool's spot (the loadout, setSpot).
       const stand = cloneStatic(platform);
-      stand.position.set(px, top - platform.size.y, pz);
+      stand.position.set(0, top - platform.size.y, 0);
       // The post reaches down to the board.
       const stem = post(top - platform.size.y);
-      stem.position.set(px, stem.position.y + top - platform.size.y, pz);
-      this.root.add(stand, stem);
+      stem.position.y += top - platform.size.y;
+      this.platform.add(stand, stem);
+      this.root.add(this.platform);
     }
-    // The use and recharge ring, flat around the tool's base (it rests on its own spot, or on the shared platform).
-    this.buildRing(x, z);
+    // The use and recharge ring, flat around the tool's base.
+    this.buildRing();
     this.build();
     this.baseColors = this.materials.map((m) => m.color.clone());
-    // Rest pose: on the platform, its face toward the player, leaning back
-    // along the rim (away from the front), so its top is out of view.
-    this.restPosition.set(x, top + (this.options.restLift ?? 0), z);
-    const outward = temp.set(Math.sin(a), 0, -Math.cos(a));
+    this.rope = toolRope(this.ropeRadius);
+    this.rope.rotation.x = Math.PI / 2;
+    this.root.add(this.rope);
+    this.placeSpot();
+    this.placeAtRest();
+    this.stage.boardLift.add(this.root, this.body);
+  }
+
+  /** Its platform group and the tool itself (the menu sinks them, src/world/sceneSwap.ts). */
+  get groups(): Group[] {
+    return [this.root, this.body];
+  }
+
+  /** The platform spot it stands on now. */
+  get spotNow(): ToolSpot {
+    return this.spot;
+  }
+
+  /**
+   * Moves the tool and its platform to another spot. Only between battles:
+   * whatever it held is let go. (Every battle puts each tool on its own spot
+   * now: moving the picks put a tool in front of the red flag.)
+   */
+  setSpot(spot: ToolSpot): void {
+    if (spot.angleDeg === this.spot.angleDeg && spot.radius === this.spot.radius) return;
+    this.spot = spot;
+    if (!this.rope) return;
+    this.holder = null;
+    this.placeSpot();
+    this.placeAtRest();
+  }
+
+  /**
+   * A copy of the tool's body for the menu's shelf and stand (its own
+   * materials, so their looks never touch the real tool), at its origin.
+   */
+  displayModel(): { model: Group; materials: MeshStandardMaterial[]; gripMid: number; lift: number; turn: (angleDeg: number, out: Quaternion) => Quaternion } {
+    const model = this.body.clone(true);
+    model.position.set(0, 0, 0);
+    model.quaternion.identity();
+    model.scale.setScalar(1);
+    model.visible = true;
+    const materials: MeshStandardMaterial[] = [];
+    const copies = new Map<MeshStandardMaterial, MeshStandardMaterial>();
+    model.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      const own = mesh.material as MeshStandardMaterial;
+      let copy = copies.get(own);
+      if (!copy) {
+        copy = own.clone();
+        // The tool's starting colors (not a dimmed or glowing look it had when copied).
+        const i = this.materials.indexOf(own);
+        if (i >= 0) copy.color.copy(this.baseColors[i]);
+        copy.emissive.setHex(0x000000);
+        copies.set(own, copy);
+        materials.push(copy);
+      }
+      mesh.material = copy;
+    });
+    return { model, materials, gripMid: (this.grip.from + this.grip.to) / 2, lift: this.restLift, turn: (angleDeg, out) => this.restTurn(angleDeg, out) };
+  }
+
+  /**
+   * How it rests on a platform at `angleDeg`: its face toward the player,
+   * leaning back along the rim (away from the front), so its top is out of
+   * view. Also for its copy on the menu's shelf and stand.
+   */
+  restTurn(angleDeg: number, out: Quaternion): Quaternion {
+    const a = degToRad(angleDeg);
     const side = a < 0 ? -1 : 1;
     const back = temp2.set(side * Math.cos(a), 0, side * Math.sin(a));
     const leanAxis = back.cross(UP).negate().normalize();
-    this.restQuaternion
-      .setFromAxisAngle(leanAxis, degToRad(this.restLeanDeg))
-      .multiply(new Quaternion().setFromAxisAngle(UP, -a));
+    return out.setFromAxisAngle(leanAxis, degToRad(this.restLeanDeg)).multiply(turnTemp.setFromAxisAngle(UP, -a));
+  }
+
+  /** How far its origin rests above a platform top (cm), for a tool that stands on its bell (the horn). */
+  get restLift(): number {
+    return this.options.restLift ?? 0;
+  }
+
+  /** Puts the platform, the ring, the rope and the rest pose at the current spot. */
+  private placeSpot(): void {
+    const top = TOOL_SPOTS.platformTop;
+    const a = degToRad(this.spot.angleDeg);
+    const x = polarX(this.spot.radius, a);
+    const z = polarZ(this.spot.radius, a);
+    this.platform.position.set(x, 0, z);
+    this.ring?.parent?.position.set(x, TOOL_SPOTS.platformTop + TOOLS.ring.lift, z);
+    // Around the tool's base, on the platform (a tool that hangs below its handle still stands on its base).
+    this.rope.position.set(x, top + 1.5, z);
+    this.restPosition.set(x, top + (this.options.restLift ?? 0), z);
+    this.restTurn(this.spot.angleDeg, this.restQuaternion);
+    const outward = temp.set(Math.sin(a), 0, -Math.cos(a));
     // The hand area: above the platform, a little toward the player.
     this.hoverPosition.copy(this.restPosition).addScaledVector(outward, -3);
     this.hoverPosition.y += TOOLS.looseLift;
-    this.rope = toolRope(this.ropeRadius);
-    this.rope.rotation.x = Math.PI / 2;
-    // Around the tool's base, on the platform (a tool that hangs below its handle still stands on its base).
-    this.rope.position.set(x, top + 1.5, z);
-    this.root.add(this.rope);
-    this.placeAtRest();
-    this.stage.boardLift.add(this.root, this.body);
   }
 
   /**
@@ -288,7 +363,7 @@ export abstract class HandTool {
    * part of it (each segment is 6 indices), so changing it costs nothing.
    * Unlit, so it reads at night too.
    */
-  private buildRing(x: number, z: number): void {
+  private buildRing(): void {
     const R = TOOLS.ring;
     const track = new Mesh(
       new RingGeometry(R.inner - 0.15, R.outer + 0.15, R.segments, 1),
@@ -297,7 +372,7 @@ export abstract class HandTool {
     const fill = new Mesh(new RingGeometry(R.inner, R.outer, R.segments, 1), new MeshBasicMaterial({ color: R.chargeColor }));
     // Flat, facing up. The fill sits a hair above the track (its local +z is up).
     track.rotation.x = -Math.PI / 2;
-    track.position.set(x, TOOL_SPOTS.platformTop + R.lift, z);
+    // Placed at the tool's spot by placeSpot().
     fill.position.set(0, 0, 0.08);
     track.add(fill);
     track.visible = false;

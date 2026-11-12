@@ -6,7 +6,7 @@
 //   Up or down: the board rises or lowers with the hand 1:1.
 // The ring lives in boardLift, so it rises with the board, and turns on its
 // own group so it follows the hand. The arrows never turn.
-import { Group, MeshStandardMaterial, Vector3 } from 'three';
+import { Group, MeshStandardMaterial, Vector3, type Object3D } from 'three';
 import { HANDLES } from '../config/game.js';
 import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { compassLetters } from '../world/compassLetters.js';
@@ -58,7 +58,11 @@ export class BoardHandles {
       arrows.add(verticalDoubleArrow(arrowMaterial, radius, side * sideArrowDeg, arrowY));
     }
     stage.boardLift.add(this.ring, arrows);
+    this.groups = [this.ring, arrows];
   }
+
+  /** The ring and its arrows (the menu sinks them, src/world/sceneSwap.ts). */
+  readonly groups: Object3D[];
 
   /** Distance (meters) from a hand to the ring, or null if out of the grab zone or held by the other hand. */
   reach(hand: HandState): number | null {

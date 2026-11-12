@@ -6,6 +6,7 @@
 // screen, or it looks blocky in the headset. Small icons come from the SVG
 // versions (public/ui/vector/), drawn at any size. PNGs are only used where
 // they are big enough (panels, the banner, the 100 px game icons).
+import { drawMenuIcon } from './kit/menuIcons.js';
 
 const FILES = {
   panel: 'rpg/panel_beige.png',
@@ -187,7 +188,29 @@ export function iconTextureSource(name: UiImageName, tint?: string): HTMLCanvasE
   return image ? tintCanvas(image, tint) : null;
 }
 
-export type ButtonIcon = 'next' | 'play' | 'restart' | 'pause' | 'table' | 'reach' | 'minus' | 'plus' | 'sound' | 'muted' | 'settings' | 'back' | 'access' | 'skip';
+export type ButtonIcon =
+  | 'next'
+  | 'play'
+  | 'restart'
+  | 'pause'
+  | 'table'
+  | 'reach'
+  | 'minus'
+  | 'plus'
+  | 'sound'
+  | 'muted'
+  | 'settings'
+  | 'back'
+  | 'access'
+  | 'skip'
+  // v2 run 2 menus: Fight, a locked Fight, Campaign, Daily Battle, Custom Game.
+  | 'sword'
+  | 'lock'
+  | 'campaign'
+  | 'daily'
+  | 'custom'
+  // Back to the home screen (the pause panel's and end panel's Menu): a little castle keep.
+  | 'home';
 
 /**
  * A crisp button icon drawn in code (256 px), in the same look as the arrows:
@@ -356,6 +379,9 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.closePath();
     c.fill();
     c.stroke();
+  } else if (icon === 'sword' || icon === 'lock' || icon === 'campaign' || icon === 'daily' || icon === 'custom' || icon === 'home') {
+    // v2 run 2 menu icons: the menus' own drawings (src/ui/kit/menuIcons.ts), in the same cream.
+    drawMenuIcon(c, icon, 0, 0, s * 0.72, ICON_FILL);
   } else if (icon === 'reach') {
     // Measure reach: a double arrow between two end bars, like a tape measure.
     c.lineWidth = s * 0.06;

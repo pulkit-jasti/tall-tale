@@ -144,6 +144,11 @@ export class Flags {
     this.wave.set(waveShare, instant);
   }
 
+  /** Both flags' groups (the menu sinks them, src/world/sceneSwap.ts). */
+  get roots(): Object3D[] {
+    return [this.health.root, this.wave.root];
+  }
+
   clothWorld(which: 'health' | 'wave', out: Vector3): Vector3 {
     return (which === 'health' ? this.health : this.wave).clothWorld(out);
   }

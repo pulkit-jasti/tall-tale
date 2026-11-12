@@ -8,6 +8,16 @@ export function rowX(i: number, count: number, gap: number): number {
   return (i - (count - 1) / 2) * gap;
 }
 
+/**
+ * How wide a panel must be for a row of `count` buttons `gap` apart, their
+ * rims `rim` wide, keeping `margin` from both side edges, and never narrower
+ * than `min` (its title). Panels size themselves with it (Panel.resize), so a
+ * button shown or hidden never leaves a gap or crowds the edge.
+ */
+export function rowPanelWidth(count: number, gap: number, rim: number, margin: number, min = 0): number {
+  return Math.max(min, Math.max(0, count - 1) * gap + 2 * (rim + margin));
+}
+
 /** The middle of a button row along a panel's bottom edge: the button's rim keeps `margin` from the edge. */
 export function bottomRowY(panelHeight: number, rimRadius: number, margin: number): number {
   return -panelHeight / 2 + rimRadius + margin;

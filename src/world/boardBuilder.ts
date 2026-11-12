@@ -292,6 +292,8 @@ async function buildDecor(terrain: Terrain, camps: CampSpot[], built: Spot[], fo
 
 export interface BuiltBoard {
   network: RoadNetwork;
+  /** The castle walls and towers (the menu sinks them, src/world/sceneSwap.ts). */
+  castle: Object3D;
   /** The windmill's sails, which turn (decor), or null without a windmill. */
   sails: Object3D | null;
   /** Camp hills by camp id, so a camp can sink as its enemies come out. */
@@ -346,6 +348,7 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   parent.add(castle, camps, decor, settlements, storyScenes);
   return {
     network,
+    castle,
     hills,
     sails: (settlements.userData.sails as Object3D | undefined) ?? null,
     // For the night lights: every window tile and lantern (in the settlements' frame, the board's), and a lantern's height.

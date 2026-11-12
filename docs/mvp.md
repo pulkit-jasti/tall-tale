@@ -2,6 +2,8 @@
 
 Goal: test the core gameplay loop in the headset as early as possible. Everything else waits until after the first playtest.
 
+**v2 run 2 (2026-11-11):** the bell left the tutorial (the bell is a campaign unlock), so the tutorial teaches the slingshot, the horn, the swatter and the pepper, and it has **4 waves** (was 5, like every campaign level: one time of day each): the old wave 5 had no lesson left, so wave 4 (pepper) is the final wave now, and the blue wave flag has 4 notches. Winning the tutorial now leads to the menu instead of the "Play again" panel, and Skip tutorial goes to the menu too ([menus.md](menus.md#11-as-built-run-2)). The tutorial rebuild itself is run 3 ([v2-plan.md](v2-plan.md)).
+
 Back to [GDD index](GDD.md).
 
 ---
@@ -154,7 +156,7 @@ Each step should be playable on its own.
 
 Decided, not forgotten. Everything else from steps 1 to 6 is done.
 
-- **Wave 5 trigger reminder:** its intro text ("Shoot the barrels, boulders and trees") is never shown, because wave 5 starts straight into the megaphone lesson. It could show as a short line after that lesson.
+- **Wave 5 trigger reminder (gone with wave 5 in v2 run 2):** its intro text ("Shoot the barrels, boulders and trees") is never shown, because wave 5 starts straight into the megaphone lesson. It could show as a short line after that lesson.
 - **Code cleanup:** the unused "loose" phase in `src/tools/handTool.ts` and its unused `tagToBack` option.
 - **Food jar look:** it still reads like another tool stand. Idea: a low "tribute tray" piled with drumsticks (needs a food model, a new asset pack needs the developer's OK, or a code-made drumstick). Polish.
 - **Courtyard houses, stalls and workers:** removed to keep the castle clear while the gameplay was built. They come back with the polish.

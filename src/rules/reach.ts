@@ -6,7 +6,9 @@ import {
   BALLOONS,
   BELL,
   BOARD,
+  BUTTON_SIZE,
   CASTLE,
+  MENU,
   END_PANEL,
   HANDLES,
   HINT_SIGN,
@@ -117,11 +119,47 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'settings lowest row (slider end)', ...lowestRow, rare: true },
     { name: 'settings Back (top left)', ...backButton, rare: true },
     { name: 'settings tabs (bottom row)', ...tabRow, rare: true },
+    ...menuSpots(onPanel),
     { name: 'climber on the rampart', radius: CASTLE.rampartRadius, y: CASTLE.wallHeight + 2, rare: true },
     { name: 'intruder at the courtyard edge', radius: CASTLE.courtyardMax, y: 2, rare: true },
     // A balloon rider while it is dropped into the courtyard (its middle, standing in the basket), and as it crosses the wall.
     { name: 'balloon rider over the courtyard', radius: BALLOONS.dropRadius, y: riderMiddle },
     { name: 'balloon rider over the wall', radius: CASTLE.wallOut, y: riderMiddle, rare: true },
+  ];
+}
+
+type OnPanel = (panelRadius: number, centerY: number, tiltDeg: number, y: number, side?: number) => { radius: number; y: number };
+
+/**
+ * The home screen's targets (v2 run 2, docs/menus.md): the main menu's
+ * buttons, the campaign panel's Back, rows, slider and Fight, the shelves'
+ * things (their grip about 3 cm over the pedestal at display size) and the
+ * loadout stand's slots.
+ */
+function menuSpots(onPanel: OnPanel): { name: string; radius: number; y: number; rare?: boolean }[] {
+  const M = MENU.main;
+  const C = MENU.campaign;
+  const mainY = uiCenterY(M.height, M.tiltDeg);
+  const smallY = M.smallY;
+  const campY = uiCenterY(C.height, M.tiltDeg);
+  const listX = (C.listLeft + C.listRight) / 2;
+  const S = MENU.shelves;
+  const grip = 3;
+  // A thing standing on a pedestal at height `y`: its grip a little above (the angle never changes the distance).
+  const flat = (radius: number, y: number): { radius: number; y: number } => ({ radius, y: y + grip });
+  return [
+    { name: 'main menu Campaign button', ...onPanel(M.radius, mainY, M.tiltDeg, M.heroAt[1], M.heroAt[0]) },
+    { name: 'main menu Daily and Custom buttons', ...onPanel(M.radius, mainY, M.tiltDeg, M.sideY, M.sideX) },
+    { name: 'main menu Settings and Tutorial buttons', ...onPanel(M.radius, mainY, M.tiltDeg, smallY, M.smallX) },
+    { name: 'campaign Back (top left)', ...onPanel(M.radius, campY, M.tiltDeg, C.backAt[1], C.backAt[0]), rare: true },
+    { name: 'campaign list top (left end)', ...onPanel(M.radius, campY, M.tiltDeg, C.listTop - 2, C.listLeft + 2), rare: true },
+    { name: 'campaign list bottom', ...onPanel(M.radius, campY, M.tiltDeg, C.listBottom + 2, listX) },
+    { name: 'campaign slider top', ...onPanel(M.radius, campY, M.tiltDeg, C.listTop - 1, C.sliderX) },
+    { name: 'campaign Fight button', ...onPanel(M.radius, campY, M.tiltDeg, C.fightAt[1], C.fightAt[0]) },
+    { name: 'tool shelf things', ...flat(S.tools.radius, S.tools.y) },
+    { name: 'trophies, low row', ...flat(S.trophies.lowRadius, S.trophies.lowY) },
+    { name: 'trophies, high row', ...flat(S.trophies.highRadius, S.trophies.highY) },
+    { name: 'loadout stand slots', ...flat(MENU.stand.radius, MENU.stand.y) },
   ];
 }
 
@@ -138,6 +176,8 @@ export function checkReach(): void {
     ['end panel', END_PANEL.height, END_PANEL.tiltDeg],
     ['pause panel', PAUSE.panel.height, PAUSE.panel.tiltDeg],
     ['settings page', PAUSE.settings.height, PAUSE.panel.tiltDeg],
+    ['main menu', MENU.main.height, MENU.main.tiltDeg],
+    ['campaign panel', MENU.campaign.height, MENU.main.tiltDeg],
   ];
   for (const [name, height, tilt] of panels) {
     if (!fitsUiZone(height, tilt)) console.warn(`[reach] the ${name} is too tall for UI_ZONE in src/config/game.ts: make it shorter`);

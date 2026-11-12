@@ -20,3 +20,9 @@ export function popIn(t: number): number {
   const u = Math.min(1, Math.max(0, t)) - 1;
   return 1 + (BACK + 1) * u * u * u + BACK * u * u;
 }
+
+/** A smooth start and stop, from 0 (t = 0) to 1 (t = 1): the menu and battle sliding in and out of the ground. */
+export function easeInOut(t: number): number {
+  const s = Math.min(1, Math.max(0, t));
+  return s * s * (3 - 2 * s);
+}

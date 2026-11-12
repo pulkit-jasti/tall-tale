@@ -799,6 +799,9 @@ export class Troops {
     for (const t of this.list) {
       if (t.mode === 'fighting' && t.foe && !t.garrison) this.fighters.set(t.foe, (this.fighters.get(t.foe) ?? 0) + 1);
     }
+    // What each squad sees, and the goblins that stop to fight a knight near them (KNIGHTS.senseRadius, goblinSense).
+    this.senseThreats();
+    this.stopNearKnights();
     const far2 = TROOPS.farAnimFrom * TROOPS.farAnimFrom;
     for (let i = 0; i < this.list.length; i++) {
       const t = this.list[i];
@@ -845,12 +848,109 @@ export class Troops {
     // The wall garrison (src/units/garrison.ts) moves, shoots and fights on the rampart.
     this.onUpdate(dt);
     this.arrows.update(dt, (arrow) => this.arrowLands(arrow));
-    // A goblin whose soldier is gone carries on, unless another soldier fights it.
+    // A goblin whose soldier is gone carries on, unless another soldier fights it. One that stopped for a
+    // field knight near it (stopNearKnights) keeps waiting for it while that knight is up and near.
+    const sense2 = (KNIGHTS.goblinSense * 1.5) ** 2;
     for (const g of this.goblins.list) {
       if (g.mode !== 'fighting') continue;
       const foe = g.foe as Troop | null;
-      if (!foe || foe.mode !== 'fighting' || foe.foe !== g) this.goblins.endFight(g);
+      if (foe && foe.mode === 'fighting' && foe.foe === g) continue;
+      if (foe && foe.mode !== 'dead' && !foe.garrison && foe.root.position.distanceToSquared(g.root.position) < sense2) continue;
+      this.goblins.endFight(g);
     }
+  }
+
+  /** The goblins each squad sees now: every fightable one within KNIGHTS.senseRadius of any of its knights. */
+  private threats = new Map<Squad, Goblin[]>();
+
+  private senseThreats(): void {
+    const r2 = KNIGHTS.senseRadius * KNIGHTS.senseRadius;
+    const wall2 = CASTLE.wallOut * CASTLE.wallOut;
+    for (const list of this.threats.values()) list.length = 0;
+    for (const squad of this.squads) {
+      let list = this.threats.get(squad);
+      if (!list) this.threats.set(squad, (list = []));
+      for (const g of this.goblins.list) {
+        if (!FIGHTABLE.has(g.mode) || this.goblins.isLesson(g)) continue;
+        const q = g.root.position;
+        if (q.x * q.x + q.z * q.z < wall2) continue;
+        for (const m of squad.members) {
+          if (m.mode === 'dead' || m.squad !== squad) continue;
+          if (m.root.position.distanceToSquared(q) <= r2) {
+            list.push(g);
+            break;
+          }
+        }
+      }
+    }
+    // Squads that are gone.
+    for (const squad of this.threats.keys()) if (!this.squads.includes(squad)) this.threats.delete(squad);
+  }
+
+  /**
+   * Every goblin on the field near a field knight (KNIGHTS.goblinSense) stops
+   * and turns to it, ready to fight, instead of walking past toward the
+   * castle. Runners too. A knight of that squad takes it on soon (every
+   * free knight goes for a goblin the squad sees).
+   */
+  private stopNearKnights(): void {
+    const r2 = KNIGHTS.goblinSense * KNIGHTS.goblinSense;
+    const wall2 = CASTLE.wallOut * CASTLE.wallOut;
+    for (const g of this.goblins.list) {
+      if ((g.mode !== 'walking' && g.mode !== 'toWall') || this.goblins.isLesson(g)) continue;
+      const q = g.root.position;
+      if (q.x * q.x + q.z * q.z < wall2) continue;
+      let near: Troop | null = null;
+      let best = r2;
+      for (const t of this.list) {
+        if (t.mode === 'dead' || t.garrison || t.mode === 'standing') continue;
+        const d = t.root.position.distanceToSquared(q);
+        if (d < best) {
+          best = d;
+          near = t;
+        }
+      }
+      if (!near) continue;
+      this.goblins.startFight(g, near);
+      g.face(near.root.position.x - q.x, near.root.position.z - q.z);
+    }
+  }
+
+  /**
+   * The goblin a knight goes for. A knight of a squad: one its squad sees
+   * (any goblin near any of its knights), the one with the fewest knights on
+   * it, the nearest of those; at its spot, never one past its leash. A knight
+   * on its own (marching home): one right next to it.
+   */
+  private squadFoe(t: Troop): Goblin | null {
+    const squad = t.squad;
+    if (!squad || squad.broken) return this.findFoe(t, TROOP_KINDS[t.kind].engageRange);
+    const threats = this.threats.get(squad);
+    if (!threats || threats.length === 0) return null;
+    const p = t.root.position;
+    const leash2 = KNIGHTS.leash * KNIGHTS.leash;
+    let best: Goblin | null = null;
+    let bestD = Infinity;
+    let bestCount = Infinity;
+    for (const g of threats) {
+      if (!FIGHTABLE.has(g.mode)) continue;
+      if (g === t.ignore && t.ignoreTime > 0) continue;
+      const q = g.root.position;
+      // The same leash fight() keeps, so a fight is never started and dropped in the same frame.
+      if (t.arrived) {
+        const lx = q.x - t.post.x;
+        const lz = q.z - t.post.z;
+        if (lx * lx + lz * lz > leash2) continue;
+      }
+      const d = (q.x - p.x) ** 2 + (q.z - p.z) ** 2;
+      const count = (this.fighters.get(g) ?? 0) - (g === t.foe && t.mode === 'fighting' ? 1 : 0);
+      if (count < bestCount || (count === bestCount && d < bestD)) {
+        bestCount = count;
+        bestD = d;
+        best = g;
+      }
+    }
+    return best;
   }
 
   private obtain(kind: TroopKind): Troop | null {
@@ -954,15 +1054,11 @@ export class Troops {
   }
 
   private walk(t: Troop, dt: number): void {
-    // Everyone fights a goblin right next to them.
-    const close = this.findFoe(t, TROOP_KINDS[t.kind].engageRange);
-    if (close) {
-      // A charging squad's first contact: the crash knocks several over (they get up dazed and are fought then).
-      if (t.mode === 'charging' && t.squad && !t.squad.crashed) {
-        this.crash(t, close);
-        return;
-      }
-      this.engage(t, close);
+    // On the way out, the squad fights every goblin it meets first, then walks on to its spot (the charge's crash
+    // happens when the first knight reaches its goblin, in fight()). Marching home, only one right next to it.
+    const foe = this.squadFoe(t);
+    if (foe) {
+      this.engage(t, foe);
       return;
     }
     const leg = t.legs[t.leg];
@@ -1002,6 +1098,11 @@ export class Troops {
 
   /** The squad was moved: a few steps straight back onto the road where its new walk starts, then the sprint. */
   private join(t: Troop, dt: number): void {
+    const foe = t.outward ? this.squadFoe(t) : null;
+    if (foe) {
+      this.engage(t, foe);
+      return;
+    }
     const leg = t.legs[0];
     if (!leg) {
       this.arrive(t);
@@ -1062,9 +1163,9 @@ export class Troops {
   }
 
   private toPost(t: Troop, dt: number): void {
-    const close = this.findFoe(t, TROOP_KINDS[t.kind].engageRange);
-    if (close) {
-      this.engage(t, close);
+    const foe = this.squadFoe(t);
+    if (foe) {
+      this.engage(t, foe);
       return;
     }
     const p = t.root.position;
@@ -1131,22 +1232,14 @@ export class Troops {
     else this.arrive(t);
   }
 
-  /** Holding its spot: it goes for any goblin that comes within KNIGHTS.watchRadius of the spot. Runners hop past. */
+  /**
+   * Holding its spot: it goes for any goblin its squad sees (near any of its
+   * knights, inside its leash). Runners no longer hop past: every goblin near
+   * a knight stops and fights (stopNearKnights).
+   */
   private hold(t: Troop): void {
-    const foe = this.findFoe(t, KNIGHTS.watchRadius, t.post);
-    if (foe) {
-      this.engage(t, foe);
-      return;
-    }
-    const p = t.root.position;
-    const r2 = KNIGHTS.dodgeRange * KNIGHTS.dodgeRange;
-    for (const g of this.goblins.list) {
-      if (g.type !== 'runner' || g.mode !== 'walking') continue;
-      const q = g.root.position;
-      const dx = q.x - p.x;
-      const dz = q.z - p.z;
-      if (dx * dx + dz * dz < r2) this.goblins.hop(g);
-    }
+    const foe = this.squadFoe(t);
+    if (foe) this.engage(t, foe);
   }
 
   /** A field knight of a broken squad walks home along the roads to the nearest wall entry and goes in. */
@@ -1224,7 +1317,8 @@ export class Troops {
     const leashed = t.arrived && !!t.squad;
     const leash2 = KNIGHTS.leash * KNIGHTS.leash;
     for (const g of this.goblins.list) {
-      if (g.type === 'runner' || !FIGHTABLE.has(g.mode) || this.goblins.isLesson(g)) continue;
+      // Runners too (v2 run 2: no goblin runs past the knights).
+      if (!FIGHTABLE.has(g.mode) || this.goblins.isLesson(g)) continue;
       if (g === t.ignore && t.ignoreTime > 0) continue;
       const q = g.root.position;
       if (q.x * q.x + q.z * q.z < CASTLE.wallOut * CASTLE.wallOut) continue;
@@ -1338,7 +1432,9 @@ export class Troops {
         this.release(t);
         return;
       }
-      const step = Math.min(gap - reach, t.speed * KNIGHTS.postSpeedScale * dt);
+      // On the way out they run at it (the charge); at their spot they walk.
+      const pace = t.arrived || !t.outward ? KNIGHTS.postSpeedScale : KNIGHTS.sprintScale;
+      const step = Math.min(gap - reach, t.speed * pace * dt);
       p.x += (dx / gap) * step;
       p.z += (dz / gap) * step;
       p.y = groundAt(p.x, p.z);
@@ -1351,6 +1447,11 @@ export class Troops {
     if (t.closing) {
       t.closing = false;
       t.play('idle');
+    }
+    // A charging squad's first contact: the crash knocks several over (they get up dazed and are fought then).
+    if (t.squad && !t.squad.crashed && !t.arrived && t.outward) {
+      this.crash(t, g);
+      if (g.mode !== 'fighting') return;
     }
     t.face(q.x - p.x, q.z - p.z);
     // The goblin's foe was knocked down: this soldier takes its place.

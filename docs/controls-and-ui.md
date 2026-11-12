@@ -51,7 +51,7 @@ Every grab, pinch and poke target must be a comfortable reach from the chair. To
 | Over 63 cm | Out of reach | Only things the tools reach (the slingshot, the swatter's long handle), and things to look at (the hint sign) |
 
 - **Where the numbers come from:** Meta's hands guidance ("Hands UI best practices", "Spatial UI inside interactive 3D scenes") puts direct touch at 42 to 46 cm and says to avoid 50 to 80 cm, the "middle distance" where people reach, miss and give up. It also says frequent actions belong low, because raised arms tire quickly. The close limit is our own, from the eat zone and the first headset tests.
-- **Measured from the eyes** with the board at its placed height (46 cm below the eyes, lowered from 36 and then 40 after the step 4 tests, so the player towers over the kingdom) and its default size. Board spots convert with `reachDistance()` in `src/rules/reach.ts`: for example 33.5 cm out and 10 cm above the board is about 49 cm.
+- **Measured from the eyes** with the board at its placed height (50 cm below the eyes, lowered from 36, then 40, then 46 after the headset tests, so the player towers over the kingdom) and its default size. Board spots convert with `reachDistance()` in `src/rules/reach.ts`: for example 33.5 cm out and 10 cm above the board is about 52 cm (the lower board pushed the low targets, platforms and ring, a little past the sweet spot; the dev server lists them).
 - **Everything is sized from it:** the ring handle (27 cm out, about 48 cm from the eyes), the tool platforms just outside it (33.5 cm out, tops 6 cm above the board, handles about 49 cm), and the castle: the wall at 46 to 52 cm, with goblins on the rampart at about 62 cm.
 - **Then sized to the player:** the reach check (below) scales all of it to the player's arms.
 - **Low:** tool platforms sit low (6 cm above the board), so the hand reaches them without lifting the arm.
@@ -241,11 +241,14 @@ All UI is built from one shared library, `src/ui/kit/` (import everything from `
 
 | Part | What it is | Used by |
 |---|---|---|
-| `PokeButton` | The round button poked with the index finger (Idle, Ready, Held, a blink while it waits) | Every button |
-| `Slider` | Touch the handle and slide, one at a time, a handle like the buttons, grey at off, ticks per step (SLIDER) | Sound settings |
+| `PokeButton` | The round button poked with the index finger (Idle, Ready, Held, a blink while it waits). `locked`: it goes down and buzzes, nothing more | Every button |
+| `Slider` | Touch the handle and slide, one at a time, a handle like the buttons, grey at off, ticks per step (SLIDER). `vertical`: upright, 1 at the top | Sound settings, the campaign list's scroll |
+| `ScrollList` | v2 run 2: a list whose rows are drawn once into one tall canvas, a window moving over it (scrolling never redraws); a tap selects a row (click), hover lights the row (tick), press darkens it; edge rows show cut off; it draws after its panel and never writes depth (SCROLL_LIST). It can scroll by swiping (Meta's guidance, coasting, springing back), or be tap only (`swipe: false`) and scrolled from outside (`scrollToShare`, gliding smoothly) | Campaign level list (tap only, with an upright `Slider`: swipes and taps got mixed up on the headset) |
+| `FightButton` | v2 run 2: the one rectangular button, a bordered box (`PokeButton`'s `box` option, the same poke, looks and sounds) with a sword and "Fight!", red; locked grey with a lock. Every other button is round | Campaign Fight |
+| `drawStar`, `drawSkull`, `drawMenuIcon` | v2 run 2: menu icons drawn in code (stars, goblin skulls, sword, lock, flag, sun, sliders, gear, replay, back). The round buttons' `sword`, `lock`, `campaign`, `daily` and `custom` icons use them. Menus use only round buttons (rectangular ones were tried and dropped) | Menus, end panel |
 | `Switch` | On and off: knob side, track color and the word On or Off together, slid past the middle to flip (springs back short of it), can be locked (SWITCH) | Access settings (the quiet horn) |
 | `StandButton` | A `PokeButton` on a post straight in front, tilted toward the eyes, that starts fresh and locked when it comes out | Next, pause |
-| `Panel` | The parchment board with a canvas, its pop, and `root` for its controls | Hint sign, end, pause, settings |
+| `Panel` | The parchment board with a canvas, its pop, and `root` for its controls. `resize(width, height)` fits it to what is on it now (its canvas stays as sharp, a menu panel keeps its `uiCenterY` height); with `rowPanelWidth` a panel is as wide as its shown buttons need, so a button shown or hidden never leaves a gap | Hint sign, end, pause (sizes to its buttons), settings, menus |
 | `LazyFollow` | Keeps a menu in front of the head like the Quest's own menus | Pause panel |
 | `armControls`, `changeTouch`, `Control` | A page opened: reset and lock its controls; the shared touch look and ready tick | Every panel, button and slider |
 | `rowX`, `bottomRowY`, `panelMap`, `stepValue`, `clamp01`, `angleTo` | Layout math, no Three.js, tested (`layout.test.ts`) | Panels, slider, follow |

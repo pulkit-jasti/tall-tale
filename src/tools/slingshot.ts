@@ -583,6 +583,44 @@ export class Slingshot {
     this.handleTouch = this.setTouch(this.woodMaterials, this.handleTouch, this.frameHolder ? 'held' : handle ? 'ready' : 'idle');
   }
 
+  /** Its platform and bowl, and the frame (the menu sinks them, src/world/sceneSwap.ts). */
+  get groups(): Object3D[] {
+    return [this.root, this.frame];
+  }
+
+  /**
+   * A copy of the frame (bands and pouch at rest) for the menu's loadout
+   * stand (v2 run 2), with its own materials, standing at its origin.
+   */
+  displayModel(): { model: Group; materials: MeshStandardMaterial[]; gripMid: number; lift: number; turn: (angleDeg: number, out: Quaternion) => Quaternion } {
+    const model = this.frame.clone(true);
+    model.position.set(0, 0, 0);
+    model.quaternion.identity();
+    model.scale.setScalar(1);
+    model.visible = true;
+    const materials: MeshStandardMaterial[] = [];
+    const copies = new Map<MeshStandardMaterial, MeshStandardMaterial>();
+    model.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      const own = mesh.material as MeshStandardMaterial;
+      let copy = copies.get(own);
+      if (!copy) {
+        copy = own.clone();
+        copy.emissive.setHex(0x000000);
+        copies.set(own, copy);
+        materials.push(copy);
+      }
+      mesh.material = copy;
+    });
+    // Turned like on its platform: the shot pointing out, away from the seat.
+    const turn = (angleDeg: number, out: Quaternion): Quaternion => {
+      const a = degToRad(angleDeg);
+      return out.setFromAxisAngle(UP, Math.atan2(-Math.sin(a), Math.cos(a)));
+    };
+    return { model, materials, gripMid: SLINGSHOT.handleHeight / 2, lift: 0, turn };
+  }
+
   /** Shows or hides the slingshot (the tutorial director brings it in later). */
   setVisible(visible: boolean): void {
     if (!visible) {

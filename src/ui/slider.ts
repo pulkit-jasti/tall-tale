@@ -34,6 +34,8 @@ export interface SliderOptions {
   /** Steps from one end to the other (a tick at each while it moves). */
   steps: number;
   value: number;
+  /** Upright (v2 run 2, the campaign list's scroll): the track runs up and down, 1 at the top. */
+  vertical?: boolean;
 }
 
 const local = new Vector3();
@@ -41,6 +43,8 @@ const local = new Vector3();
 export class Slider implements Control {
   /** Place and turn this group. Its +z is the slider's face. */
   readonly group = new Group();
+  /** The slider's own frame (its track along x): the group itself, or turned a quarter for an upright one. */
+  private frame = new Group();
   onChange: (value: number, final: boolean) => void = () => {};
   private length: number;
   private steps: number;
@@ -77,7 +81,10 @@ export class Slider implements Control {
     this.handle = new Mesh(new CylinderGeometry(S.handleRadius, S.handleRadius, S.handleDepth, POKE.segments), this.handleMaterial);
     this.handle.rotation.x = Math.PI / 2;
     this.handle.position.z = S.trackDepth + S.handleDepth / 2;
-    this.group.add(track, this.fill, this.handle);
+    this.frame.add(track, this.fill, this.handle);
+    // Upright: the whole frame turned a quarter, so its +x (toward 1) points up. The touch code reads the frame, so it is the same.
+    if (options.vertical) this.frame.rotation.z = Math.PI / 2;
+    this.group.add(this.frame);
     this.show();
   }
 
@@ -116,8 +123,8 @@ export class Slider implements Control {
     // Dragging: the handle follows the finger along the track until it pulls back off the face.
     if (this.held) {
       const hand = this.held;
-      this.group.updateWorldMatrix(true, false);
-      this.group.worldToLocal(local.copy(hand.indexTip));
+      this.frame.updateWorldMatrix(true, false);
+      this.frame.worldToLocal(local.copy(hand.indexTip));
       const off = !hand.tracked || local.z > S.releaseOut || Math.abs(local.y) > S.zoneHeight * 1.6;
       if (off) {
         this.held = null;
@@ -140,8 +147,8 @@ export class Slider implements Control {
         this.lastZ.delete(hand);
         continue;
       }
-      this.group.updateWorldMatrix(true, false);
-      this.group.worldToLocal(local.copy(hand.indexTip));
+      this.frame.updateWorldMatrix(true, false);
+      this.frame.worldToLocal(local.copy(hand.indexTip));
       const dx = local.x - handleX;
       if (dx * dx + local.y * local.y > reach * reach || local.z < -S.zoneBehind) {
         this.lastZ.delete(hand);
@@ -172,7 +179,7 @@ export class Slider implements Control {
     const reach = SLIDER.handleRadius + SLIDER.handleMargin;
     for (const hand of hands) {
       if (!hand.tracked) continue;
-      this.group.worldToLocal(local.copy(hand.indexTip));
+      this.frame.worldToLocal(local.copy(hand.indexTip));
       const dx = local.x - handleX;
       if (dx * dx + local.y * local.y <= reach * reach && local.z > SLIDER.touchAt + 0.3) return true;
     }

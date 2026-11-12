@@ -18,6 +18,7 @@ import { BOARD, PAUSE, POKE, SLIDER, SWITCH, UI_SPACING } from '../config/game.j
 import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
 import { access, hornHearsMic } from '../player/accessSettings.js';
+import { progress } from '../player/progress.js';
 import type { HandState } from '../player/hands.js';
 import { settingsTabRowY } from '../rules/reach.js';
 import {
@@ -32,6 +33,7 @@ import {
   Panel,
   panelMap,
   PokeButton,
+  rowPanelWidth,
   rowX,
   Slider,
   StandButton,
@@ -40,21 +42,23 @@ import {
   type ButtonIcon,
 } from './kit/index.js';
 
-export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart' | 'skipTutorial';
+export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart' | 'skipTutorial' | 'quitToMenu';
 
 /**
- * The main page's buttons. Settings opens the settings page (in the panel, not
- * an action for the game). Skip tutorial shows only while the tutorial runs,
- * so no player is ever stuck in it.
+ * The main page's buttons, and when each shows. Settings opens the settings
+ * page (in the panel, not an action for the game). Skip tutorial shows only
+ * while the tutorial runs, so no player is ever stuck in it; Menu (back to
+ * the home screen, v2 run 2) in every other battle. The panel sizes itself
+ * to the buttons that show (Panel.resize, rowPanelWidth).
  */
-const BUTTONS: { action: PauseAction | 'settings'; icon: ButtonIcon; label: string }[] = [
-  { action: 'resume', icon: 'play', label: 'Resume' },
+const BUTTONS: { action: PauseAction | 'settings'; icon: ButtonIcon; label: string; when: 'always' | 'teaching' | 'battle' }[] = [
+  { action: 'resume', icon: 'play', label: 'Resume', when: 'always' },
   // Reset table lives in the settings now (Access tab), with Measure reach.
-  { action: 'settings', icon: 'settings', label: 'Settings' },
-  { action: 'restart', icon: 'restart', label: 'Restart' },
-  { action: 'skipTutorial', icon: 'skip', label: 'Skip tutorial' },
+  { action: 'settings', icon: 'settings', label: 'Settings', when: 'always' },
+  { action: 'restart', icon: 'restart', label: 'Restart', when: 'always' },
+  { action: 'skipTutorial', icon: 'skip', label: 'Skip tutorial', when: 'teaching' },
+  { action: 'quitToMenu', icon: 'home', label: 'Menu', when: 'battle' },
 ];
-const SKIP_INDEX = BUTTONS.findIndex((b) => b.action === 'skipTutorial');
 
 /** The settings' categories, as tabs along the top of the page. */
 type SettingsTab = 'sound' | 'access';
@@ -73,9 +77,6 @@ interface SoundRow {
   y: number;
 }
 
-/** X of each button's center on the panel (cm), left to right. */
-const buttonX = (index: number): number => rowX(index, BUTTONS.length, PAUSE.panel.buttonGap);
-
 const CM = 0.01;
 
 export class PauseMenu {
@@ -86,8 +87,10 @@ export class PauseMenu {
   private pauseButton: StandButton;
   private buttonTopPx = 0;
   private open = false;
-  /** Skip tutorial shows (only while the tutorial runs). */
-  private skipShown = true;
+  /** The tutorial runs (Skip tutorial shows) or not (Menu shows); null before the first show. */
+  private teaching: boolean | null = null;
+  /** The buttons that show now (indexes into BUTTONS), left to right. */
+  private shown: number[] = [];
   /** The settings page: measure reach again, and the sound groups' volumes. */
   private settings: Panel;
   private page: 'main' | 'settings' = 'main';
@@ -103,6 +106,10 @@ export class PauseMenu {
   private tabButtons: PokeButton[] = [];
   private tabGroups: Record<SettingsTab, Group> = { sound: new Group(), access: new Group() };
   private bellSwitch: Switch;
+  /** "Unlock all tools" (Access tab, v2 run 2). */
+  private unlockSwitch: Switch;
+  /** The "Unlock all tools" switch was flipped (the game saves it and the shelves show it). */
+  onUnlockAll: (on: boolean) => void = () => {};
   /** Follows the head lazily while open, like the Quest's own menus. */
   private follow: LazyFollow;
 
@@ -119,14 +126,14 @@ export class PauseMenu {
     this.panel = new Panel(this.holder, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: Math.round(width * 15), canvasScale: 2 });
     const rim = buttonRadius * POKE.rimScale;
     const buttonY = bottomRowY(height, rim, buttonMargin);
-    BUTTONS.forEach((b, i) => {
+    for (const b of BUTTONS) {
       const button = new PokeButton(audio, { radius: buttonRadius, icon: b.icon });
-      button.group.position.set(buttonX(i), buttonY, 0);
+      button.group.position.y = buttonY;
       this.panel.root.add(button.group);
       this.buttons.push(button);
-    });
+    }
     this.buttonTopPx = panelMap(width, height, this.panel.layoutWidth, this.panel.layoutHeight).y(buttonY + rim);
-    this.panel.paint((c, w) => this.draw(c, w));
+    this.layoutButtons(false);
     // The settings page, on its own panel at the same spot (a little bigger).
     const S = PAUSE.settings;
     this.settings = new Panel(this.holder, {
@@ -166,6 +173,13 @@ export class PauseMenu {
     // Reset table (was on the pause panel's main page): the board placed again at its starting height.
     this.table = new PokeButton(audio, { radius: S.reachRadius, icon: 'table' });
     add(this.table.group, controlLeft + S.reachRadius * POKE.rimScale, S.firstRowY - 2 * S.accessRowGap, this.tabGroups.access);
+    // Unlock all tools (v2 run 2, for judges): every tool on the shelf can be picked. Tools only, never levels.
+    this.unlockSwitch = new Switch(audio, { on: progress.unlockAll });
+    add(this.unlockSwitch.group, controlLeft + SWITCH.width / 2, S.firstRowY - 3 * S.accessRowGap, this.tabGroups.access);
+    this.unlockSwitch.onChange = (on) => {
+      this.onUnlockAll(on);
+      this.repaintSettings();
+    };
     SOUND_CATEGORIES.forEach((c, i) => {
       const y = S.firstRowY - i * S.rowGap;
       // Just a slider per group: all the way down is off.
@@ -198,18 +212,29 @@ export class PauseMenu {
    * Opens the panel in front of the head, at the same spot from the eyes as
    * the end panel (sized with the board, so it matches the player's reach).
    */
-  /** `skipShown`: the tutorial runs, so Skip tutorial is on the panel. */
-  show(head: Vector3, forward: Vector3, boardScale: number, skipShown = false): void {
+  /** `teaching`: the tutorial runs, so Skip tutorial is on the panel (else Menu is). */
+  show(head: Vector3, forward: Vector3, boardScale: number, teaching = false): void {
     this.open = true;
     this.settingsOnly = false;
     this.pauseButton.show(false);
-    if (skipShown !== this.skipShown) {
-      this.skipShown = skipShown;
-      this.buttons[SKIP_INDEX].group.visible = skipShown;
-      this.panel.paint((c, w) => this.draw(c, w));
-    }
+    this.layoutButtons(teaching);
     this.follow.snap(head, forward, BOARD.eyeToBoard * boardScale, CM * boardScale);
     this.showPage('main');
+  }
+
+  /**
+   * Only the buttons for this battle show, spread evenly, and the panel takes
+   * the width they need (never a gap where a hidden one was).
+   */
+  private layoutButtons(teaching: boolean): void {
+    if (teaching === this.teaching) return;
+    this.teaching = teaching;
+    const P = PAUSE.panel;
+    this.shown = BUTTONS.flatMap((b, i) => (b.when === 'always' || (b.when === 'teaching') === teaching ? [i] : []));
+    this.buttons.forEach((button, i) => (button.group.visible = this.shown.includes(i)));
+    this.shown.forEach((i, k) => (this.buttons[i].group.position.x = rowX(k, this.shown.length, P.buttonGap)));
+    this.panel.resize(rowPanelWidth(this.shown.length, P.buttonGap, P.buttonRadius * POKE.rimScale, P.buttonMargin, P.minWidth), P.height);
+    this.panel.paint((c, w) => this.draw(c, w));
   }
 
   hide(): void {
@@ -235,7 +260,7 @@ export class PauseMenu {
     this.panel.visible = page === 'main';
     this.settings.visible = page === 'settings';
     // It follows the head only once the eyes go past the page's edge: the big settings page lets them roam to its corners.
-    this.follow.fitTo(page === 'main' ? PAUSE.panel.width : PAUSE.settings.width, PAUSE.panel.radius);
+    this.follow.fitTo(page === 'main' ? this.panel.width : PAUSE.settings.width, PAUSE.panel.radius);
     (page === 'main' ? this.panel : this.settings).popIn(0.2);
     if (page === 'main') {
       armControls(this.buttons);
@@ -255,13 +280,14 @@ export class PauseMenu {
     // Without a mic the quiet horn is the only choice: the switch shows On, locked.
     this.bellSwitch.set(!hornHearsMic());
     this.bellSwitch.setLocked(!mic.on);
+    this.unlockSwitch.set(progress.unlockAll);
     armControls([this.back, ...this.tabButtons, ...this.tabControls()]);
     this.repaintSettings();
   }
 
   /** The controls of the tab that shows. */
   private tabControls(): Control[] {
-    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table];
+    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table, this.unlockSwitch];
   }
 
   private repaintSettings(): void {
@@ -318,6 +344,7 @@ export class PauseMenu {
     if (this.reach.update(hands, dt)) return 'measureReach';
     if (this.table.update(hands, dt)) return 'resetTable';
     this.bellSwitch.update(hands, dt);
+    this.unlockSwitch.update(hands, dt);
     return null;
   }
 
@@ -363,16 +390,18 @@ export class PauseMenu {
     name('Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
     name('Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
     name('Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
+    name('Unlock all tools', S.firstRowY - 3 * S.accessRowGap, 'Tools only, not levels', UI_COLORS.note);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {
-    const at = panelMap(PAUSE.panel.width, PAUSE.panel.height, w, this.panel.layoutHeight);
-    drawTitleBanner(c, 'Paused', w * 0.25, UI_SPACING.top * at.px, w * 0.5, 74, 40);
-    // A word over each button, nothing else, a little gap above their rims.
+    const at = panelMap(this.panel.width, this.panel.height, w, this.panel.layoutHeight);
+    // The title keeps its size whatever the width (the panel is as wide as its buttons need).
+    const titleW = Math.min(w * 0.6, 22 * at.px);
+    drawTitleBanner(c, 'Paused', (w - titleW) / 2, UI_SPACING.top * at.px, titleW, 74, 40);
+    // A word over each button that shows, nothing else, a little gap above their rims.
     const labelY = this.buttonTopPx - UI_SPACING.labelGap * at.px - 11;
-    BUTTONS.forEach((b, i) => {
-      if (i === SKIP_INDEX && !this.skipShown) return;
-      drawLine(c, b.label, at.x(buttonX(i)), labelY, PAUSE.panel.buttonGap * at.px - 8, 22, UI_COLORS.accent);
-    });
+    for (const i of this.shown) {
+      drawLine(c, BUTTONS[i].label, at.x(this.buttons[i].group.position.x), labelY, PAUSE.panel.buttonGap * at.px - 8, 22, UI_COLORS.accent);
+    }
   }
 }

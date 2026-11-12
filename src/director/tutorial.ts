@@ -1,4 +1,4 @@
-// The tutorial director (docs/mvp.md "Tutorial director"): 5 waves, each
+// The tutorial director (docs/mvp.md "Tutorial director"): 4 waves (v2 run 2, was 5), each
 // introducing one new thing, taught by doing. Each lesson shows one short
 // instruction on the hint sign and a marker on the thing to use, and waits
 // until the player does it. New things are taught before their wave, so no
@@ -62,21 +62,14 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     newTool: 'swatter',
   },
   {
-    intro: 'Three camps! Spin the board to watch all sides.',
+    // v2 run 2: 4 waves (was 5), like every campaign level (one time of day each). The old wave 5 had no
+    // lesson left once the bell became a campaign unlock, so this is the final wave now.
+    intro: 'Final wave! Three camps. Spin the board to watch all sides.',
     camps: ['campEast', 'campSouth', 'campWest'],
     counts: { grunt: 18, runner: 8 },
     spawnTime: 60,
     newTool: 'pepper',
     balloons: 3,
-  },
-  {
-    intro: 'Final wave! Shoot the barrels, boulders and trees.',
-    camps: ['campNorth', 'campEast', 'campSouth'],
-    counts: { grunt: 22, runner: 16 },
-    spawnTime: 70,
-    balloons: 4,
-    // One new tool per wave: the bell (v2: the only stun).
-    newTool: 'bell',
   },
 ];
 

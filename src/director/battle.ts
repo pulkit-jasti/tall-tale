@@ -32,7 +32,7 @@ import { angleDelta, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { wallHitDamage } from '../rules/gear.js';
 import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
-import type { HandToolName, HandTool } from '../tools/handTool.js';
+import type { HandToolName, HandTool, ToolSpot } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
@@ -156,6 +156,26 @@ export class Battle implements TutorialApi {
   playFromWave = 0;
   /** The battle teaches (the tutorial's lessons). False after Skip tutorial, until the welcome panel's Play. */
   private teach = true;
+  /**
+   * v2 run 2: the 2 picked hand tools for a battle without the tutorial (the
+   * slingshot and the horn are always out), or null for every tool. Every
+   * tool stands on its own platform spot, picked or not.
+   */
+  loadout: HandToolName[] | null = null;
+  /** The campaign level being fought (its number), or null (the tutorial, or a debug battle). */
+  level: number | null = null;
+  /** Each tool's own spot, from when it was built. */
+  private homeSpots = new Map<HandTool, ToolSpot>();
+  /**
+   * The battle is over and the end moment has passed: what comes next. The
+   * game answers 'menu' (no end panel, it goes to the menu: the tutorial
+   * won), or how the end panel shows (stars, a Menu button).
+   */
+  onEnd: (won: boolean, healthShare: number) => 'menu' | { stars?: number; menu: boolean } = () => ({ menu: false });
+  /** The end panel's Menu button. */
+  onMenu: () => void = () => {};
+  /** The welcome panel's Skip tutorial (the game: to the menu). */
+  onSkip: () => void = () => this.skipTutorial();
   /** The reach check at the start (only until the player's reach is known). */
   private reach = new ReachCheck();
   /** True once the board was sized to this player (saved in the browser). */
@@ -230,6 +250,7 @@ export class Battle implements TutorialApi {
     parts.slingshot.onHit = () => this.slingHits++;
     parts.slingshot.onEvent = (event) => this.sling[event]++;
     for (const tool of Object.values(parts.tools)) {
+      this.homeSpots.set(tool, tool.spotNow);
       tool.onUse = (count) => (this.toolUseCount[tool.name] += count);
       tool.onGrab = () => this.toolGrabCount[tool.name]++;
     }
@@ -332,11 +353,24 @@ export class Battle implements TutorialApi {
     this.pauses = 0;
     this.shownStep = null;
     this.doneFlash = 0;
-    // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
-    for (const wave of teach ? TUTORIAL_WAVES.slice(0, from) : TUTORIAL_WAVES) {
-      const tool = wave.newTool;
-      if (tool === 'slingshot') slingshot.setVisible(true);
-      else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
+    // Every tool on its own platform, always (the loadout only picks which show). Moving the picks to the
+    // left spots put a tool in front of the red flag, so they stay home now.
+    const picks: HandToolName[] | null = !teach && this.loadout ? this.loadout.filter((n) => n !== 'horn') : null;
+    for (const tool of Object.values(this.parts.tools)) tool.setSpot(this.homeSpots.get(tool)!);
+    if (picks) {
+      // A battle with a loadout: the slingshot, the horn and the 2 picks (docs/menus.md section 5).
+      slingshot.setVisible(true);
+      this.parts.tools.horn.setVisible(true);
+      for (const name of picks) this.parts.tools[name].setVisible(true);
+    } else {
+      // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
+      // Without the tutorial and without a loadout (debug): every tool.
+      for (const wave of teach ? TUTORIAL_WAVES.slice(0, from) : TUTORIAL_WAVES) {
+        const tool = wave.newTool;
+        if (tool === 'slingshot') slingshot.setVisible(true);
+        else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
+      }
+      if (!teach) for (const t of Object.values(this.parts.tools)) t.setVisible(true);
     }
     this.reach.stop();
     const director = new Director<TutorialApi>(buildTutorialSteps(BUILT_TOOLS, TUTORIAL_WAVES, from, !this.reachKnown, teach), this);
@@ -396,6 +430,20 @@ export class Battle implements TutorialApi {
     this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
     this.parts.flags.show(1, 0, true);
     this.parts.panel.show('welcome');
+  }
+
+  /**
+   * Into the menu (v2 run 2): no battle, an empty board, every tool put away.
+   * The game sinks the battleground first, then calls this.
+   */
+  clearForMenu(): void {
+    this.stop();
+    this.endTimer = -1;
+    this.parts.goblins.killAll();
+    this.parts.slingshot.setVisible(false);
+    this.resetTools();
+    this.state = createBattle(TUTORIAL_WAVES.length, CASTLE_HEALTH);
+    this.parts.flags.show(1, 0, true);
   }
 
   /** Stops everything (stress test, leaving VR). The board is left empty. */
@@ -557,11 +605,17 @@ export class Battle implements TutorialApi {
     this.updateHint(dt, hands, head);
     if (this.endTimer > 0) {
       this.endTimer -= dt;
-      if (this.endTimer <= 0) panel.show(this.state.phase === 'won' ? 'won' : 'lost');
+      if (this.endTimer <= 0) {
+        // v2 run 2: the game says what comes next (the tutorial won goes to the menu; a campaign level shows its stars).
+        const won = this.state.phase === 'won';
+        const next = this.onEnd(won, healthShare(this.state));
+        if (next !== 'menu') panel.show(won ? 'won' : 'lost', next);
+      }
     }
-    // Welcome panel: Play is the tutorial, Skip tutorial the battle without it. Play again keeps the last choice.
+    // Welcome panel: Play is the tutorial, Skip tutorial the game's (the menu). Play again keeps the last choice.
     const choice = panel.update(hands, dt);
-    if (choice === 'skip') this.skipTutorial();
+    if (choice === 'skip') this.onSkip();
+    else if (choice === 'menu') this.onMenu();
     else if (choice === 'play') this.start(this.playFromWave, panel.kindShown === 'welcome' ? true : this.teach);
   }
 
@@ -831,6 +885,15 @@ export class Battle implements TutorialApi {
   /** Skips only the current tutorial step. */
   skipStep(): void {
     if (this.running && this.state.phase === 'playing') this.director?.skip();
+  }
+
+  /** Debug: the battle is won right away, with the castle's health as it is (for the stars). */
+  winNow(): void {
+    if (!this.running || this.state.phase !== 'playing') return;
+    this.state.wavesCleared = this.state.totalWaves;
+    this.state.phase = 'won';
+    this.parts.celebrate(true);
+    this.end();
   }
 
   loseNow(): void {

@@ -4,7 +4,7 @@ Status: first pass decided. Sample level mockup: `maps/castle-3d.html` (random l
 
 ### Scale (from the mockup)
 
-- Board height about 65 cm (placed about 46 cm below the eyes, low so the player towers over the kingdom, then set per player with the ring handle), hole the player sits in about 25 cm radius.
+- Board height about 65 cm (placed about 50 cm below the eyes, low so the player towers over the kingdom, then set per player with the ring handle), hole the player sits in about 25 cm radius.
 - These are the default sizes. The reach check at the start scales the whole board to the player's arms (0.85 to 1.45 times), see [controls-and-ui.md](controls-and-ui.md#reach-check-show-me-how-big-you-are-giant).
 - Castle wall from 46 to 52 cm, **about 6 cm high** (the mockup still shows 40 to 46 cm and 10 cm high). Moved out after the step 4 review, as far as the reach band allows: climbers on the rampart (49 cm) stay in reach ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)).
 - The courtyard (40 to 44 cm for intruders) is empty for now. Houses, stalls and workers come back once the main gameplay is done.

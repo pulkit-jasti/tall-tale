@@ -16,9 +16,10 @@ export const BOARD = {
   /**
    * Board surface height below the eyes when placed (meters). Lowered from
    * 0.36 and then 0.40 after the step 4 tests: towering high over the
-   * kingdom is what makes the player feel like a giant.
+   * kingdom is what makes the player feel like a giant. Then 0.50 (was 0.46)
+   * after the v2 run 2 headset test: the ground felt too close.
    */
-  eyeToBoard: 0.46,
+  eyeToBoard: 0.5,
   skirtColor: 0x6b5a45,
 };
 
@@ -754,9 +755,9 @@ export const WAVES = {
  */
 export const FLAGS = {
   radius: 38.5,
-  /** Red castle health flag on the left, blue wave flag on the right. */
-  healthAngleDeg: -43,
-  waveAngleDeg: 43,
+  /** Red castle health flag on the left, blue wave flag on the right. A little nearer the front (was 43), clear of the tools behind them. */
+  healthAngleDeg: -39,
+  waveAngleDeg: 39,
   poleHeight: 26,
   poleRadius: 0.35,
   poleColor: 0x5a4330,
@@ -843,6 +844,155 @@ export const END_PANEL = {
   settingsRadius: BUTTON_SIZE.medium,
   /** The panel appears this long after the battle ends, after the last poofs (seconds). */
   showDelay: 1.2,
+};
+
+/**
+ * The menus after the tutorial, the home screen (docs/menus.md). All in
+ * boardLift (cm, rises with the board and grows with the reach check, never
+ * turns), every target inside the reach band (reachSpots in
+ * src/rules/reach.ts). Panels get their height from uiCenterY. Only round
+ * PokeButtons, a word over each (no rectangular buttons, the developer's
+ * choice after the first look), at least 2.4 cm between any two rims.
+ */
+export const MENU = {
+  /** The main menu panel in front (docs/menus.md section 4), at the end panel's spot. */
+  main: {
+    radius: 41,
+    tiltDeg: 20,
+    // A compact grid (was 50 x 30, with wide empty sides: the eyes had to turn to its edges), the same
+    // UI_SPACING.edge on every side, each word right under its button, rows at least 2.5 cm apart.
+    width: 36,
+    height: 32,
+    /** Top row: Daily, Campaign (the biggest, middle), Custom. Bottom row: Settings and Tutorial (cm from the panel's middle). */
+    heroAt: [0, 4.3] as [number, number],
+    heroRadius: BUTTON_SIZE.primary,
+    sideX: 11.3,
+    sideY: 4.3,
+    sideRadius: BUTTON_SIZE.large,
+    smallX: 6.5,
+    smallY: -8.2,
+    smallRadius: BUTTON_SIZE.standard,
+    /** How long "Coming soon" replaces the word over Daily or Custom after a poke (seconds). */
+    soonTime: 2.5,
+  },
+  /** The campaign panel (docs/menus.md section 8), in the main menu's spot: the level list left, the detail card right. */
+  campaign: {
+    // Smaller than before (56 x 40): the slider is gone, so less head turning to see its edges.
+    width: 50,
+    height: 36,
+    pxPerCm: 15,
+    backRadius: BUTTON_SIZE.min,
+    /** Back, top left (UI_SPACING.edge from both edges). */
+    backAt: [-20.3, 13.3] as [number, number],
+    /**
+     * The level list (ScrollList, tap only) from listLeft to listRight and
+     * from listTop to listBottom (cm from the panel's middle), rows rowHeight
+     * tall, rowGap apart, about 4.4 rows in view so the last one shows cut
+     * off. Tap a row to select it; only the upright slider right of it
+     * (sliderX, sliderLength) scrolls it (touch scrolling mixed up taps and
+     * swipes on the headset).
+     */
+    listLeft: -22.8,
+    listRight: -6.6,
+    listTop: 9.5,
+    listBottom: -15.8,
+    rowHeight: 5,
+    rowGap: 0.8,
+    sliderX: -3.7,
+    sliderLength: 21,
+    /** The detail card, from cardLeft to the panel's right edge (less UI_SPACING.edge), its content `cardPad` inside. */
+    cardLeft: -0.8,
+    cardPad: 1.5,
+    /** The Fight button (the only rectangular one: FightButton), centered at the card's bottom. */
+    fightAt: [11, -11.6] as [number, number],
+    fightSize: [12, 4.6] as [number, number],
+    /** The reward: a small turning copy of the tool on the card (cm from the panel's middle, its height, turns per second). */
+    rewardAt: [3.6, -3.6] as [number, number],
+    rewardHeight: 5.5,
+    rewardSpin: 0.25,
+    /** Button caps: a red Fight, grey when locked. A selected row is drawn gold. */
+    fightColor: 0xc8402e,
+    lockedColor: 0x8a847a,
+    selectedColor: '#e6b54a',
+  },
+  /** Stars from the red flag at the end (docs/menus.md "Stars"): 3 at threeAt or more, 2 at twoAt or more, else 1. */
+  stars: { threeAt: 0.7, twoAt: 0.35 },
+  /** The battleground sinks and the menu rises (docs/menus.md section 2): transforms only (seconds, cm). */
+  swap: {
+    sinkTime: 1.1,
+    riseTime: 1.1,
+    /** The castle, tools and flags go this far down; the menu comes up from this far below. */
+    battleDepth: 18,
+    menuDepth: 60,
+  },
+  /**
+   * The tool shelf (right, the back row, higher) and the achievements shelf
+   * (left); only the menu panel is in front. Angles in degrees (0 = front,
+   * positive = right), radius from the seat, heights above the board (cm).
+   * Moved out and up after the first look (was 31 to 38 cm out and 8 to 14
+   * cm up: too close and low to grab), so they sit about as far as the
+   * rampart the reach check sizes the board to. Tools are shown at
+   * displayScale (was 0.5: too small); held in a fist they grow to full
+   * size in their grip (HOLD.poses).
+   */
+  shelves: {
+    displayScale: 0.8,
+    plankColor: 0x8a5a34,
+    plankDepth: 8,
+    plankThick: 1.2,
+    // Between the front and the side: at 90 degrees they were out of view without turning the head, at 36 to 80
+    // they crowded the menu. Now the menu keeps about 40 degrees clear on each side.
+    tools: { radius: 47, y: 27, angles: [60, 74, 88], cardAngle: 101 },
+    trophies: {
+      /** The trophy model's height on the shelf (cm): 6 (was 8, too big), on smaller pedestals farther apart so they never touch. */
+      height: 6,
+      plank: 5.5,
+      lowRadius: 43,
+      lowY: 18,
+      // Between the front and the left side, like the tools on the right.
+      lowAngles: [-48, -60, -72, -84, -96],
+      highRadius: 48,
+      highY: 30,
+      highAngles: [-54, -66, -78, -90],
+      cardAngle: -104,
+    },
+    /** Grabbing a shelf thing: a hand closes within this of it (meters at the default board size). */
+    grabRadius: 0.07,
+    /**
+     * Let go within this of a stand slot or a shelf spot (meters, the tool's grip to the platform top), it
+     * snaps there; else it glides back. While it is that close the platform glows (snapGlow) with a tick.
+     */
+    dropRadius: 0.1,
+    snapGlow: { color: 0x9fe07a, intensity: 0.9 },
+    /** A held thing lets go after the hand is open this long (seconds). */
+    releaseHold: 0.2,
+    returnTime: 0.35,
+    /**
+     * The empty tool slots hint (a poke on Fight while a slot is empty): the
+     * glass sign in front of the eyes and a red arrow at the first empty slot,
+     * for this long (seconds).
+     */
+    emptySlotsHint: { text: 'Put 2 tools on the stand first', seconds: 5 },
+    /** The tag over a held thing (cm), and how far above it. */
+    tagWidth: 16,
+    tagHeight: 5.5,
+    tagAbove: 9,
+    /** A new tool on the shelf glows until it is grabbed once. */
+    newGlow: { color: 0xffd76a, speed: 1.2 },
+  },
+  /**
+   * The loadout stand: 4 pedestals on the right, the front row (nearer and
+   * lower than the tool shelf behind it), left to right: the slingshot and
+   * the horn (fixed), then the 2 slots the player fills (empty at first).
+   */
+  stand: {
+    radius: 38,
+    y: 14,
+    angles: [50, 65, 80, 95],
+    /** The same platform as in battle (tower-hexagon-top on a post, TOOL_SPOTS.platformWidth), so what is put here is what the battle shows. */
+    /** An empty slot glows until it is filled. */
+    emptyGlow: 0xffd76a,
+  },
 };
 
 /**
@@ -944,6 +1094,8 @@ export const PAUSE = {
     buttonRadius: BUTTON_SIZE.large,
     /** Gap between button centers (cm): 2.9 cm between the rims. */
     buttonGap: 10.4,
+    /** The panel is as wide as the buttons that show need (rowPanelWidth), never narrower than this (its title). */
+    minWidth: 30,
     buttonMargin: UI_SPACING.edge,
     /** Drawn after everything else (above the markers and ghost hands), never hidden by the castle or the sign. */
     renderOrder: RENDER_ORDER.pause,
@@ -993,8 +1145,11 @@ export const PAUSE = {
     labelX: -23.8,
     firstRowY: 9,
     rowGap: 4.4,
-    /** The Access tab's rows (Measure reach, then the bell switch): farther apart, the button is round. */
-    accessRowGap: 6,
+    /**
+     * The Access tab's rows (Measure reach, Quiet horn, Reset table, Unlock all tools): farther apart,
+     * the buttons are round. 5.5 (was 6) so the fourth row (v2 run 2) keeps its gap above the tabs.
+     */
+    accessRowGap: 5.5,
     sliderX: 8.6,
     sliderLength: 27,
   },
@@ -1065,6 +1220,45 @@ export const SLIDER = {
   readyDistance: 6,
   touchAt: 2.1,
   releaseOut: 4,
+};
+
+/**
+ * The swipe list (src/ui/kit/scrollList.ts), from Meta's hands UI guidance:
+ * scroll by touching the list with the index finger and swiping up or down
+ * (no scroll bar), select by a tap (touch and lift without dragging). Rows
+ * at the edges show cut off, the hint that it scrolls. In the list's frame
+ * (cm, face toward +z). A finger within touchAt of the face touches it (it
+ * must come from the front, past armAt); it lets go past releaseOut. A move
+ * over dragStart makes it a scroll, not a tap. Let go, it coasts with the
+ * finger's speed and slows by `friction` (per second); past an end it
+ * stretches by `rubber` of the finger's move and springs back (`spring`
+ * per second). Hover within readyDistance in front.
+ */
+export const SCROLL_LIST = {
+  touchAt: 1.2,
+  armAt: 2,
+  releaseOut: 2.6,
+  readyDistance: 5,
+  /** A finger that leaves the list's sides by this much (cm) lets go too. */
+  sideMargin: 2,
+  dragStart: 1,
+  /** Tap only lists (no swipe): a finger may wobble this far (cm) and still tap. */
+  tapSlop: 2.5,
+  /** Scrolled from outside (the slider): it glides to the asked spot at this rate (per second). */
+  follow: 14,
+  /** Finger speed smoothing (seconds), the speed that stops a coast (cm per second), and the most a fling may give. */
+  speedSmoothing: 0.06,
+  stopSpeed: 2,
+  maxSpeed: 120,
+  friction: 3.5,
+  rubber: 0.35,
+  spring: 12,
+  /** Hover and press overlays over a row: light and dark, see-through. */
+  hoverColor: 0xffffff,
+  hoverOpacity: 0.22,
+  pressColor: 0x3b2b1f,
+  pressOpacity: 0.18,
+  pxPerCm: 30,
 };
 
 /** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. Sizes: BUTTON_SIZE. */
@@ -1282,15 +1476,17 @@ export const FEEDBACK = {
  * neither (cm, degrees: 0 = front, positive = right).
  */
 export const TOOL_SPOTS = {
-  slingshot: { angleDeg: 30, radius: 33.5 },
+  // Moved back twice (v2 run 2 headset tests): the front ones stood in front of the flags (at 39 degrees).
+  // Were 30 (slingshot, pepper), 56 to 58 (bell, pebble bowl), 82 (horn, swatter), then 50, 68 to 70, 86 to 90.
+  slingshot: { angleDeg: 60, radius: 33.5 },
   /** The horn (v2, the megaphone's old spot). */
-  rightSide: { angleDeg: 82, radius: 33.5 },
+  rightSide: { angleDeg: 96, radius: 33.5 },
   /** The bell (v2: its own platform, where the food jar was). */
-  leftMiddle: { angleDeg: -56, radius: 33.5 },
-  /** Pepper shaker. */
-  leftFront: { angleDeg: -30, radius: 33.5 },
+  leftMiddle: { angleDeg: -78, radius: 33.5 },
+  /** Pepper shaker. The left side has room (no bowl), so its three are spread wider (were -60 and -96). */
+  leftFront: { angleDeg: -56, radius: 33.5 },
   /** Fly swatter. */
-  leftSide: { angleDeg: -82, radius: 33.5 },
+  leftSide: { angleDeg: -100, radius: 33.5 },
   /** Platform top above the board (cm). Low, so the hand reaches it without lifting the arm. */
   platformTop: 6,
   /** Platform width (cm). */
@@ -1432,7 +1628,8 @@ export const AIM_ASSIST = {
 
 /** The pebble bowl beside the slingshot, on a post like the platforms. Soldiers keep topping it up. */
 export const PEBBLE_BOWL = {
-  angleDeg: 58,
+  /** Between the slingshot (60) and the horn (96). Was 58, then 70. */
+  angleDeg: 78,
   radius: 33.5,
   /** Rim height above the board (cm). A little above the platforms, so it stays in the reach band now that the board sits lower. */
   rimY: 9,
@@ -2025,9 +2222,19 @@ export const KNIGHTS = {
   /** Their spots at the aimed point: this far apart sideways, and the second row this far behind. */
   holdSpread: 3.5,
   holdBack: 3,
-  /** They go for any goblin this close to their spot... */
-  watchRadius: 22,
-  /** ...but never chase it farther than this from their spot (then they walk back). */
+  /**
+   * The squad rule (v2 run 2 rewrite, headset test: one knight walked up and
+   * fell, then the next, and goblins ran past): a squad sees every goblin
+   * within senseRadius of any of its knights, on the way out or at its spot,
+   * and every knight not fighting goes for one of them (the least crowded,
+   * the nearest), so the whole squad fights; then they go on to their spot.
+   * Every goblin (runners too) within goblinSense of a field knight stops
+   * and fights instead of walking on toward the castle (it waits there,
+   * facing the knight, until a knight takes it on). Sizes in cm.
+   */
+  senseRadius: 22,
+  goblinSense: 16,
+  /** At their spot they never chase a goblin farther than this from it (then they walk back). On the way out, no leash. */
   leash: 35,
   /**
    * Safety net: a knight walking up to its goblin that has not reached it
@@ -2049,8 +2256,7 @@ export const KNIGHTS = {
   /** The crash: goblins this close to the first goblin met are knocked over (at most crashMax). */
   crashRadius: 12,
   crashMax: 6,
-  /** A runner this close to a holding knight hops past it. */
-  dodgeRange: 7,
+  /** A runner's hop (Goblins.hop; knights no longer make runners hop past, every goblin near a knight stops to fight). */
   hopTime: 0.35,
   hopHeight: 3,
   /** The squad's banner, carried by its first knight in its left hand, held this far above the pole's foot (cm). */

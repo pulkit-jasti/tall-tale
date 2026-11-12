@@ -6,7 +6,27 @@ import { createSystem, VisibilityState } from '@iwsdk/core';
 import { DirectionalLight, Fog, Object3D, Quaternion, Vector3 } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
-import { BALLOONS, DEBUG, FPS, GLASS_SIGN, GOBLIN_RULES, HORN, JUICE, PAUSE, SKY, STAGE, STRESS_TEST, TIMES_OF_DAY, TOOLS, TRIGGERS, XR, type TimeOfDay } from './config/game.js';
+import {
+  BALLOONS,
+  DEBUG,
+  FPS,
+  GLASS_SIGN,
+  GOBLIN_RULES,
+  HORN,
+  JUICE,
+  MENU,
+  PAUSE,
+  POINTER,
+  SKY,
+  STAGE,
+  STRESS_TEST,
+  TIMES_OF_DAY,
+  TOOL_SPOTS,
+  TOOLS,
+  TRIGGERS,
+  XR,
+  type TimeOfDay,
+} from './config/game.js';
 import { eatShare } from './rules/recharge.js';
 import type { DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
@@ -64,12 +84,18 @@ import { buildBoard } from './world/boardBuilder.js';
 import { buildSeatFloor, GiantBody } from './world/giant.js';
 import { Windmill } from './world/settlements.js';
 import { Stage } from './world/stage.js';
+import { SceneSwap } from './world/sceneSwap.js';
+import { loadTemplate } from './world/models.js';
+import { Menu } from './ui/menu/menu.js';
+import { progress, resetProgress, saveProgress } from './player/progress.js';
+import { battleTools, recordTutorial, recordWin, starsFor } from './rules/campaign.js';
 
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
 const headForward = new Vector3();
 const toHead = new Vector3();
 const boardAt = new Vector3();
+const slotAt = new Vector3();
 /** Session storage key for the debug "Start at wave" choice. */
 const PLAY_FROM_KEY = 'tallTale.playFromWave';
 
@@ -163,6 +189,15 @@ export class GameSystem extends createSystem({}) {
   private giant!: GiantBody;
   private windmill!: Windmill;
   private heartbeatTimer = 0;
+  /** The menus after the tutorial (v2 run 2, docs/menus.md), and the battleground sinking and the menu rising. */
+  private menu!: Menu;
+  private swap!: SceneSwap;
+  /** The settings page is open from the main menu, and the reach check was started from it. */
+  private menuSettings = false;
+  private menuMeasure = false;
+  /** The empty tool slots hint (Fight poked with an empty slot): time left (seconds), and its red arrow. */
+  private slotsHintLeft = 0;
+  private slotsArrow!: PointerArrow;
 
   init(): void {
     // The page hidden (the headset off, the Quest browser in the background): pause on the next frame.
@@ -293,6 +328,7 @@ export class GameSystem extends createSystem({}) {
       this.titleSettings = true;
       this.pauseMenu.showSettings(headPosition, headForward, this.stage.boardScale);
     };
+    const flags = new Flags(this.stage.boardLift, TUTORIAL_WAVES.length);
     this.battle = new Battle({
       stage: this.stage,
       goblins: this.goblins,
@@ -303,7 +339,7 @@ export class GameSystem extends createSystem({}) {
       triggers: this.triggers,
       balloons: this.balloons,
       stun: this.stun,
-      flags: new Flags(this.stage.boardLift, TUTORIAL_WAVES.length),
+      flags,
       panel: this.endPanel,
       sign: this.sign,
       ghost,
@@ -363,6 +399,48 @@ export class GameSystem extends createSystem({}) {
     };
     this.grabEat.onGrab = () => this.battle.notePicked();
     this.grabEat.onToss = (_goblin, speed) => this.battle.noteTossed(speed);
+    // The menus (v2 run 2): display copies of the tools for the shelf and the stand, made before the tools hide,
+    // and the trophy model (docs/assets.md) for the achievements shelf.
+    const [trophy, platform] = await Promise.all([
+      loadTemplate('props/mini-arena/trophy.glb', { height: MENU.shelves.trophies.height }),
+      // The loadout stand uses the tools' own battle platform, so what is put there is what the battle shows.
+      loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width: TOOL_SPOTS.platformWidth }),
+    ]);
+    this.menu = new Menu(
+      this.stage,
+      this.audio,
+      this.particles,
+      {
+        swatter: this.swatter.displayModel(),
+        pepper: this.pepper.displayModel(),
+        bell: this.bell.displayModel(),
+        horn: this.horn.displayModel(),
+        slingshot: this.slingshot.displayModel(),
+      },
+      { trophy, platform },
+      // Separate copies for the campaign card's reward (a small turning tool).
+      { swatter: this.swatter.displayModel().model, pepper: this.pepper.displayModel().model, bell: this.bell.displayModel().model },
+      // And full-size copies to hold when a reward is grabbed off the card.
+      { swatter: this.swatter.displayModel(), pepper: this.pepper.displayModel(), bell: this.bell.displayModel() },
+    );
+    // Compile the home screen and upload its tags now, so the first grab or first look never hitches.
+    this.menu.warm(this.renderer, this.scene, this.camera);
+    // The empty tool slots hint's red arrow (POINTER.threat's look, flying to the slot once it is in view).
+    this.slotsArrow = new PointerArrow(root, { ...POINTER.threat, flies: true });
+    // What sinks into the ground for the menu: the castle, the flags, the ring handle, the tools and their platforms.
+    this.swap = new SceneSwap();
+    this.swap.addBattle(built.castle);
+    for (const o of [...flags.roots, ...this.handles.groups]) this.swap.addBattle(o);
+    for (const o of [...this.slingshot.groups, ...this.tools.flatMap((t) => t.groups)]) this.swap.addBattle(o, false);
+    this.swap.addMenu(this.menu.group);
+    this.pauseMenu.onUnlockAll = (on) => {
+      progress.unlockAll = on;
+      saveProgress();
+      this.menu.refresh();
+    };
+    this.battle.onEnd = (won, share) => this.battleOver(won, share);
+    this.battle.onMenu = () => this.goToMenu('campaign');
+    this.battle.onSkip = () => this.skipToMenu();
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
     for (const tool of this.tools) tool.setVisible(false);
@@ -429,6 +507,145 @@ export class GameSystem extends createSystem({}) {
       .updateTargetFrameRate(XR.frameRate)
       .then(() => console.info(`[xr] frame rate set to ${XR.frameRate} Hz`))
       .catch((error) => console.warn('[xr] frame rate change failed', error));
+  }
+
+  // ---- The menus (v2 run 2, docs/menus.md) ----
+
+  /**
+   * A battle is over and its end moment has passed. The tutorial won is saved
+   * as done and goes to the menu (no end panel). A campaign level won saves
+   * its stars and opens the next level; its end panel shows the stars and a
+   * Menu button.
+   */
+  private battleOver(won: boolean, share: number): 'menu' | { stars?: number; menu: boolean } {
+    if (this.battle.teaching) {
+      if (!won) return { menu: false };
+      recordTutorial(progress, true);
+      saveProgress();
+      this.goToMenu('main');
+      return 'menu';
+    }
+    const level = this.battle.level;
+    if (level === null) return { menu: progress.tutorialDone };
+    if (!won) return { menu: true };
+    const stars = starsFor(share, MENU.stars.threeAt, MENU.stars.twoAt);
+    const opened = recordWin(progress, level, stars);
+    saveProgress();
+    console.info(`[campaign] level ${level} won: ${stars} stars${opened ? `, level ${level + 1} is open` : ''}`);
+    return { stars, menu: true };
+  }
+
+  /** Skip tutorial (welcome or pause panel): the tutorial counts as done, and the menu comes up. */
+  private skipToMenu(): void {
+    recordTutorial(progress, false);
+    saveProgress();
+    this.goToMenu('main');
+  }
+
+  /** The battleground sinks, the menu rises (`instant`: a later visit opens straight on the menu). */
+  private goToMenu(page: 'main' | 'campaign', instant = false): void {
+    this.endPanel.hide();
+    this.sign.show(null);
+    this.grabEat.releaseAll();
+    this.threat.hideArrow();
+    this.hornAim.hide();
+    this.glass.hide();
+    this.battle.stop();
+    this.menu.open(page);
+    this.swap.toMenu(
+      () => this.battle.clearForMenu(),
+      () => console.info('[menu] open'),
+      instant,
+    );
+  }
+
+  /** The menu sinks, the battle rises, then `start` starts the battle. */
+  private goToBattle(start: () => void, instant = false): void {
+    this.menu.close();
+    this.menuSettings = false;
+    this.slotsHintLeft = 0;
+    this.slotsArrow.hide();
+    this.glass.hide();
+    this.swap.toBattle(() => {}, start, instant);
+  }
+
+  /** Fight on a campaign level: the normal battle without the tutorial, with the loadout (decided 2026-11-11 for run 2). */
+  private fight(level: number): void {
+    this.battle.level = level;
+    this.battle.loadout = battleTools(progress.loadout).filter((t) => t !== 'slingshot') as ('swatter' | 'pepper' | 'bell' | 'horn')[];
+    console.info(`[campaign] level ${level}: ${battleTools(progress.loadout).join(', ')}`);
+    this.goToBattle(() => this.battle.start(0, false));
+  }
+
+  /** Replay tutorial (main menu): the whole tutorial again, every tool on its own spot. */
+  private replayTutorial(): void {
+    this.battle.level = null;
+    this.battle.loadout = null;
+    this.goToBattle(() => this.battle.start(0, true));
+  }
+
+  /** A debug action that starts a battle while the menu shows: the battleground comes back at once first. */
+  private battleSceneNow(): void {
+    if (this.swap.shown === 'battle') return;
+    this.goToBattle(() => {}, true);
+  }
+
+  /** The menu's frame: the shelves, the panels, the settings page from it, and the living board around (no battle). */
+  private tickMenu(dt: number): void {
+    this.stage.update(dt);
+    this.villagers.update(dt);
+    this.particles.update(dt);
+    this.juice.update(dt, headPosition);
+    this.sky?.update(dt);
+    this.updateTimeOfDay(dt);
+    this.windmill.update(dt);
+    this.fog.near = SKY.fogNear * this.stage.boardScale;
+    this.fog.far = SKY.fogFar * this.stage.boardScale;
+    // The empty tool slots hint: the glass sign in front of the eyes and a red arrow at the empty slot, for a few seconds.
+    this.slotsHintLeft = this.swap.shown === 'menu' ? Math.max(0, this.slotsHintLeft - dt) : 0;
+    const slot = this.slotsHintLeft > 0 ? this.menu.emptySlotWorld(slotAt) : null;
+    if (slot) {
+      this.glass.show(dt, MENU.shelves.emptySlotsHint.text, null, headPosition, headForward);
+      this.slotsArrow.update(dt, headPosition, headForward, slot);
+    } else {
+      this.slotsHintLeft = 0;
+      this.glass.hide();
+      this.slotsArrow.hide();
+    }
+    if (this.swap.shown !== 'menu') return;
+    if (this.menuSettings) {
+      // The settings page from the main menu: Back brings the panels again, Measure reach runs the reach check.
+      const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
+      if (action === 'measureReach') {
+        this.pauseMenu.hide();
+        this.menuSettings = false;
+        this.menuMeasure = true;
+        this.battle.startMeasure();
+      } else if (action === 'resetTable') {
+        this.stage.height = 0;
+        this.placeBoard();
+      } else if (!this.pauseMenu.isOpen) {
+        this.menuSettings = false;
+        this.menu.showPanels();
+      }
+      return;
+    }
+    if (this.menuMeasure) {
+      if (this.battle.updateMeasure(dt, this.hands.hands, headPosition, headForward)) {
+        this.menuMeasure = false;
+        this.menu.showPanels();
+      }
+      return;
+    }
+    const choice = this.menu.update(this.hands.hands, dt, headPosition);
+    if (!choice) return;
+    if (choice.kind === 'settings') {
+      this.menu.hidePanels();
+      this.menuSettings = true;
+      this.pauseMenu.showSettings(headPosition, headForward, this.stage.boardScale);
+    } else if (choice.kind === 'replay') this.replayTutorial();
+    else if (choice.kind === 'fight') this.fight(choice.level);
+    else if (choice.kind === 'needTools') this.slotsHintLeft = MENU.shelves.emptySlotsHint.seconds;
   }
 
   /** The board's middle in the world (for the celebrations). */
@@ -606,7 +823,16 @@ export class GameSystem extends createSystem({}) {
     // panel shows. Its Play button starts the battle (in the browser: the debug page's Restart game).
     if (pendingStart === 'browser' || (pendingStart === 'vr' && immersive && this.placeTimer <= 0)) {
       pendingStart = null;
-      this.battle.welcome();
+      // A later visit (the tutorial saved as done) opens straight on the menu (docs/menus.md section 2).
+      if (progress.tutorialDone) this.goToMenu('main', true);
+      else this.battle.welcome();
+    }
+
+    // The menu (v2 run 2): while it shows, or the battleground sinks and the menu rises, no battle runs.
+    this.swap.update(dt);
+    if (this.swap.shown !== 'battle') {
+      this.tickMenu(dt);
+      return;
     }
 
     this.stressTest.update(dt);
@@ -811,9 +1037,14 @@ export class GameSystem extends createSystem({}) {
         this.battle.start();
         break;
       case 'skipTutorial':
-        // A fresh battle without the lessons, every tool out (a player is never stuck in the tutorial).
+        // v2 run 2: out of the tutorial into the menu (a player is never stuck in the tutorial).
         this.resume();
-        this.battle.skipTutorial();
+        this.skipToMenu();
+        break;
+      case 'quitToMenu':
+        // Out of a battle back to the home screen (the battle is not saved, no stars).
+        this.resume();
+        this.goToMenu('main');
         break;
     }
   }
@@ -850,7 +1081,33 @@ export class GameSystem extends createSystem({}) {
   }
 
   private runDebug(id: DebugCommand, arg?: number): void {
+    // These start a tutorial battle: the battleground comes back from the menu first, without a level or loadout.
+    if (id === 'restartBattle' || id === 'startWave' || id === 'skipTutorial' || id === 'measureReach') {
+      this.battleSceneNow();
+      this.battle.level = null;
+      this.battle.loadout = null;
+    }
     switch (id) {
+      case 'openMenu':
+        this.goToMenu('main');
+        break;
+      case 'resetSave':
+        resetProgress();
+        this.menu.refresh();
+        console.info('[debug] saved progress forgotten (the tutorial, stars, unlocks, the loadout)');
+        break;
+      case 'unlockAll':
+        progress.unlockAll = !progress.unlockAll;
+        saveProgress();
+        this.menu.refresh();
+        console.info(`[debug] unlock all tools ${progress.unlockAll ? 'on' : 'off'}`);
+        break;
+      case 'winBattle':
+        this.battle.winNow();
+        break;
+      case 'fightLevel':
+        this.fight(Math.round(arg ?? 1));
+        break;
       case 'skipWave':
         this.battle.skipWave();
         break;

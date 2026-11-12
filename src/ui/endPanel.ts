@@ -10,11 +10,16 @@ import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { END_PANEL, POKE, UI_SPACING } from '../config/game.js';
 import type { HandState } from '../player/hands.js';
-import { armControls, bottomRowY, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY } from './kit/index.js';
+import { armControls, bottomRowY, drawLine, drawStar, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY } from './kit/index.js';
 
 export type EndKind = 'welcome' | 'won' | 'lost';
-/** What was poked: the main button (Play, Play again) or Skip tutorial (welcome panel only). */
-export type EndChoice = 'play' | 'skip' | null;
+/** What was poked: the main button (Play, Play again), Skip tutorial (welcome panel only), or Menu (after a campaign battle, v2 run 2). */
+export type EndChoice = 'play' | 'skip' | 'menu' | null;
+/** How an end panel shows after a battle: the stars won, and a way back to the menu. */
+export interface EndExtras {
+  stars?: number;
+  menu: boolean;
+}
 
 /** As little text as possible: a title, and one word or two over each button. */
 interface PanelText {
@@ -38,6 +43,7 @@ export class EndPanel {
   /** The welcome panel's Skip tutorial button (bottom left, the same size as Settings, mirrored). */
   private skip: PokeButton;
   private kind: EndKind = 'welcome';
+  private extras: EndExtras = { menu: false };
   private buttonTopPx = 0;
   private settingsX = 0;
   private settingsTopPx = 0;
@@ -78,13 +84,19 @@ export class EndPanel {
     return this.kind;
   }
 
-  show(kind: EndKind): void {
+  show(kind: EndKind, extras: EndExtras = { menu: false }): void {
     this.kind = kind;
-    this.draw(TEXT[kind]);
+    this.extras = kind === 'welcome' ? { menu: false } : extras;
+    const menu = this.extras.menu;
+    // With a menu (v2 run 2): won, the big button goes to the menu (play again small, bottom left);
+    // lost, it tries again (the menu small, bottom left).
+    const text = menu && kind === 'won' ? { title: TEXT.won.title, button: 'Menu' } : TEXT[kind];
+    this.draw(text);
     // Play to start, restart to play again. Settings and Skip tutorial only on the welcome panel.
-    this.button.setIcon(kind === 'welcome' ? 'play' : 'restart');
+    this.button.setIcon(kind === 'welcome' ? 'play' : menu && kind === 'won' ? 'home' : 'restart');
+    this.skip.setIcon(kind === 'welcome' ? 'skip' : kind === 'won' ? 'restart' : 'home');
     this.settings.group.visible = kind === 'welcome';
-    this.skip.group.visible = kind === 'welcome';
+    this.skip.group.visible = kind === 'welcome' || menu;
     this.panel.visible = true;
     this.panel.popIn(0.25);
     // A finger still there from the last poke must not start the next battle at once.
@@ -93,7 +105,7 @@ export class EndPanel {
 
   /** Shows the same panel again (after its settings page closed). */
   showAgain(): void {
-    this.show(this.kind);
+    this.show(this.kind, this.extras);
   }
 
   hide(): void {
@@ -108,8 +120,10 @@ export class EndPanel {
       this.onSettings();
       return null;
     }
-    if (this.skip.group.visible && this.skip.update(hands, dt)) return 'skip';
-    return this.button.update(hands, dt) ? 'play' : null;
+    const menuWon = this.extras.menu && this.kind === 'won';
+    if (this.skip.group.visible && this.skip.update(hands, dt)) return this.kind === 'welcome' ? 'skip' : menuWon ? 'play' : 'menu';
+    if (!this.button.update(hands, dt)) return null;
+    return menuWon ? 'menu' : 'play';
   }
 
   private draw(text: PanelText): void {
@@ -120,7 +134,9 @@ export class EndPanel {
     const at = panelMap(END_PANEL.width, END_PANEL.height, w, this.panel.layoutHeight);
     const textWidth = w - UI_SPACING.edge * at.px * 2;
     // Title on a banner, the button's label a little above its rim. Every line shrinks to fit inside the panel.
-    drawTitleBanner(c, text.title, w * 0.12, UI_SPACING.top * at.px, w * 0.76, 80, 44);
+    // A lower banner when the stars show under it (v2 run 2), so they fit above the button's label.
+    const starsShown = this.extras.stars !== undefined;
+    drawTitleBanner(c, text.title, w * 0.12, UI_SPACING.top * at.px, w * 0.76, starsShown ? 62 : 80, starsShown ? 36 : 44);
     const gap = UI_SPACING.labelGap * at.px;
     const labelY = this.buttonTopPx - gap - 15;
     // The main label stays clear of the Settings button on the welcome panel.
@@ -130,6 +146,15 @@ export class EndPanel {
     if (settingsShown) {
       drawLine(c, 'Settings', at.x(this.settingsX), this.settingsTopPx - gap - 10, 110, 20, UI_COLORS.accent);
       drawLine(c, 'Skip tutorial', at.x(-this.settingsX), this.settingsTopPx - gap - 10, 120, 20, UI_COLORS.accent);
+    } else if (this.extras.menu) {
+      // The small button bottom left: play the level again (won) or back to the menu (lost).
+      drawLine(c, this.kind === 'won' ? 'Play again' : 'Menu', at.x(-this.settingsX), this.settingsTopPx - gap - 10, 120, 20, UI_COLORS.accent);
+    }
+    // The stars won, under the title (v2 run 2).
+    const stars = this.extras.stars;
+    if (stars !== undefined) {
+      const y = UI_SPACING.top * at.px + 80;
+      for (let s = 0; s < 3; s++) drawStar(c, w / 2 + (s - 1) * 36, y, 30, s < stars);
     }
   }
 }

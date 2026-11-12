@@ -1,6 +1,6 @@
 # Tall Tale v2: Plan and Decisions
 
-Status: decided (2026-11-10). Run 1 built (2026-11-10) and tuned over 15 headset rounds (to 2026-11-11, build only, committed). Run 2 rescoped (2026-11-11) to the menus and the new UI only, designed in [menus.md](menus.md). Next: run 2, see "Before run 2 (handoff)" and "Run 2" in section 3. Branch: `feat/v2`.
+Status: decided (2026-11-10). Run 1 built (2026-11-10) and tuned over 15 headset rounds (to 2026-11-11, build only, committed). Run 2 rescoped (2026-11-11) to the menus and the new UI only, designed in [menus.md](menus.md), and built the same day on the branch `feat/v2-menus` (build only, not tested on the headset). Next: the run 2 headset check, then run 3. Branch: `feat/v2-menus` (from `feat/v2`).
 
 **This file wins over every other doc where they disagree.** The other docs describe the MVP as built. As each part below is built, update its topic doc (the "What this replaces" table says which) and tick it in the checklist here. When everything is folded in, this file is history.
 
@@ -116,7 +116,7 @@ Two clear jobs, so the army never looks dumb:
 - **Blow the horn:** the gate bursts open with the horn sound and a battle cry, and **a squad of 4 to 5 (swordsmen and spearmen) sprints down the road in front of the player** (spin the board to choose the road) at 2 to 3 times walking speed with a banner.
 - **They crash into the goblins** on that road: the impact knocks several over, with a hit stop.
 - Then they **hold the first junction** on that road (about 130 to 140 cm out) and fight everything that comes down it, until they fall or the wave ends. They never walk to the camp.
-- **Runners dodge past them** with a quick hop.
+- ~~**Runners dodge past them** with a quick hop.~~ Changed in run 2: every goblin near a knight, runners too, stops and fights it, and the whole squad fights whatever any of its knights sees, on the way out too ([core-loop.md](core-loop.md)).
 - When the wave ends, they march home.
 - The answer to each threat: a big group on a road is the horn; a crowded wall is the bell, pepper or hands.
 - Field soldiers are swordsmen and spearmen only. Archers live on the rampart.
@@ -143,11 +143,11 @@ Two clear jobs, so the army never looks dumb:
 **Replaced by [menus.md](menus.md) (2026-11-11), which has the full design.** In short:
 
 - The menu is the tutorial battleground: after the tutorial the castle, flags and battle things sink into the ground and the menu rises.
-- Front: the main menu panel with tile buttons in different sizes (Campaign big in the center, Daily and Custom beside it, Settings and Replay tutorial small below). Every option shown, none locked.
-- Campaign: a split panel, a level list scrolled by a vertical slider on the left, the selected level's detail card on the right, a red Fight button with a sword.
-- Right: the tool shelf. Left: the achievements shelf. Low in front: the loadout stand (slingshot and horn fixed, 2 slots to fill from the shelf).
+- Front, and only there: the main menu panel, a compact grid of round buttons (Daily, Campaign big in the middle, Custom; Settings and Tutorial below). Every option shown, none locked.
+- Campaign: a split panel, a list of levels on the left (tap to select, an upright slider to scroll), the selected level's card on the right (a turning 3D copy of the reward tool), a rectangular red Fight button (locked until the level is open and both tool slots are filled; with empty slots a poke shows a glass sign and a red arrow at the slot).
+- Right side, between the front and the side: the tool shelf (back row) and the loadout stand in front of it (the battle's own platforms: slingshot and horn fixed, 2 slots to fill; any tool goes on any place, with a glowing snap zone). Left side (-90): the achievements shelf.
 - **"More coming soon"** as one card at the end of each list: levels, tools, achievements.
-- Built only from the UI library (`src/ui/kit/`), inside the reach band, with two new kit parts (a tile button, a vertical slider).
+- Built only from the UI library (`src/ui/kit/`), inside the reach band, following Meta's hands UI guidance; new kit parts: `ScrollList`, a `locked` state and menu icons for `PokeButton`.
 
 ### 2.10 Achievements as riddles
 
@@ -177,7 +177,7 @@ Build 1 or 2 in run 3, for the tool rack and the video:
 - **Sound credits:** check each Freesound file's license on its page and write a credits file for the CC BY ones. Not done: the licenses are not recorded anywhere yet.
 - **Mic in VR:** still not tested inside the immersive session. The horn's hold-to-blow fallback means it is no longer a risk.
 - **Throw ghost demo** (`toss` in `src/ui/ghostDemos.ts`): built, needs a headset check.
-- **Wave 5 trigger reminder text** is never shown; fold it into the new tutorial.
+- ~~**Wave 5 trigger reminder text** is never shown; fold it into the new tutorial.~~ Wave 5 is gone (run 2: 4 waves).
 
 ---
 
@@ -229,7 +229,7 @@ This is the current state. The step notes above and the round log below are hist
   - The horn: grab it (left hand), then one lesson in beats on the glass sign: "Look around" (at least 7 s of holding), lift to the mouth, "Spot set" (2 s, the horn waits), blow with the bar.
   - The knights' first fight: once the full squad of 5 has reached its spot, 3 goblins come and stop in front of it to be fought ("Congratulations! Your knights won!"). Then wave 1 plays on.
   - Wave 2: slingshot (grab with the left hand, pebble with the right, load, shoot a moving goblin), keg, boulder, tree, a little practice, then a balloon (glass sign).
-  - Wave 3: swatter. Wave 4: pepper (armored goblins). Wave 5: bell.
+  - Wave 3: swatter. Wave 4: pepper (armored goblins). Wave 5: bell. (Run 2: the bell left, wave 5 was dropped; 4 waves, the blue flag has 4 notches.)
   - **Rules:** no lesson ever moves on by itself (Skip tutorial is the way out); no wave goblins while a lesson runs, only the lesson's own; every other tool is locked (dimmed, a grab buzzes) during a lesson; knight squads march home after each wave's cheer; texts are one short easy line; ghost hands use the opposite hand of the tool's side (AGENTS.md).
 - **Horn** (`src/tools/horn.ts`, `src/ui/hornAim.ts`):
   - Aim by gaze, 12 degrees below where the head points, snapped to a road within 22 cm. Off the road: a white ring with a dark edge and an arrow to the nearest road.
@@ -238,7 +238,7 @@ This is the current state. The step notes above and the round log below are hist
   - The called spot stays marked until the squad arrives. The use window starts on the call; 30 s recharge.
 - **Knights** (`src/units/troops.ts`):
   - Up to 4 squads of 3 to 5 (always 5 in the tutorial), routed over the roads.
-  - At their spot: a 22 cm watch radius and a 35 cm leash. A free knight takes the least crowded goblin near it (no cap), 35% hits.
+  - At their spot: a 22 cm watch radius and a 35 cm leash. A free knight takes the least crowded goblin near it (no cap), 35% hits. (Run 2 rewrite: the squad sees every goblin within 22 cm of any knight, `senseRadius`, and every free knight goes for one, on the way out too; goblins within 16 cm of a knight, `goblinSense`, stop and fight; no hops past.)
   - A squad down to 1 breaks and goes home. Squads stay between waves, except in the tutorial.
   - Safety nets for the "running in place" bug (cause still unknown): `closeGiveUp` 4 s and `stuckTime` 2 s, each with a debug note.
 - **Garrison** (`src/units/garrison.ts`): archers within 60 cm, 2 arrows make a hit. Guards hunt the whole rampart at 8 cm/s. Refills: archers every 15 s, guards 30 s. Rampart goblins jump in only once no soldier is left on the wall. No spawns while intruders are inside.
@@ -250,7 +250,7 @@ This is the current state. The step notes above and the round log below are hist
   - The FPS panel shows the reason while paused.
 - **Menus and UI:**
   - Welcome panel: Play, Settings, Skip tutorial.
-  - Pause panel: Resume, Settings, Restart, Skip tutorial.
+  - Pause panel: Resume, Settings, Restart, Skip tutorial (run 2: Skip tutorial only in the tutorial, Menu in other battles; the panel sizes to its buttons).
   - Settings: Access first and open by default (Measure reach, Quiet horn, Reset table), then Sound.
   - The glass sign (`src/ui/kit/glassSign.ts`) is in the UI library.
 - **Debug:** no keyboard keys, everything is on the debug page (cleaned up, with a notes column from `src/debug/notes.ts`). FPS panel, and the mic panel (`?mic` or "Mic panel on/off") for the blow line.
@@ -356,17 +356,26 @@ This is the current state. The step notes above and the round log below are hist
 
 **Only the menus and the UI around them.** The full design is in [menus.md](menus.md); build from it. Not in run 2: the tutorial rebuild, the first-use coach, the wave director and real levels, the map generator, tests.
 
-- [ ] **2.1 UI kit parts:** a rectangular tile button (same states, feedback and sounds as `PokeButton`, sizes from `BUTTON_SIZE`), an upright option for `Slider`, a red Fight tile with a sword icon. In `src/ui/kit/`, exported from its index ([menus.md](menus.md#7-new-ui-library-parts-built-first)).
-- [ ] **2.2 Level data:** the 15 level entries the menu reads (number, name, flavor, skulls, enemy icons, reward, open or locked), in a data file, rules in `src/rules/`. Levels 1 to 5 open, 6 to 15 text only. Tool rewards left empty (not decided yet).
-- [ ] **2.3 Saving:** localStorage, one key: tutorial done, stars per level, levels open, unlocked tools, the loadout. Plus the star rules (70% and 35%, best kept) and the "Unlock all tools" switch in settings.
-- [ ] **2.4 Tutorial to menu:** after the tutorial win, the battle (castle walls, towers, flags, battle-only things) sinks into the ground and the menu rises, both smooth. Fight plays it the other way. Later visits open on the menu. The bell is taken out of the tutorial (its wave and lesson), so the tutorial still runs to the end.
-- [ ] **2.5 Main menu:** the front panel with tiles in different sizes (Campaign big in the center, Daily and Custom beside it, Settings and Replay tutorial small below). Settings opens the settings panel; Replay tutorial starts the tutorial.
-- [ ] **2.6 Campaign panel:** the split panel, the scrolling level list with the vertical slider, the detail card (name, stars, skulls, flavor, enemies with "New!", reward, Fight), locked levels greyed with a lock, "Start here" on level 1, "More coming soon" at the end, a back button.
-- [ ] **2.7 Tool shelf and loadout stand:** every tool on the shelf (locked ones grey with their unlock text), grab one to read its tag, put it on one of the 2 free stand slots (slingshot and horn fixed). The battle then shows only those 4 tools, on 4 platforms. Every new spot in `reachSpots()`, every held tool keeps its `HOLD.poses` grip.
-- [ ] **2.8 Achievements shelf:** grey trophy slots, a "0 / 9" counter, a "???" tag on grab, "More coming soon".
-- [ ] **2.9 Docs** updated for run 2 (menus.md, controls-and-ui, modes-and-progression, mvp, README status).
+Decided before the build (2026-11-11): Daily and Custom show "Coming soon"; Fight plays the normal battle without the tutorial with the loadout and saves stars; pepper stays in the tutorial's wave 4. Built 2026-11-11 on the branch `feat/v2-menus` (from `feat/v2`), build only, not tested on the headset, not committed per step (the developer commits). Then reworked twice the same day after the developer's looks (round buttons only, the home screen moved out and up, a swipe list, the level card redone, free tool placement on the battle platforms). The full "as built" list is in [menus.md](menus.md#11-as-built-run-2).
 
-Before starting, settle the open items in [menus.md](menus.md#10-open) (what Daily, Custom and Fight do in run 2).
+- [x] **2.1 UI kit parts:** ~~a rectangular tile button, a red Fight tile~~ (built, then dropped: round buttons only), an upright option for `Slider` (kept, unused), a red Fight button with a sword icon. In `src/ui/kit/`, exported from its index ([menus.md](menus.md#7-ui-library-parts)).
+  - Done: `PokeButton` `locked` (buzz, no click) and new icons (`sword`, `lock`, `campaign`, `daily`, `custom`, drawn by `src/ui/kit/menuIcons.ts`). `ScrollList` (`src/ui/kit/scrollList.ts`, `SCROLL_LIST`): swipe to scroll with coasting and spring back, or tap only and scrolled from outside (`scrollToShare`), hover and press looks, all rows drawn once into one canvas (a scroll only moves the window, so nothing blinks). `Slider` `vertical` turns its frame a quarter. `FightButton` (`src/ui/kit/fightButton.ts`): a bordered box `PokeButton` (`box` option), and `PokeButton.onRefuse` for a poke while locked.
+- [x] **2.2 Level data:** the 15 level entries the menu reads (number, name, flavor, skulls, enemy icons, reward, open or locked), in a data file, rules in `src/rules/`. Levels 1 to 5 open, 6 to 15 text only.
+  - Done: `src/config/levels.ts`. Level 3 unlocks the bell (decided 2026-11-11); levels 8 and 12 show a "???" reward (`'mystery'`), the rest none. A win unlocks the level's reward tool.
+- [x] **2.3 Saving:** localStorage, one key: tutorial done, stars per level, levels open, unlocked tools, the loadout. Plus the star rules (70% and 35%, best kept) and the "Unlock all tools" switch in settings.
+  - Done: `src/rules/campaign.ts` (`parseProgress` checks every field, so a broken save never breaks the game), `src/player/progress.ts` (key `tallTale.progress`). Also saved: where each tool stands on the shelf (`shelf`), the enemy kinds met (for "New!") and the tools grabbed once (a new tool glows until then). The loadout starts empty. The Access tab rows are 5.5 cm apart (was 6) to fit the fourth row.
+- [x] **2.4 Tutorial to menu:** after the tutorial win, the battle (castle walls, towers, flags, battle-only things) sinks into the ground and the menu rises, both smooth. Fight plays it the other way. Later visits open on the menu. The bell is taken out of the tutorial (its wave and lesson), so the tutorial still runs to the end.
+  - Done: `src/world/sceneSwap.ts`. `Battle.onEnd`, `onMenu`, `onSkip` let the game decide what follows a battle. Wave 5 has no `newTool` now. Decided: Skip tutorial goes to the menu.
+- [x] **2.5 Main menu:** the front panel with buttons in different sizes. Settings opens the settings panel; Tutorial starts the tutorial.
+  - Done: `src/ui/menu/mainMenu.ts`, a 36 x 32 cm grid of round buttons (Daily, Campaign, Custom; Settings, Tutorial), each word under its button.
+- [x] **2.6 Campaign panel:** the split panel, the scrolling level list, the detail card (name, stars, skulls, flavor, enemies with "New!", reward, Fight), locked levels greyed with a lock, "More coming soon" at the end, a back button.
+  - Done: `src/ui/menu/campaignPanel.ts`, 50 x 36 cm: a tap only `ScrollList` of level cards (no row buttons) scrolled by an upright `Slider` (swipe scrolling mixed up taps and swipes on the headset), the card in one padded column with labeled Best and Difficulty blocks, the reward as a small turning 3D copy of the tool, and `FightButton` (the one rectangular button). No enemies on the card (dropped). A locked level says "Beat level N to unlock" under Fight; with empty tool slots a poke on Fight shows the glass sign and a red arrow at the empty slot for 5 s. "Start here" was dropped.
+- [x] **2.7 Tool shelf and loadout stand:** every tool on the shelf (locked ones grey with their unlock text), grab one to read its tag, put it on one of the 2 free stand slots (slingshot and horn fixed). The battle then shows only those 4 tools, on 4 platforms. Every new spot in `reachSpots()`, every held tool keeps its `HOLD.poses` grip.
+  - Done: `src/ui/menu/shelves.ts` with display copies of the tools (`HandTool.displayModel()`, `Slingshot.displayModel()`, resting with `HandTool.restTurn()`). The stand is 4 battle platforms (`tower-hexagon-top.glb`), the shelf wooden pedestals, both on the right. Any tool on any place (`moveTool` in `src/rules/campaign.ts`: a swap when occupied), the snap zone glows green with a tick. In battle every tool stays on its own platform (moving the picks put one in front of the red flag); the flags moved to -39 and 39 degrees. A reward tool can be grabbed off the campaign card (a full-size copy, no effects). The pause panel got a Menu button and sizes itself to its buttons (`Panel.resize`, `rowPanelWidth`).
+- [x] **2.8 Achievements shelf:** trophy slots, a "0 / 9" counter, a "???" tag on grab, "More coming soon".
+  - Done: 9 Kenney trophies (`props/mini-arena/trophy.glb`, 6 cm, dimmed until earned) on two rows on the left.
+- [x] **2.9 Docs** updated for run 2 (menus.md, controls-and-ui, modes-and-progression, mvp, README status).
+- Known, not from run 2: `npm run typecheck` reports the Bell's private `ring` method clashing with `HandTool`'s private `ring` field (from run 1), and `director.test.ts` is stale.
 
 ### Run 3: content, then fixes
 
@@ -425,5 +434,5 @@ Proposed, to confirm after the run 1 headset test:
 | Castle machines on hold | Dropped | castle-machines.md (history), README |
 | Only the tutorial battle; modes later | Campaign of 15 levels (5 open), unlocks, saving, tool shelf, riddle trophies | menus.md, modes-and-progression.md, mvp.md, map.md |
 | No loadout, every tool always on its platform | 4 tools per battle: slingshot and horn fixed, 2 picked; tools unlock in levels 1 to 5 | menus.md, modes-and-progression.md, giant-tools.md |
-| A menu board with carved buttons; all modes open after the tutorial, no level unlocks | The battleground sinks into the menu; a kit panel with tile buttons; shelves left and right | menus.md, modes-and-progression.md |
+| A menu board with carved buttons; all modes open after the tutorial, no level unlocks | The battleground sinks into the home screen: a kit panel of round buttons in front, the tool shelf and loadout stand on the right, the trophies on the left | menus.md, modes-and-progression.md |
 | Achievement hints for locked trophies | Riddles, with a hint after 2 battles since first read | modes-and-progression.md |

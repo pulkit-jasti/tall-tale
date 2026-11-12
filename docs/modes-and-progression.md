@@ -2,6 +2,8 @@
 
 Status: decided. Scoring and Endless difficulty are still to discuss.
 
+**v2 run 2 (2026-11-11):** the menu, the campaign panel, the tool shelf, the loadout stand, the achievements shelf and saving are built as designed in [menus.md](menus.md), which wins over this file for everything after the tutorial (see its "As built" section). Daily Battle and Custom Game show "Coming soon" for now.
+
 Back to [GDD index](GDD.md). Related: [Map and level generator](map.md#8-levels-and-the-level-generator), [Controls and UI](controls-and-ui.md).
 
 ---
