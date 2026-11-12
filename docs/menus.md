@@ -49,7 +49,7 @@ A compact front panel (the existing `Panel`, 36 x 32 cm) with **round poke butto
 
 Rules:
 
-- **Every option is shown and pokeable, none is locked.** Daily and Custom are not built yet: a poke turns their word to "Coming soon" for a moment.
+- **Every option is shown and pokeable, none is locked.** Daily is not built yet: a poke turns its word to "Coming soon" for a moment. Custom Game opens the Custom Game pages ([custom-mode.md](custom-mode.md#8-custom-game-menu-and-the-ui-kit), decided 2026-11-11).
 - Settings opens the existing settings panel. Tutorial starts the tutorial again.
 - Small enough that its edges are seen without turning the head (a first 50 cm wide panel was not).
 
@@ -100,7 +100,8 @@ Rules:
 - **Round buttons everywhere but Fight.** `PokeButton` got a `locked` state (it goes down and buzzes, never clicks, and calls `onRefuse`) and menu icons (sword, lock, flag, sun, sliders). Rectangular menu tiles were built and dropped.
 - **FightButton** (`src/ui/kit/fightButton.ts`): the one rectangular button, a bordered box (`PokeButton`'s `box` option: the same poke, looks and sounds) with a sword and "Fight!" on its face, red; locked, grey with a lock and "Locked". A round Fight did not look right.
 - **ScrollList** (`src/ui/kit/scrollList.ts`): a list drawn once into one canvas, a window moving over it (no redraw while scrolling); hover, press and selected looks, a tick and a click; edge rows show cut off. It can scroll by swiping (Meta's guidance), but the campaign uses it **tap only** (`swipe: false`) with the upright slider scrolling it (`scrollToShare`, gliding smoothly): on the headset, swipes and taps on the same rows got mixed up.
-- **Upright slider** (`Slider` `vertical`): the campaign list's scroll, smooth (no row steps).
+- **Upright slider** (`Slider` `vertical`): the campaign list's scroll, smooth (no row steps). Decided 2026-11-11: every page that scrolls uses it, in a scrollbar look with a long pill-shaped handle instead of the round one, so it never looks like a value slider ([custom-mode.md](custom-mode.md#ui-kit-parts)).
+- **Custom Game** (decided 2026-11-11): its pages, the floating rectangular tabs, the name field with the system keyboard and the delete question are in [custom-mode.md](custom-mode.md#8-custom-game-menu-and-the-ui-kit).
 
 ---
 

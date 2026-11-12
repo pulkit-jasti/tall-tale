@@ -242,7 +242,7 @@ All UI is built from one shared library, `src/ui/kit/` (import everything from `
 | Part | What it is | Used by |
 |---|---|---|
 | `PokeButton` | The round button poked with the index finger (Idle, Ready, Held, a blink while it waits). `locked`: it goes down and buzzes, nothing more | Every button |
-| `Slider` | Touch the handle and slide, one at a time, a handle like the buttons, grey at off, ticks per step (SLIDER). `vertical`: upright, 1 at the top | Sound settings, the campaign list's scroll |
+| `Slider` | Touch the handle and slide, one at a time, a handle like the buttons, grey at off, ticks per step (SLIDER). `vertical`: upright, 1 at the top. Scrollbar look (planned, [custom-mode.md](custom-mode.md#ui-kit-parts)): a long pill-shaped handle instead of the round one, for every page that scrolls | Sound settings, the campaign list's scroll, every scrolling page |
 | `ScrollList` | v2 run 2: a list whose rows are drawn once into one tall canvas, a window moving over it (scrolling never redraws); a tap selects a row (click), hover lights the row (tick), press darkens it; edge rows show cut off; it draws after its panel and never writes depth (SCROLL_LIST). It can scroll by swiping (Meta's guidance, coasting, springing back), or be tap only (`swipe: false`) and scrolled from outside (`scrollToShare`, gliding smoothly) | Campaign level list (tap only, with an upright `Slider`: swipes and taps got mixed up on the headset) |
 | `FightButton` | v2 run 2: the one rectangular button, a bordered box (`PokeButton`'s `box` option, the same poke, looks and sounds) with a sword and "Fight!", red; locked grey with a lock. Every other button is round | Campaign Fight |
 | `drawStar`, `drawSkull`, `drawMenuIcon` | v2 run 2: menu icons drawn in code (stars, goblin skulls, sword, lock, flag, sun, sliders, gear, replay, back). The round buttons' `sword`, `lock`, `campaign`, `daily` and `custom` icons use them. Menus use only round buttons (rectangular ones were tried and dropped) | Menus, end panel |
@@ -255,6 +255,8 @@ All UI is built from one shared library, `src/ui/kit/` (import everything from `
 | `drawTitleBanner`, `drawLine`, `drawOutlined`, `UI_COLORS` | Canvas text in one look and one set of colors | Panels, labels |
 | `canvasTexture`, `canvasPlane` | A canvas as a sharp sRGB texture, and the unlit picture made from it | Panels, button faces, markers, labels, FPS panel |
 | `drawOnTop` and `RENDER_ORDER` (config) | Never hidden behind anything, in one table of layer orders | Pause panel; markers, labels, stun ring, arrows and ghost hands use the table |
+
+**Planned for Custom Game** ([custom-mode.md](custom-mode.md#ui-kit-parts), decided 2026-11-11): range slider, choice picker, number stepper, seed control, setting row, floating rectangular tabs outside a panel's top border (with `FightButton`, the only rectangular buttons), a text field typed with the Quest's system keyboard with a validation line under it, and tick and cross icons for yes and no.
 
 The Kenney UI images and their helpers (`drawBanner`, `drawIcon`, `drawNineSlice`, `fitFont`, `wrapText`, the button icons) come through the same entry. Something new that two places need goes into the library first.
 
