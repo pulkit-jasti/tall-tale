@@ -1,6 +1,6 @@
 # Menus, Shelves and the Campaign Screen (v2 run 2)
 
-Status: decided with the developer (2026-11-11). Built in v2 run 2 (2026-11-11, branch `feat/v2-menus`, build only, not tested on the headset yet). Where the build chose something, it is in "As built" at the end. This is the topic doc for everything the player sees after the tutorial. Where it disagrees with [modes-and-progression.md](modes-and-progression.md), this file wins (that file is the MVP's older plan). [v2-plan.md](v2-plan.md) still wins over this file.
+Status: decided with the developer (2026-11-11). Built in v2 run 2 (2026-11-11, branch `feat/v2-menus`) and tested on the headset the same day: everything in "As built" works well. Where the build chose something, it is in "As built" at the end. This is the topic doc for everything the player sees after the tutorial. Where it disagrees with [modes-and-progression.md](modes-and-progression.md), this file wins (that file is the MVP's older plan). [v2-plan.md](v2-plan.md) still wins over this file.
 
 Back to [GDD index](GDD.md). Related: [v2-plan.md](v2-plan.md), [controls-and-ui.md](controls-and-ui.md#ui-library), [castle-rules.md](castle-rules.md#star-rating).
 
