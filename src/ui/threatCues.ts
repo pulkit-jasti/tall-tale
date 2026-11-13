@@ -9,10 +9,12 @@ import { BALLOONS, CASTLE, POINTER, THREAT } from '../config/game.js';
 import { PointerArrow } from './pointerArrow.js';
 import type { Particles } from '../fx/particles.js';
 import { angleOf, polarX, polarZ } from '../rules/boardMath.js';
-import type { Goblin } from '../units/goblins.js';
+import type { Goblin, Goblins } from '../units/goblins.js';
 import type { Stage } from '../world/stage.js';
 
 const temp = new Vector3();
+const toGoblin = new Vector3();
+const arrowAt = new Vector3();
 
 interface Flash {
   mesh: Mesh;
@@ -23,11 +25,18 @@ interface Flash {
 export class ThreatCues {
   private flashes: Flash[] = [];
   private nextFlash = 0;
+  private arrow: PointerArrow;
+  /** How long each goblin at the wall has been out of view (seconds). */
+  private unseen = new Map<Goblin, number>();
+  /** The goblin the red arrow points at, kept while it stays a threat out of view. */
+  private pointed: Goblin | null = null;
 
   constructor(
     private stage: Stage,
     private particles: Particles,
+    world: Object3D,
   ) {
+    this.arrow = new PointerArrow(world, POINTER.threat);
     // Wall top flashes, in boardSpin: they sit on the wall where it was hit.
     const depth = CASTLE.wallOut - CASTLE.wallIn;
     const geometry = new BoxGeometry(THREAT.flashWidth, 0.25, depth);
@@ -40,8 +49,8 @@ export class ThreatCues {
     }
   }
 
-  /** A goblin hit the wall: flash the wall top where it stands, and a dust puff. */
-  wallHit(goblin: Goblin): void {
+  /** A goblin hit the wall: flash the wall top where it stands, and a dust puff. `dust` false: the flash only (a climber running on it). */
+  wallHit(goblin: Goblin, dust = true): void {
     if (!THREAT.enabled) return;
     const p = goblin.root.position;
     const a = angleOf(p.x, p.z);
@@ -53,6 +62,7 @@ export class ThreatCues {
     flash.mesh.visible = true;
     flash.time = THREAT.flashTime;
     flash.material.opacity = THREAT.flashOpacity;
+    if (!dust) return;
     temp.set(polarX(CASTLE.wallOut, a), CASTLE.wallHeight, polarZ(CASTLE.wallOut, a));
     this.particles.burst(this.stage.boardSpin.localToWorld(temp), THREAT.dustColors, THREAT.dustCount, THREAT.dustSpeed);
   }
@@ -61,10 +71,19 @@ export class ThreatCues {
    * The red arrow: at a goblin hitting the wall, climbing it or on the rampart that has
    * been at the edge of the view or out of it for POINTER.threatAfter.
    */
-  updateArrow(dt: number, goblins: Goblins, head: Vector3, forward: Vector3): void {
+  /**
+   * The red arrow points at one threat at a time: the nearest to where the
+   * player looks among those out of view long enough, and it stays on that
+   * one until it is handled (no longer at the wall, on it or over it), even
+   * while it is in view (the arrow just hides then). Only then the next one.
+   * So it never jumps between goblins and confuses the player.
+   */
+  /** `camp`: a camp that just rose and was not looked at yet (world): the arrow points there while no goblin needs it. */
+  updateArrow(dt: number, goblins: Goblins, head: Vector3, forward: Vector3, camp: Vector3 | null = null): void {
     if (!THREAT.enabled) return;
+    let keep = false;
     let best: Goblin | null = null;
-    let bestTime = POINTER.threatAfter;
+    let bestAngle = Infinity;
     for (const g of goblins.list) {
       // At the wall, climbing it, on top of it running about, or riding a balloon over it.
       const p = g.root.position;
@@ -73,21 +92,19 @@ export class ThreatCues {
         if (this.unseen.has(g)) this.unseen.delete(g);
         continue;
       }
+      if (g === this.pointed) keep = true;
       goblins.centerWorld(g, toGoblin).sub(head);
-      const out = (forward.angleTo(toGoblin) * 180) / Math.PI > POINTER.showDeg;
-      const time = out ? (this.unseen.get(g) ?? 0) + dt : 0;
+      const angle = (forward.angleTo(toGoblin) * 180) / Math.PI;
+      const time = angle > POINTER.showDeg ? (this.unseen.get(g) ?? 0) + dt : 0;
       this.unseen.set(g, time);
-      // Keep pointing at the same one while it is still a threat, so the arrow never jumps around.
-      if (g === this.pointed && time > 0) {
+      if (time >= POINTER.threatAfter && angle < bestAngle) {
         best = g;
-        bestTime = Infinity;
-      } else if (time >= bestTime) {
-        best = g;
-        bestTime = time;
+        bestAngle = angle;
       }
     }
-    this.pointed = best;
-    this.arrow.update(dt, head, forward, best ? goblins.centerWorld(best, arrowAt) : null);
+    if (!keep) this.pointed = best;
+    const target = this.pointed;
+    this.arrow.update(dt, head, forward, target ? goblins.centerWorld(target, arrowAt) : camp);
   }
 
   hideArrow(): void {

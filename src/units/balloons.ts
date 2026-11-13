@@ -39,8 +39,10 @@ import type { Goblin, Goblins } from './goblins.js';
 
 type Phase = 'off' | 'approach' | 'drop' | 'leave' | 'popped';
 
-/** Under the envelope's center: the basket's middle and the riders' hands (cm). */
+/** Under the envelope's center: the basket's middle (cm). */
 const BASKET_DROP = BALLOONS.radius * 1.15 + 4.2;
+/** The basket's floor, where the riders stand, under the envelope's center (cm). */
+const BASKET_FLOOR = BASKET_DROP + BALLOONS.basketHeight / 2 - 0.2;
 const temp = new Vector3();
 const matrix = new Matrix4();
 const quaternion = new Quaternion();
@@ -62,6 +64,8 @@ export class Balloon implements SlingTarget {
   /** Height gained since it turned away (cm). */
   lift = 0;
   aimed = false;
+  /** The balloon lesson: it stops this far out (cm) and hovers there, riders aboard, until popped. Null: it comes all the way in. */
+  waitAt: number | null = null;
   readonly radius = BALLOONS.radius * 1.2;
   readonly assist = 1;
 
@@ -126,15 +130,16 @@ function balloonGeometry(): BufferGeometry {
   mouth.translate(0, -r * 1.12, 0);
   parts.push(paint(mouth, () => BALLOONS.colors[3]));
   // The basket.
-  const basket = new CylinderGeometry(1.7, 1.35, 2.2, 6);
+  const { basketRadius, basketHeight } = BALLOONS;
+  const basket = new CylinderGeometry(basketRadius, basketRadius * 0.82, basketHeight, 6);
   basket.translate(0, -BASKET_DROP, 0);
   parts.push(paint(basket, () => BALLOONS.basketColor));
   // Four ropes from the basket rim up to the envelope.
   const top = -r * 0.9;
-  const bottom = -BASKET_DROP + 1.1;
+  const bottom = -BASKET_DROP + basketHeight / 2;
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
-    const from = new Vector3(Math.cos(a) * 1.5, bottom, Math.sin(a) * 1.5);
+    const from = new Vector3(Math.cos(a) * basketRadius * 0.9, bottom, Math.sin(a) * basketRadius * 0.9);
     const to = new Vector3(Math.cos(a) * r * 0.55, top, Math.sin(a) * r * 0.55);
     const length = from.distanceTo(to);
     const rope = new BoxGeometry(0.12, length, 0.12);
@@ -149,6 +154,13 @@ export class Balloons {
   readonly list: Balloon[] = [];
   /** The stress test: balloons hover where they are (they still bob). */
   hold = false;
+  /** Balloons popped since the game started (the balloon lesson counts them). */
+  pops = 0;
+
+  /** The balloon lesson is over: a balloon still hovering comes on in. */
+  releaseWaiting(): void {
+    for (const b of this.list) b.waitAt = null;
+  }
   private mesh: InstancedMesh;
   private time = 0;
   /** Called with each balloon popped (juice: a ring and stars), at its world position. */
@@ -201,7 +213,7 @@ export class Balloons {
    * A balloon comes in along a board angle (radians), from `from` cm out.
    * Returns null when all balloons are out, or no rider could be spawned (unit cap).
    */
-  spawn(angle: number, from: number = BALLOONS.startRadius): Balloon | null {
+  spawn(angle: number, from: number = BALLOONS.startRadius, waitAt: number | null = null): Balloon | null {
     const balloon = this.list.find((b) => b.phase === 'off');
     if (!balloon) return null;
     const riders: Goblin[] = [];
@@ -220,6 +232,7 @@ export class Balloons {
     balloon.age = 0;
     balloon.lift = 0;
     balloon.aimed = false;
+    balloon.waitAt = waitAt;
     this.tint(balloon);
     this.place(balloon, 0);
     this.mesh.visible = true;
@@ -245,7 +258,9 @@ export class Balloons {
   /** Hit by a slingshot shot: it bursts, and its riders fall and poof where they land. */
   pop(balloon: Balloon): void {
     if (!balloon.hittable()) return;
+    this.pops++;
     balloon.phase = 'popped';
+    balloon.waitAt = null;
     balloon.timer = BALLOONS.popTime;
     // Riders fall, drifting on a little the way it floated (inward).
     const vx = -polarX(1, balloon.angle) * BALLOONS.speed * 0.8;
@@ -293,8 +308,10 @@ export class Balloons {
       switch (b.phase) {
         case 'approach':
           if (!stunned && !this.hold) b.radiusOut -= BALLOONS.speed * dt;
+          // The lesson balloon hovers outside the wall, riders aboard, until it is popped.
+          if (b.waitAt !== null && b.radiusOut <= b.waitAt) b.radiusOut = b.waitAt;
           if (b.riders.length === 0) b.phase = 'leave';
-          else if (b.radiusOut <= BALLOONS.dropRadius) {
+          else if (b.waitAt === null && b.radiusOut <= BALLOONS.dropRadius) {
             b.radiusOut = BALLOONS.dropRadius;
             b.phase = 'drop';
             b.timer = BALLOONS.dropGap * 0.5;
@@ -365,14 +382,14 @@ export class Balloons {
     }
     matrix.compose(p, quaternion, scaleV.setScalar(s));
     this.mesh.setMatrixAt(b.index, matrix);
-    // Riders hang from the basket, side by side, facing where it floats.
+    // Riders stand in the basket, side by side, heads and shoulders over the rim, facing where it floats.
     const n = b.riders.length;
     const faceX = -polarX(1, b.angle);
     const faceZ = -polarZ(1, b.angle);
     for (let k = 0; k < n; k++) {
       const g = b.riders[k];
-      const side = (k - (n - 1) / 2) * 2.2;
-      g.root.position.set(p.x - faceZ * side, p.y - BASKET_DROP - 0.9 - g.stats.height * 1.05, p.z + faceX * side);
+      const side = (k - (n - 1) / 2) * BALLOONS.riderGap;
+      g.root.position.set(p.x - faceZ * side, p.y - BASKET_FLOOR, p.z + faceX * side);
       g.face(faceX, faceZ);
     }
   }

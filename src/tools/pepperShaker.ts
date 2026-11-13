@@ -1,9 +1,10 @@
-// The pepper shaker (docs/giant-tools.md): grab it and shake it over goblins.
-// The first shake pays 3 food and gives about 8 seconds of pepper. Pepper
-// falls straight down from where the shaker is, so the falling specks show
-// where it lands. No aiming UI. Every goblin under it sneezes and is seasoned:
-// worth 2 food instead of 1 when eaten. Goblins outside the wall stumble back
-// a little. (Gear flying off comes with the gear-wearing enemies.)
+// The pepper shaker (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): grab it
+// and shake it over goblins. The first shake starts about 8 seconds of
+// pepper, then it recharges. Pepper falls straight down from where the shaker
+// is, so the falling specks show where it lands. No aiming UI. Every goblin
+// in the small area under it is disarmed (weapon, helmet and shield fly off),
+// sneezes for a few seconds without attacking, and is seasoned: eating it
+// fills the tool rings twice as much. No push back.
 //
 // Shaking is found from the shaker's own movement: a quick move that turns
 // back on the one before is one stroke, two strokes close together are a shake.
@@ -113,7 +114,7 @@ export class PepperShaker extends HandTool {
     if (count > 0) this.onUse(count);
   }
 
-  /** Debug: peppers the goblins at the front of the wall, without hands. Pays the food like a real shake. */
+  /** Debug: peppers the goblins at the front of the wall, without hands (starts a use like a real shake). */
   debugShake(): void {
     if (!this.debugStart()) return;
     // Above the goblins at the wall straight in front of the player (boardLift).

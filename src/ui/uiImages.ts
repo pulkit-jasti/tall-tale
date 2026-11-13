@@ -6,6 +6,8 @@
 // screen, or it looks blocky in the headset. Small icons come from the SVG
 // versions (public/ui/vector/), drawn at any size. PNGs are only used where
 // they are big enough (panels, the banner, the 100 px game icons).
+import { drawMenuIcon } from './kit/menuIcons.js';
+import { ACTION_ICONS, drawActionIcon, type ActionIcon } from './kit/actionIcons.js';
 
 const FILES = {
   panel: 'rpg/panel_beige.png',
@@ -22,10 +24,38 @@ const FILES = {
   target: 'icons/target.png',
   returnArrow: 'icons/return.png',
   next: 'icons/next.png',
+  // Board Game Icons (white, 128 px, tinted in code): the compass's goblin count, the end panel's stats, a best result.
+  skull: 'board/skull.png',
+  heart: 'board/suit_hearts.png',
+  hourglass: 'board/hourglass.png',
+  crown: 'board/crown_a.png',
+  // More Board Game Icons for the cards and the settings rows (white, tinted).
+  shield: 'board/shield.png',
+  bow: 'board/bow.png',
+  tower: 'board/structure_tower.png',
+  award: 'board/award.png',
+  flag: 'board/flag_triangle.png',
+  sword: 'board/sword.png',
+  hand: 'board/hand.png',
+  rotate: 'board/arrow_rotate.png',
+  // Game Icons (white, 100 px).
+  starIcon: 'icons/star.png',
+  locked: 'icons/locked.png',
+  unlocked: 'icons/unlocked.png',
+  music: 'icons/musicOn.png',
+  wrench: 'icons/wrench.png',
+  audioOn: 'icons/audioOn.png',
+  audioOff: 'icons/audioOff.png',
+  // Fantasy UI Borders (white): the glass sign's frame (9-slice) and a divider line (mirrored, tinted).
+  frame: 'borders/panel-border-010.png',
+  divider: 'borders/divider-fade-002.png',
 } as const;
 
 /** Long side of an SVG drawn into a texture of its own (pixels). */
 const RASTER_SIZE = 256;
+/** The cream of every icon drawn in code, and the dark brown outline the tutorial markers keep (to read against the sky). */
+const ICON_FILL = '#f7e2b0';
+const ICON_OUTLINE = '#6d4b27';
 
 export type UiImageName = keyof typeof FILES;
 
@@ -101,6 +131,38 @@ export function drawIcon(c: CanvasRenderingContext2D, name: UiImageName, x: numb
   // Tint on a small scratch canvas, so the panel's own pixels are not touched.
   const scratch = tintCanvas(image, tint);
   c.drawImage(scratch, x, y, size, size);
+}
+
+/** An icon by its middle (`size` px square), optionally tinted. */
+export function drawIconCentered(c: CanvasRenderingContext2D, name: UiImageName, x: number, y: number, size: number, tint?: string): void {
+  drawIcon(c, name, x - size / 2, y - size / 2, size, tint);
+}
+
+/** Colors of the Kenney stars on the cards: won (gold) and not yet (faint brown). */
+const STAR_ON = '#e8b020';
+const STAR_OFF = 'rgba(138, 90, 52, 0.35)';
+
+/** A row of `total` Kenney stars (Game Icons), the first `count` gold, from the middle of the first at x, `gap` px apart. */
+export function drawStars(c: CanvasRenderingContext2D, x: number, y: number, size: number, gap: number, count: number, total = 3): void {
+  for (let s = 0; s < total; s++) drawIconCentered(c, 'starIcon', x + s * gap, y, size, s < count ? STAR_ON : STAR_OFF);
+}
+
+/**
+ * A Fantasy UI Borders divider on both sides of a gap (`gap` px wide around
+ * x): the fading line with its little cross toward the middle, mirrored on
+ * the right, tinted. `width` is each side's length, `height` its thickness.
+ */
+export function drawDivider(c: CanvasRenderingContext2D, x: number, y: number, gap: number, width: number, height: number, tint: string): void {
+  const image = uiImage('divider');
+  if (!image) return;
+  const line = tintCanvas(image, tint);
+  // The image fades out to its left and has its cross on the right: the left half as it is, the right half mirrored.
+  c.drawImage(line, x - gap / 2 - width, y - height / 2, width, height);
+  c.save();
+  c.translate(x + gap / 2 + width, y - height / 2);
+  c.scale(-1, 1);
+  c.drawImage(line, 0, 0, width, height);
+  c.restore();
 }
 
 const tinted = new Map<string, HTMLCanvasElement>();
@@ -184,14 +246,38 @@ export function iconTextureSource(name: UiImageName, tint?: string): HTMLCanvasE
   return image ? tintCanvas(image, tint) : null;
 }
 
-export type ButtonIcon = 'next' | 'play' | 'restart';
+export type ButtonIcon =
+  | 'next'
+  | 'play'
+  | 'restart'
+  | 'pause'
+  | 'table'
+  | 'reach'
+  | 'minus'
+  | 'plus'
+  | 'sound'
+  | 'muted'
+  | 'settings'
+  | 'back'
+  | 'access'
+  | 'skip'
+  // v2 run 2 menus: Fight, a locked Fight, Campaign, Daily Battle, Custom Game.
+  | 'sword'
+  | 'lock'
+  | 'campaign'
+  | 'daily'
+  | 'custom'
+  // Back to the home screen (the pause panel's and end panel's Menu): a little castle keep.
+  | 'home'
+  // Custom Game (src/ui/kit/actionIcons.ts): yes, no, edit, duplicate, delete, share, the seed's dice, an unpicked choice.
+  | ActionIcon;
 
 /**
  * A crisp button icon drawn in code (256 px), in the same look as the arrows:
  * cream fill with a brown outline. Used on the faces of all poke buttons.
  */
 export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
-  if (icon === 'next') return arrowCanvas('right');
+  if (icon === 'next') return arrowCanvas('right', false);
   const key = `button|${icon}`;
   const cached = tinted.get(key);
   if (cached) return cached;
@@ -202,9 +288,105 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
   c.translate(s / 2, s / 2);
   c.lineJoin = 'round';
   c.lineCap = 'round';
-  c.strokeStyle = '#6d4b27';
-  c.fillStyle = '#f7e2b0';
-  if (icon === 'play') {
+  // No dark outline (it looked ugly on the buttons): the outline is the fill's own cream, so it only makes the shape a little bolder.
+  c.strokeStyle = ICON_FILL;
+  c.fillStyle = ICON_FILL;
+  if (icon === 'minus' || icon === 'plus') {
+    // A fat bar, and for plus a second one across it.
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.roundRect(-s * 0.3, -s * 0.08, s * 0.6, s * 0.16, s * 0.04);
+    if (icon === 'plus') c.roundRect(-s * 0.08, -s * 0.3, s * 0.16, s * 0.6, s * 0.04);
+    c.fill();
+    c.stroke();
+    if (icon === 'plus') {
+      // The crossing is filled again, so no outline shows through the middle.
+      c.fillRect(-s * 0.08 + 2, -s * 0.08 + 2, s * 0.16 - 4, s * 0.16 - 4);
+    }
+  } else if (icon === 'sound' || icon === 'muted') {
+    // A speaker: a box and a cone, then sound waves, or a cross when muted.
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.moveTo(-s * 0.34, -s * 0.1);
+    c.lineTo(-s * 0.18, -s * 0.1);
+    c.lineTo(s * 0.02, -s * 0.28);
+    c.lineTo(s * 0.02, s * 0.28);
+    c.lineTo(-s * 0.18, s * 0.1);
+    c.lineTo(-s * 0.34, s * 0.1);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.lineWidth = s * 0.07;
+    if (icon === 'sound') {
+      for (const r of [0.14, 0.26]) {
+        c.beginPath();
+        c.arc(s * 0.06, 0, s * r, -0.8, 0.8);
+        c.stroke();
+      }
+    } else {
+      c.beginPath();
+      c.moveTo(s * 0.14, -s * 0.14);
+      c.lineTo(s * 0.36, s * 0.14);
+      c.moveTo(s * 0.36, -s * 0.14);
+      c.lineTo(s * 0.14, s * 0.14);
+      c.stroke();
+    }
+  } else if (icon === 'settings') {
+    // A gear: a toothed ring around a hole.
+    c.lineWidth = s * 0.05;
+    c.beginPath();
+    const teeth = 8;
+    for (let i = 0; i < teeth * 2; i++) {
+      const a = (i / (teeth * 2)) * Math.PI * 2;
+      const r = i % 2 === 0 ? s * 0.36 : s * 0.27;
+      const a0 = a - Math.PI / (teeth * 2) * 0.55;
+      const a1 = a + Math.PI / (teeth * 2) * 0.55;
+      c.lineTo(Math.cos(a0) * r, Math.sin(a0) * r);
+      c.lineTo(Math.cos(a1) * r, Math.sin(a1) * r);
+    }
+    c.closePath();
+    c.fill();
+    c.stroke();
+    // The hole is cut out, so the button's green shows through.
+    c.beginPath();
+    c.arc(0, 0, s * 0.11, 0, Math.PI * 2);
+    c.globalCompositeOperation = 'destination-out';
+    c.fill();
+    c.globalCompositeOperation = 'source-over';
+  } else if (icon === 'access') {
+    // Accessibility: a round head over a figure with open arms and legs, in a ring.
+    c.lineWidth = s * 0.07;
+    c.beginPath();
+    c.arc(0, 0, s * 0.38, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.arc(0, -s * 0.2, s * 0.07, 0, Math.PI * 2);
+    c.fill();
+    c.lineWidth = s * 0.08;
+    c.beginPath();
+    c.moveTo(-s * 0.22, -s * 0.07);
+    c.lineTo(s * 0.22, -s * 0.07);
+    c.moveTo(0, -s * 0.07);
+    c.lineTo(0, s * 0.08);
+    c.lineTo(-s * 0.12, s * 0.26);
+    c.moveTo(0, s * 0.08);
+    c.lineTo(s * 0.12, s * 0.26);
+    c.stroke();
+  } else if (icon === 'back') {
+    // Back: an arrow pointing left.
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.moveTo(-s * 0.34, 0);
+    c.lineTo(-s * 0.06, -s * 0.28);
+    c.lineTo(-s * 0.06, -s * 0.1);
+    c.lineTo(s * 0.32, -s * 0.1);
+    c.lineTo(s * 0.32, s * 0.1);
+    c.lineTo(-s * 0.06, s * 0.1);
+    c.lineTo(-s * 0.06, s * 0.28);
+    c.closePath();
+    c.fill();
+    c.stroke();
+  } else if (icon === 'play') {
     // A play triangle, pointing right, nudged right so it looks centered.
     c.beginPath();
     c.moveTo(s * 0.36, 0);
@@ -214,6 +396,77 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.lineWidth = s * 0.06;
     c.fill();
     c.stroke();
+  } else if (icon === 'skip') {
+    // Skip: two play triangles and a bar after them (skip to the end).
+    c.lineWidth = s * 0.05;
+    for (const x of [-s * 0.34, -s * 0.06]) {
+      c.beginPath();
+      c.moveTo(x + s * 0.26, 0);
+      c.lineTo(x, -s * 0.24);
+      c.lineTo(x, s * 0.24);
+      c.closePath();
+      c.fill();
+      c.stroke();
+    }
+    c.beginPath();
+    c.roundRect(s * 0.23, -s * 0.24, s * 0.09, s * 0.48, s * 0.02);
+    c.fill();
+    c.stroke();
+  } else if (icon === 'pause') {
+    // Two upright bars.
+    c.lineWidth = s * 0.06;
+    for (const x of [-s * 0.2, s * 0.06]) {
+      c.beginPath();
+      c.roundRect(x, -s * 0.3, s * 0.14, s * 0.6, s * 0.03);
+      c.fill();
+      c.stroke();
+    }
+  } else if (icon === 'table') {
+    // Reset table: a round board seen from above with a down arrow onto it (placed again).
+    c.lineWidth = s * 0.06;
+    c.beginPath();
+    c.ellipse(0, s * 0.2, s * 0.34, s * 0.13, 0, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    c.beginPath();
+    c.moveTo(0, s * 0.12);
+    c.lineTo(-s * 0.16, -s * 0.06);
+    c.lineTo(-s * 0.07, -s * 0.06);
+    c.lineTo(-s * 0.07, -s * 0.36);
+    c.lineTo(s * 0.07, -s * 0.36);
+    c.lineTo(s * 0.07, -s * 0.06);
+    c.lineTo(s * 0.16, -s * 0.06);
+    c.closePath();
+    c.fill();
+    c.stroke();
+  } else if (icon === 'sword' || icon === 'lock' || icon === 'campaign' || icon === 'daily' || icon === 'custom' || icon === 'home') {
+    // v2 run 2 menu icons: the menus' own drawings (src/ui/kit/menuIcons.ts), in the same cream.
+    drawMenuIcon(c, icon, 0, 0, s * 0.72, ICON_FILL);
+  } else if ((ACTION_ICONS as readonly string[]).includes(icon)) {
+    drawActionIcon(c, icon as ActionIcon, s);
+  } else if (icon === 'reach') {
+    // Measure reach: a double arrow between two end bars, like a tape measure.
+    c.lineWidth = s * 0.06;
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.roundRect(side * s * 0.36 - s * 0.04, -s * 0.24, s * 0.08, s * 0.48, s * 0.02);
+      c.fill();
+      c.stroke();
+    }
+    c.beginPath();
+    c.moveTo(-s * 0.28, 0);
+    c.lineTo(-s * 0.12, -s * 0.15);
+    c.lineTo(-s * 0.12, -s * 0.06);
+    c.lineTo(s * 0.12, -s * 0.06);
+    c.lineTo(s * 0.12, -s * 0.15);
+    c.lineTo(s * 0.28, 0);
+    c.lineTo(s * 0.12, s * 0.15);
+    c.lineTo(s * 0.12, s * 0.06);
+    c.lineTo(-s * 0.12, s * 0.06);
+    c.lineTo(-s * 0.12, s * 0.15);
+    c.closePath();
+    c.fill();
+    c.stroke();
   } else {
     // Restart: a circular arrow, an open ring with an arrowhead at its end.
     const r = s * 0.27;
@@ -221,11 +474,7 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     const end = Math.PI * 1.35;
     c.beginPath();
     c.arc(0, 0, r, start, end);
-    c.lineWidth = s * 0.17;
-    c.strokeStyle = '#6d4b27';
-    c.stroke();
-    c.lineWidth = s * 0.09;
-    c.strokeStyle = '#f7e2b0';
+    c.lineWidth = s * 0.12;
     c.stroke();
     // Arrowhead at the start of the ring, pointing along it (clockwise).
     const ax = Math.cos(start) * r;
@@ -242,7 +491,6 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
     c.lineTo(ax - nx * head + tx * head * 0.2, ay - ny * head + ty * head * 0.2);
     c.closePath();
     c.lineWidth = s * 0.05;
-    c.strokeStyle = '#6d4b27';
     c.fill();
     c.stroke();
   }
@@ -254,8 +502,8 @@ export function buttonIconCanvas(icon: ButtonIcon): HTMLCanvasElement {
  * A crisp arrow drawn in code (256 px), in the Kenney look: cream fill with a
  * brown outline. `direction` is where it points.
  */
-export function arrowCanvas(direction: 'left' | 'right' | 'down'): HTMLCanvasElement {
-  const key = `arrow|${direction}`;
+export function arrowCanvas(direction: 'left' | 'right' | 'down', outline = true): HTMLCanvasElement {
+  const key = `arrow|${direction}|${outline}`;
   const cached = tinted.get(key);
   if (cached) return cached;
   const canvas = document.createElement('canvas');
@@ -276,8 +524,9 @@ export function arrowCanvas(direction: 'left' | 'right' | 'down'): HTMLCanvasEle
   c.closePath();
   c.lineJoin = 'round';
   c.lineWidth = s * 0.06;
-  c.strokeStyle = '#6d4b27';
-  c.fillStyle = '#f7e2b0';
+  // Outlined for the markers (they float against the sky); on a button no dark outline, it looked ugly there.
+  c.strokeStyle = outline ? ICON_OUTLINE : ICON_FILL;
+  c.fillStyle = ICON_FILL;
   c.fill();
   c.stroke();
   tinted.set(key, canvas);

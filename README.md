@@ -2,7 +2,7 @@
 
 A seated, hands-only VR game for Meta Quest.
 
-You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Your little army does most of the fighting. You turn the battle with giant tools (a slingshot, a fly swatter, a pepper shaker and a megaphone), and when goblins climb the wall, you pick one up and eat it. Eating is also how you pay for your tools.
+You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Your little army does most of the fighting. You turn the battle with giant tools (a slingshot, a fly swatter, a pepper shaker, a bell and a war horn that calls your knights), and when goblins climb the wall, you pick one up and eat it. Tools are free but rest after each use, and eating fills them up faster.
 
 The feeling we want: being a kid playing with toy soldiers, making up your own battle story, except the toys are alive.
 
@@ -11,10 +11,23 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 ## Status
 
 - **MVP build steps 1 to 6 are done and tested on the headset** (2026-11-03 to 2026-11-05): the board, castle and ring handle, grab and eat, the slingshot, 5 tutorial waves with a guided tutorial, both flags, the fly swatter, pepper shaker, food jar, triggers, troops, megaphone and bell, pause, and the giant's seat and body.
-- **Steps 7 and 8 are built, not tested on the headset yet** (2026-11-05): three troop kinds with gear (swordsmen, spearmen, archers), goblin spears and helmets, balloon riders from wave 4, the stress test with troops, and the juice pass (knockout stars, hit stop, food labels, confetti and more). Next: the headset test, the stress test result, then the missing sounds.
+- **Steps 7 and 8 are built and tested on the headset** (2026-11-05 to 2026-11-10): three troop kinds with gear (swordsmen, spearmen, archers), goblin spears and helmets, balloon riders from wave 4, the stress test with troops, and the juice pass (knockout stars, hit stop, food labels, confetti and more). Next: the stress test result, then the missing sounds.
 - Details, open items and the build order are in [docs/mvp.md](docs/mvp.md). Frame rate results are in [docs/performance.md](docs/performance.md).
-- Day and night and stylized hands are far future ideas. The MVP has a hand-made tutorial map. The level generator comes later.
-- The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win.
+- **Day and night is built** on the branch `feat/day-night-cycle` (2026-11-05, tested on the headset 2026-11-10, [docs/mvp.md](docs/mvp.md#day-and-night-cycle-started)): four times of day that follow the waves, a dark night with stars, a moon and a ringed planet, glowing windows, torches and lanterns, and a bright edge on the units so goblins stay easy to spot. Stylized hands are a far future idea. The MVP has a hand-made tutorial map. The level generator comes later.
+- **The same branch grew much more** (2026-11-05 to 2026-11-10, tested on the headset 2026-11-10, typecheck, build and tests not run yet, nothing committed, [docs/mvp.md](docs/mvp.md#more-on-the-same-branch-sound-ui-and-a-livelier-world)): real sounds from Freesound and menu and battle music, sound placement fixes (mono, a muffle behind the head, soft ends on long sounds), a pause button in front instead of on the wrist, a settings page with Sound and Access tabs, sliders and a sliding switch, the bell as a choice in place of the megaphone, our own UI library, menus centered in front of the eyes, one 3D arrow as the only tutorial marker, a throw lesson, farther and bigger goblin camps, story scenes, villagers, road torches, a rolling pebble, and tutorial fixes (reach check, pepper, balloons).
+- **v2 run 1 is built** on the branch `feat/v2` (2026-11-10, build only, not tested on the headset yet, typecheck and tests not run, [docs/v2-plan.md](docs/v2-plan.md)): gear with real effects (helmets and shields as extra hits, spears and swords, goblin shields and swords), every goblin climbs (bash, climb, rampart, courtyard), free tools with use windows and recharge rings (eating fills them; the food jar and price tags are gone), the pepper disarms, the bell knocks the rampart down, the war horn replaces the megaphone and calls field knights who charge and hold a junction, and a wall garrison of 4 archers and 2 guards.
+- **v2 run 1 tuned over 15 headset rounds** (2026-11-10 to 2026-11-11, build only, committed, typecheck and tests not run): the horn aimed by gaze with a lock that follows the look and a one-frame blow, knights routed over the roads in up to 4 squads, a tutorial that never skips a lesson (Skip tutorial instead), the glass sign, opposite-hand ghost demos, the bell rewritten, auto-pause for the Quest menu and a headset taken off, and a cleaner debug page with notes and a mic panel. The current state and the handoff are in [docs/v2-plan.md](docs/v2-plan.md#run-1-as-it-stands-now-after-15-headset-rounds-2026-11-10-to-2026-11-11). Next: the stress test, typecheck and tests, then run 2 (the tutorial rebuild, levels, saving, menus).
+- **v2 run 2 is built and tested on the headset** on the branch `feat/v2-menus` (2026-11-11, works well after several headset rounds, typecheck and tests not run, not committed yet, [docs/menus.md](docs/menus.md#11-as-built-run-2)): after the tutorial the battleground sinks and the home screen rises: a compact main menu of round buttons in front, a campaign panel with a list of 15 levels (1 to 5 open, tap to pick, a slider to scroll), stars and a rectangular Fight button, a tool shelf and a loadout stand on the right (the battle's own platforms: slingshot and horn fixed, 2 slots the player fills; any tool goes anywhere, with a glowing snap zone), an achievements shelf with trophies on the left, saving in the browser, and "Unlock all tools" in the settings. The bell left the tutorial and unlocks at level 3, and battles have 4 waves. On the same run: the knights and goblins fight rewritten (the whole squad fights, on the way out too, no goblin walks past), the battle tools moved back behind the flags, and the board sits 50 cm below the eyes. Reworked over several headset rounds, following Meta's hands UI guidance. Next: the level generator and Custom Game (below).
+- **Next: the level generator and Custom Game** ([docs/custom-mode.md](docs/custom-mode.md), decided 2026-11-11, not started): one generator for every level, run from the command line too, with winding roads that are part of the gameplay; the wave director; each level on its own map; camps that rise as their wave starts (the tutorial too); all 15 campaign levels made with it; and the Custom Game menu with new UI kit parts. First part: the generator and the Custom Game menu (your own levels, named with the Quest's system keyboard, saved in the browser, edit, duplicate and delete), tested on the headset before the wave director and the map loading. **Built and tested on the headset 2026-11-11:** the generator with its checks and `npm run gen`, the new UI kit parts and the Custom Game pages; the menus and the whole UI work well.
+- **The wave director and the map loading are built** on the branch `feat/custom-mode` (2026-11-11, committed, build and tests pass, [docs/custom-mode.md](docs/custom-mode.md#13-handoff-the-wave-director-and-the-map-loading-next)): Custom Game's Fight loads the level's own map and plays its 4 waves with its rules (garrison, castle health, gear); camps rise with their wave (the tutorial too), with a drum, dust and the red arrow; going back to the menu builds the tutorial map again.
+- **Headset rounds on the same branch** (2026-11-11 to 2026-11-12, build and tests pass, tested on the headset in rounds):
+  - **The horn without the lips or a lock** ([docs/giant-tools.md](docs/giant-tools.md)): the flag and the knights' path show the moment it is held; raise it into a blow zone in front of the mouth and blow (or hold it there). The path sits on the road's own surface and costs no frame time (its rebuilds made the sun and clouds flicker); a silent mic falls back to the hold, with debug notes.
+  - **A 3D compass** straight in front, out by the wall, replacing the blue wave flag ([docs/castle-rules.md](docs/castle-rules.md#2-the-flag-and-the-compass-ring)): a brass dish tipped toward the eyes whose rim wedges show where goblins come from (color: how close, size: how many), tents for the camps, and the goblins left with wave dots in the middle. The pause and Next buttons moved 34 degrees right.
+  - **Everything nearer the front** (tools, flag, buttons about 12% nearer, so the head turns less) and **the tutorial updated** for the compass, the rising camps and the new horn ([docs/mvp.md](docs/mvp.md)).
+  - **A new win screen** ([docs/castle-rules.md](docs/castle-rules.md#4-end-of-battle-screens-mvp)): "Victory!", 3D stars that pop in with chimes and sparkles, stats, "New best!", and Menu, Next level and Play again. Every win gives stars; Custom Game levels keep their best.
+  - **Kenney art instead of code-drawn icons** ([public/ui/README.md](public/ui/README.md)): board game icons, game icons and fantasy UI borders on the compass, the win screen, the glass sign, the campaign and Custom Game cards, the settings rows and the trophy counter. New rule: never make art by hand in code (AGENTS.md).
+- **Next:** a headset check of all of the above, then goblin emotes (speech bubbles over goblins, from the Kenney Emotes pack), then the 15 campaign levels ([docs/custom-mode.md](docs/custom-mode.md) section 11, step 6).
+- The full design lives in [docs/GDD.md](docs/GDD.md) and the files it links. This README is a short overview. When they disagree, the docs win (and [docs/v2-plan.md](docs/v2-plan.md) wins over every other doc).
 
 ---
 
@@ -86,7 +99,7 @@ Stage 1 is a pass/fail check that the project fits the theme and uses the requir
 | Zone | What happens there | What you do |
 |---|---|---|
 | Far | Enemies leave their camps | Slingshot, shoot triggers (powder kegs, boulders, trees) |
-| Middle | Troops and enemies clash | Slingshot, megaphone |
+| Middle | Troops and enemies clash | Slingshot, war horn |
 | Near (castle wall) | Enemies hit the wall, climbers pop up | Fly swatter, pepper shaker, grab and eat |
 
 Each zone is the backup for the one before it.
@@ -96,34 +109,35 @@ Each zone is the backup for the one before it.
 All actions are simple grab, pull, shake, poke and release. No complex gestures. Details in [docs/giant-tools.md](docs/giant-tools.md) and [docs/controls-and-ui.md](docs/controls-and-ui.md).
 
 - **Grab and eat:** pinch a tiny goblin and hold it near your mouth for a moment. Your bare hands only grab and eat. No smashing, and a toss does no damage.
-- **Slingshot (free):** pull back and release to shoot pebbles. Precise, middle and far. A pebble thrown by hand only knocks a goblin back. Load a goblin instead of a pebble for a stronger shot that knocks over the ones around it, at the cost of a meal.
-- **Fly swatter (4 food):** about 10 seconds of swatting groups near the wall.
-- **Pepper shaker (3 food):** enemies sneeze off their gear and become "seasoned" (worth more food).
-- **Megaphone or bell (6 food):** scream into the megaphone, or shake the bell, to stun every enemy. Both sit on the same platform, so voice is never needed.
+- **Slingshot (free, always):** pull back and release to shoot pebbles. Precise, middle and far. A pebble thrown by hand only knocks a goblin back. Load a goblin instead of a pebble for a stronger shot that knocks over the ones around it, at the cost of a meal.
+- **Fly swatter (10 s, then 20 s recharge):** swatting groups near the wall and on the rampart.
+- **Pepper shaker (8 s, then 20 s):** goblins in a small area lose their weapon, helmet and shield, sneeze and become "seasoned".
+- **Bell (one stun, then 35 s):** shake it to stun every goblin and knock the ones on the rampart back down.
+- **War horn (one call, then 30 s):** hold it at your mouth (or blow into the mic) to send a squad of knights charging down the road in front of you.
 - **Move the board:** grab the ring handle in front of you. Pull sideways to spin the board, or up or down to raise or lower it. Each grab locks to one direction.
 
-### Food
+### Tools and eating (v2)
 
-- One food jar powers all tools except the slingshot. Eating fills it. It never drains on its own.
-- Food comes from climbers (goblins that climb the wall and pop up in reach) and intruders in the courtyard.
-- No loadout and no unlocks after the tutorial. Every tool is always on its platform.
+- Tools are free, with a use window and then a recharge; a ring on each platform shows it. Eating a goblin fills every recharging ring a little (a seasoned one twice as much).
+- Every goblin climbs the wall, so there is always something in reach to eat. Your army: a wall garrison of archers and guards, and knights that only come when you blow the horn.
+- Run 2 adds a loadout (the slingshot and the horn, plus 2 picked tools) and unlocks in a 15 level campaign ([docs/menus.md](docs/menus.md)).
 
 ### Win and lose
 
-- Two flags in front of the player: the red castle health flag slides down with damage, the blue wave flag climbs one notch per wave.
+- In front of the player: the red castle health flag slides down with damage, and a compass ring low in front shows where enemies come from, the wave and the goblins left (it replaced the blue wave flag, 2026-11-11).
 - Win by surviving all waves. Lose when the red flag reaches the bottom. Details in [docs/castle-rules.md](docs/castle-rules.md).
 
 ### Voice (optional, never required)
 
-- **Megaphone:** uses only mic loudness, no speech recognition. Mic permission is asked on the start page.
+- **War horn (v2, replaces the megaphone):** blowing into the mic uses only its loudness, no speech recognition. Mic permission is asked on the start page.
 - **Voice troop orders:** later, not in the MVP.
-- **Hand alternatives are required** for every voice action. The bell sits next to the megaphone and does the same thing. This keeps the game hands-only and helps accessibility.
+- **Hand alternatives are required** for every voice action. The horn also blows when simply held at the mouth for a moment, and a "Quiet horn" setting never listens to the mic. This keeps the game hands-only and helps accessibility.
 
 ### Surround play and comfort
 
 - The battlefield wraps around you.
 - **Always a full 360 degree board.** One ring handle in front of you spins the board and sets its height, so you never need to turn around. Works in any chair.
-- **Comfort:** only the board spins. The sky, horizon, hills, your tools and the two flags stay still. A later comfort setting turns the board in snap steps instead of smoothly.
+- **Comfort:** only the board spins. The sky, horizon, hills, your tools, the red flag and the compass ring stay still. A later comfort setting turns the board in snap steps instead of smoothly.
 - **Threat cues:**
   1. Spatial audio from the real direction of the threat (main cue).
   2. Visual cues, on by default: the wall top flashes red with a dust puff where it is hit ([docs/controls-and-ui.md](docs/controls-and-ui.md#threat-cues)).
@@ -263,9 +277,11 @@ The MVP is the submission. Endless, Daily Battle and the other modes are bonus i
 ## Open questions
 
 - Subtitle for the name (to make it searchable), for example *Tall Tale: The Giant's Keep*
-- Castle machines: keep or cut, after the first playtest ([docs/castle-machines.md](docs/castle-machines.md))
+- Castle machines: cut in v2 ([docs/castle-machines.md](docs/castle-machines.md) stays as history)
 - Endless scoring and difficulty curve ([docs/modes-and-progression.md](docs/modes-and-progression.md))
 - Final food numbers and climber counts (tune in playtests)
+- Goblin walk speeds now that the camps are farther out (a grunt takes about 60 s to reach the wall instead of about 33 s)
+- Background music: the two tracks in place are a first pick. The plan is layers that follow the game (calm by day, a march layer in waves, the ethereal version at night), quiet under the sound cues ([docs/audio.md](docs/audio.md))
 
 ---
 
@@ -311,6 +327,30 @@ Ideas we explored and why they changed. Kept so we do not repeat old discussions
 36. **One board size for everyone:** after the second step 4 test everything still felt too close. Now a reach check ("Show me how big you are, giant!") measures the player's stretched arm once and scales the whole board so the rampart sits a little inside that reach. The board is also placed lower (46 cm below the eyes), so the player towers over the kingdom.
 37. **Tools held at the grab angle:** a fist grab now snaps the tool into the hand the way it is held in real life, because some grabs needed an awkward wrist.
 38. **Visual threat cues off by default:** now on by default (wall hit flash). With the sound off, goblins at the wall were hard to find. An attack compass arc with red marks was tried too and dropped: the wall flash was enough.
+39. **Five times of day (morning, noon, afternoon, sunset, night), one per tutorial wave:** replaced by four looks that work for any number of waves (first morning, last night, the one before sunset, the rest day). Noon and afternoon looked almost the same in the cartoon style.
+40. **A bright moonlit night, so goblins stay visible:** replaced by a dark night where the units carry the readability: a bright edge on troops and goblins, and the terrain darker. A first terrain fade toward grey-blue looked washed out, so it now only darkens.
+41. **A ringed planet sitting on the horizon:** it looked like it was on the ground, so it moved high into the sky, farther away, in one faded color. Later smaller and a little lower, with warm orange-red stripes.
+42. **Stereo sounds placed as they are:** most files are stereo, which smears where a sound comes from. Every placed sound is mixed to mono in code now (the files stay as they are). A test showed left and right work, but front and back were confusing, so sounds behind the head are muffled and a little quieter. Google's Resonance Audio was looked at and left out (a new dependency, more work on the Quest, and front and back stay hard anyway).
+43. **Long sounds stopping dead:** drums, the horn and the fanfare now fade out over their end. Short cues keep their sharp end.
+44. **A pause button on the wrist:** the palm pose was hard to find and the button flickered. Pause is now a button on a post straight in front, below the Next button's spot, and steps aside while Next shows.
+45. **The balloon banner after the pepper lesson:** it came too fast and the pepper lesson never really ended. The pepper lesson now ends when a peppered goblin is eaten (peppered goblins sneeze for 10 s and do no damage meanwhile), and balloons are taught in the slingshot wave, after the trigger lessons and a few more knockouts: one balloon hovers in front until it is popped, no Next button.
+46. **Camps shaking before goblins come out:** too cartoony for buildings. Only the drum sound is left.
+47. **Camps close to the castle:** most of the board was empty. Camps moved out to about 400 cm (the front one to 300 cm, so its details can be seen), became bigger war camps, each different, and the empty land got story scenes, villagers and road torches.
+48. **Big round glows around torches:** they read as floating balls, not light. Road torches now light a soft oval pool on the ground, and castle torches and lanterns have only a small halo.
+49. **A volume slider with minus and plus buttons and a mute button:** too much. Just one long slider per sound group now, all the way left is off, its handle like the buttons (green in a dark rim, a gold one looked out of place), grey at off.
+52. **Menus with explaining text:** subtitles and help lines are gone. Each menu shows only its title and a word over each button.
+53. **Buttons that wanted a slow push:** a quick poke was missed (the click waited for the animated cap to catch up, and a fast finger could skip past the button between two tracking frames). The click now goes by the finger itself, and a finger that was in front one frame and in the next counts.
+54. **The tutorial rushing on:** a finished lesson moved on after 1.2 s while the player was still trying it. Now a green tick shows for 3.5 s and the next step waits that long; other steps leave a short gap. The sign hangs in front of the eyes outside waves, and Next only blinks once it was missed for 5 s.
+55. **A red arrow that jumped between threats:** it now stays on the nearest threat until that one is handled.
+56. **A megaphone that went deaf at random:** the mic chain is now rebuilt when it hears perfect silence, is muted, or the audio was paused.
+50. **Menus placed by hand-picked heights:** the settings page grew too tall and its low rows were hard to touch. Every menu now gets its height from one rule: right in front of the eyes, never higher than 2 cm above them or lower than 30 cm below (`UI_ZONE`).
+51. **UI code written again in each panel:** buttons on posts, button rows, panel text, canvas textures and draw-on-top code were copied around. It all lives in our own UI library now (`src/ui/kit/`), and new UI must be built from it.
+57. **Food currency, food jar and price tags (v2):** one favorite tool got used all the time, and the jar was one more thing to read. Tools are free now, with a use window and a recharge ring on the platform; eating fills every ring a little ([docs/v2-plan.md](docs/v2-plan.md)).
+58. **Climbers as their own type (v2):** goblins could hide behind the wall, and there was little to eat. Every goblin now bashes, climbs, runs on the rampart and jumps in, so the order of threats is always clear.
+59. **Spears for looks, helmets one hit, big hits through armor (v2):** helmet and shield are each one extra hit for every hit (triggers ignore armor), spears double wall damage, swords strike soldiers faster, and the pepper strips it all.
+60. **The megaphone scream and the bell as its voice-free twin (v2):** the bell is now the only stun and also knocks the rampart down; the new war horn calls the knights, held at the mouth or blown into the mic, so voice is still never needed.
+61. **Squads walking out every 14 s to the camp and back, with field archers (v2):** they looked aimless. A wall garrison (4 archers, 2 guards) defends the rampart, and field knights only come when the horn calls them, charge down the road in front and hold its first junction.
+62. **Castle machines on hold (v2):** dropped, no time to design, add and balance them. Only the giant's hand tools.
 
 ---
 

@@ -1,8 +1,7 @@
-// The two flags in front of the player (docs/castle-rules.md section 2): the
-// red castle health flag slides down with damage, the blue wave flag climbs
-// one notch per wave. Progress bars built into the world, no numbers.
-// They live in boardLift (cm): they rise with the board but never spin.
-import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, type Object3D } from 'three';
+// The red castle health flag in front of the player (docs/castle-rules.md
+// section 2) slides down with damage: a progress bar built into the world, no
+// numbers. It lives in boardLift (cm): it rises with the board but never spins.
+import { Color, CylinderGeometry, DoubleSide, Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, type Object3D } from 'three';
 import { FLAGS, JUICE } from '../config/game.js';
 import { popIn } from '../fx/ease.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
@@ -72,41 +71,35 @@ class Flag {
     return this.pivot.localToWorld(out.set(0, -FLAGS.clothHeight / 2, 0));
   }
 
-  /** Small rings on the pole, one per step (the wave flag's notches). */
-  addNotches(count: number): void {
-    const geometry = new BoxGeometry(FLAGS.poleRadius * 5, 0.35, FLAGS.poleRadius * 5);
-    const material = flatMaterial(FLAGS.notchColor);
-    for (let i = 0; i <= count; i++) {
-      const notch = new Mesh(geometry, material);
-      notch.position.y = clothTopAt(i / count);
-      this.root.add(notch);
-    }
-  }
-
   update(dt: number, low: boolean): void {
     this.time += dt;
     const k = 1 - Math.exp(-FLAGS.slideSpeed * dt);
     this.shown += (this.target - this.shown) * k;
     this.place();
-    // A low flag waves slower and droops (tears and smoke come with the juice step).
+    // The cloth only ever turns around the pole itself (y), so its whole edge stays on the pole. It used to
+    // tilt and jerk around its top corner, which swung its lower edge off the pole (headset test).
+    // A low flag waves slower and hangs limp: it flies shorter, its edge still on the pole.
     const sway = degToRad(FLAGS.swayDeg) * (low ? 0.4 : 1);
-    this.pivot.rotation.y = Math.sin(this.time * FLAGS.swaySpeed * (low ? 0.6 : 1)) * sway;
-    this.pivot.rotation.x = low ? 0.35 : 0;
+    let turn = Math.sin(this.time * FLAGS.swaySpeed * (low ? 0.6 : 1)) * sway;
     const material = this.cloth.material as ReturnType<typeof flatMaterial>;
     material.color.copy(this.color).multiplyScalar(low ? 0.55 : 1);
-    // Juice: hit, the cloth jerks and flashes bright. A wave won, it pops bigger and settles.
+    // Juice: hit, the cloth shakes on the pole and flashes bright. A wave won, it pops bigger and settles.
     if (this.jolt > 0) {
       this.jolt = Math.max(0, this.jolt - dt);
       const t = this.jolt / JUICE.flagJoltTime;
-      this.pivot.rotation.z = Math.sin(t * Math.PI * 6) * degToRad(JUICE.flagJoltDeg) * t;
+      turn += Math.sin(t * Math.PI * 6) * degToRad(JUICE.flagJoltDeg) * t;
       material.color.lerp(FLASH, t * 0.6);
-    } else this.pivot.rotation.z = 0;
+    }
+    this.pivot.rotation.set(0, turn, 0);
+    let size = 1;
     if (this.popTime > 0) {
       this.popTime = Math.max(0, this.popTime - dt);
       const t = 1 - this.popTime / JUICE.flagPopTime;
-      this.pivot.scale.setScalar(t < 0.5 ? 1 + popIn(t * 2) * 0.35 : 1.35 - (t - 0.5) * 0.7);
+      size = t < 0.5 ? 1 + popIn(t * 2) * 0.35 : 1.35 - (t - 0.5) * 0.7;
       material.color.lerp(FLASH, (1 - t) * 0.4);
-    } else this.pivot.scale.setScalar(1);
+    }
+    // Scaled from the pivot on the pole, so the edge never leaves it.
+    this.pivot.scale.set(size * (low ? FLAGS.limpLength : 1), size, size);
   }
 
   private place(): void {
@@ -120,31 +113,35 @@ function clothTopAt(share: number): number {
   return lowest + (FLAGS.clothTop - lowest) * share;
 }
 
+/**
+ * The red castle health flag. The blue wave flag is gone (2026-11-11: nobody
+ * noticed it); the wave and the goblins left show in the compass ring's
+ * middle instead (src/ui/compass.ts).
+ */
 export class Flags {
   private health: Flag;
-  private wave: Flag;
   private healthShare = 1;
 
-  constructor(parent: Object3D, totalWaves: number) {
+  constructor(parent: Object3D) {
     this.health = new Flag(parent, FLAGS.healthAngleDeg, FLAGS.healthColor, -1);
-    this.wave = new Flag(parent, FLAGS.waveAngleDeg, FLAGS.waveColor, 1);
-    this.wave.addNotches(totalWaves);
-    this.wave.set(0, true);
   }
 
-  /** Castle health share (1 = full) and waves cleared, from the battle rules. */
-  show(healthShare: number, waveShare: number, instant = false): void {
+  /** Castle health share (1 = full), from the battle rules. */
+  show(healthShare: number, instant = false): void {
     this.healthShare = healthShare;
     this.health.set(healthShare, instant);
-    this.wave.set(waveShare, instant);
   }
 
-  clothWorld(which: 'health' | 'wave', out: Vector3): Vector3 {
-    return (which === 'health' ? this.health : this.wave).clothWorld(out);
+  /** The flag's group (the menu sinks it, src/world/sceneSwap.ts). */
+  get roots(): Object3D[] {
+    return [this.health.root];
+  }
+
+  clothWorld(out: Vector3): Vector3 {
+    return this.health.clothWorld(out);
   }
 
   update(dt: number): void {
     this.health.update(dt, this.healthShare < FLAGS.lowShare);
-    this.wave.update(dt, false);
   }
 }

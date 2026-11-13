@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTutorialSteps, TUTORIAL_WAVES, type TutorialApi, type TutorialStep } from '../director/tutorial.js';
+import { buildTutorialSteps, TUTORIAL_TIMING, TUTORIAL_WAVES, type TutorialApi, type TutorialStep } from '../director/tutorial.js';
 import { Director, type DirectorStep } from './director.js';
 
 interface Ctx {
@@ -66,6 +66,16 @@ describe('director', () => {
     director.update(0.1);
     expect(director.spawnRate).toBe(1);
   });
+
+  it('holds the spawns completely while a step holds the wave', () => {
+    const ctx: Ctx = { goal: false, log: [] };
+    const director = new Director([step({ holdSpawns: true }), step({ id: 'plain' })], ctx);
+    director.update(0.1);
+    expect(director.spawnRate).toBe(0);
+    ctx.goal = true;
+    director.update(0.1);
+    expect(director.spawnRate).toBe(1);
+  });
 });
 
 /** A fake game: the player does nothing at all. */
@@ -81,6 +91,7 @@ function idleApi(): TutorialApi & {
   baited: string[];
   baitReleased: number;
   balloons: number;
+  balloonsEnded: number;
 } {
   return {
     cleared: 0,
@@ -94,6 +105,7 @@ function idleApi(): TutorialApi & {
     baited: [],
     baitReleased: 0,
     balloons: 0,
+    balloonsEnded: 0,
     startWave(index) {
       this.started.push(index);
     },
@@ -123,6 +135,8 @@ function idleApi(): TutorialApi & {
     boardMoved: () => 0,
     picked: () => 0,
     eaten: () => 0,
+    tossed: () => 0,
+    pepperedEaten: () => 0,
     slingCount: () => 0,
     slingLoaded: () => false,
     startTriggerLesson(kind) {
@@ -146,9 +160,13 @@ function idleApi(): TutorialApi & {
       this.baitReleased++;
     },
     pausedCount: () => 0,
-    balloonIntro() {
+    balloonLesson() {
       this.balloons++;
     },
+    endBalloonLesson() {
+      this.balloonsEnded++;
+    },
+    balloonsPopped: () => 0,
   };
 }
 
@@ -165,8 +183,13 @@ function eagerApi(): ReturnType<typeof idleApi> {
     boardMoved: more,
     picked: more,
     eaten: more,
+    tossed: more,
+    pepperedEaten: more,
+    balloonsPopped: more,
     slingCount: more,
     slingLoaded: () => true,
+    triggersSetOff: more,
+    pausedCount: more,
   };
 }
 
@@ -355,7 +378,8 @@ describe('tutorial director', () => {
     expect(director.current?.id).toBe('learn-tree');
     setOff.tree = 1;
     director.update(0.1);
-    expect(director.current?.id).toBe('wave-2-clear');
+    // The balloon lessons come next, still in wave 2 (a few more knockouts first, then one balloon).
+    expect(director.current?.id).toBe('sling-practice');
     expect(api.lessonKinds).toEqual(['keg', 'boulder', 'tree']);
     // Each lesson lets its waiting goblins go when it ends.
     expect(api.released).toBe(3);
@@ -372,7 +396,7 @@ describe('tutorial director', () => {
   it('teaches pausing first: done once the player paused and came back, and never stuck without hands', () => {
     const steps = buildTutorialSteps(['slingshot']);
     expect(steps[0].id).toBe('learn-pause');
-    expect(steps[0].hint?.demo).toBe('pauseShow');
+    expect(steps[0].hint?.marker).toBe('pauseButton');
     const api = idleApi();
     const director = new Director<TutorialApi>(steps, api);
     director.update(0.1);
@@ -415,21 +439,42 @@ describe('tutorial director', () => {
     expect(api.baitReleased).toBeGreaterThan(0);
   });
 
-  it('shows the balloon banner once, in the first balloon wave after its tool lesson, and lets the balloons come', () => {
+  it('the pepper lesson ends only when a peppered goblin is eaten, not when one is peppered', () => {
+    const api = idleApi();
+    const director = new Director<TutorialApi>(buildTutorialSteps(['slingshot', 'swatter', 'pepper']), api);
+    while (director.current?.id !== 'learn-pepper') director.skip();
+    api.toolUses = (tool) => (tool === 'pepper' ? 3 : 0);
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-pepper');
+    api.pepperedEaten = () => 1;
+    director.update(0.1);
+    expect(director.current?.id).not.toBe('learn-pepper');
+  });
+
+  it('teaches balloons in the slingshot wave after the triggers: a bit more play, then one hovering balloon to pop, no Next', () => {
     const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper', 'megaphone']);
     const ids = steps.map((s) => s.id);
-    expect(ids.filter((id) => id === 'balloon-intro')).toHaveLength(1);
-    const first = TUTORIAL_WAVES.findIndex((w) => (w.balloons ?? 0) > 0);
-    expect(first).toBe(3);
-    expect(ids.indexOf('balloon-intro')).toBeGreaterThan(ids.indexOf('learn-pepper'));
-    expect(ids.indexOf('balloon-intro')).toBeLessThan(ids.indexOf('wave-4-clear'));
-    // An info step: it waits for Next, and its start sends the first balloon.
+    expect(ids.filter((id) => id === 'learn-balloon')).toHaveLength(1);
+    const tree = ids.indexOf('learn-tree');
+    expect(ids.slice(tree + 1, tree + 3)).toEqual(['sling-practice', 'learn-balloon']);
+    expect(ids.indexOf('learn-balloon')).toBeLessThan(ids.indexOf('wave-2-clear'));
+    expect(steps.find((s) => s.id === 'learn-balloon')!.hint?.next).toBeFalsy();
     const api = idleApi();
-    api.waveCleared = () => true;
     const director = new Director<TutorialApi>(steps, api);
-    runPokingNext(director, 60 * 40);
-    expect(director.finished).toBe(true);
+    while (director.current?.id !== 'sling-practice') director.skip();
+    // A few more knockouts first.
+    api.toolUses = (tool) => (tool === 'slingshot' ? TUTORIAL_TIMING.balloonAfterKnockouts : 0);
+    director.update(0.1);
+    expect(director.current?.id).toBe('learn-balloon');
     expect(api.balloons).toBe(1);
+    expect(director.spawnRate).toBe(0);
+    // It waits for the pop, then lets the balloon go on if it never came.
+    run(director, 30);
+    expect(director.current?.id).toBe('learn-balloon');
+    api.balloonsPopped = () => 1;
+    director.update(0.1);
+    expect(director.current?.id).not.toBe('learn-balloon');
+    expect(api.balloonsEnded).toBe(1);
   });
 
   it('numbers the lessons', () => {

@@ -54,6 +54,41 @@ export class Road {
     return this.curve.getTangentAt(u, out);
   }
 
+  /**
+   * The road's own surface, saved when its mesh is built (after the terrain):
+   * per vertex along it the center, the side direction (unit, flat) and both
+   * edges' heights. surfaceAt reads it with no curve math and no terrain
+   * lookups, so things drawn on the road (the horn's path) sit exactly on it
+   * and cost almost nothing to build.
+   */
+  private surface: { segments: number; cx: Float32Array; cz: Float32Array; sx: Float32Array; sz: Float32Array; yl: Float32Array; yr: Float32Array } | null = null;
+
+  /**
+   * A point on the road's top at a distance along it (cm), `offset` cm to
+   * the side (within the road's width), into `out`. Exactly on the drawn
+   * ribbon. Before the mesh is built it falls back to pointAt.
+   */
+  surfaceAt(distance: number, offset: number, out: Vector3): Vector3 {
+    const s = this.surface;
+    if (!s) return this.pointAt(distance, offset, out);
+    const k = (Math.min(this.length, Math.max(0, distance)) / this.length) * s.segments;
+    const i = Math.min(s.segments - 1, Math.floor(k));
+    const t = k - i;
+    const j = i + 1;
+    // Across the road from its left edge (-half) to its right edge (+half): the ribbon is flat between its two edges.
+    // Written out (no helper function), so a call makes no garbage.
+    const half = ROADS.width / 2;
+    const across = Math.min(1, Math.max(0, (offset / half + 1) / 2));
+    const sx = s.sx[i] + (s.sx[j] - s.sx[i]) * t;
+    const sz = s.sz[i] + (s.sz[j] - s.sz[i]) * t;
+    const yl = s.yl[i] + (s.yl[j] - s.yl[i]) * t;
+    const yr = s.yr[i] + (s.yr[j] - s.yr[i]) * t;
+    out.x = s.cx[i] + (s.cx[j] - s.cx[i]) * t + sx * offset;
+    out.z = s.cz[i] + (s.cz[j] - s.cz[i]) * t + sz * offset;
+    out.y = yl + (yr - yl) * across;
+    return out;
+  }
+
   /** Sandy ribbon a little above the ground, following the hills. */
   buildMesh(): Mesh {
     const segments = Math.max(16, Math.ceil(this.length / 4));
@@ -61,15 +96,32 @@ export class Road {
     const indices: number[] = [];
     const center = new Vector3();
     const half = ROADS.width / 2;
+    const n = segments + 1;
+    const surface = {
+      segments,
+      cx: new Float32Array(n),
+      cz: new Float32Array(n),
+      sx: new Float32Array(n),
+      sz: new Float32Array(n),
+      yl: new Float32Array(n),
+      yr: new Float32Array(n),
+    };
     for (let i = 0; i <= segments; i++) {
       const u = i / segments;
       this.curve.getPointAt(u, center);
       this.curve.getTangentAt(u, tangent);
       side.crossVectors(tangent, up).normalize();
+      surface.cx[i] = center.x;
+      surface.cz[i] = center.z;
+      surface.sx[i] = side.x;
+      surface.sz[i] = side.z;
       for (const s of [-1, 1]) {
         const x = center.x + side.x * half * s;
         const z = center.z + side.z * half * s;
-        positions.push(x, groundAt(x, z) + ROADS.lift, z);
+        const y = groundAt(x, z) + ROADS.lift;
+        positions.push(x, y, z);
+        if (s < 0) surface.yl[i] = y;
+        else surface.yr[i] = y;
       }
       if (i < segments) {
         const a = i * 2;
@@ -80,6 +132,7 @@ export class Road {
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
+    this.surface = surface;
     const material = flatMaterial(ROADS.color);
     material.polygonOffset = true;
     material.polygonOffsetFactor = -2;

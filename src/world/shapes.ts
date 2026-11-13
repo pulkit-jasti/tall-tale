@@ -2,6 +2,8 @@
 // in its own small function so a real model can replace it later.
 import {
   BoxGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
   CatmullRomCurve3,
   CylinderGeometry,
   DoubleSide,
@@ -19,7 +21,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { BELL, FOOD_JAR, HANDLES, MEGAPHONE, PEBBLE_BOWL, PEPPER, PRICE_TAG, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { BELL, HANDLES, HORN, KNIGHTS, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -54,6 +56,25 @@ export function ringArc(material: MeshStandardMaterial): Group {
       cap.position.copy(polar(radius, end, ringY));
       group.add(cap);
     }
+  }
+  return group;
+}
+
+/**
+ * A short piece of the ring handle in front (the home screen's height rail,
+ * src/player/heightRail.ts): the same tube at the same spot, `halfSpanDeg`
+ * each way from the front, with round ends and a pole under each end.
+ */
+export function railArc(material: MeshStandardMaterial, halfSpanDeg: number): Group {
+  const { radius, ringY, ringRadius, poleRadius } = HANDLES;
+  const group = new Group();
+  group.add(new Mesh(new TubeGeometry(arc(radius, -halfSpanDeg, halfSpanDeg, ringY), 16, ringRadius, 8, false), material));
+  for (const end of [-halfSpanDeg, halfSpanDeg]) {
+    const cap = new Mesh(new SphereGeometry(ringRadius, 8, 6), material);
+    cap.position.copy(polar(radius, end, ringY));
+    const pole = new Mesh(new CylinderGeometry(poleRadius, poleRadius, ringY, 6), flatMaterial(HANDLES.trackColor));
+    pole.position.copy(polar(radius, end, ringY / 2));
+    group.add(cap, pole);
   }
   return group;
 }
@@ -303,91 +324,117 @@ export function pepperShaker(): { group: Group; materials: MeshStandardMaterial[
   return { group, materials: [bodyMaterial, capMaterial], top: bodyHeight + bodyRadius };
 }
 
-/** The wooden board of a price tag, centered, its face toward +z (cm). The text goes on a plane in front of it. */
-export function priceTagBoard(): Mesh {
-  const { width, height, thickness, woodColor } = PRICE_TAG;
-  const board = new Mesh(new BoxGeometry(width, height, thickness), flatMaterial(woodColor));
-  board.position.z = -thickness / 2;
-  return board;
-}
-
 /** The little rope that ties a locked tool down: a thin ring around it. */
 export function toolRope(radius: number): Mesh {
   return new Mesh(new TorusGeometry(radius, 0.35, 5, 14), flatMaterial(TOOLS.ropeColor));
 }
 
-/** One food ball for the jar's heap (shared geometry for an instanced heap). */
-export function foodBallGeometry(): IcosahedronGeometry {
-  return new IcosahedronGeometry(FOOD_JAR.ballSize / 2, 0);
+/**
+ * A field knight squad's banner (v2, KNIGHTS): a thin wooden pole from the
+ * ground up, with a blue cloth and a gold stripe at its top, the cloth
+ * hanging toward -z (behind the knight as it runs). Unlit cloth, so it reads
+ * at night. Board cm, its foot at the origin.
+ */
+export function knightBanner(opacity = 1): Group {
+  const { bannerHeight: h, bannerWidth: w, bannerLength: l } = KNIGHTS;
+  const group = new Group();
+  // See-through (the horn's ghost banner where the knights will go): unlit, never writing depth.
+  const ghost = opacity < 1;
+  const basic = (color: number): MeshBasicMaterial =>
+    new MeshBasicMaterial({ color, transparent: ghost, opacity, depthWrite: !ghost });
+  const pole = new Mesh(new CylinderGeometry(0.12, 0.14, h, 5), ghost ? basic(KNIGHTS.poleColor) : flatMaterial(KNIGHTS.poleColor));
+  pole.position.y = h / 2;
+  const clothMaterial = basic(KNIGHTS.bannerColor);
+  const cloth = new Mesh(new BoxGeometry(0.08, l, w), clothMaterial);
+  cloth.position.set(0, h - l / 2 - 0.2, -w / 2);
+  const stripe = new Mesh(new BoxGeometry(0.1, l * 0.22, w), basic(KNIGHTS.bannerTrim));
+  stripe.position.set(0, h - l * 0.45, -w / 2);
+  const tip = new Mesh(new SphereGeometry(0.28, 6, 4), basic(KNIGHTS.bannerTrim));
+  tip.position.y = h + 0.2;
+  group.add(pole, cloth, stripe, tip);
+  // The cloth's material, so the banner of the squad the horn would move can glow.
+  group.userData.cloth = clothMaterial;
+  return group;
 }
 
 /**
- * Megaphone: a short pistol grip along +y from y = 0 (the end the hand
- * holds) and an open cone on top of it, lying along -z: the small mouthpiece
- * toward +z (the face), the wide open end toward -z (the way the knuckles
- * point when it is held). Returns the group, its materials and the middle of
- * the wide end (cm).
+ * War horn (v2): a short leather grip along +y from y = 0 (the end the hand
+ * holds) and a curved ivory hunting horn held from below: the brass
+ * mouthpiece on top of the grip toward +z (the face), the body arching
+ * forward, then down past the fist and a little to the side, the open bell
+ * ending low (HORN.curve). At the lips it stays below the line of sight. A
+ * tapered tube along the curve, brass bands and a brass rim on the bell.
+ * Returns the group, its materials, the mouthpiece and the bell's middle (cm).
  */
-export function megaphone(): { group: Group; materials: MeshStandardMaterial[]; mouth: Vector3 } {
-  const { gripLength, gripRadius, coneLength, coneMouth, coneEnd, coneBack } = MEGAPHONE;
-  const bodyMaterial = flatMaterial(MEGAPHONE.bodyColor);
+export function warHorn(): { group: Group; materials: MeshStandardMaterial[]; mouthpiece: Vector3; bell: Vector3 } {
+  const { gripLength, gripRadius, mouthRadius, bellRadius } = HORN;
+  const bodyMaterial = flatMaterial(HORN.bodyColor);
   bodyMaterial.side = DoubleSide;
-  const bandMaterial = flatMaterial(MEGAPHONE.bandColor);
-  const gripMaterial = flatMaterial(MEGAPHONE.gripColor);
+  const bandMaterial = flatMaterial(HORN.bandColor);
+  const gripMaterial = flatMaterial(HORN.gripColor);
   const group = new Group();
   const grip = new Mesh(new CylinderGeometry(gripRadius, gripRadius * 1.1, gripLength, 8), gripMaterial);
   grip.position.y = gripLength / 2;
-  // The cone's axis is its y: turned to lie along z, its top (the wide end) toward -z.
-  const coneY = gripLength + coneMouth * 0.6;
-  const coneZ = coneBack - coneLength / 2;
-  const cone = new Mesh(new CylinderGeometry(coneEnd, coneMouth, coneLength, 12, 1, true), bodyMaterial);
-  cone.rotation.x = -Math.PI / 2;
-  cone.position.set(0, coneY, coneZ);
-  const band = new Mesh(new TorusGeometry(coneEnd, 0.35, 5, 14), bandMaterial);
-  band.position.set(0, coneY, coneBack - coneLength);
-  const mouthpiece = new Mesh(new CylinderGeometry(coneMouth * 0.9, coneMouth * 0.9, 1.6, 8), bandMaterial);
-  mouthpiece.rotation.x = Math.PI / 2;
-  mouthpiece.position.set(0, coneY, coneBack + 0.6);
-  group.add(grip, cone, band, mouthpiece);
-  return { group, materials: [bodyMaterial, bandMaterial, gripMaterial], mouth: new Vector3(0, coneY, coneBack - coneLength) };
-}
-
-/**
- * The megaphone's loudness meter, lying on top of its cone from the
- * mouthpiece toward the wide end: a dark track, a fill bar that grows along
- * it (scale its z from 0 to 1), and a red target dot at MEGAPHONE.targetShare
- * of its length. Unlit, so it reads in any light. Returns the parts (cm).
- */
-export function megaphoneMeter(): {
-  group: Group;
-  fill: Mesh<BoxGeometry, MeshBasicMaterial>;
-  target: Mesh;
-} {
-  const { coneLength, coneMouth, coneEnd, coneBack, gripLength, meterWidth, meterLift, targetShare } = MEGAPHONE;
-  const coneY = gripLength + coneMouth * 0.6;
-  const radiusAt = (z: number): number => coneMouth + ((coneEnd - coneMouth) * (coneBack - z)) / coneLength;
-  const z1 = coneBack - 1.5;
-  const z2 = coneBack - coneLength + 1.5;
-  const rise = radiusAt(z2) - radiusAt(z1);
-  const length = Math.hypot(z1 - z2, rise);
-  const group = new Group();
-  group.position.set(0, coneY + radiusAt(z1) + meterLift, z1);
-  // Its length runs along local -z, tilted up with the cone's top line.
-  group.rotation.x = Math.atan2(rise, z1 - z2);
-  const track = new Mesh(new BoxGeometry(meterWidth + 0.2, 0.2, length + 0.2), new MeshBasicMaterial({ color: MEGAPHONE.meterTrackColor }));
-  track.position.z = -length / 2;
-  const fillGeometry = new BoxGeometry(meterWidth, 0.3, 1);
-  fillGeometry.translate(0, 0.05, -0.5);
-  const fill = new Mesh(fillGeometry, new MeshBasicMaterial({ color: MEGAPHONE.meterLowColor }));
-  fill.scale.z = 0.001;
-  // The fill grows from the start to the full length.
-  fill.userData.length = length;
-  const target = new Mesh(new SphereGeometry(0.42, 10, 8), new MeshBasicMaterial({ color: MEGAPHONE.targetColor }));
-  target.position.set(0, 0.45, -length * targetShare);
-  const notch = new Mesh(new BoxGeometry(meterWidth + 0.6, 0.36, 0.22), new MeshBasicMaterial({ color: MEGAPHONE.targetColor }));
-  notch.position.set(0, 0.05, -length * targetShare);
-  group.add(track, fill, notch, target);
-  return { group, fill, target };
+  const curve = new CatmullRomCurve3(HORN.curve.map(([x, y, z]) => new Vector3(x, y, z)));
+  // The tube: rings along the curve, thin at the mouthpiece, flaring to the bell.
+  const steps = 20;
+  const sides = 10;
+  const radiusAt = (t: number): number => mouthRadius + (bellRadius - mouthRadius) * Math.pow(t, 2.6);
+  const frames = curve.computeFrenetFrames(steps, false);
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const point = new Vector3();
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    curve.getPointAt(t, point);
+    const r = radiusAt(t);
+    const n = frames.normals[i];
+    const b = frames.binormals[i];
+    for (let k = 0; k < sides; k++) {
+      const a = (k / sides) * Math.PI * 2;
+      positions.push(
+        point.x + r * (Math.cos(a) * n.x + Math.sin(a) * b.x),
+        point.y + r * (Math.cos(a) * n.y + Math.sin(a) * b.y),
+        point.z + r * (Math.cos(a) * n.z + Math.sin(a) * b.z),
+      );
+    }
+  }
+  for (let i = 0; i < steps; i++) {
+    for (let k = 0; k < sides; k++) {
+      const a = i * sides + k;
+      const b = i * sides + ((k + 1) % sides);
+      const c = (i + 1) * sides + k;
+      const d = (i + 1) * sides + ((k + 1) % sides);
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const tube = new BufferGeometry();
+  tube.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  tube.setIndex(indices);
+  tube.computeVertexNormals();
+  const horn = new Mesh(tube, bodyMaterial);
+  // Brass: a band a third and two thirds along, a rim round the bell, the mouthpiece along the first stretch.
+  const ringAt = (t: number, thickness: number): Mesh => {
+    const ring = new Mesh(new TorusGeometry(radiusAt(t) + thickness * 0.4, thickness, 5, 14), bandMaterial);
+    curve.getPointAt(t, ring.position);
+    const tangent = curve.getTangentAt(t);
+    ring.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), tangent);
+    return ring;
+  };
+  const start = curve.getPointAt(0);
+  const startTangent = curve.getTangentAt(0);
+  const mouthpiece = new Mesh(new CylinderGeometry(mouthRadius * 1.15, mouthRadius * 0.85, 1.4, 8), bandMaterial);
+  // Along the curve's start, sticking out toward the face.
+  mouthpiece.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), startTangent.clone().negate());
+  mouthpiece.position.copy(start).addScaledVector(startTangent, -0.6);
+  group.add(grip, horn, ringAt(0.35, 0.22), ringAt(0.65, 0.25), ringAt(1, 0.32), mouthpiece);
+  const bell = curve.getPointAt(1);
+  return {
+    group,
+    materials: [bodyMaterial, bandMaterial, gripMaterial],
+    mouthpiece: start.clone().addScaledVector(startTangent, -1.3),
+    bell,
+  };
 }
 
 /**

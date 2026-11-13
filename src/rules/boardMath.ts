@@ -84,8 +84,22 @@ export function clearOfTowers(angle: number): number {
 
 /** Shortest signed difference between two angles (radians). */
 export function angleDelta(from: number, to: number): number {
-  let d = to - from;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
+  // No loop: a huge or endless value (a bad angle somewhere) can never hang the game.
+  const d = to - from;
+  if (!Number.isFinite(d)) return 0;
+  return d - Math.round(d / (Math.PI * 2)) * Math.PI * 2;
+}
+
+/**
+ * The stretch of rampart between the two towers around a board angle
+ * (radians), kept CASTLE.towerClearDeg away from each tower: [from, to],
+ * with `from` at most `angle` and `to` at least it, so it never wraps.
+ */
+export function towerGap(angle: number): [number, number] {
+  const step = 360 / CASTLE.towerCount;
+  const deg = angle / DEG;
+  const k = Math.floor((deg - CASTLE.towerStartDeg) / step);
+  const lo = CASTLE.towerStartDeg + k * step + CASTLE.towerClearDeg;
+  const hi = CASTLE.towerStartDeg + (k + 1) * step - CASTLE.towerClearDeg;
+  return [Math.min(lo, deg) * DEG, Math.max(hi, deg) * DEG];
 }

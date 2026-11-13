@@ -1,6 +1,6 @@
 # Castle Machines
 
-Status: **on hold until the first playtest.** Nothing here is locked. This file records what was discussed so it is not lost. Decide after building the current design and testing how it feels in the headset.
+Status: **dropped in v2** ([v2-plan.md](v2-plan.md#212-smaller-decisions-and-leftovers-from-the-mvp)): no time to design, add and balance them. Kept as history. Earlier: on hold until the first playtest. Nothing here is locked. This file records what was discussed so it is not lost. Decide after building the current design and testing how it feels in the headset.
 
 Back to [GDD index](GDD.md). Related: [Giant tools and food](giant-tools.md), [Enemies](enemies.md).
 

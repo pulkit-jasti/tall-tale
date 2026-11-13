@@ -14,24 +14,25 @@ Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md), [Castle rul
 | Info | Shown as |
 |---|---|
 | Castle health | The red flag on its pole ([castle-rules.md](castle-rules.md#2-the-two-flags)) |
-| Battle progress | The blue wave flag, one notch per wave |
+| Battle progress | The compass ring's middle: the wave and the goblins left (the blue wave flag was dropped 2026-11-11) |
+| Where enemies come from | The 3D compass straight in front by the wall: wedge color says how close (camps about to send, goblins far, near, at the wall), wedge height how many, tents on its lip where the camps are ([castle-rules.md](castle-rules.md#2-the-flag-and-the-compass-ring)). The pause and Next buttons stand 34 degrees to the right |
 | Where damage is happening | The wall top flashes red with a dust puff on each hit (see "Threat cues"). Later cracks, smoke and fires on the wall. Plus spatial sound |
-| Food | A jar or basket beside the tool platforms |
-| Tool cost | A small wooden price tag on each tool platform: a food ball and the cost as a number, like a price on a market stall. Cream number = the jar has enough, red = not enough, a tick = a paid use is running |
-| Tool locked (not enough food) | Tool dimmed or tied down with a rope |
+| Tool use and recharge (v2) | A flat ring on each tool's platform: it drains in cream while a use runs, fills in blue while the tool recharges, flashes white when eating fills it, hidden while ready ([giant-tools.md](giant-tools.md#3-use-windows-and-recharge-v2)) |
+| Tool recharging | Tool dimmed (the Locked look) and its ring filling |
+| The horn's blow | A live bar on the glass sign while the horn is raised in front of the face with a spot, full and gold for 1.5 s after a blow |
 
 - In-world displays also help with "FoV-aware design" and polish in judging, and keep the "toys on a table" feeling.
 
 ### Interaction feedback (applies to everything you can touch)
 
-Every grabbable or pokeable thing (goblins, tools, handles, buttons, the wrist button, trophies) uses the same states, so the player learns them once. There are no haptics, so these are the main feedback.
+Every grabbable or pokeable thing (goblins, tools, handles, buttons, the pause button, trophies) uses the same states, so the player learns them once. There are no haptics, so these are the main feedback.
 
 | State | When | Look | Sound |
 |---|---|---|---|
 | Idle | Hand far away | Normal | None |
 | Ready | Hand within grab or poke range | Soft white brighten | Soft tick |
 | Held / pressed | Grabbed or poked | Orange | Grab or click |
-| Locked | Ready, but cannot be used (not enough food) | Stays dimmed, small wobble | "Not enough food" buzz |
+| Locked | Ready, but cannot be used (a tool recharging, an empty pouch) | Stays dimmed, small wobble | A buzz |
 
 - **Only one target per hand.** Only the nearest thing in range is Ready, so the player always knows what they will grab.
 - **The tutorial hint is different:** a slow pulse, not a steady brighten, so "look here" never gets confused with "you can grab this".
@@ -47,12 +48,12 @@ Every grab, pinch and poke target must be a comfortable reach from the chair. To
 | Under 30 cm | Too close | Nothing (it also overlaps the eat zone, 22 cm from the face) |
 | 30 to 40 cm | Close | Nothing that is reached often |
 | **40 to 50 cm** | **Best** | Everything the hands use often: the ring handle, the tool handles, the pebble bowl, the Next and panel buttons |
-| 50 to 63 cm | Edge | Only things reached now and then: climbers on the rampart, intruders in the courtyard |
+| 50 to 63 cm | Edge | Only things reached now and then: goblins on the rampart, intruders in the courtyard |
 | Over 63 cm | Out of reach | Only things the tools reach (the slingshot, the swatter's long handle), and things to look at (the hint sign) |
 
 - **Where the numbers come from:** Meta's hands guidance ("Hands UI best practices", "Spatial UI inside interactive 3D scenes") puts direct touch at 42 to 46 cm and says to avoid 50 to 80 cm, the "middle distance" where people reach, miss and give up. It also says frequent actions belong low, because raised arms tire quickly. The close limit is our own, from the eat zone and the first headset tests.
-- **Measured from the eyes** with the board at its placed height (46 cm below the eyes, lowered from 36 and then 40 after the step 4 tests, so the player towers over the kingdom) and its default size. Board spots convert with `reachDistance()` in `src/rules/reach.ts`: for example 33.5 cm out and 10 cm above the board is about 49 cm.
-- **Everything is sized from it:** the ring handle (27 cm out, about 48 cm from the eyes), the tool platforms just outside it (33.5 cm out, tops 6 cm above the board, handles about 49 cm), and the castle: the wall at 46 to 52 cm, with climbers on the rampart at about 62 cm.
+- **Measured from the eyes** with the board at its placed height (50 cm below the eyes, lowered from 36, then 40, then 46 after the headset tests, so the player towers over the kingdom) and its default size. Board spots convert with `reachDistance()` in `src/rules/reach.ts`: for example 33.5 cm out and 10 cm above the board is about 52 cm (the lower board pushed the low targets, platforms and ring, a little past the sweet spot; the dev server lists them).
+- **Everything is sized from it:** the ring handle (27 cm out, about 48 cm from the eyes), the tool platforms just outside it (33.5 cm out, tops 6 cm above the board, handles about 49 cm), and the castle: the wall at 46 to 52 cm, with goblins on the rampart at about 62 cm.
 - **Then sized to the player:** the reach check (below) scales all of it to the player's arms.
 - **Low:** tool platforms sit low (6 cm above the board), so the hand reaches them without lifting the arm.
 - **Checked in code:** `REACH` in `src/config/game.ts`. The dev server warns at start about any spot in `reachSpots()` outside the band. Add every new interactive thing there.
@@ -63,10 +64,11 @@ Arm length varies a lot between players, and the default size felt too close in 
 
 - **What the player does:** the sign says "Show me how big you are, giant! Sit back and stretch one arm straight out: hand flat, thumb up, fingers spread." A see-through ghost hand loops the move: from the chest, the right arm goes straight out, holds, and comes back.
 - **The pose:** hand flat with the thumb up and the palm facing in, so the hand's side faces the headset and the cameras see every finger. The palm never faces the headset (that is the Quest menu gesture).
-- **Countdown:** as soon as a hand is stretched out (more than 33 cm from the head, level), the sign shows "Great, hold it there... 3", then 2, then 1, with a tick each second (the text pops on each number). If the arm drops for more than 0.4 s, it waits again. When it ends, a chime plays and the ticked sign says "Done! You can rest your arm now."
+- **No rush:** nothing counts for the first 3 s (time to read the sign), a hand must be at least 40 cm from the head (level, was 33), and it must have settled: moving slower than 8 cm/s for 0.6 s. While it is out but still moving, the sign says "Good! Now hold your hand still." If the hand moves a lot again during the countdown (faster than 25 cm/s for a quarter second), the player is still adjusting: the countdown stops and waits for it to settle again. Before, it started the moment a hand was out, with no time to read.
+- **Countdown:** once a hand is out and still, the sign shows "Great, hold it there... 3", then 2, then 1, with a tick each second (the text pops on each number). If the arm drops for more than 0.4 s, it waits again. When it ends, a chime plays and the ticked sign says "Done! You can rest your arm now."
 - **What it measures:** the farthest the pinch point gets, as a level distance from the head (not the seat, so leaning forward does not count), smoothed so a tracking spike never counts.
 - **What it changes:** the whole board (everything in `boardLift`: board, castle, goblins, ring, tools, flags, sign, panels) scales so the rampart sits at 88% of the measured reach, a comfortable reach rather than a full stretch. Everything keeps its place relative to the wall. The scale stays within 0.85 to 1.45, and the board grows or shrinks to it smoothly, so the player sees it fit them.
-- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. Debug page: "Measure reach again" forgets it and runs the check again. A "measure again" option in the pause menu comes later.
+- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. "Measure reach" on the pause panel runs the check again right away, on the frozen battle, without starting it again. "Measure reach again" on the debug page forgets it and starts the battle with the check.
 - Numbers in `CALIBRATION` in `src/config/game.ts`, code in `src/player/reachCheck.ts`.
 
 ### Holding a tool
@@ -79,12 +81,16 @@ After the step 4 test, tools stuck to the hand at whatever angle the grab happen
 - **Slingshot:** fork up past the thumb, arms spread across the palm, the shot going the way the knuckles point (arm stretched out, thumb up).
 - The fist frame comes from the knuckle joints (wrist to middle knuckle, pinky knuckle to index knuckle), not from the wrist joint's own angle, so it matches what the player sees.
 - Right after the grab the tool eases into place over about 0.15 s, so it never jumps.
-- A pinch grab (the slingshot handle, or the food tools if `TOOLS.acceptPinch` is on) keeps the angle it grabbed at.
+- A pinch grab (the slingshot handle, or the hand tools if `TOOLS.acceptPinch` is on) keeps the angle it grabbed at.
+- The war horn (v2) is held like the megaphone was: the mouthpiece toward the wrist, so it is at the mouth when the fist is just below and to the side of it (`HOLD.poses.horn`).
 - Numbers in `HOLD` in `src/config/game.ts` (where the fist holds each tool, which way it faces), code in `src/player/hold.ts`. The ghost hand grab demos already close the fist this way.
 
 ### Threat cues
 
 Players who cannot hear, or play with the sound off, still need to know where goblins are hurting the castle. On by default (`THREAT` in config, `src/ui/threatCues.ts`):
+
+- **Red pointer arrow (step 6):** a goblin hitting the wall, climbing it or running on the rampart that has been at the edge of the view or out of it for 1.5 s gets a fast blinking red 3D arrow in front of the face pointing at it, so no goblin hides behind the player.
+- **Rampart flash:** the stretch of wall under a goblin running on the rampart flashes red like a wall hit (no damage). A giggle plays where one pops up (v2).
 
 - **Wall hit flash:** every hit makes that part of the wall top flash red and fade, with a small dust puff. The wall top is easy to see from the seat, also out of the corner of the eye.
 - An "attack compass" arc with red marks inside the ring was tried and removed after the headset test: the wall flash alone reads well enough.
@@ -94,9 +100,9 @@ Players who cannot hear, or play with the sound off, still need to know where go
 | Action | How | Used for |
 |---|---|---|
 | **Pinch** | Thumb and index finger together | Small things: picking up goblins, pulling back the slingshot pouch, taking pebbles from the bowl, other small actions |
-| **Grab** | Close the whole hand into a fist | Big things: the slingshot handle, fly swatter, pepper shaker, megaphone, bell, the ring handle |
+| **Grab** | Close the whole hand into a fist | Big things: the slingshot handle, fly swatter, pepper shaker, bell, war horn, the ring handle |
 
-- Buttons (Play, pause panel, wrist button) are poked with the index finger, not pinched or grabbed.
+- Buttons (Play, pause panel, pause button) are poked with the index finger, not pinched or grabbed.
 - Each object accepts only its own action, so a pinch never picks up the swatter and a fist never picks up a goblin.
 - Exception: the ring handle and the slingshot handle accept a pinch too. In the first headset test a fist with the back of the hand toward the headset tracked poorly, because the fingers are hidden.
 - A fist counts when 3 of 4 fingers are curled, so one badly tracked finger does not break it.
@@ -137,7 +143,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 
 ### Comfort rules
 
-- **Only the board rotates.** The sky, the horizon, the hills, the tool platforms, the food jar and the two flags never turn. The platforms, jar, flags and hint sign rise and fall with the board, so they always stand at the same spot on it and the ring never passes through them. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it (a whole-world turn was tried on paper after the step 5 review and dropped for this reason).
+- **Only the board rotates.** The sky, the horizon, the hills, the tool platforms (with the pebble bowl), the red flag and the compass ring never turn. The platforms, the flag, the compass and the hint sign rise and fall with the board, so they always stand at the same spot on it and the ring never passes through them. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it (a whole-world turn was tried on paper after the step 5 review and dropped for this reason).
 - **Movement follows the hands exactly (1:1)**, with no smoothing or lag. Moving the world is only comfortable when the player clearly causes it.
 - **Comfort setting (later):** for players who get motion sick, the board turns in snap steps (30 degrees) instead of smoothly.
 - Later ideas: a small "momentum" flick spin for fun.
@@ -145,7 +151,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 ### Placement and fallbacks
 
 - **Auto placement:** when the player presses Play, the board is placed at a fixed distance below the head, facing where the player is looking.
-- **Reset table:** a button in the pause menu runs auto placement again, for when the board ends up somewhere odd.
+- **Reset table:** a button in the pause menu runs auto placement again (at the starting height), for when the board ends up somewhere odd.
 - **Quest recenter:** if the player recenters with the Meta button, the game catches it and places the board again. A web game cannot trigger the system recenter itself, which is why "Reset table" exists.
 
 ---
@@ -164,7 +170,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 ### Eat
 
 1. Bring the held goblin toward the face, like eating a snack (hand within about 22 cm). The goblin pulses. It must not require touching the mouth.
-2. Keep it there for a moment (about 0.2 seconds). It is eaten without letting go. Chomp, gulp, small burp. Food is added to the food jar.
+2. Keep it there for a moment (about 0.2 seconds). It is eaten without letting go. Chomp, gulp, small burp. Every recharging tool's ring jumps forward (v2, [giant-tools.md](giant-tools.md#eating-fills-every-recharge-ring)).
 
 - **No letting go and no head tilt.** In the first headset test, holding a goblin above the face with the head tilted up turned the palm toward the headset, and the pinch opened the Quest menu. Now the palm can face down or sideways the whole time.
 - If the pinch breaks close to the face anyway (tracking loss or the menu gesture), the goblin is still eaten instead of dropped.
@@ -180,7 +186,7 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 
 ## 4. Menus
 
-- **2D start page:** one "Enter VR" button (the browser needs one tap to enter VR). Before entering VR it asks for mic permission (needed for the megaphone). Built in step 5: on the first visit the button says "Allow microphone", its tap shows the browser prompt, then it says "Enter VR" (opening VR needs a fresh tap). A line under it says whether the mic is on (the megaphone) or not (the bell comes instead). If the mic was allowed before, it opens with no prompt and one tap enters VR. Later it can offer an optional "Install app" button.
+- **2D start page:** one "Enter VR" button (the browser needs one tap to enter VR). Before entering VR it asks for mic permission (v2: for blowing into the war horn; holding it at the mouth works without). Built in step 5: on the first visit the button says "Allow microphone", its tap shows the browser prompt, then it says "Enter VR" (opening VR needs a fresh tap). A line under it says whether the mic is on (blow into the horn) or not (hold it at the mouth). If the mic was allowed before, it opens with no prompt and one tap enters VR. Later it can offer an optional "Install app" button.
 - **In VR:** the menu is the board in peacetime, with a giant menu board and trophy shelf. See [modes-and-progression.md](modes-and-progression.md#2-the-menu-is-the-board-in-peacetime). MVP: a single Play button.
 - **End of battle (MVP):** a simple win or lose panel. See [castle-rules.md](castle-rules.md#4-end-of-battle-screens-mvp).
 
@@ -191,24 +197,90 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 ### What hand tracking games do
 
 - **Palm pinch is taken by the system.** On Quest, a pinch with the palm facing the player is reserved for the system on both hands. The right one opens the Quest menu. Meta's WebXR docs say the left one (the three bars icon) acts like the left controller's menu button, which leaves the WebXR session, but in our headset test it did nothing. Apps cannot use either one or turn them off, so the game never relies on them.
-- So the common pattern is a **wrist button**: a small button on the inside of one wrist that shows when the player turns that palm toward their face. The other hand's index finger pokes it. A poke with the other hand is deliberate, so it is rarely pressed by accident.
+- A common pattern is a **wrist button**: a small button on the inside of one wrist that shows when the player turns that palm toward their face. The other hand's index finger pokes it. We tried it, but the palm pose was hard to find and the button flickered, so ours is a fixed button in front.
 
 ### Our pause
 
-- **Wrist button on the left wrist** (right wrist once handedness exists). It fades in only when the left palm faces the player's face for about 0.3 seconds, and fades out when the hand turns away.
-- **Poke it with the right index finger** to pause. The button presses in, with a click sound.
-- **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Reset table", "Restart battle".
-- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset (the WebXR session's visibility change event). It stays paused until the player pokes "Resume". Build step 1 already has a simple version: the game freezes and all sound stops while the session or the page is not fully visible, and resumes by itself. The FPS panel shows "paused" while it is.
+- **Pause button on a stand in front**, outside the ring, low (9 cm up) so it does not block the view ahead, on the tutorial Next button's spot (Next was lowered to the same height, so the two line up). It was a wrist button until the step 7 and 8 headset test (the palm pose was hard to find and the button flickered).
+- **Poke it with either index finger** to pause. The button presses in, with a click sound.
+- **Pause panel:** the battle freezes and a small panel appears in front of the player with big poke buttons: "Resume", "Settings", "Restart" and, while the tutorial runs, "Skip tutorial" (a fresh battle from wave 1 with every tool out and no lessons). The welcome panel has **Skip tutorial** too (bottom left, mirroring Settings), for a player who knows the game, for example after clearing the browser's data. Restart and Play again keep the choice; the welcome panel's Play brings the tutorial back. So no lesson ever needs a timer: it waits for the player, and Skip tutorial is the way out.
+- **Auto-pause:** the game pauses on its own when the player opens the Quest system menu or takes off the headset. It stays paused until the player pokes "Resume". The FPS panel shows "paused" while it is. The Quest menu can stop the frames without a hidden frame ever reaching the game (headset test: it did not always pause), so it listens to the XR session's and the page's visibility events (even between frames), and also pauses when no frame ran for 0.75 s (`PAUSE.autoPauseGap`). It still missed the right hand's Meta pinch at random, so the gesture itself pauses too: a hand holding nothing starts a pinch with the palm straight toward the eyes, within 45 cm of the head, and keeps it 0.15 s (`PAUSE.metaGesture`). The no-frames pause needs 1.5 s. **Headset taken off:** the Quest 3S has no proximity sensor, so the system never tells the page (Meta's VRC.Quest.Functional.2), and the game played on. It pauses itself when no hand is tracked and the head stays within 3 mm and 0.4 degrees for 5 s (`PAUSE.headsetOff`): a worn headset always moves a little. While paused, the FPS panel says what caused it. The game never uses that pose, and a goblin at the mouth was pinched long before, so it does not pause by mistake.
+- **Glass sign** (`GLASS_SIGN`, `src/ui/kit/glassSign.ts`): the see-through variant of the hint sign, a small dark glass label a little above the look's center that follows the look. Lessons where the player must watch what is in front of them use it instead of the hint sign (`Hint.glass`: the horn, the knights' first fight, the balloon), so only one sign ever shows. The horn uses it while held: what to do now, and raised in front of the face a live bar. The bar is plain meshes; a canvas redrawn whenever it moved made the whole view flicker on the Quest. Since 2026-11-12 a thin Fantasy UI Borders frame (notched corners, `GLASS_SIGN.frameCorner`, `frameOpacity`) sits just inside the glass.
+- **Short text:** every tutorial line is one short instruction in easy words (headset test: players do not read long signs).
 - Settings come later (not in the MVP).
 
+**Built in step 6** (`src/ui/pauseMenu.ts`, numbers in `PAUSE`):
+- The pause button is the shared poke button with a pause icon, on a post like the Next button, straight in front (38.5 cm out, 9 cm above the board, face tilted 40 degrees toward the eyes, `PAUSE.button`). It rises with the board and never turns. About 53 cm from the eyes, a little past the sweet spot, fine for a button poked now and then. It shows while a battle runs (in VR), and steps aside while the Next button shows (same spot, higher). It ignores pokes for a moment after it comes back, so the finger that poked Next or Resume does not pause at once.
+- **Taught first:** the tutorial's first lesson (after the reach check) points the gold arrow at it and asks the player to poke it and Resume (no ghost hand demo).
+- Pausing lets go of everything the hands hold (goblins drop, tools go back), freezes the battle and all sound, and hides the hint sign, the gold arrow and the ghost hand.
+- The pause panel opens in front of the head, not on the board, at the same spot from the eyes as the end panel and sized with the board, so its buttons are always in the best reach band (about 47 to 49 cm from the eyes), even when the board ended up somewhere odd. It always draws on top of everything (no depth test), so the castle or the sign never hide it. It **follows the head lazily**, like the Quest's own menus: it stays still while the head turns, and swings back in front only once the head turned past the panel's side edge plus 10 degrees (at least 20; or moved 12 cm), so it is never behind the player. The angle goes by the panel's size (`LazyFollow.fitTo`, `PAUSE.follow`): about 38 degrees for the pause panel, 42 for the wide settings page, so the eyes can go to its corners (Back, top left) without it moving away. A fixed 25 degrees made it swing away whenever the player looked at a corner. Four poke buttons (44 cm wide, 10.4 cm apart): **Resume**, **Settings**, **Restart** (the battle again) and **Skip tutorial** (only while the tutorial runs). The settings page opens on its **Access** tab (Access first, then Sound, the two tabs centered in their row). Access holds **Measure reach** (the reach check right away on the frozen battle, the board resizes, then play goes on, no restart), the **Quiet horn** switch and **Reset table** (auto placement again at the starting height, then play goes on; it moved here from the main page). Its buttons ignore pokes for 1 s after it opens.
+- Sound stops only for the Quest menu, so the pause panel's clicks are heard.
+- **Settings tabs:** the settings page has one tab per category on the right of its top row, **Sound** and **Access** (accessibility). The chosen tab's cap is green, its label bold green and underlined; the others are grey with a light label (color, text and a line, never color alone). Only the chosen tab's rows show. A new category is a new entry in `SETTINGS_TABS` (`src/ui/pauseMenu.ts`) with its own group of rows.
+- **Row icons** (2026-11-12): every row's name on both tabs has a small Kenney icon before it (Music, Goblins skull, Battle sword, Tools wrench, Voice speaker; Your reach hand, Quiet horn muted speaker, Table rotate arrow, Unlock all tools open lock). Only the names moved; the sliders and switches are untouched.
+- **Access tab:** "Your reach" with the Measure reach button (the reach check, which used to be on the pause panel), and "Quiet horn" with an on and off switch (v2, was "Bell in place of the megaphone"): the horn never listens to the mic, for players who cannot or do not want to blow (it still sounds after 1.2 s raised in front of the face with a spot; saved, `src/player/accessSettings.ts`, `hornHearsMic()`). Without a mic the switch shows On and is locked ("No mic: always quiet").
+- **The switch** (`src/ui/switch.ts`, `SWITCH`, the shared on and off component): a 7 by 3 cm rounded track with a knob, slid like the slider: touch the knob with the index fingertip and slide it along (1:1). Let go past the middle and it snaps over and flips; short of the middle it springs back with a little bounce (an elastic feel). A tick as the knob crosses the middle, a click when it flips. A tap does not flip it. On: the knob on the right, the track green, the word "On" beside the knob. Off: the knob on the left, the track grey, "Off". So position, color and text all say the same, and it reads for color-blind players too. Idle, Ready, Held and Locked on the knob.
+- **Settings page** (the Settings button on the pause panel, or on the welcome panel's bottom right corner, `PAUSE.settings`): Back (top left, its label under it) and the title at the top, then the chosen tab's rows, then below everything the tabs, each name beside its button. The Sound tab has one row per sound group (Music, Goblins, Battle, Tools, Voice and menus, `SOUND_CATEGORIES`): its name and level ("70%" or "Off") and one long slider. All the way left is off; there is no mute button (the slider is easy enough, headset test). Saved in localStorage (`tallTale.sound`), so it holds across visits.
+- **The slider** (`src/ui/slider.ts`, `SLIDER`, the shared component for every future slider), from Meta's hands guidelines: touch the handle itself with the index fingertip (touching the track does nothing: it moved two rows at once), slide along (it follows 1:1, no jump), pull the finger back to let go. Only one slider moves at a time. No pinch, nothing to hold. Near the ends it snaps to off and full. The handle is 3.2 cm across (over the 22 mm minimum), the buttons' green (no dark ring around it, that looked odd) over a warm tan fill and the dark track, so it matches the theme and still stands out (a gold one looked out of place), grey at 0 so off shows in color. Targets keep over 12 mm apart, a tick plays at every 10% step and a click on release. The value is saved on release, not during the drag. (Its minus and plus buttons were removed: not needed.)
+- **Quick pokes** (`POKE.quickBehind`, `cooldown` 0.35 s): a fast poke used to be missed, because the click waited for the animated cap to catch up and a fast finger could pass the button between two tracking frames. Now the click goes by the fingertip's own depth, and a fingertip that was in front of the face one frame and pushed in the next clicks at once (sliders grab the same way).
+- **Minimal text in menus:** a title and a word over each button, nothing more (no subtitles, no help lines).
+- **Room in menus** (`UI_SPACING`): nothing comes closer than 2.2 cm to a panel's side or bottom edge, the title banner starts 1.4 cm down, and a label keeps 0.9 cm from its button. The panels got a little bigger for it (welcome and end 34 by 22, pause 44 by 20 with its buttons 2.9 cm apart, settings 52 by 39.8 with rows 4.4 cm apart and the tabs in their own row at the bottom), all inside `UI_ZONE`.
+- **Button sizes** (`BUTTON_SIZE`): every button uses one of four sizes, across the rim: medium 4.9 cm (Settings on the welcome panel, Measure reach), standard 6.2 cm (Next, pause, the settings tabs and Back), large 7.5 cm (the pause panel), primary 9.1 cm (Play). `PokeButton` never builds one below `BUTTON_SIZE.min` (4.9 cm across, whatever size is asked for; the old small 3.6 cm size felt too small for the tabs), the dev build warns above 9.1 cm, and keep at least 1.2 cm between targets.
+- **One drag at a time** (`canDrag`, `takeDrag`, `endDrag` in `src/ui/kit/controls.ts`): only one slider or switch moves at a time, so a finger sliding one row never moves the next, and a second hand cannot grab another.
+- **Button icons** are plain cream shapes, no dark outline (it looked ugly), drawn premultiplied so no dark edge shows either.- Auto-pause in VR during a battle shows the same panel when the player comes back. Outside a battle (welcome or end panel) and in the browser it still resumes by itself.
+- Debug: Space pauses or resumes, and the debug page's "Pause panel button 1 to 4" pokes a panel button.
+
 ---
+
+- **Opened from the welcome panel**, the settings page comes up alone in front of the head; Back brings the welcome panel again, and Measure reach runs the reach check and then brings it back.
+
+### UI height zone
+
+Menus and panels (the welcome and end panel, the pause panel, the settings page) sit right in front of the eyes, never too high or too low (`UI_ZONE`, `uiCenterY` in `src/rules/reach.ts`): each panel's middle is 15 cm below the eyes, and no part of it reaches higher than 4 cm above the eyes or lower than 34 cm below them (the panel is moved to fit; the dev server warns about a panel too tall to fit at all, and a test checks every panel). Added after the settings page's low rows were hard to touch (then 2 and 30 cm). Grown when the settings tabs got their own row at the bottom: the page is 39.8 cm tall, its top (title, Back) about at eye level, its tabs about 29 cm below the eyes.
+
+### UI library
+
+All UI is built from one shared library, `src/ui/kit/` (import everything from `src/ui/kit/index.js`), so every control looks, sounds and behaves the same, and nothing is written twice:
+
+| Part | What it is | Used by |
+|---|---|---|
+| `PokeButton` | The round button poked with the index finger (Idle, Ready, Held, a blink while it waits). `locked`: it goes down and buzzes, nothing more | Every button |
+| `Slider` | Touch the handle and slide, one at a time, a handle like the buttons, grey at off, ticks per step (SLIDER). `vertical`: upright, 1 at the top. `scrollbar` look ([custom-mode.md](custom-mode.md#ui-kit-parts)): a long pill-shaped handle instead of the round one, for every page that scrolls | Sound settings, the campaign list's scroll, every scrolling page |
+| `ScrollList` | v2 run 2: a list whose rows are drawn once into one tall canvas, a window moving over it (scrolling never redraws); a tap selects a row (click), hover lights the row (tick), press darkens it; edge rows show cut off; it draws after its panel and never writes depth (SCROLL_LIST). It can scroll by swiping (Meta's guidance, coasting, springing back), or be tap only (`swipe: false`) and scrolled from outside (`scrollToShare`, gliding smoothly) | Campaign level list (tap only, with an upright `Slider`: swipes and taps got mixed up on the headset) |
+| `FightButton` | v2 run 2: the one rectangular button, a bordered box (`PokeButton`'s `box` option, the same poke, looks and sounds) with a sword and "Fight!", red; locked grey with a lock. Every other button is round | Campaign Fight |
+| `drawMenuIcon` | v2 run 2: the round buttons' icons drawn in code (sword, lock, flag, sun, sliders, gear, replay, back), kept since the buttons are tested. Menus use only round buttons (rectangular ones were tried and dropped) | Round buttons |
+| `drawIconCentered`, `drawStars`, `drawDivider` | 2026-11-12: Kenney art on panels and cards (`public/ui/README.md`): an icon by its middle (tinted), a row of Kenney stars (gold won, faint not yet), a Fantasy UI Borders divider. They replaced the code-drawn stars and skulls (AGENTS.md: never make art by hand in code) | Campaign and Custom Game cards, settings rows, trophy counter, end panel |
+| `Switch` | On and off: knob side, track color and the word On or Off together, slid past the middle to flip (springs back short of it), can be locked (SWITCH) | Access settings (the quiet horn) |
+| `StandButton` | A `PokeButton` on a post straight in front, tilted toward the eyes, that starts fresh and locked when it comes out | Next, pause |
+| `Panel` | The parchment board with a canvas, its pop, and `root` for its controls. `resize(width, height)` fits it to what is on it now (its canvas stays as sharp, a menu panel keeps its `uiCenterY` height); with `rowPanelWidth` a panel is as wide as its shown buttons need, so a button shown or hidden never leaves a gap | Hint sign, end, pause (sizes to its buttons), settings, menus |
+| `LazyFollow` | Keeps a menu in front of the head like the Quest's own menus | Pause panel |
+| `armControls`, `changeTouch`, `Control` | A page opened: reset and lock its controls; the shared touch look and ready tick | Every panel, button and slider |
+| `rowX`, `bottomRowY`, `panelMap`, `stepValue`, `clamp01`, `angleTo` | Layout math, no Three.js, tested (`layout.test.ts`) | Panels, slider, follow |
+| `drawTitleBanner`, `drawLine`, `drawOutlined`, `UI_COLORS` | Canvas text in one look and one set of colors | Panels, labels |
+| `canvasTexture`, `canvasPlane` | A canvas as a sharp sRGB texture, and the unlit picture made from it | Panels, button faces, markers, labels, FPS panel |
+| `drawOnTop` and `RENDER_ORDER` (config) | Never hidden behind anything, in one table of layer orders | Pause panel; markers, labels, stun ring, arrows and ghost hands use the table |
+
+**Built for Custom Game** ([custom-mode.md](custom-mode.md#ui-kit-parts), 2026-11-11, not tested on the headset yet): `RangeSlider` (two handles), `ChoicePicker`, `NumberStepper`, `SeedControl`, `SettingRow` (name, control and value from a spec), `ScrollArea` (a column of items and the scrollbar: every page that scrolls), `Tabs` (floating rectangular buttons outside a panel's top border; with `FightButton`, the only rectangular buttons), `TextField` (typed with the Quest's system keyboard, a validation line under it; `isTyping` keeps auto-pause away), `CanvasLabel`, and the tick, cross, edit, copy, trash, share, dice and dot button icons.
+
+**Rules learned on the headset (2026-11-11), built into the kit so they hold for every new page:**
+
+- **No canvas redraw while dragging.** Redrawing and uploading a canvas texture on every slider step made the panel flicker, then vanish while sliding (the sound sliders never did: they repaint only when let go). `CanvasLabel.draw` and `Panel.paint` now wait for the drag to end by themselves (`afterDrag`, `isDragging` in `src/ui/kit/controls.ts`); `ScrollArea` flushes waiting redraws every frame. Anything new that redraws a canvas goes through `afterDrag`.
+- **Navigation outside, content inside.** Every menu panel's title and Back are a `PanelHeader` (`src/ui/kit/panelHeader.ts`, `HEADER`): a floating plate over the panel's top edge, Back beside it. Tabs and the page's call to action float under the panel (tabs from its left edge, `ActionButton` at its right edge). Done for the main menu, the campaign, the Custom Game pages and the settings page (its tabs are the `Tabs` now, Access first). The pause, welcome and end panels keep their in-panel titles for now.
+- **Menu pages draw like the settings page:** on top, in the page's own tree order, inside the `RENDER_ORDER.menu` layer (`layerPage` in `src/ui/kit/onTop.ts`; call it again when a page gets new meshes). Depth-tested Custom Game pages flickered on taps, slider releases and tab changes; the settings page, drawn this way, never did. Anything drawn on top must add its parts back to front (a plate before its text: the settings header's title was hidden by its own plate).
+- **Scrolling cuts, never hides early.** `ScrollArea` cuts its rows at the window's edges **in the shader, by world position** (`src/ui/kit/windowClip.ts`). three.js's own clipping planes do not work here: IWSDK draws both eyes in one pass (multiview) and the planes are worked out for one camera, so each eye cut in a different place and rows came and went with the head. A row works while its middle is inside the window.
+- **The scrollbar's handle is a block wrapped around its rail** (`SLIDER.scrollbar.wall`), not a pill lying on it.
+- **Recenter (the Meta button) places the board again** from the head: the XR reference space's `reset` event (`watchSession` in `src/game.ts`), its height kept. Before, the board kept the turn of the head at its first placement, so after a recenter everything sat a few degrees off.
+- **Header plates are unlit** (`MeshBasicMaterial`, `HEADER.color` a vivid coral), so the scene's light never dulls them. Text fields 2.9 cm tall, the scrollbar block 3.8 cm long.
+- **Rims 20% taller** (`POKE.rimHeight` 1.08 of the cap's depth, was 0.9), on every button and the text fields (they keep their dark border; their white face covers the whole cap). The cap stops level with the rim's top (`pressMaxFor`, `POKE.capAboveRim`), so it never hides inside it. The scrollbar has its own thin rail (`SLIDER.scrollbar.rail` 0.7 cm). Slider values sit right after their slider (`SETTING_ROW.valueGap`). Save is a bright orange, the header plates a lighter terracotta.
+- **Round buttons press as deep as box buttons:** the cap ends level with its rim (`POKE.capShowShare` 0.1), it clicks at 95% of its travel (`fireShare`, was 85%), and it follows the finger faster (`capFollow` 26, was 14), so it no longer clicks while it looks half pushed.
+
+The Kenney UI images and their helpers (`drawBanner`, `drawIcon`, `drawNineSlice`, `fitFont`, `wrapText`, the button icons) come through the same entry. Something new that two places need goes into the library first.
 
 ## 6. Accessibility options
 
 None of these are in the MVP. They come after the first playtest (see [mvp.md](mvp.md)).
 
-- **Quiet mode:** chosen at the start. Replaces the megaphone with a bell that works by shaking. Offered to everyone, no one has to declare a disability. See [giant-tools.md](giant-tools.md).
-- **Mic calibration:** a quick test shout sets the megaphone threshold per player.
+- **Quiet mode:** built in v2 as the "Quiet horn" switch (Access tab): the horn works by holding it at the mouth. Offered to everyone, no one has to declare a disability. See [giant-tools.md](giant-tools.md).
+- **Mic calibration:** a quick test blow sets the horn's blow threshold per player.
 - **Handedness:** which side the slingshot platform sits on.
 - **Snap rotation:** the board turns in 30 degree steps instead of smoothly.
 - **Stronger slingshot aim assist** (see [giant-tools.md](giant-tools.md#slingshot-aim-assist)).
@@ -235,7 +307,7 @@ Not raw joint positions (they change as the whole hand moves). Instead, a few si
 |---|---|---|
 | Finger curl | Fingertip distance to the palm (3 of 4 fingers) | Grab (fist) for big tools and the ring handle |
 | Pinch | Thumb tip to index tip distance | Pinch for goblins and the slingshot pouch |
-| Palm direction | Which way the palm faces | Palm toward the face shows the wrist pause button |
+| Palm direction | Which way the palm faces | Not used for input (a palm-facing pinch is the Quest menu) |
 | Speed | Hand movement over the last few frames | Shake (pepper, bell), swat |
 
 A gesture is a rule over these, for example "all fingers curled and palm down = fist".

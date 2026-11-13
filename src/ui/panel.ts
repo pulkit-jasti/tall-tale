@@ -5,8 +5,12 @@
 // spins and never follows the head. Each user draws its own content on it
 // (paint) and can add things to `root` that tilt with it, like a poke button.
 // The canvas is redrawn only when a user paints, never every frame.
-import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, type Object3D } from 'three';
+import { Group, PlaneGeometry, type CanvasTexture, type Mesh, type MeshBasicMaterial, type Object3D } from 'three';
+import { popIn } from '../fx/ease.js';
 import { degToRad } from '../rules/boardMath.js';
+import { uiCenterY } from '../rules/reach.js';
+import { canvasPlane, canvasTexture } from './kit/canvas.js';
+import { afterDrag } from './kit/controls.js';
 import { drawNineSlice } from './uiImages.js';
 
 /** Dark brown ink for text on the light panel. */
@@ -31,12 +35,19 @@ export interface PanelOptions {
 export class Panel {
   /** Placed and tilted: things added here (buttons) tilt with the panel. */
   readonly root = new Group();
-  /** Layout size (pixels) that paint() draws in. */
-  readonly layoutWidth: number;
-  readonly layoutHeight: number;
+  /** Layout size (pixels) that paint() draws in (they change with resize()). */
+  layoutWidth: number;
+  layoutHeight: number;
+  /** Size (cm). */
+  width: number;
+  height: number;
   private canvas = document.createElement('canvas');
   private texture: CanvasTexture;
   private canvasScale: number;
+  /** Layout pixels per cm, kept when it resizes. */
+  private pxPerCm: number;
+  private tiltDeg: number;
+  private zoned: boolean;
   /** The parchment board. Only it pops, not what was added to root. */
   private board: Mesh;
   /** Little pop when new content shows (1 = settled). */
@@ -46,17 +57,18 @@ export class Panel {
   constructor(parent: Object3D, options: PanelOptions) {
     const { width, height, layoutWidth, canvasScale } = options;
     this.canvasScale = canvasScale;
+    this.width = width;
+    this.height = height;
+    this.pxPerCm = layoutWidth / width;
+    this.tiltDeg = options.tiltDeg;
+    // A menu panel placed by uiCenterY keeps that rule when it resizes; others (the hint sign) keep their height.
+    this.zoned = Math.abs(options.centerY - uiCenterY(height, options.tiltDeg)) < 0.01;
     this.canvas.width = Math.round(layoutWidth * canvasScale);
     this.canvas.height = Math.round(((layoutWidth * height) / width) * canvasScale);
     this.layoutWidth = layoutWidth;
     this.layoutHeight = this.canvas.height / canvasScale;
-    this.texture = new CanvasTexture(this.canvas);
-    this.texture.colorSpace = SRGBColorSpace;
-    this.texture.anisotropy = options.anisotropy ?? 1;
-    this.board = new Mesh(
-      new PlaneGeometry(width, height),
-      new MeshBasicMaterial({ map: this.texture, transparent: true, fog: false, toneMapped: false }),
-    );
+    this.texture = canvasTexture(this.canvas, options.anisotropy ?? 1);
+    this.board = canvasPlane(this.texture, width, height);
     this.root.add(this.board);
     // Its face (+z) toward the player, tilted back like a lectern.
     this.root.position.set(0, options.centerY, -options.radius);
@@ -72,8 +84,40 @@ export class Panel {
     this.root.visible = on;
   }
 
-  /** Redraws the panel: the parchment, then the user's content, in layout pixels. */
+  /**
+   * A new size (cm) that fits what is on it now (a button shown or hidden):
+   * the board, its canvas (as sharp as before) and its height in front of the
+   * eyes (uiCenterY) follow. Call paint() after it. Nothing happens if the
+   * size is the same. So no panel needs its size tuned by hand.
+   */
+  resize(width: number, height: number): void {
+    if (Math.abs(width - this.width) < 1e-3 && Math.abs(height - this.height) < 1e-3) return;
+    this.width = width;
+    this.height = height;
+    this.layoutWidth = Math.round(width * this.pxPerCm);
+    this.canvas.width = Math.round(this.layoutWidth * this.canvasScale);
+    this.canvas.height = Math.round(height * this.pxPerCm * this.canvasScale);
+    this.layoutHeight = this.canvas.height / this.canvasScale;
+    // A new canvas size needs a new texture (the old one keeps its size on the GPU).
+    const material = this.board.material as MeshBasicMaterial;
+    this.texture.dispose();
+    this.texture = canvasTexture(this.canvas, this.texture.anisotropy);
+    material.map = this.texture;
+    this.board.geometry.dispose();
+    this.board.geometry = new PlaneGeometry(width, height);
+    if (this.zoned) this.root.position.y = uiCenterY(height, this.tiltDeg);
+  }
+
+  /**
+   * Redraws the panel: the parchment, then the user's content, in layout
+   * pixels. While something is dragged it waits for the drag to end
+   * (src/ui/kit/controls.ts afterDrag: a redraw mid-drag made panels flicker).
+   */
   paint(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
+    afterDrag(this, () => this.paintNow(draw));
+  }
+
+  private paintNow(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
     const c = this.canvas.getContext('2d')!;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -98,10 +142,8 @@ export class Panel {
   update(dt: number): void {
     if (this.pop >= 1) return;
     this.pop = Math.min(1, this.pop + dt / this.popTime);
-    // Ease out with a small overshoot, then settle at full size.
-    const t = this.pop - 1;
-    const ease = 1 + 2.7 * t * t * t + 1.7 * t * t;
-    this.board.scale.setScalar(0.8 + 0.2 * ease);
+    // The shared pop: a small overshoot, then it settles at full size.
+    this.board.scale.setScalar(0.8 + 0.2 * popIn(this.pop));
   }
 }
 

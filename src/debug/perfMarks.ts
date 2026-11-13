@@ -9,7 +9,8 @@ export type PerfMark =
   | 'sound'
   | 'panel redraw'
   | 'hint sign'
-  | 'price tag'
+  | 'horn'
+  | 'knight charge'
   | 'debug send'
   | 'particles'
   | 'board placed'
@@ -19,7 +20,10 @@ export type PerfMark =
   | 'trigger'
   | 'balloon spawn'
   | 'gear'
-  | 'juice';
+  | 'juice'
+  | 'time of day'
+  | 'map load'
+  | 'horn path';
 
 const marks = new Set<PerfMark>();
 

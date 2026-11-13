@@ -12,8 +12,9 @@
 //
 // A tiny canvas texture redrawn twice a second, so it costs almost nothing. It
 // lives in boardLift: it rises with the board but never spins.
-import { CanvasTexture, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, SRGBColorSpace } from 'three';
+import type { CanvasTexture, Mesh, Object3D } from 'three';
 import { FPS, HANDLES } from '../config/game.js';
+import { canvasPlane, canvasTexture } from '../ui/kit/index.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import type { RunStats } from './debugKeys.js';
 import { mark, takeMarks, type PerfMark } from './perfMarks.js';
@@ -73,10 +74,8 @@ export class FpsCounter {
     this.canvas.width = 384;
     this.canvas.height = 192;
     this.context = this.canvas.getContext('2d')!;
-    this.texture = new CanvasTexture(this.canvas);
-    this.texture.colorSpace = SRGBColorSpace;
-    const material = new MeshBasicMaterial({ map: this.texture, transparent: true, fog: false, toneMapped: false });
-    this.mesh = new Mesh(new PlaneGeometry(FPS.width, FPS.height), material);
+    this.texture = canvasTexture(this.canvas);
+    this.mesh = canvasPlane(this.texture, FPS.width, FPS.height);
     const a = degToRad(FPS.angleDeg);
     const y = HANDLES.ringY + HANDLES.ringRadius + FPS.aboveRing + FPS.height / 2;
     this.mesh.position.set(polarX(FPS.radius, a), y, polarZ(FPS.radius, a));

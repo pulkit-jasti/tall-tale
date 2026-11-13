@@ -16,9 +16,10 @@ export const BOARD = {
   /**
    * Board surface height below the eyes when placed (meters). Lowered from
    * 0.36 and then 0.40 after the step 4 tests: towering high over the
-   * kingdom is what makes the player feel like a giant.
+   * kingdom is what makes the player feel like a giant. Then 0.50 (was 0.46)
+   * after the v2 run 2 headset test: the ground felt too close.
    */
-  eyeToBoard: 0.46,
+  eyeToBoard: 0.5,
   skirtColor: 0x6b5a45,
 };
 
@@ -108,14 +109,67 @@ export const GRASS = {
  * battles; and forests out in the hilly far ring, away from the villages,
  * where the decor's tree groves grow. All merged into a few meshes.
  */
+/**
+ * The goblin war camps (src/world/boardBuilder.ts buildCamps): the camp hill
+ * in the middle (it sinks as goblins come out) inside a spiked palisade, with
+ * the gate toward the castle where the road leaves and red banners beside
+ * it, a big war tent at the back, smaller tents and a catapult at the sides,
+ * a weapon rack, a fire, and tall rocks looming behind the fence. Sizes are
+ * board cm for a camp of size 30 (they grow and shrink with the camp).
+ * Merged into one mesh per material for all camps. Moved out to about 400 cm
+ * and made bigger after the step 7 and 8 test (they looked too small and
+ * plain, and most of the board was empty).
+ */
+export const CAMP_LOOK = {
+  /** The palisade's distance from the middle (share of the camp size: the flat ground ends there), and one piece's length. */
+  fenceRadius: 1,
+  fencePiece: 6,
+  warTentHeight: 10,
+  tentHeight: 6,
+  catapultWidth: 9,
+  bannerHeight: 8,
+  rackWidth: 3,
+  fireWidth: 3.2,
+  /** Goblin standing stones beside some gates. */
+  totemHeight: 6,
+  /** Tall rocks just outside the palisade, behind the camp (count, height range). */
+  rocks: 3,
+  rockHeight: [8, 14] as [number, number],
+};
+
+/**
+ * Little scenes in the empty land (src/world/storySpots.ts): how many of each
+ * and how big (cm across from the middle), the ring they go in (cm from the
+ * board's middle), and the gaps they keep to roads (the travelers' camp sits
+ * within travelersNear of one), camps, everything built, and each other.
+ * Added after the step 7 and 8 test: much of the board was empty meadow.
+ */
+export const STORY_SPOTS = {
+  counts: { stoneCircle: 2, ruinedTower: 2, battlefield: 2, shrine: 1, travelers: 2, archery: 1, goblinTrap: 1 },
+  sizes: { stoneCircle: 12, ruinedTower: 10, battlefield: 16, shrine: 10, travelers: 10, archery: 12, goblinTrap: 8 },
+  from: 110,
+  to: 520,
+  roadGap: 4,
+  travelersNear: 10,
+  campGap: 25,
+  gap: 8,
+  spacing: 40,
+};
+
 export const SETTLEMENTS = {
   villages: {
     count: 4,
-    /** Distance from the center (cm, between the castle and the camps at 227 to 277), radius of each village (cm), and houses in each. */
+    /** Distance from the center (cm, between the castle and the camps at 390 to 425), radius of each village (cm), and houses in each. */
     from: 105,
-    to: 240,
-    radius: [16, 21] as [number, number],
-    houses: [3, 5] as [number, number],
+    to: 260,
+    // Bigger and busier after the step 7 and 8 test (were 16 to 21 cm with 3 to 5 houses): more houses, a second stall,
+    // benches, hedges, wood piles, buckets, a chest and a banner in each square (`props` below), and more villagers.
+    radius: [20, 26] as [number, number],
+    houses: [5, 7] as [number, number],
+    /** The houses stand in an arc this wide (degrees) on the far side of the square; the side toward the castle stays open, so the villagers can be seen. */
+    houseArcDeg: 220,
+    /** Small things in each village square: how many barrels and boxes, and how many of the other props. */
+    props: { barrels: 7, extras: 6 },
     /** Gap from the village's edge to the nearest road (cm): close by a road, never on it. */
     roadGap: [4, 30] as [number, number],
     /** Keep this far from the enemy camps and from each other (cm). */
@@ -151,8 +205,13 @@ export const SETTLEMENTS = {
     /** One tower piece (cm across and tall). */
     size: 3.4,
   },
-  /** The one windmill: its height (cm), on the highest spot this close to a field (cm). */
-  windmill: { height: 15, near: 70 },
+  /**
+   * The one windmill: its height (cm) with the roof, on the highest spot this
+   * close to a field (cm). A mill house this many floors high, its sails
+   * (radius in wall tiles) on the front wall near the top, this far out from
+   * it (tiles), turning this fast (radians per second).
+   */
+  windmill: { height: 15, near: 70, floors: 3, sailRadius: 0.85, axleOut: 0.12, spin: 0.8 },
   ruins: {
     count: 4,
     /** This far past an enemy camp's edge (cm), and how wide (cm). */
@@ -178,15 +237,18 @@ export const SETTLEMENTS = {
   quarry: { from: 300, to: 520, radius: 12 },
   /**
    * Tall landmarks on the highest far hills, spread around the circle, so the
-   * horizon has things to spot. One of each kind, in this order: a tall
-   * watchtower, a hexagon mage tower, a gatehouse on the old border, a
-   * ruined tower and a small keep. About 30 cm tall at most.
+   * horizon has things to spot: tall watchtowers, hexagon mage towers,
+   * gatehouses on the old border, ruined towers and small keeps, in the
+   * order of `kinds` (as many as fit on far hills, at most one per kind
+   * listed). About 30 cm tall at most.
    */
+  // Twice as many after the step 7 and 8 test (the far land was still empty), closer together, the kinds
+  // taking turns so neighbours differ. The list is the order they are placed in, one per far hill.
   landmarks: {
-    from: 300,
-    to: 535,
-    spacing: 190,
-    kinds: ['tallTower', 'mageTower', 'gatehouse', 'ruinedTower', 'keep'] as LandmarkKind[],
+    from: 280,
+    to: 560,
+    spacing: 110,
+    kinds: ['tallTower', 'mageTower', 'gatehouse', 'ruinedTower', 'keep', 'mageTower', 'tallTower', 'ruinedTower', 'keep', 'tallTower', 'gatehouse', 'ruinedTower'] as LandmarkKind[],
     /** Tower piece size (cm across and per floor). */
     size: 3.6,
   },
@@ -335,9 +397,24 @@ export const CALIBRATION = {
   /** The board size stays within this range, whatever the measurement says. */
   minScale: 0.85,
   maxScale: 1.45,
-  /** A hand farther than this from the head (level, meters) counts as stretched out and starts the countdown. */
-  startReach: 0.33,
-  /** Countdown while the arm stays out (seconds). The hand can rest when it ends. */
+  /**
+   * The countdown never rushes the player (it started at once before, with
+   * no time to read): nothing counts for readSeconds after the instruction
+   * shows; a hand must be at least startReach from the head (level, meters,
+   * was 0.33) to count as stretched out; and it must have settled, moving
+   * slower than stillSpeed (meters per second, smoothed over speedSmoothing)
+   * for stillFor (seconds), before the countdown starts. While counting, a
+   * hand moving faster than moveSpeed for moveGrace is still being adjusted:
+   * the countdown stops and waits for it to settle again.
+   */
+  readSeconds: 3,
+  startReach: 0.4,
+  stillSpeed: 0.08,
+  stillFor: 0.6,
+  speedSmoothing: 0.15,
+  moveSpeed: 0.25,
+  moveGrace: 0.25,
+  /** Countdown while the arm stays out and still (seconds). The hand can rest when it ends. */
   holdSeconds: 3,
   /** The arm may drop back this long before the countdown starts over (seconds), so a tracking blink does not reset it. */
   dropGrace: 0.4,
@@ -345,10 +422,18 @@ export const CALIBRATION = {
   smoothing: 0.12,
   /** The board grows or shrinks to its new size with this smoothing (seconds). */
   growSmoothing: 0.25,
-  /** The ghost hand demo: where the stretched hand ends, from the head (meters forward, right, down). */
-  demoForward: 0.55,
-  demoRight: 0.16,
-  demoDown: 0.2,
+  /**
+   * The ghost hand demo (the very first lesson): the right arm stretched
+   * straight out, hand flat, thumb up, fingers forward, exactly the pose the
+   * check wants. Its hand ends at demoStretch of the reach the game expects
+   * (the rampart's distance over rampartShare, sized with the board: about
+   * 56 cm for the default board, was a fixed 55), in front of the right
+   * shoulder (meters right and down from the eyes, was 20 cm down: the
+   * shoulder is higher).
+   */
+  demoStretch: 1,
+  demoRight: 0.17,
+  demoDown: 0.14,
   /** Saved in the browser, so it runs only once (debug page: "Measure reach again"). */
   storageKey: 'tallTale.boardScale',
 };
@@ -359,6 +444,52 @@ export const STAGE = {
   placeDelay: 0.6,
   /** Desktop camera (no headset): seated eye height (meters). */
   desktopEyeHeight: 1.15,
+};
+
+/**
+ * The giant's seat and body (src/world/giant.ts): the hole the player sits in
+ * is filled with packed earth flush with the courtyard, and a chunky low-poly
+ * giant from the waist up comes out of it, under the head. Real sizes
+ * (meters, not board cm), so it is the player's own body size. It follows the
+ * head gently and sits a little behind it, below the normal view, so it never
+ * covers the ring, the tools or the courtyard.
+ */
+export const GIANT = {
+  floor: {
+    /** Packed earth in the middle, a ring of flat stones at the edge (board cm). */
+    color: 0x8a7458,
+    stoneColor: 0xa49c8c,
+    stoneDarkColor: 0x8f8778,
+    stones: 18,
+    /** Stones from this far out to the hole's edge (cm). */
+    stonesFrom: 20,
+  },
+  /** Shoulders this far below the eyes (meters). Low enough that they never cover the ring or the tools. */
+  shoulderDrop: 0.27,
+  /** The body's middle sits this far behind the head (meters), so the chest is under the chin, not in the view. */
+  behind: 0.07,
+  /** Half widths (meters): the waist at the belt, the chest, the shoulders (end of the shoulder balls). */
+  waist: 0.13,
+  chest: 0.14,
+  shoulders: 0.15,
+  /** Front to back depth as a share of the width (a body is flatter than it is wide). */
+  depthShare: 0.72,
+  /** The torso is at least this tall (meters), even with the board raised high. */
+  minHeight: 0.12,
+  belt: 0.035,
+  /** Follows the head's position with this smoothing (seconds)... */
+  followSmoothing: 0.25,
+  /** ...and turns toward where the player faces only past this angle (degrees), slowly (seconds). */
+  turnDeadDeg: 20,
+  turnSmoothing: 0.9,
+  colors: {
+    tunic: 0x5f7f3a,
+    tunicDark: 0x4c6a2c,
+    belt: 0x5a3a22,
+    buckle: 0xf2c14e,
+    collar: 0x8a6a42,
+    patch: 0x7a5a36,
+  },
 };
 
 /** The ring handle: one curved rail in front of the player that spins and lifts the board. */
@@ -414,9 +545,8 @@ export const HANDLES = {
   woodColor: 0x5a4330,
   trackColor: 0x3b2b1f,
   arrowColor: 0xf2c14e,
-  /** Keyboard debug speeds. */
-  keyRotateDegPerSec: 60,
-  keyHeightCmPerSec: 12,
+  /** The home screen's height rail (src/player/heightRail.ts): a short piece of the ring in front, height only. */
+  menuRail: { halfSpanDeg: 26 },
 };
 
 export const HANDS = {
@@ -451,13 +581,16 @@ export const EAT = {
   burstDown: 0.06,
 };
 
-export type GoblinType = 'grunt' | 'runner' | 'climber';
+/** v2: there is no climber type any more, every goblin climbs (docs/v2-plan.md 2.6). */
+export type GoblinType = 'grunt' | 'runner';
 
 export interface GoblinStats {
   /** Height (cm). */
   height: number;
   /** Walking speed (cm per second). */
   speed: number;
+  /** Climbing speed up the wall (cm per second). A helmet slows it to GOBLIN_RULES.helmetClimbSpeed. */
+  climbSpeed: number;
   /** Multiplies the model colors. */
   tint: [number, number, number];
   moveClip: string;
@@ -467,12 +600,24 @@ export interface GoblinStats {
 
 export const GOBLINS: Record<GoblinType, GoblinStats> = {
   // Heights raised about 11% (from 3.5, 3 and 3.5) after a headset test, so they read better on the hills.
-  grunt: { height: 3.9, speed: 6, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.3 },
-  runner: { height: 3.35, speed: 13, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.4 },
-  climber: { height: 3.9, speed: 5.5, tint: [0.85, 0.6, 1.15], moveClip: 'walk', moveClipSpeed: 1.2 },
+  // v2: faster (grunts 6 to 7.5, runners 13 to 15), so waves do not drag now that the camps are far out.
+  grunt: { height: 3.9, speed: 7.5, climbSpeed: 2, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.55 },
+  runner: { height: 3.35, speed: 15, climbSpeed: 4, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.55 },
 };
 
 export const GOBLIN_RULES = {
+  /** Things (not goblins or soldiers, they poof) shrink away over this long (seconds), with a small elastic swell first. */
+  vanishTime: 0.32,
+  /**
+   * Climbers on the rampart run about, causing chaos: dashes of up to this
+   * far along the wall (degrees, between the two towers), at this share of
+   * their speed, with stops of this long between them (seconds, from, to).
+   */
+  rampartDashDeg: 18,
+  rampartRunShare: 1.8,
+  rampartStop: [0.15, 0.6] as [number, number],
+  /** The stretch of wall under a climber on the rampart flashes red this often (seconds), like a wall hit, without damage. */
+  rampartMarkEvery: 0.35,
   /** Most goblins on the board at once (unit budget, docs/mvp.md). */
   maxGoblins: 40,
   /** Random speed change per goblin (0.1 = plus or minus 10%). */
@@ -481,15 +626,28 @@ export const GOBLIN_RULES = {
   wallHitInterval: 1.6,
   /** Shortest gap between two wall hit sounds from all goblins (seconds). */
   wallHitSoundGap: 0.25,
-  /** Climbing speed up the wall (cm per second). */
-  climbSpeed: 2,
-  /** How long a climber waits on the rampart before jumping into the courtyard (seconds). */
+  /**
+   * v2, every goblin climbs (docs/v2-plan.md 2.6), in four steps: it bashes
+   * the wall for about bashTime (seconds, jittered by bashJitter), standing
+   * bashStandOff cm outside it, then climbs (GoblinStats.climbSpeed, a
+   * helmet slows it to helmetClimbSpeed), runs about on the rampart for
+   * rampartWait, then jumps into the courtyard.
+   */
+  bashTime: 5,
+  bashJitter: 0.2,
+  bashStandOff: 1.2,
+  helmetClimbSpeed: 1.5,
+  /** How long a goblin runs about on the rampart before jumping into the courtyard (seconds). */
   rampartWait: 8,
+  /** The giggle when a goblin reaches the rampart: at most this often for all goblins (seconds). */
+  cackleGap: 0.6,
   /** Dazed time after being dropped (seconds). */
   dazedTime: 1.4,
   /** Knocked back by a thrown pebble or a goblin shot: sideways and upward speed of the hop (cm per second). */
   knockSpeed: 60,
   knockHop: 90,
+  /** Knocked off the rampart by the bell: outward speed (cm per second), the hop is half of knockHop. */
+  knockOffSpeed: 25,
   /** Gravity for dropped goblins (cm per second squared). */
   gravity: 980,
   /** Hand speed smoothing while held, so tracking jitter does not fling goblins (seconds). */
@@ -498,6 +656,8 @@ export const GOBLIN_RULES = {
   throwScale: 1,
   /** Fastest throw, so a tracking glitch cannot launch a goblin off the map (cm per second). */
   maxThrowSpeed: 350,
+  /** The toss lesson counts a goblin let go at least this fast (cm per second): a real throw, not just dropped. */
+  tossLessonSpeed: 60,
   /** Landing faster than this bounces once more (cm per second, downward). */
   bounceSpeed: 120,
   /** Share of the downward speed kept on a bounce. */
@@ -520,6 +680,24 @@ export const ROUTES = {
 };
 
 /** Castle health, damage and repair (docs/castle-rules.md). Health is the red flag's height. */
+/**
+ * Goblins the tutorial brings for a tool's use lesson (src/units/lessonBait.ts),
+ * so there is always something to use it on, waiting without hurting the
+ * castle: calm climbers on the rampart in front (swatter, pepper, stun tool),
+ * this many, this far apart (degrees), and grunts walking back and forth on
+ * the road in front for the slingshot (this many, about this far out, on a
+ * stretch this long either way, coming in from this far, cm).
+ */
+export const LESSON_BAIT = {
+  rampartCount: 3,
+  rampartSpreadDeg: 11,
+  /** One moving goblin for the first shot (3 walked on past the keg lesson's goblins, which felt odd). */
+  patrolCount: 1,
+  patrolRadius: 115,
+  patrolHalf: 14,
+  approach: 25,
+};
+
 export const CASTLE_HEALTH = {
   maxHealth: 100,
   /**
@@ -540,7 +718,15 @@ export const CASTLE_HEALTH = {
    * while a goblin is at or on the wall, in the courtyard, or held: the
    * player can still deal with those.
    */
-  stalemateSeconds: 60,
+  stalemateSeconds: 90,
+  /**
+   * The stalemate clock also starts over whenever the goblin nearest the
+   * castle got at least this much closer (cm, checked every progressEvery
+   * seconds). Goblins still walking in, or fighting their way in, are never
+   * a stalemate (waves ended with goblins on the way after step 6).
+   */
+  progressCm: 1.5,
+  progressEvery: 2,
 };
 
 /** How a wave's enemies come out of their camps (the numbers per wave are in src/director/tutorial.ts). */
@@ -565,15 +751,132 @@ export const WAVES = {
 };
 
 /**
- * The two flags (docs/castle-rules.md section 2). They live in boardLift:
- * they rise with the board but never spin. Just behind the tool platforms,
- * between the front ones and the middle ones, one on each side (cm, degrees).
+ * Rising camps (docs/custom-mode.md section 7): a camp that is not there yet
+ * waits under the ground (hidden), and slides up as its wave starts, with
+ * the drum from its direction, a dust burst and the red threat arrow
+ * pointing at it until the player looks (POINTER.showDeg).
+ */
+export const RISING_CAMPS = {
+  /** How deep a camp waits (cm, board size 1), and how long it takes to come up (seconds). */
+  depth: 28,
+  riseTime: 2.2,
+  /** Dust puffs at its start and at its end, and their speed. */
+  dustStart: 14,
+  dustEnd: 8,
+  dustSpeed: 0.18,
+  dustColors: [0xc9b79a, 0xa8957a, 0xe0d4bd],
+  /** The arrow gives up on a camp nobody looked at after this long (seconds). */
+  arrowFor: 12,
+};
+
+/**
+ * The compass (src/ui/compass.ts, decided 2026-11-11, replaces the blue wave
+ * flag; 3D since 2026-11-12): a brass compass dish on a short post straight
+ * in front, out by the wall (where the pause button stood; it moved right),
+ * nearly flat like a compass on a table. Directions are relative to the
+ * player (a gold needle points straight ahead).
+ *   - Rim wedges: their color is how close the worst thing in that direction
+ *     is (a camp about to send amber, goblins far dim red, near red, at the
+ *     wall, climbing or inside bright red and blinking), their height is how
+ *     many goblins are there.
+ *   - Little tents on the lip: every camp that is up, dim while quiet, amber
+ *     and bobbing while its drums play.
+ *   - The middle: the wave and the goblins left, on a raised brass boss.
+ * Only looked at, never touched. In boardLift (cm): it rises with the board, never turns.
+ */
+export const COMPASS = {
+  /**
+   * Straight in front, this far out and this high (cm: the dish's floor),
+   * tipped this much toward the player (degrees). Was 31.5 out, 2 up and
+   * steeply tilted: from the seat it hid under the ring (headset test
+   * 2026-11-12). Out here the eyes see it over the ring, and the goblins at
+   * the front wall still show over it.
+   */
+  at: 37,
+  y: 7,
+  /** Tipped toward the eyes (was 8, nearly flat: hard to read from the seat, headset test 2026-11-12). */
+  tiltDeg: 35,
+  radius: 5.5,
+  /** The dish: its wall height and how far its lip stands out over the face (cm). */
+  dishDepth: 0.9,
+  lipWidth: 0.55,
+  brassColor: 0xb8862e,
+  /** A little glow of its own, so it still reads at night. */
+  brassGlow: 0x2a1c08,
+  faceColor: 0x1f1a16,
+  /** Rim wedges around (each one pointing in). */
+  segments: 32,
+  /** A wedge's length and width (cm), and its tip this far in from the lip. */
+  arrowLength: 1.1,
+  arrowWidth: 0.95,
+  arrowInset: 0.2,
+  /**
+   * More goblins in a direction, a bigger wedge: its height (cm) with none,
+   * then barPer more per goblin, and it grows sizePer longer and wider per
+   * goblin (its tail stays at the lip, so it reaches in), up to barMax goblins.
+   * Size reads better than height now that the dish is tipped toward the eyes.
+   */
+  barBase: 0.2,
+  barPer: 0.32,
+  sizePer: 0.1,
+  barMax: 6,
+  /** Wedges grow to their new height with this smoothing (seconds), so a count change never jumps. */
+  barGlide: 0.15,
+  /** Colors by level: none, camp about to send, far, near, at the wall. */
+  levelColors: [0x3a332d, 0xffb030, 0x8a2a20, 0xe0402c, 0xff5a3c],
+  /** A goblin on the board closer than this to the middle (cm) is "near". */
+  near: 150,
+  /** The top level blinks this often (per second), the amber one pulses slower. */
+  blinkHz: 1.6,
+  pulseHz: 0.6,
+  /** The wedges beside a threat light one level lower (at the base height), so a group reads as a wide arrow. */
+  spread: true,
+  /** Camp tents on the lip: most shown, their size (cm), how high a sending one bobs, and their colors. */
+  maxCamps: 12,
+  tentRadius: 0.5,
+  tentHeight: 0.9,
+  tentBob: 0.35,
+  tentColor: 0x6b5a48,
+  tentSendingColor: 0xffb030,
+  /** The gold needle pointing straight ahead (cm): its length out from the boss (short of the wedges' tips) and its width. */
+  needleLength: 0.75,
+  needleWidth: 0.7,
+  needleColor: 0xf2c14e,
+  /**
+   * The raised boss in the middle: the goblins left in the wave as one big
+   * number (the main information), a gold tick between waves, and a row of
+   * dots under it, one per wave (gold: won, white: this one, hollow: to come).
+   * Canvas size (cm) and colors. Was three lines of small text (too small, headset test 2026-11-12).
+   */
+  bossRadius: 2.8,
+  bossHeight: 0.7,
+  textWidth: 5.2,
+  textHeight: 4.4,
+  numberColor: '#ffffff',
+  /** The skull icon in front of the number (Kenney Board Game Icons; a bare number read as random), tinted. */
+  iconColor: '#e8dcc0',
+  tickColor: '#f2c14e',
+  dotDoneColor: '#f2c14e',
+  dotNowColor: '#ffffff',
+  dotLaterColor: '#8a7a62',
+};
+
+/** Map loading (docs/custom-mode.md section 11, step 5): the map key of the tutorial map. */
+export const MAPS = {
+  tutorialKey: 'tutorial',
+};
+
+/**
+ * The red castle health flag (docs/castle-rules.md section 2). It lives in
+ * boardLift: it rises with the board but never spins. Just behind the tool
+ * platforms, between the front ones and the middle ones, on the left (cm,
+ * degrees). The blue wave flag on the right is gone (2026-11-11): the
+ * compass ring (COMPASS) shows the wave instead.
  */
 export const FLAGS = {
   radius: 38.5,
-  /** Red castle health flag on the left, blue wave flag on the right. */
-  healthAngleDeg: -43,
-  waveAngleDeg: 43,
+  /** A little nearer the front (was 43), clear of the tools behind it. */
+  healthAngleDeg: -34,
   poleHeight: 26,
   poleRadius: 0.35,
   poleColor: 0x5a4330,
@@ -582,7 +885,6 @@ export const FLAGS = {
   clothWidth: 6,
   clothHeight: 4,
   healthColor: 0xd23c28,
-  waveColor: 0x2f6fd8,
   /** Lowest and highest cloth top on the pole (cm above the board). */
   clothBottom: 5,
   clothTop: 25,
@@ -591,40 +893,820 @@ export const FLAGS = {
   /** Waving: sway angle (degrees) and speed. */
   swayDeg: 12,
   swaySpeed: 3,
-  /** Below this health share the red cloth darkens and droops (tears and smoke come with the juice step). */
+  /** Below this health share the red cloth darkens and hangs limp: it flies this share of its length, its edge on the pole. */
   lowShare: 0.3,
-  notchColor: 0xddd6c8,
+  limpLength: 0.8,
 };
 
 /** Win and lose panels, and the poke buttons on them (docs/castle-rules.md section 4). */
-export const END_PANEL = {
-  /** Panel spot, its middle, fixed in front of the player (cm): over the front wall, the button within reach. Moved back and up from 36 and 20. */
-  radius: 41,
-  y: 24,
-  /** Tilted back a little, toward the eyes (degrees). */
-  tiltDeg: 20,
-  width: 32,
-  height: 24,
-  /** The round poke button at the bottom, below all the text, in front of the panel (cm). */
-  buttonRadius: 3.5,
-  /** Space between the button's rim and the panel's bottom edge (cm). */
-  buttonMargin: 1.2,
-  /** The panel appears this long after the battle ends, after the last poofs (seconds). */
-  showDelay: 1.2,
+/**
+ * Button sizes: every PokeButton uses one of these (cap radius, cm; the rim
+ * makes it 1.3 times wider). Across the rim: medium 4.9 cm (a secondary
+ * button beside a big one, Measure reach), standard 6.2 cm (Next, pause,
+ * the settings tabs and Back), large 7.5 cm (the pause panel), primary
+ * 9.1 cm (Play). PokeButton never makes one smaller than min (4.9 cm
+ * across; small, 3.6 cm, is gone: the tabs felt too small) and warns in
+ * the dev build above max. Keep at least 1.2 cm between any two targets.
+ */
+export const BUTTON_SIZE = {
+  /** Setting rows only (steppers, choices, the seed dice): 15% under medium, still over Meta's 22 mm (3.2 cm cap, 4.2 cm rim). */
+  compact: 1.6,
+  medium: 1.9,
+  standard: 2.4,
+  large: 2.9,
+  primary: 3.5,
+  /** The smallest any button may be (the compact size; everything else keeps medium or bigger). */
+  min: 1.6,
+  max: 3.5,
+};
+/**
+ * Breathing room in every menu panel (cm), so nothing feels cramped (it did
+ * after the text was cut): no button, slider or line of text comes closer
+ * than `edge` to a panel's side or bottom edge, the title banner starts
+ * `top` down from the top edge, and a label keeps `labelGap` from the
+ * button it names.
+ */
+export const UI_SPACING = {
+  edge: 2.2,
+  top: 1.4,
+  labelGap: 0.9,
 };
 
-/** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. */
-export const POKE = {
-  /** Ready when the fingertip is this close in front of the button face. */
+/**
+ * Where menus and panels sit up and down (src/rules/reach.ts uiCenterY),
+ * from the eyes, for the default board (cm): each panel's middle is
+ * centerBelowEyes below the eyes, right in front, and no part of it reaches
+ * higher than highestAboveEyes or lower than lowestBelowEyes (the panel is
+ * moved to fit; the dev server warns about one too tall to fit at all).
+ * Added after the settings page's low rows were hard to touch. Grown a
+ * little (2 and 30 before) for the settings page's tab row: its top
+ * (title, Back) reaches about eye level, its tabs about 29 cm below.
+ */
+export const UI_ZONE = {
+  centerBelowEyes: 15,
+  highestAboveEyes: 4,
+  lowestBelowEyes: 34,
+};
+
+export const END_PANEL = {
+  /** Panel spot, fixed in front of the player (cm, its height from UI_ZONE): over the front wall, the button within reach. */
+  radius: 41,
+  /** Tilted back a little, toward the eyes (degrees). */
+  tiltDeg: 20,
+  /** Only a title and a word over each button now (was 24 tall with a subtitle and long labels), with room around them (UI_SPACING). */
+  width: 34,
+  height: 22,
+  /** The round poke button at the bottom, below all the text, in front of the panel (cm). */
+  buttonRadius: BUTTON_SIZE.primary,
+  /** Space between the buttons' rims and the panel's bottom and side edges (cm). */
+  buttonMargin: UI_SPACING.edge,
+  /** The welcome panel's smaller Settings button, in the bottom right corner (cm). */
+  settingsRadius: BUTTON_SIZE.medium,
+  /** The panel appears this long after the battle ends, after the last poofs (seconds). */
+  showDelay: 1.2,
+  /**
+   * The win and loss panels (revamped 2026-11-12): taller, for the level's
+   * name, the 3D stars, a row of stats (castle health, goblins eaten, time)
+   * and a line under them ("New best!", or what the next star needs). Three
+   * buttons along the bottom: Menu (left), the big one in the middle (Next
+   * level when there is one, else Play again; Try again when lost), and Play
+   * again (right) when the middle one is Next. The welcome panel keeps width x height.
+   */
+  endWidth: 38,
+  winHeight: 32,
+  lostHeight: 27,
+  /** The small buttons beside the big one (Menu, Play again). */
+  sideRadius: BUTTON_SIZE.large,
+  /** The Kenney icons over the stats (white, tinted) and the divider beside the level's name. */
+  statColors: { castle: '#c8392b', eaten: '#5b4a3a', time: '#8a5a34' },
+  dividerColor: '#8a5a34',
+  /** Where things sit, down from the panel's top (cm): the level's name, the stars' middle, the stats, the line under them. */
+  subtitleFromTop: 6.6,
+  statsFromTop: 15.2,
+  noteFromTop: 18.2,
+  /** Lost: no stars, so the stats sit higher. */
+  lostStatsFromTop: 10.4,
+  /** The 3D stars (src/ui/winStars.ts). Sizes in cm (a star's outer radius), times in seconds. */
+  stars: {
+    fromTop: 10.6,
+    /** In front of the panel, so they float. */
+    z: 1.6,
+    spacing: 5.4,
+    size: 1.8,
+    middleSize: 2.3,
+    middleLift: 0.8,
+    /** The side stars lean out a little (radians). */
+    leanRad: 0.28,
+    depth: 0.5,
+    bevel: 0.18,
+    goldColor: 0xf2c230,
+    goldGlow: 0x6a4400,
+    stoneColor: 0x5c564c,
+    /** A missed star is this much smaller. */
+    missedScale: 0.82,
+    /** The first pops in this long after the panel, then one every `gap`; each pop takes popTime, a won one spins once over spinTime. */
+    firstAt: 0.45,
+    gap: 0.42,
+    popTime: 0.45,
+    spinTime: 0.7,
+    /** The gentle bob (cm) and its speed, and how far they turn to and fro (radians). */
+    bob: 0.25,
+    bobSpeed: 2.2,
+    sway: 0.25,
+    /** A glint runs across the gold stars this often (seconds), this bright. */
+    glintEvery: 3,
+    glintStrength: 2.2,
+    /** Sparkles on each won star's pop. */
+    sparkles: 14,
+    sparkleColors: [0xffffff, 0xffe9a8, 0xf2c230],
+  },
+};
+
+/**
+ * The menus after the tutorial, the home screen (docs/menus.md). All in
+ * boardLift (cm, rises with the board and grows with the reach check, never
+ * turns), every target inside the reach band (reachSpots in
+ * src/rules/reach.ts). Panels get their height from uiCenterY. Only round
+ * PokeButtons, a word over each (no rectangular buttons, the developer's
+ * choice after the first look), at least 2.4 cm between any two rims.
+ */
+export const MENU = {
+  /**
+   * The home screen's panels sit this much lower than the UI_ZONE spot (cm),
+   * nearer the ground (headset test 2026-11-11: with the floating titles they
+   * were too high). The settings page opened from the home screen too.
+   */
+  drop: 6,
+  /** The main menu panel in front (docs/menus.md section 4), at the end panel's spot. */
+  main: {
+    radius: 41,
+    tiltDeg: 20,
+    // A compact grid (was 50 x 30, with wide empty sides: the eyes had to turn to its edges), the same
+    // UI_SPACING.edge on every side, each word right under its button, rows at least 2.5 cm apart.
+    // 30 tall (was 32): the title floats over it now (HEADER).
+    width: 36,
+    height: 30,
+    /** Top row: Daily, Campaign (the biggest, middle), Custom. Bottom row: Settings and Tutorial (cm from the panel's middle). */
+    heroAt: [0, 4] as [number, number],
+    heroRadius: BUTTON_SIZE.primary,
+    sideX: 11.3,
+    sideY: 4,
+    sideRadius: BUTTON_SIZE.large,
+    smallX: 6.5,
+    smallY: -7.8,
+    smallRadius: BUTTON_SIZE.standard,
+    /** How long "Coming soon" replaces the word over Daily or Custom after a poke (seconds). */
+    soonTime: 2.5,
+  },
+  /** The campaign panel (docs/menus.md section 8), in the main menu's spot: the level list left, the detail card right. */
+  campaign: {
+    // Smaller than before (56 x 40): the slider is gone, so less head turning to see its edges.
+    width: 50,
+    height: 36,
+    pxPerCm: 15,
+    backRadius: BUTTON_SIZE.medium,
+    /** Back, top left (UI_SPACING.edge from both edges). */
+    backAt: [-20.3, 13.3] as [number, number],
+    /**
+     * The level list (ScrollList, tap only) from listLeft to listRight and
+     * from listTop to listBottom (cm from the panel's middle), rows rowHeight
+     * tall, rowGap apart, about 4.4 rows in view so the last one shows cut
+     * off. Tap a row to select it; only the upright slider right of it
+     * (sliderX, sliderLength) scrolls it (touch scrolling mixed up taps and
+     * swipes on the headset).
+     */
+    // The list reaches to the top now: the title and Back float over the panel (HEADER).
+    listLeft: -22.8,
+    listRight: -6.6,
+    listTop: 15.8,
+    listBottom: -15.8,
+    rowHeight: 5,
+    rowGap: 0.8,
+    sliderX: -3.7,
+    sliderLength: 27,
+    /** The detail card, from cardLeft to the panel's right edge (less UI_SPACING.edge), its content `cardPad` inside. */
+    cardLeft: -0.8,
+    cardPad: 1.5,
+    /** The Fight button (the only rectangular one: FightButton), centered at the card's bottom. */
+    fightAt: [11, -11.6] as [number, number],
+    fightSize: [12, 4.6] as [number, number],
+    /** The reward: a small turning copy of the tool on the card (cm from the panel's middle, its height, turns per second). */
+    rewardAt: [3.6, -3.6] as [number, number],
+    rewardHeight: 5.5,
+    rewardSpin: 0.25,
+    /** Button caps: a red Fight, grey when locked. A selected row is drawn gold. */
+    fightColor: 0xc8402e,
+    lockedColor: 0x8a847a,
+    selectedColor: '#e6b54a',
+  },
+  /** Stars from the red flag at the end (docs/menus.md "Stars"): 3 at threeAt or more, 2 at twoAt or more, else 1. */
+  stars: { threeAt: 0.7, twoAt: 0.35 },
+  /** The battleground sinks and the menu rises (docs/menus.md section 2): transforms only (seconds, cm). */
+  swap: {
+    sinkTime: 1.1,
+    riseTime: 1.1,
+    /** The castle, tools and flags go this far down; the menu comes up from this far below. */
+    battleDepth: 18,
+    menuDepth: 60,
+  },
+  /**
+   * The tool shelf (right, the back row, higher) and the achievements shelf
+   * (left); only the menu panel is in front. Angles in degrees (0 = front,
+   * positive = right), radius from the seat, heights above the board (cm).
+   * Moved out and up after the first look (was 31 to 38 cm out and 8 to 14
+   * cm up: too close and low to grab), so they sit about as far as the
+   * rampart the reach check sizes the board to. Tools are shown at
+   * displayScale (was 0.5: too small); held in a fist they grow to full
+   * size in their grip (HOLD.poses).
+   */
+  shelves: {
+    displayScale: 0.8,
+    plankColor: 0x8a5a34,
+    plankDepth: 8,
+    plankThick: 1.2,
+    // Between the front and the side: at 90 degrees they were out of view without turning the head, at 36 to 80
+    // they crowded the menu. Now the menu keeps about 40 degrees clear on each side.
+    tools: { radius: 47, y: 27, angles: [60, 74, 88], cardAngle: 101 },
+    trophies: {
+      /** The trophy model's height on the shelf (cm): 6 (was 8, too big), on smaller pedestals farther apart so they never touch. */
+      height: 6,
+      plank: 5.5,
+      lowRadius: 43,
+      lowY: 18,
+      // Between the front and the left side, like the tools on the right.
+      lowAngles: [-48, -60, -72, -84, -96],
+      highRadius: 48,
+      highY: 30,
+      highAngles: [-54, -66, -78, -90],
+      cardAngle: -104,
+    },
+    /** Grabbing a shelf thing: a hand closes within this of it (meters at the default board size). */
+    grabRadius: 0.07,
+    /**
+     * Let go within this of a stand slot or a shelf spot (meters, the tool's grip to the platform top), it
+     * snaps there; else it glides back. While it is that close the platform glows (snapGlow) with a tick.
+     */
+    dropRadius: 0.1,
+    snapGlow: { color: 0x9fe07a, intensity: 0.9 },
+    /** A held thing lets go after the hand is open this long (seconds). */
+    releaseHold: 0.2,
+    returnTime: 0.35,
+    /**
+     * The empty tool slots hint (a poke on Fight while a slot is empty): the
+     * glass sign in front of the eyes and a red arrow at the first empty slot,
+     * for this long (seconds).
+     */
+    emptySlotsHint: { text: 'Put 2 tools on the stand first', seconds: 5 },
+    /** The tag over a held thing (cm), and how far above it. */
+    tagWidth: 16,
+    tagHeight: 5.5,
+    tagAbove: 9,
+    /** A new tool on the shelf glows until it is grabbed once. */
+    newGlow: { color: 0xffd76a, speed: 1.2 },
+  },
+  /**
+   * The loadout stand: 4 pedestals on the right, the front row (nearer and
+   * lower than the tool shelf behind it), left to right: the slingshot and
+   * the horn (fixed), then the 2 slots the player fills (empty at first).
+   */
+  stand: {
+    radius: 38,
+    y: 14,
+    angles: [50, 65, 80, 95],
+    /** The same platform as in battle (tower-hexagon-top on a post, TOOL_SPOTS.platformWidth), so what is put here is what the battle shows. */
+    /** An empty slot glows until it is filled. */
+    emptyGlow: 0xffd76a,
+  },
+};
+
+/**
+ * The level generator (docs/custom-mode.md, src/level/generate.ts): where it
+ * puts things and the checks every level must pass. Polar spots are cm from
+ * the board's middle and degrees (0 = front). The settings it reads are in
+ * src/config/levelSettings.ts.
+ */
+export const LEVEL_GEN = {
+  /** Bumped whenever the generator changes what a seed gives (saved in each level's meta). */
+  version: 1,
+  /** Seeds tried after the asked one when a check fails, before giving up. */
+  tries: 24,
+  /** Wall entries: one per wall stretch (like the tutorial map), at this distance. */
+  wallRadius: 58,
+  wallAngles: [0, 60, 120, 180, 240, 300],
+  /** The troop gate (kept for later gate mechanics). */
+  gate: [52, 180] as [number, number],
+  /** The inner junctions (one per outer junction, near the wall) and the outer ring of junctions (cm). */
+  innerRadius: [86, 96] as [number, number],
+  outerRadius: [124, 148] as [number, number],
+  /** Outer junctions keep this far apart (degrees): up to the most, less when many share the circle, never under the least. */
+  junctionGapDeg: { least: 24, most: 48 },
+  /**
+   * Two roads may not run on top of each other: no more than `overlapMax`
+   * cm of one within `overlapNear` cm of another (away from the points they
+   * share, `overlapEnds` cm). Crossings cross at one spot, which is fine.
+   */
+  overlapNear: 9,
+  overlapMax: 24,
+  overlapEnds: 18,
+  /** How far a camp's road may turn around the castle at full wiggle before it reaches its junction (degrees). */
+  maxTurnDeg: 110,
+  /** In-between points: about one every this many cm of road, and their sideways sway at full wiggle (cm). */
+  viaEvery: 40,
+  swayCm: 26,
+  /** A fork splits a camp road at this share of the way in; its long branch bulges out this far in its middle (cm). */
+  forkAt: 0.5,
+  forkBulge: 30,
+  /** Ring roads bulge out this far in their middle (cm), so they read as a ring, not a chord. */
+  ringBulge: 8,
+  /** Camps keep at least this far apart (cm, flat) and their hills this far from any other road (cm). */
+  campGap: 110,
+  campRoadClear: 12,
+  /** Camps of the same side keep at least this far apart (degrees). */
+  campGapDeg: 34,
+  /** Camps of "one side" fit in this arc (degrees). */
+  oneSideArc: 150,
+  /** No road point comes closer than this to the castle's middle, except wall entries (cm), or past maxRoadRadius. */
+  minRoadRadius: 60,
+  maxRoadRadius: 520,
+  /** Triggers sit between these shares of a camp road (from the castle end), at least `triggerGap` cm apart. */
+  triggerFrom: 0.25,
+  triggerTo: 0.8,
+  triggerGap: 30,
+  /** A main road "passes" a trigger within this of its line (cm). */
+  triggerNear: 8,
+  /**
+   * The unit budget (docs/performance.md): goblins on the board at once.
+   * A wave's goblins are capped so its estimate stays in it.
+   */
+  unitBudget: 50,
+  /** Of a wave's goblins, about this share is on the board at once (they come out over the wave and walk in). */
+  atOnceShare: 0.75,
+  /** Rising camps: share of the camps up from the start, by difficulty (the rest rise in waves 2 to 4). */
+  startCamps: { easy: 0.34, normal: 0.5, hard: 0.67 },
+  waves: 4,
+};
+
+/**
+ * A menu panel's header (src/ui/kit/panelHeader.ts), cm: the title on a
+ * floating plate `above` the panel's top edge, sized to the title (at least
+ * minWidth), Back `backGap` to its left. Navigation floats outside panels.
+ */
+export const HEADER = {
+  height: 4.4,
+  depth: 0.8,
+  above: 1.4,
+  pad: 2.4,
+  minWidth: 14,
+  textSize: 2,
+  backGap: 1.4,
+  // A warm coral, drawn unlit (was a dark red 0xa8492c lit, then 0xff6a45: too vivid).
+  color: 0xe0644a,
+  ink: '#fff4dc',
+};
+
+/** Floating rectangular tabs outside a panel's border, under it (src/ui/kit/tabs.ts), cm. */
+export const TABS = {
+  width: 9,
+  height: 3.6,
+  gap: 1.4,
+  /** How far under the panel's bottom edge the tabs' top edge floats. */
+  below: 1.4,
+  onColor: 0x6fae4a,
+  offColor: 0x8a847a,
+  onInk: '#fff4dc',
+  offInk: '#ece6da',
+};
+
+/** The text field typed with the system keyboard (src/ui/kit/textField.ts), cm and seconds. */
+export const TEXT_FIELD = {
+  /** The field's cap (its sides; the face is drawn white on top, unlit: dark text on white reads best). */
+  color: 0xffffff,
+  typingColor: 0xffffff,
+  face: '#ffffff',
+  /** Thin, so it hardly stands out of the panel (cm). */
+  depth: 0.45,
+  /** The message line under it. */
+  messageHeight: 1.5,
+  messageGap: 0.35,
+  /** No keyboard this long after a poke: ask for a pinch (the keyboard may need a gesture). */
+  keyboardWait: 1.5,
+};
+
+/** Number stepper, choice picker and seed control (src/ui/kit/pickers.ts), cm. */
+export const PICKERS = {
+  stepperWidth: 14,
+  /** A button that cannot do more (a stepper at its limit) or a choice not picked. */
+  offColor: 0x8a847a,
+  /** From one choice button's middle to the next, and the words under them. */
+  choiceGap: 5.6,
+  choiceWordHeight: 1.6,
+  /** A stepper's number and the seed (text height, cm). */
+  numberSize: 1.3,
+};
+
+/**
+ * One setting row (src/ui/kit/settingRow.ts), cm. Inline rows: name left,
+ * control middle, value right, `height` tall. Stacked rows (a choice, a
+ * range, a text field): the name and value on a `lineHeight` line, the
+ * control under it. Text sizes are cm (smaller after the first headset look:
+ * everything read too big that close).
+ */
+export const SETTING_ROW = {
+  // 5 (was 5.6): the row buttons are the compact size now.
+  height: 5,
+  lineHeight: 2.4,
+  /** Room left under a stacked row's control (was 1: more rows fit now). */
+  padding: 0.4,
+  nameShare: 0.36,
+  valueShare: 0.18,
+  gap: 0.6,
+  nameSize: 1.15,
+  valueSize: 0.95,
+  /** A slider's value starts this far after the slider's end (cm), so it reads as that slider's. */
+  valueGap: 0.5,
+  /** The short hint under each name (smaller, lighter), the gap over it, and a stacked row's line when it has one. */
+  hintSize: 0.9,
+  hintGap: 0.35,
+  hintLineHeight: 3.2,
+  stepperWidth: 13,
+  /** A range slider's track (stacked, across the row) and the height it takes. */
+  spanLength: 24,
+  spanHeight: 3.6,
+  /** A text field row: the field's height, the gap over it (it stands out of the panel), the room under it for its message. */
+  // 2.9 (was 3.6): 20% smaller after a headset test.
+  fieldHeight: 2.9,
+  fieldGap: 0.5,
+  fieldMessage: 1.9,
+};
+
+/**
+ * The Custom Game pages (docs/custom-mode.md section 8, src/ui/menu/custom*.ts),
+ * in the main menu's spot. Cm from each panel's middle, like MENU.campaign.
+ */
+export const CUSTOM_GAME = {
+  /** Name and description rules (src/rules/customLevels.ts). */
+  nameMax: 20,
+  descriptionMax: 60,
+  maxLevels: 20,
+  /** How long "Coming soon" shows for Fight and Share (seconds). */
+  soonTime: 2.5,
+  /** The empty state: a smaller panel with the icon, two lines and Create level. */
+  empty: {
+    width: 40,
+    height: 30,
+    iconY: 7.5,
+    lineY: [2.2, 0] as [number, number],
+    createAt: [0, -6] as [number, number],
+    createRadius: BUTTON_SIZE.large,
+  },
+  /** The list page: the levels left, the card right. */
+  list: {
+    width: 54,
+    height: 36,
+    pxPerCm: 15,
+    listLeft: -24.8,
+    listRight: -9.8,
+    listTop: 15.8,
+    listBottom: -9.4,
+    rowHeight: 5,
+    rowGap: 0.8,
+    scrollbarX: -7.2,
+    /** New (round, under the list) and its word beside it. */
+    newAt: [-21.9, -13.3] as [number, number],
+    cardLeft: -4.6,
+    cardPad: 1.5,
+    /** The level's facts row (Kenney icons: camps, castle health, guards, archers), between the description and the buttons. */
+    factsY: 3.4,
+    /** Edit, Duplicate, Delete, Share: small round buttons in a row, a word under each. */
+    actionsY: -1.6,
+    actionsX: [0.5, 6.9, 13.3, 19.7],
+    fightAt: [10.1, -11.6] as [number, number],
+    /** The delete question: yes (green tick) and no (red cross), no words. */
+    confirmY: -2,
+    confirmX: [5.1, 15.1] as [number, number],
+    confirmRadius: BUTTON_SIZE.large,
+    yesColor: 0x5fae4a,
+    noColor: 0xc8402e,
+  },
+  /**
+   * The create and edit page: narrow and tall (rows stack, headset test
+   * 2026-11-11). Back and the title at the top, the rows scrolling below
+   * (the name and description are the Map tab's first rows), a status line
+   * at the bottom; under the panel, the tabs on the left and Save on the right.
+   */
+  edit: {
+    // 34 tall: the title and Back float over it (HEADER), the tabs and Save under it; the rows get the rest.
+    width: 42,
+    height: 34,
+    /** The scroll window (top, bottom, left, right) and its scrollbar's x. */
+    // The same room over and under the rows (UI_SPACING.edge); the status line is outside, under Save.
+    windowTop: 14.8,
+    windowBottom: -14.8,
+    windowLeft: -18.8,
+    windowRight: 14.6,
+    scrollbarX: 16.9,
+    rowGap: 0.4,
+    /** The status line (why it could not save): outside the panel, under the tabs and Save, this tall. */
+    statusHeight: 1.3,
+    /** Save: the rectangular call to action under the panel's right end, in its own gold. */
+    saveSize: [10, 3.6] as [number, number],
+    // A bright warm orange (was a dull gold), with white text like every button.
+    saveColor: 0xf58a1f,
+    /** White text and icon, like every other button. */
+    saveInk: '#ffffff',
+  },
+};
+
+/**
+ * The draw order of everything drawn on top or in a fixed order (higher
+ * draws later, over the lower ones), all in one place so layers never
+ * fight: ghost hands and aim dots, "+1" labels, the stun
+ * ring, the pointer arrows, then the pause panel above all. Used with
+ * drawOnTop (src/ui/kit/onTop.ts).
+ */
+export const RENDER_ORDER = {
+  /** Menu pages drawn on top in their own order (layerPage, src/ui/kit/onTop.ts), all between this and the next whole number. */
+  menu: 3,
+  ghost: 5,
+  ghostGlow: 6,
+  labels: 20,
+  stunWave: 30,
+  /** The horn's aim beam (src/ui/hornAim.ts). */
+  hornAim: 32,
+  /** The glass sign in front of the eyes (src/ui/kit/glassSign.ts). */
+  glassSign: 34,
+  pointer: 36,
+  pause: 40,
+};
+
+/**
+ * Pause (docs/controls-and-ui.md section 5): a pause button on a stand
+ * straight in front, outside the ring, poked with either index finger, and
+ * a pause panel in front of the player with Resume, Reset table, Measure
+ * reach and Restart. The panel is placed from the head when it opens (not
+ * on the board), so it is always in reach, even when the board ended up
+ * somewhere odd.
+ */
+export const PAUSE = {
+  /**
+   * The button: on the Next button's spot (HINT_SIGN.nextAt), but lower, so
+   * it does not block the view ahead (boardLift, cm, degrees). It stays
+   * there while a battle runs, and steps aside while the Next button shows.
+   * Was on the left wrist until the step 7 and 8 test (the palm pose was
+   * hard to find and flickered).
+   */
+  button: {
+    radius: BUTTON_SIZE.standard,
+    at: 38.5,
+    y: 9,
+    tiltDeg: 40,
+    /**
+     * Round to the right, on the blue wave flag's old spot (2026-11-12): the
+     * compass ring took the spot straight in front. Same distance, so the same reach.
+     * 34 since 2026-11-12 (was 39): everything nearer the front.
+     */
+    angleDeg: 34,
+  },
+  /**
+   * The Quest menu can stop the frames without the page ever seeing a
+   * hidden frame (headset test: it did not always pause). So it also pauses
+   * when the XR session or the page says it lost focus (their events, even
+   * between frames), or when frames stopped for this long (seconds).
+   */
+  // Was 0.75: one long hitch (a new effect drawn the first time, memory clean-up) could pause at random.
+  autoPauseGap: 1.5,
+  /**
+   * The Quest menu gesture itself (a pinch with the palm toward the eyes)
+   * pauses too, the moment the pinch starts, so the pause never depends on
+   * the browser's events (headset test: still random with the right hand's
+   * Meta pinch). `facing`: how straight the palm faces the head (dot of the
+   * palm's normal and the way to the head), `maxDistance` from the head (m).
+   * The game never uses this pose itself, and a goblin held at the mouth is
+   * pinched long before, so it never pauses by mistake.
+   */
+  // Stricter after random pauses (was facing 0.6, 55 cm, at once): straighter, nearer, a hand holding
+  // nothing, and the pose kept for `hold` seconds. The FPS panel shows what caused a pause.
+  metaGesture: { facing: 0.8, maxDistance: 0.45, hold: 0.15 },
+  /**
+   * The headset taken off (headset test: the game played on for 30 s). The
+   * Quest 3S has no proximity sensor, so the system never tells the page
+   * (Meta's VRC.Quest.Functional.2). No hand tracked and the head within
+   * moveCm (cm) and turnDeg (degrees) of where it was for `seconds` pauses.
+   */
+  headsetOff: { moveCm: 0.3, turnDeg: 0.4, seconds: 5 },
+  /**
+   * The panel follows the head lazily, like the Quest's own menus: it stays
+   * still while the head turns a little (so it can be poked), and swings
+   * back in front once the head turned past its edge. How far that is goes
+   * by the panel's size: the angle from its middle to its side edge (as
+   * seen from the eyes) plus edgeMarginDeg, never less than followDeg. So a
+   * small panel comes back soon, and on a big one (the settings page) the
+   * player can look at its corners (Back, top left) without it moving away
+   * (it used to swing at a fixed 25 degrees). It is never behind the player.
+   */
+  follow: {
+    followDeg: 20,
+    edgeMarginDeg: 10,
+    /** Swings back with this smoothing (seconds), and moves with the head's position too. */
+    smoothing: 0.3,
+    /** It is in front again once within this angle (degrees), then it stops. */
+    settleDeg: 3,
+  },
+  /** The panel, in cm from the seat like END_PANEL (sized with the board). */
+  /** The panel, its height from UI_ZONE. */
+  panel: {
+    radius: 41,
+    tiltDeg: 20,
+    // "Paused" and a word over each button only (was 23 tall with two more lines of text), with room around them (UI_SPACING).
+    // Four buttons: Resume, Settings, Restart, Skip tutorial (Reset table moved into the settings).
+    width: 44,
+    height: 20,
+    buttonRadius: BUTTON_SIZE.large,
+    /** Gap between button centers (cm): 2.9 cm between the rims. */
+    buttonGap: 10.4,
+    /** The panel is as wide as the buttons that show need (rowPanelWidth), never narrower than this (its title). */
+    minWidth: 30,
+    buttonMargin: UI_SPACING.edge,
+    /** Drawn after everything else (above the markers and ghost hands), never hidden by the castle or the sign. */
+    renderOrder: RENDER_ORDER.pause,
+  },
+  /**
+   * The settings page (Settings on the pause panel or the welcome panel): a
+   * bigger panel at the same spot, laid out in cm from its middle (x right,
+   * y up). Back at the top left (its label under it) beside the title,
+   * then the chosen tab's rows: each its name and level on the left, a
+   * slider (SLIDER) or switch on the right. Below everything, the tabs, each
+   * with its name beside it. Rows rowGap apart, so the targets keep 12 mm
+   * between them (Meta's hands guidelines), and everything keeps UI_SPACING
+   * from the edges.
+   */
+  // Made shorter (38 to 32 cm) after its low rows were hard to touch: Back and Measure reach share the
+  // top row beside the title. Then just one long slider per row (no mute, no minus and plus), the
+  // buttons small (BUTTON_SIZE, 3.6 cm across) and the slider handle 3.2 cm. Then no help line, and
+  // then more room around and between everything (it felt cramped): 52 by 33, rows 4.8 cm apart.
+  // Then the buttons got bigger (Back 4.9 cm, the tabs 6.2 cm across: the tabs felt too small) and
+  // the tabs moved below everything (floating them out of the panel's top was tried: it looked bad).
+  // The tab row made it taller (39.8 cm), so UI_ZONE grew a little and the rows are 4.4 cm apart.
+  settings: {
+    // 29 tall (was 39.8): the title and Back float over it (HEADER), the tabs (Access first, then Sound) under it (TABS).
+    width: 52,
+    height: 29,
+    pxPerCm: 15,
+    /** Measure reach, in the Access tab (smaller, so the bell switch below keeps its gap). */
+    reachRadius: BUTTON_SIZE.medium,
+    labelX: -23.8,
+    firstRowY: 10.4,
+    rowGap: 4.4,
+    /**
+     * The Access tab's rows (Measure reach, Quiet horn, Reset table, Unlock all tools): farther apart,
+     * the buttons are round. 5.5 (was 6) so the fourth row (v2 run 2) keeps its gap above the tabs.
+     */
+    accessRowGap: 5.5,
+    sliderX: 8.6,
+    sliderLength: 27,
+  },
+};
+
+/**
+ * The slider (src/ui/slider.ts), from Meta's hands guidelines: targets well
+ * over 22 mm with gaps over 12 mm, touched with the index finger only (cm,
+ * in the slider's own frame, its face toward +z). The handle (3.2 cm) looks
+ * like the buttons' green cap (no dark ring: it looked odd), over a warm parchment
+ * fill and the dark track, so it matches the theme and still stands out
+ * (the gold first tried looked out of place); grey at 0 (off). Its
+ * face is at trackDepth + handleDepth; a finger within touchAt of the
+ * slider's back grabs it (it has to come from the front), and it lets go
+ * once the finger is back past releaseOut. Ready (hover) within
+ * readyDistance in front, within zoneHeight above or below its middle (less
+ * than half the settings rows' gap, so two rows never both answer).
+ * No minus and plus buttons. Only the handle itself grabs (handleMargin),
+ * not the track (touching the track moved two rows at once), and only one
+ * slider moves at a time.
+ */
+/**
+ * The on and off switch (src/ui/switch.ts): a 7 by 3 cm rounded track (the
+ * whole of it is the target, well over 22 mm), its knob on the right and the
+ * track green when on, on the left and grey when off, with the word On or
+ * Off written beside the knob, so position, color and text all say the same.
+ * Slid like the slider (cm in its own frame, face toward +z): a fingertip
+ * within the knob's radius plus grabMargin and within touchAt of its back
+ * grabs the knob (it has to come from the front, within readyDistance),
+ * and it lets go once the finger is back past releaseOut. Let go past the
+ * middle it flips, else it springs back (a tap no longer flips it). The
+ * spring (stiffness, damping, per second) bounces a little, at most
+ * overshoot (a share of the travel) past an end.
+ */
+export const SWITCH = {
+  width: 7,
+  height: 3,
+  depth: 0.8,
+  knobRadius: 1.25,
+  knobDepth: 1,
+  onColor: 0x6fae4a,
+  offColor: 0x8a847a,
+  knobColor: 0xf7e2b0,
+  grabMargin: 0.8,
+  zoneBehind: 2.5,
+  readyDistance: 6,
+  touchAt: 2.1,
+  releaseOut: 4,
+  springStiffness: 260,
+  springDamping: 18,
+  overshoot: 0.08,
+};
+
+export const SLIDER = {
+  length: 14,
+  trackHeight: 1.6,
+  trackDepth: 0.8,
+  handleRadius: 1.6,
+  handleDepth: 1,
+  /** The buttons' green (POKE.color), the parchment's warm tan, a grey for off. */
+  handleColor: 0x6fae4a,
+  offColor: 0x9a948a,
+  fillColor: 0xe2c48a,
+  zoneHeight: 2.2,
+  /** Only the handle grabs: the fingertip within its radius plus this (cm). Touching the track does nothing. */
+  handleMargin: 0.5,
+  zoneBehind: 2.5,
+  readyDistance: 6,
+  touchAt: 2.1,
+  releaseOut: 4,
+  /**
+   * The scrollbar look (every page that scrolls, docs/custom-mode.md): a long
+   * block wrapped around the rail (`wall` cm thick on every side), a light
+   * wood color, no filled track, so it never looks like a value slider. Long
+   * enough to grab, about 26 mm across.
+   */
+  // `rail`: the scrollbar's own thin rail (cm across and deep; a value slider's track is 1.6), so the two never look alike.
+  // The block is about 21 mm across (rail plus a wall on each side) and 3.8 cm long (smaller after a headset test).
+  scrollbar: { pillLength: 3.8, rail: 0.7, wall: 0.7, handleColor: 0xd8b778 },
+};
+
+/**
+ * The swipe list (src/ui/kit/scrollList.ts), from Meta's hands UI guidance:
+ * scroll by touching the list with the index finger and swiping up or down
+ * (no scroll bar), select by a tap (touch and lift without dragging). Rows
+ * at the edges show cut off, the hint that it scrolls. In the list's frame
+ * (cm, face toward +z). A finger within touchAt of the face touches it (it
+ * must come from the front, past armAt); it lets go past releaseOut. A move
+ * over dragStart makes it a scroll, not a tap. Let go, it coasts with the
+ * finger's speed and slows by `friction` (per second); past an end it
+ * stretches by `rubber` of the finger's move and springs back (`spring`
+ * per second). Hover within readyDistance in front.
+ */
+export const SCROLL_LIST = {
+  touchAt: 1.2,
+  armAt: 2,
+  releaseOut: 2.6,
   readyDistance: 5,
+  /** A finger that leaves the list's sides by this much (cm) lets go too. */
+  sideMargin: 2,
+  dragStart: 1,
+  /** Tap only lists (no swipe): a finger may wobble this far (cm) and still tap. */
+  tapSlop: 2.5,
+  /** Scrolled from outside (the slider): it glides to the asked spot at this rate (per second). */
+  follow: 14,
+  /** Finger speed smoothing (seconds), the speed that stops a coast (cm per second), and the most a fling may give. */
+  speedSmoothing: 0.06,
+  stopSpeed: 2,
+  maxSpeed: 120,
+  friction: 3.5,
+  rubber: 0.35,
+  spring: 12,
+  /** Hover and press overlays over a row: light and dark, see-through. */
+  hoverColor: 0xffffff,
+  hoverOpacity: 0.22,
+  pressColor: 0x3b2b1f,
+  pressOpacity: 0.18,
+  pxPerCm: 30,
+};
+
+/** Poke buttons (src/ui/pokeButton.ts), in cm like the rigs they sit in. Sizes: BUTTON_SIZE. */
+export const POKE = {
+  /** Ready when the fingertip is this close in front of the button face, and no longer Ready once past readyDistance times readyOut (a gap, so it never flickers). */
+  readyDistance: 5,
+  readyOut: 1.35,
+  /**
+   * The cap follows the fingertip in at this rate (per second): slower than
+   * the finger's own shake, so it does not vibrate. Was 14: the cap lagged so
+   * far behind that round buttons clicked while they looked half pushed.
+   */
+  capFollow: 26,
   /** How far the cap sinks into its rim. It follows the fingertip. */
   travel: 1,
-  /** It clicks when pushed this share of the way down. */
-  fireShare: 0.85,
+  /** It clicks when pushed this share of the way down (was 0.85: it clicked before the cap reached the rim). */
+  fireShare: 0.95,
   /** After a click, the fingertip must come back out this far in front of the face before another press... */
   releaseDistance: 2,
-  /** ...and this long must pass (seconds). */
-  cooldown: 0.6,
+  /** ...and this long must pass (seconds). Was 0.6: quick pokes in a row felt ignored (Meta uses 0.25). */
+  cooldown: 0.35,
+  /**
+   * A quick poke: a fingertip in front of the face one frame and pushed in
+   * the next clicks at once, even if no frame caught it on the way in, and
+   * it still counts this far (cm) past the button's back.
+   */
+  quickBehind: 3,
   /** A button whose job just changed (the sign shows a new step) ignores presses this long (seconds). */
   lockAfterChange: 1,
   /** The poke zone is this much wider than the button. */
@@ -638,6 +1720,14 @@ export const POKE = {
   iconShare: 0.8,
   /** Cap thickness as a share of its radius, unless a button sets its own. */
   depthShare: 0.4,
+  /**
+   * The dark rim's height as a share of the cap's depth (1.08: 20% taller
+   * than the 0.9 before, headset test 2026-11-11), and how far the cap's face
+   * stays over the rim's top when pushed all the way in (cm): it ends level
+   * with the rim and never hides inside it.
+   */
+  rimHeight: 1.08,
+  capAboveRim: 0.04,
 };
 
 /**
@@ -659,13 +1749,59 @@ export const HINT_SIGN = {
   tiltDeg: -5,
   /** A new instruction pops in over this long (seconds). */
   popTime: 0.25,
-  /** A finished lesson shows its ticked box this long before the next one (seconds). */
-  doneTime: 1.2,
-  /** Round "Next" poke button: its size, and its spot straight in front, tilted toward the eyes (cm, degrees). */
-  nextRadius: 2.6,
-  nextAt: 33.5,
-  nextY: 9,
+  /**
+   * A finished lesson shows its green tick this long before the next
+   * instruction, unless the lesson sets its own pause (TutorialStep.afterDone
+   * in src/director/tutorial.ts: longer where the player needs time to watch
+   * or finish a move, none where the next lesson follows straight on). Was a
+   * fixed 3.5 s for every lesson (before that 1.2): it made the player wait
+   * after things they had already read and done.
+   */
+  doneTime: 0.6,
+  /** The reach check from the pause panel or welcome settings: its "rest your arm" tick stays this long (seconds). */
+  measureDoneTime: 2.5,
+  /** Any other step the player saw (a banner, an info step) leaves a short quiet gap before the next (seconds). */
+  stepGap: 0.4,
+  /** The tick on a finished lesson's box, green so it reads as done. */
+  doneColor: '#3faa3a',
+  /**
+   * Where the sign hangs while no wave is fought (the lessons before wave 1
+   * and the breathers between waves): lower, its middle this far below the
+   * eyes (cm), so it is right in front of them and not missed. During a wave
+   * it goes back up (y), out of the way of the enemies. It glides between
+   * the two over moveTime (seconds).
+   */
+  calmBelowEyes: 4,
+  moveTime: 0.6,
+  /**
+   * A lesson whose target is in the air (the balloon, hint `signLow`): the
+   * bottom edge this high above the board instead (cm), so the sign is
+   * under the balloon and the shot's path to it (up at y, it hid both).
+   */
+  lowY: 18,
+  /**
+   * Info steps wait for the player's Next. If Next is not poked within
+   * nextBlinkAfter (seconds), it starts to blink (an emissive pulse, per
+   * second) until it is. Was 5: it blinked while the player was still reading.
+   */
+  nextBlinkAfter: 15,
+  nextBlinkColor: 0xfff1a8,
+  nextBlinkIntensity: 0.75,
+  nextBlinkSpeed: 2.2,
+  /**
+   * Round "Next" poke button: its size, and its spot straight in front,
+   * tilted toward the eyes (cm, degrees). Moved back toward the wall and up
+   * a little after the step 6 test (was 33.5 out, 9 up: too close to the ring,
+   * hands on the ring pressed it). Still about 49 cm from the eyes. It no
+   * longer blinks (it looked busy and cheap after the step 7 and 8 test).
+   */
+  nextRadius: BUTTON_SIZE.standard,
+  nextAt: 38.5,
+  /** Same height as the pause button (was 15: the two did not line up). */
+  nextY: PAUSE.button.y,
   nextTiltDeg: 40,
+  /** On the pause button's spot, round to the right (2026-11-12: the compass ring is straight in front now). */
+  nextAngleDeg: PAUSE.button.angleDeg,
 };
 
 /** Ghost hands that show how to do each lesson (src/ui/ghostHand.ts). */
@@ -691,16 +1827,52 @@ export const GHOST_HAND = {
   /** The ghost's mouth point: in front of the face and a little down (meters). */
   mouthForward: 0.16,
   mouthDown: 0.07,
+  /** Ghost aim dots (the keg lesson): how many, their size (meters), how high the arc rises (share of its length), flow speed. */
+  aimDots: 18,
+  aimDotSize: 0.0045,
+  aimArc: 0.16,
+  aimFlow: 0.5,
 };
 
-/** Tutorial markers (src/ui/markers.ts). */
-export const MARKERS = {
-  /** Down arrow size (meters, world). */
-  size: 0.03,
-  /** Above the target (meters) and the bounce height. */
-  lift: 0.02,
+/**
+ * The 3D pointer arrows (src/ui/pointerArrow.ts): in front of the face,
+ * pointing at something while it is at the very edge of the headset's view
+ * or out of it (the Quest 3S sees about 96 by 90 degrees, so about 45
+ * degrees from the middle is the edge). Each blinks (glow between
+ * blinkMin and blinkMax, blinkSpeed times a second). `lesson`:
+ * gold, softly, at the lesson's target. `threat`: red, fast, at a goblin
+ * hitting the wall, climbing it or running on it out of view, a little
+ * lower so both fit (meters, degrees, seconds).
+ */
+export const POINTER = {
+  length: 0.055,
+  distance: 0.4,
+  smoothing: 0.12,
+  /** Shows once the target is this far from the middle of the view, hides again once within hideDeg. */
+  showDeg: 38,
+  hideDeg: 32,
+  popTime: 0.2,
+  renderOrder: RENDER_ORDER.pointer,
+  /**
+   * The lesson's yellow arrow is the only tutorial marker (the 2D bouncing
+   * arrows are gone): out of view it waits in the middle of the view,
+   * pointing the way; once the target is in view it flies over to it in
+   * flyTime (seconds) and hovers just above it, tip down, bobbing (meters).
+   * The red threat arrow never flies: it just hides once its goblin is in view.
+   */
+  lesson: { color: 0xf2c14e, glow: 0xb07a10, below: 0.03, blinkMin: 0.25, blinkMax: 0.8, blinkSpeed: 0.8, flies: true },
+  /** The red one blinks fast and strong, to catch the eye. */
+  threat: { color: 0xe0342a, glow: 0xff2a10, below: 0.16, blinkMin: 0, blinkMax: 1.6, blinkSpeed: 3.5, flies: false },
+  flyTime: 0.45,
+  /** Gap from the tip to the target's top, and the bob. */
+  hoverLift: 0.012,
   bob: 0.012,
   bobSpeed: 4,
+  /** A fallback pulse (the lesson calls the eye again): it grows this much more for this long (seconds). */
+  pulseScale: 0.8,
+  pulseTime: 2.5,
+  /** The red arrow: only for a goblin hitting the wall that has been out of view this long (seconds), so a glance away does not show it. */
+  threatAfter: 1.5,
 };
 
 /** Debug spawning (keys and the stress test), apart from the director. */
@@ -713,8 +1885,6 @@ export const DEBUG_SPAWN = {
   runnerGroup: 4,
   /** Gap between goblins in a group (seconds). */
   groupGap: 0.8,
-  /** Every Nth auto group also sends a climber. */
-  climberEvery: 2,
   /** Every Nth auto group is runners instead of grunts. */
   runnerEvery: 4,
 };
@@ -741,16 +1911,19 @@ export const FEEDBACK = {
  * neither (cm, degrees: 0 = front, positive = right).
  */
 export const TOOL_SPOTS = {
-  slingshot: { angleDeg: 30, radius: 33.5 },
-  /**
-   * The megaphone, or the bell when there is no mic. Only one of them is
-   * ever out, so they use the same spot.
-   */
-  rightSide: { angleDeg: 82, radius: 33.5 },
-  /** Pepper shaker. */
-  leftFront: { angleDeg: -30, radius: 33.5 },
+  // Moved back twice (v2 run 2 headset tests): the front ones stood in front of the flags (at 39 degrees).
+  // Were 30 (slingshot, pepper), 56 to 58 (bell, pebble bowl), 82 (horn, swatter), then 50, 68 to 70, 86 to 90.
+  // 2026-11-12: everything about 12% nearer the front (was 60, 96, -78, -56, -100), so the head turns less.
+  // At least 17 degrees between platforms (about 10 cm), so a hand still fits between two tools.
+  slingshot: { angleDeg: 53, radius: 33.5 },
+  /** The horn (v2, the megaphone's old spot). */
+  rightSide: { angleDeg: 86, radius: 33.5 },
+  /** The bell (v2: its own platform, where the food jar was). */
+  leftMiddle: { angleDeg: -68, radius: 33.5 },
+  /** Pepper shaker. The left side has room (no bowl), so its three are spread wider (were -60 and -96). */
+  leftFront: { angleDeg: -50, radius: 33.5 },
   /** Fly swatter. */
-  leftSide: { angleDeg: -82, radius: 33.5 },
+  leftSide: { angleDeg: -88, radius: 33.5 },
   /** Platform top above the board (cm). Low, so the hand reaches it without lifting the arm. */
   platformTop: 6,
   /** Platform width (cm). */
@@ -827,10 +2000,29 @@ export const SLINGSHOT = {
   springBack: 18,
   /** A stretch creak plays every this many cm of pull. */
   creakEvery: 4,
-  /** Pebbles in flight or falling at once (pool size). */
-  maxPebbles: 8,
+  /** Pebbles in flight, falling or lying on the ground at once (pool size). Raised from 8, since landed pebbles now stay a while. */
+  maxPebbles: 16,
+  /** A landed pebble lies where it fell this long (seconds), then shrinks away over pebbleFade (the shared despawn look). */
+  pebbleRest: 2.5,
+  pebbleFade: 0.35,
   /** Pebble size (cm). Bigger than real pebbles, so they are easy to see and pinch. */
   pebbleSize: 2.5,
+  /**
+   * The pebble's look (made in code, like the sun): a low-poly ball with
+   * flat faces, its corners pushed in and out by up to pebbleLumps (share),
+   * squashed to pebbleSquash of its height, in a stone grey.
+   */
+  pebbleLumps: 0.12,
+  pebbleSquash: 0.85,
+  pebbleColor: 0x9b958a,
+  /**
+   * A pebble that lands (a miss) rolls on: it keeps this share of its speed
+   * along the ground, slows by rollFriction (cm/s each second) and lies
+   * still below rollStop (cm/s), then its pebbleRest starts.
+   */
+  rollKeep: 0.3,
+  rollFriction: 160,
+  rollStop: 4,
   /** Longest flight before a pebble is dropped (seconds). */
   maxFlight: 4,
   /** Below this height (cm, board) a pebble that fell into the hole is gone. */
@@ -866,14 +2058,15 @@ export const AIM_ASSIST = {
   /** Overall assist strength (0 = off, 1 = normal). An accessibility option later. */
   strength: 1,
   /** Assist share per enemy type. Weak on runners: the slingshot is meant to be weak against them. */
-  typeShare: { grunt: 1, runner: 0.3, climber: 1 } as Record<GoblinType, number>,
+  typeShare: { grunt: 1, runner: 0.3 } as Record<GoblinType, number>,
   /** 5. Hit area around the pebble's center, bigger than it looks (cm). Raised from 3.5. */
   hitRadius: 4,
 };
 
 /** The pebble bowl beside the slingshot, on a post like the platforms. Soldiers keep topping it up. */
 export const PEBBLE_BOWL = {
-  angleDeg: 58,
+  /** Between the slingshot (53) and the horn (86). Was 58, 70, then 78 (2026-11-12: everything nearer the front). */
+  angleDeg: 70,
   radius: 33.5,
   /** Rim height above the board (cm). A little above the platforms, so it stays in the reach band now that the board sits lower. */
   rimY: 9,
@@ -914,77 +2107,42 @@ export const GOBLIN_SHOT = {
   spin: 14,
 };
 
-/** Food (docs/giant-tools.md section 3). Costs are in TOOLS below. */
-export const FOOD = {
-  start: 4,
-  max: 10,
-  eatBasic: 1,
-  /** A peppered goblin is seasoned. */
-  eatSeasoned: 2,
-};
-
 /**
- * The food jar: a pot between the two left tool platforms, like the pebble
- * bowl on the right. It rises with the board but never turns. The pot has a
- * narrow neck, so the food shows as a little heap of food balls on its
- * mouth, one ball per food: easy to read (cm, degrees).
+ * Shared rules for the hand tools (v2, docs/v2-plan.md 2.1 and 2.2, rules in
+ * src/rules/recharge.ts): free, with a use window that starts with the first
+ * use, then a recharge that fills while the tool is back on its platform.
+ * The slingshot has neither. Tune in playtests.
  */
-export const FOOD_JAR = {
-  angleDeg: -56,
-  radius: 33.5,
-  /** Pot height (the model is fitted to it). */
-  height: 7,
-  /** Pot bottom above the board. */
-  bottomY: 0,
-  /** Food balls on the mouth: size, and how far the heap sits below the pot top (cm). */
-  ballSize: 1.3,
-  heapSink: 0.4,
-  /** Balls per layer of the heap, bottom first (the last number repeats). */
-  layers: [6, 3, 1],
-  ballColors: [0xf2c14e, 0xc9772c, 0x8fb04a, 0xd23c28, 0xe8d8b0],
-  /** A ball pops in or out over this long (seconds). */
-  popTime: 0.25,
-  /** Crumbs that pop out of the jar when food goes in or out. */
-  popColors: [0xf2c14e, 0xc9772c, 0xffffff],
-};
-
-/**
- * Price tag on each food tool's platform: a small wooden board with a food
- * ball and the cost, on the front edge, tilted toward the eyes, beside the
- * tool so the hand never covers it. The number is cream when the jar has
- * enough, red when it does not, and a tick while a paid use runs (cm, degrees).
- */
-export const PRICE_TAG = {
-  width: 4.6,
-  height: 2.8,
-  thickness: 0.35,
-  /** Toward the player from the platform center, and sideways toward the front (cm). */
-  inset: 2.6,
-  side: 2.2,
-  /** Leaning back from upright, toward the eyes (degrees). */
-  tiltDeg: 40,
-  woodColor: 0x6b4a2e,
-  okColor: '#fff4dc',
-  shortColor: '#ff5a4e',
-  paidColor: '#9be27a',
-};
-
-/** Shared rules for the food tools (swatter, pepper; the megaphone and bell in step 5). */
 export const TOOLS = {
   /**
-   * Food tools cost nothing while the tutorial runs, so a player who used up
-   * the jar is never locked out of a tool they are about to learn. Their
-   * price tags say "Free". The costs below apply in later battles.
+   * How long one use lasts (seconds), from the first swat, shake or ring.
+   * The bell and the horn are one use each (one stun, one call): their
+   * window is only the short moment until the tool goes back.
    */
-  freeInTutorial: true,
-  /** Food each one costs on its first use (docs/giant-tools.md). */
-  cost: { swatter: 4, pepper: 3, megaphone: 6, bell: 6 },
+  use: { swatter: 10, pepper: 8, bell: 1.2, horn: 1.4 },
+  /** The recharge after a use, while the tool is back on its platform (seconds). */
+  recharge: { swatter: 20, pepper: 20, bell: 35, horn: 30 },
+  /** Each goblin eaten fills every recharging tool's ring by this share of its full recharge (a seasoned one by seasonedRefill). */
+  eatRefill: 0.1,
+  seasonedRefill: 0.2,
   /**
-   * How long one paid use lasts (seconds). The megaphone and the bell are one
-   * use each: this is the short window to keep screaming or ringing for a
-   * longer stun, then the tool goes back to its platform.
+   * The ring on the platform (readable with the sound off): while a use runs
+   * it drains (useColor), while recharging it fills (chargeColor) over a
+   * dark track. Hidden while ready. Flat on the platform top, around the
+   * tool's base (cm). One mesh per ring: the fill is a draw range.
    */
-  duration: { swatter: 10, pepper: 8, megaphone: 2.5, bell: 2.5 },
+  ring: {
+    inner: 3.1,
+    outer: 3.85,
+    segments: 40,
+    lift: 0.25,
+    trackColor: 0x2a2018,
+    useColor: 0xfff1b8,
+    chargeColor: 0x5ab0ff,
+    /** The ring flashes this bright for this long when eating fills it (seconds). */
+    flashColor: 0xffffff,
+    flashTime: 0.25,
+  },
   /** The hand must be open near the tool this long before closing it grabs (seconds). Same as the ring. */
   readyTime: 0.15,
   /** A held tool lets go only after the hand is open this long (seconds). */
@@ -1007,7 +2165,7 @@ export const TOOLS = {
   popTime: 0.25,
   /** It blinks in the last seconds of a use, so the end is no surprise. */
   warnTime: 2,
-  /** Locked (not enough food): the colors are dimmed to this share. */
+  /** Recharging (or tied down): the colors are dimmed to this share (the Locked look). */
   dimShare: 0.45,
   /** Locked wobble after a refused grab (seconds, degrees). */
   wobbleTime: 0.45,
@@ -1046,11 +2204,11 @@ export const HOLD = {
     swatter: { at: 3.5, face: 'back', tiltDeg: 45 },
     pepper: { at: 4.5, face: 'palm' },
     slingshot: { at: 3.5, face: 'back' },
-    // A pistol grip: the cone points the way the knuckles point, so it is in front of the mouth when the fist is.
-    megaphone: { at: 3, face: 'back', tiltDeg: 15 },
+    // Held like the megaphone was: the bell end points the way the knuckles point, the mouthpiece toward the wrist, so it is at the mouth when the fist is just below it.
+    horn: { at: 3, face: 'back', tiltDeg: 15 },
     // The handle on top of the bell, thumb up, the bell hanging below the fist.
     bell: { at: 2, face: 'palm' },
-  } as Record<'swatter' | 'pepper' | 'slingshot' | 'megaphone' | 'bell', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
+  } as Record<'swatter' | 'pepper' | 'slingshot' | 'horn' | 'bell', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
 };
 
 /**
@@ -1114,7 +2272,7 @@ export const SWATTER = {
   splatColors: [0x6a8f3a, 0x8fb04a, 0xffffff, 0xd23c28],
 };
 
-/** The pepper shaker (docs/giant-tools.md). Seasons goblins for more food. */
+/** The pepper shaker (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): a small area that disarms everything and seasons goblins. */
 export const PEPPER = {
   bodyHeight: 9,
   bodyRadius: 2.2,
@@ -1144,66 +2302,127 @@ export const PEPPER = {
   speckColors: [0x2a2018, 0x4a3a2a, 0x6b5a45],
   /** Shake sound at most this often (seconds). */
   soundGap: 0.22,
-  /** A peppered goblin sneezes: dazed this long (seconds), and a goblin outside the wall stumbles back (cm per second). */
+  /** A peppered goblin on the rampart or in the courtyard stops this long (seconds). No push back (v2). */
   sneezeTime: 1.2,
-  stumbleSpeed: 22,
-  stumbleHop: 45,
   /** A seasoned goblin's colors are multiplied by this (dusty brown). */
   seasonedTint: [0.85, 0.68, 0.55] as [number, number, number],
+  /**
+   * Peppered goblins keep sneezing, like an old cartoon: every so often
+   * (seconds, from, to) the head jerks forward for sneezeJerkTime with a puff
+   * of pepper, and red pepper flakes circle over the head (like the dizzy
+   * stars, one instanced mesh): this many, this big and this far out (cm), this fast.
+   */
+  sneezeEvery: [1.4, 3.2] as [number, number],
+  /**
+   * It sneezes for this long after the pepper (seconds), and cannot attack
+   * meanwhile (no wall hits, no bashing, no attacks on the garrison, an
+   * intruder does not count). Then it can hurt the castle again; it stays
+   * seasoned (it fills the tool rings twice as much when eaten). v2: a few
+   * seconds (was 10): the power is the disarm.
+   */
+  sneezeFor: 5,
+  sneezeJerkTime: 0.35,
+  sneezeColors: [0xffffff, 0xf1e6d0, 0xd23c28],
+  flakeCount: 3,
+  flakeSize: 0.45,
+  flakeOrbit: 1.1,
+  flakeSpeed: 4,
+  flakeColor: 0xd8341f,
 };
 
 /**
- * The megaphone (docs/giant-tools.md): hold it and scream. The mic loudness
- * (Web Audio, src/audio/mic.ts) passing `screamLevel` for `screamHold` is a
- * scream. It stuns every goblin, and a longer scream stuns longer.
+ * The war horn (v2, docs/v2-plan.md 2.3, replaces the megaphone): calls the
+ * field knights. Aim with the head while holding it, lift it to the lips to
+ * lock the spot, then blow (src/tools/horn.ts). A curved hunting horn held
+ * from below: the mouthpiece on top of the grip toward the face, the body
+ * curving forward, down past the fist and a little to the side, the bell
+ * ending low, so at the lips it stays below the line of sight; near the face
+ * it also fades to see-through (headset test: the straight horn covered the
+ * middle of the view). With the mic only a real blow sends the knights; the
+ * quiet horn (or no mic) sends them after `holdTime` at the lips. Sizes in
+ * cm, times in seconds.
  */
-export const MEGAPHONE = {
-  /** Cone (open wide end) along the tool's -z on top of a short grip (cm). */
+export const HORN = {
+  /** The leather grip along +y from the fist. */
   gripLength: 6,
   gripRadius: 0.9,
-  coneLength: 13,
-  coneMouth: 1.1,
-  coneEnd: 3.6,
-  /** The cone starts this far behind the grip (toward the face, cm). */
-  coneBack: 3,
-  bodyColor: 0xe8e2d0,
-  bandColor: 0xd23c28,
-  gripColor: 0x3b2b1f,
+  /**
+   * The horn's center line, from the mouthpiece to the bell (tool cm): on top
+   * of the grip toward the face (+z), arching forward, then down past the
+   * fist and out to the side. A tapered tube along it.
+   */
+  curve: [
+    [0, 8.6, 2.6],
+    [0, 9.4, -0.4],
+    [1.2, 7.8, -3],
+    [2.6, 4.4, -3.6],
+    [3.6, 0.9, -2.6],
+    [4.2, -2.2, -0.8],
+  ] as [number, number, number][],
+  mouthRadius: 0.6,
+  bellRadius: 2.6,
+  /** It rests standing on its bell: its grip this far above the platform top. */
+  restLift: 3.4,
+  bodyColor: 0xeadfc4,
+  bandColor: 0xc9952e,
+  gripColor: 0x5a3a22,
   gripFrom: 0,
   gripTo: 6,
   grabRadius: 0.06,
   /**
-   * Mic loudness (RMS of the samples, 0 to 1) that counts as a scream, and
-   * how long it must last (seconds). Lowered from 0.12 after the first
-   * headset test (it did not trigger). The debug page's mic column shows the
-   * loudest level while the megaphone is held, to tune it.
+   * The blow zone (meters, fixed 2026-11-12): a ball of zoneRadius around a
+   * point zoneForward ahead of the eyes (the look kept level) and zoneDown
+   * below them, in front of the mouth. The lips (about 3 cm ahead, 11 below)
+   * and a horn raised a hand's length out (30 ahead) both count; one resting
+   * at the chest (about 25 ahead, 40 below) or held to the side does not.
+   * Once in, it stays in out to zoneRadius + zoneExitMargin, and leaving for
+   * less than zoneGrace seconds (a tracking dropout) does not count. The
+   * first try (a 32 cm cone from the eyes) left out the mouth itself.
    */
-  screamLevel: 0.04,
-  screamHold: 0.1,
+  zoneForward: 0.12,
+  zoneDown: 0.1,
+  zoneRadius: 0.2,
+  zoneExitMargin: 0.05,
+  zoneGrace: 0.3,
+  /** A loud frame still counts as a blow this long after it (seconds), so one just before the horn is in place is not lost. */
+  blowMemory: 0.25,
   /**
-   * The loudness meter on top of the cone, shown while it is held: a thin
-   * bar that fills as the player gets louder, and a pulsing red dot at
-   * `targetShare` of its length, where the scream level is. Filling past the
-   * dot stuns (cm, seconds).
+   * A live mic always hears a little room noise (about 0.001 and up). Under
+   * silentLevel for silentFallback seconds while held, it counts as broken:
+   * the horn falls back to the quiet hold (hold it raised to send), and a
+   * debug note says so with the mic's state.
    */
-  meterWidth: 0.5,
-  meterLift: 0.35,
-  targetShare: 0.8,
-  /** The bar drops back this slowly, so a shout is easy to read. */
-  meterFall: 0.18,
-  meterTrackColor: 0x2a2018,
-  meterLowColor: 0x5ad15a,
-  meterHighColor: 0xffd23f,
-  meterFullColor: 0xff4a2a,
-  targetColor: 0xff2a2a,
-  /** The loudness is smoothed this much (seconds). */
-  levelSmoothing: 0.05,
-  /** Sound waves out of the cone while screaming: this often (seconds). */
-  waveEvery: 0.12,
-  waveColors: [0xffffff, 0xfff1b8, 0xcfe8ff],
+  silentLevel: 0.00002,
+  silentFallback: 1,
+  /**
+   * Near the face it fades: fully solid farther than fadeFar, down to
+   * fadeOpacity at fadeNear (meters from the mouthpiece to the head).
+   */
+  fadeFar: 0.3,
+  fadeNear: 0.13,
+  fadeOpacity: 0.15,
+  /**
+   * The quiet horn (or no mic): kept in the blow zone with a spot this long,
+   * it sounds (seconds). With the mic only a blow sounds it: a hold never
+   * does, so aiming is never cut short (headset test: it went off while still aiming).
+   */
+  holdTime: 1.2,
+  /**
+   * Mic loudness (raw RMS of one frame, 0 to 1) that counts as a blow: one
+   * frame over it is enough, no smoothing and no holding it (headset test).
+   * Set from the live loudness panel (MIC_PANEL, debug page "Mic panel").
+   * Earlier smoothed values, held for 0.25 to 0.35 s, ran from 0.025 to 0.1.
+   */
+  blowLevel: 0.015,
+  /** The horn sound's volume when held to blow, and when blown into the mic (louder). */
+  heldVolume: 0.8,
+  blownVolume: 1,
+  /** Little puffs out of the bell while it fills: this often (seconds). */
+  puffEvery: 0.15,
+  waveColors: [0xffffff, 0xfff1b8, 0xffd23f],
 };
 
-/** The bell (docs/giant-tools.md): the hands-only twin of the megaphone. Shake it to stun every goblin. */
+/** The bell (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): the only stun. Shake it to stun every goblin and knock the climbers down. */
 export const BELL = {
   /** Wooden handle on top along +y from the fist (cm), the brass bell hanging below it. */
   handleLength: 4,
@@ -1216,17 +2435,26 @@ export const BELL = {
   gripFrom: 0,
   gripTo: 4,
   grabRadius: 0.06,
-  /** Shake detection, like the pepper: a quick move that turns back on the last one is a ring (cm per second, seconds). */
-  speedSmoothing: 0.04,
-  ringSpeed: 30,
-  ringWindow: 0.7,
-  /** Harder shaking means a longer stun: the shake speed from ringSpeed up to this gives the full extra stun. */
-  hardSpeed: 140,
-  /** Ring sound at most this often (seconds). */
-  soundGap: 0.16,
+  /**
+   * A ring (src/tools/bell.ts, second rewrite: speed checks never rang, hand
+   * tracking runs at 30 Hz and smooths fast motion, Meta docs): the holding
+   * hand's distance from a slow anchor that follows it (anchorSmoothing
+   * seconds). ringOffset cm away is a ring; back within rearmOffset (and
+   * ringGap seconds) before the next. No ring for grabQuiet seconds after the
+   * grab. The debug notes show each grab's farthest swing, to tune it.
+   */
+  // Carried steadily at v cm/s the hand trails the anchor by about v x anchorSmoothing: 15 cm/s gives
+  // about 2 cm (no ring), a swing of 40 cm/s about 6 cm (a ring).
+  anchorSmoothing: 0.15,
+  ringOffset: 3,
+  rearmOffset: 1.2,
+  ringGap: 0.25,
+  grabQuiet: 0.4,
+  /** A bigger swing stuns longer: from ringOffset up to this (cm) gives the full extra stun. */
+  hardOffset: 9,
 };
 
-/** The stun of the megaphone and the bell: every goblin on the board stops, dizzy. */
+/** The stun of the bell: every goblin on the board stops, dizzy. */
 export const STUN = {
   /** The first scream or ring stuns this long (seconds)... */
   baseSeconds: 3.5,
@@ -1259,45 +2487,121 @@ export const TRIGGERS = {
   /** A trigger the slingshot aims at wobbles a little (degrees, speed). */
   aimWobbleDeg: 5,
   aimWobbleSpeed: 16,
+  /**
+   * Easy to see (build step 6, nobody noticed them in the step 5 playtest):
+   * the ground is flat under each trigger and on the way from it to the
+   * castle, so no hill hides it from the seat, and the decor keeps clear.
+   * `flat` is the flat spot's radius per kind, `sight` the share of its
+   * distance where the extra flat spots on the way in sit (radius `sightSize`),
+   * and `clear` how far villages, towers and decor keep from it (cm).
+   */
+  ground: {
+    flat: { keg: 9, boulder: 14, tree: 10 } as Record<'keg' | 'boulder' | 'tree', number>,
+    sight: [0.86, 0.72],
+    sightSize: 5,
+    clear: 16,
+  },
+  /**
+   * How each trigger shows what it is, with props in the world (no floating
+   * UI), in this red (the keg's bands): a pry bar with a red rag flag under
+   * the boulder (the tree has autumn leaves). Plus the wood of the props.
+   */
+  paint: 0xe0342a,
+  woodColor: 0x8a5a34,
+  /**
+   * "This can be used now": while goblins are near a trigger it glows softly
+   * (emissive only, pulsing). When a group walks right past it, a short
+   * "now!" cue: a stronger pulse and a sound from its direction (at most
+   * every `nowGap` seconds per trigger). No floating UI.
+   */
+  cue: {
+    /** Goblins this close (flat, cm) count as near. */
+    nearRadius: 24,
+    /** This many goblins this close (cm) is a group right at it: "now!". */
+    nowRadius: 12,
+    nowCount: 2,
+    nowGap: 6,
+    /** How long the strong "now!" pulse lasts (seconds). */
+    nowTime: 1.2,
+    /** Goblins are counted this often (seconds), not every frame. */
+    checkEvery: 0.1,
+    glowColor: 0xffc23a,
+    glowMin: 0.15,
+    glowMax: 0.55,
+    glowSpeed: 5,
+    nowColor: 0xffe27a,
+    nowIntensity: 1,
+  },
+  /**
+   * The trigger lessons (wave 2): a small group walks to the trigger in front
+   * of the player and waits right in what it does until the player sets it
+   * off, however many tries that takes.
+   */
+  lesson: {
+    group: 3,
+    /** They start this far before their waiting spot (cm), a few cm apart. */
+    approach: 40,
+    spacing: 4,
+  },
   keg: {
-    height: 2.6,
+    /** Raised from 2.6, then 3, in build step 6, so it reads from the seat. */
+    height: 4.2,
     /** Sideways from the road center (cm), so goblins walk past it. */
-    side: 4.5,
-    hitRadius: 2.2,
+    side: 5,
+    hitRadius: 3.3,
     /** Goblins this close are knocked out. */
     blastRadius: 13,
-    /** Other triggers this close are set off by the blast. */
-    chainRadius: 30,
-    /** Red bands, so it reads as explosive. */
-    tint: [1.25, 0.6, 0.5] as [number, number, number],
+    /**
+     * Other triggers this close are set off by the blast. 0 since the step 6
+     * test: each trigger does only its own thing, a keg never sets off a
+     * boulder or a tree.
+     */
+    chainRadius: 0,
+    /** Bright red bands, so it reads as explosive and stands out from the scenery. */
+    tint: [1.5, 0.55, 0.42] as [number, number, number],
     debris: 6,
     fireColors: [0xffd84a, 0xff8a2a, 0xd23c28, 0x5a5048, 0xffffff],
   },
   boulder: {
-    size: 4,
+    /** Raised from 4. */
+    size: 5,
     /** The hill under it, and how far it sits from the road center (cm). */
-    hillWidth: 9,
-    side: 8,
-    hitRadius: 2.8,
+    hillWidth: 11,
+    side: 9,
+    hitRadius: 3.4,
+    /** Pale stone with a green mossy top (the rocks around are orange). */
+    stoneColor: 0xd9d3c6,
+    mossColor: 0x6fae3a,
+    /** The warning flag on the hill beside it: an upright pole this tall, and the red rag at its top (cm). */
+    poleHeight: 10,
+    flagWidth: 3.4,
+    flagHeight: 2.4,
     /** Rolling speed down the road toward the castle (cm per second). */
     speed: 42,
     /** Goblins this close to the rolling boulder are squashed. */
-    crushRadius: 4,
+    crushRadius: 4.5,
     /** It stops this far from the end of its road (cm), then crumbles. */
     stopShort: 4,
     debris: 4,
     dustColors: [0xc9b79a, 0xa8957a, 0x8a8a8a],
   },
   tree: {
-    height: 12,
+    /** Raised from 12. */
+    height: 14,
     /** Its trunk stands this far from the road center (cm), leaning over the road. */
-    side: 5,
+    side: 5.5,
     leanDeg: 12,
-    hitRadius: 3.5,
-    /** It falls across the road (90 degrees) in this long. */
+    hitRadius: 4,
+    /** Its leaves (only the leaf triangles) are this autumn orange, so it stands out from every other tree. */
+    leafColor: 0xe8742a,
+    /** It falls across the road in this long, until its crown rests on the ground (at most 90 degrees). */
     fallTime: 0.55,
-    /** Goblins this close to the fallen trunk's line are squashed (cm). */
-    crushWidth: 3,
+    /** For the resting angle: the crown starts this share up the trunk, and the trunk's radius (cm). */
+    crownFrom: 0.35,
+    trunkRadius: 0.6,
+    /** Share of the crown's radius that must stay above the ground (leaves may just touch it, never sink half in). */
+    crownRest: 0.75,
+
     /** The road stays closed this long, then the tree poofs away and the road opens. */
     blockSeconds: 12,
     debris: 4,
@@ -1308,30 +2612,21 @@ export const TRIGGERS = {
 };
 
 /**
- * Troops (docs/core-loop.md section 2): squads of soldiers come out of the
- * castle while a wave is fought, walk the roads outward toward an attacking
- * camp, and fight the goblins they meet with simple timed hits. On their own
- * they lose slowly, so the player is always needed. They go back home when
- * they reach the camp or when the wave ends. Sizes in cm, times in seconds.
+ * Troops (v2, docs/v2-plan.md 2.7): two jobs. Field knights (KNIGHTS) come
+ * only when the horn calls them and hold a junction; the wall garrison
+ * (GARRISON) stands on the rampart. Both fight with simple timed hits. On
+ * their own they lose slowly, so the player is always needed. Sizes in cm,
+ * times in seconds.
  */
 export const TROOPS = {
-  /** Most soldiers on the board at once (they share the unit budget with the goblins). */
   /**
-   * Was 12 (squads of 3 to 4 every 10 s, the soldiers won too much), then 4
-   * in squads of 2 for testing. Step 7 balance: 8 in squads of 2 to 3, with
-   * the three kinds (archers shoot from range, helmets take an extra hit).
-   * Tune after the headset test and the stress test with troops.
+   * Most soldiers on the board at once (they share the unit budget with the
+   * goblins). Tune after the headset test and the stress test with troops.
    */
-  max: 8,
-  /** Soldiers per squad (from, to). */
-  squadMin: 2,
-  squadMax: 3,
-  /** A new squad comes out this often while a wave runs, the first one this long after the wave starts. */
-  squadEvery: 14,
-  firstSquadAt: 4,
-  /** Gap between soldiers of one squad leaving (seconds). */
-  leaveGap: 0.7,
-  height: 2.5,
+  /** v2: field knights (KNIGHTS.maxField, 4 squads of up to 5) plus the wall garrison (6). */
+  max: 26,
+  /** The same size as the goblins (grunts 3.9 cm), raised from 2.5 after the step 6 test. */
+  height: 3.9,
   speed: 5.5,
   speedJitter: 0.1,
   laneJitter: 1.6,
@@ -1350,6 +2645,209 @@ export const TROOPS = {
   poofColors: [0xffffff, 0xc9d4e8, 0x8aa0c8],
   /** Units farther than this from the center (cm) update their animation every other frame. */
   farAnimFrom: 150,
+};
+
+/**
+ * Field knights (v2, docs/v2-plan.md 2.7): they only come when the horn calls
+ * them. The player aims the horn by looking at a road (HORN_AIM): a squad of
+ * swordsmen and spearmen bursts out of the nearest wall entry and sprints
+ * along the roads to that spot with a banner, crashes into the first goblins
+ * it meets (several are knocked over, with a hit stop), then holds the spot:
+ * it fights any goblin that comes within watchRadius of it, never chasing
+ * past leash. At most maxSquads squads; at the limit the horn moves the
+ * squad nearest the aimed spot there instead. A squad down to breakAt
+ * knights marches home and frees its place. Squads stay between waves.
+ * Runners dodge past with a quick hop. Sizes in cm, times in seconds.
+ */
+export const KNIGHTS = {
+  /** Knights per squad, picked at random from min to max. */
+  squadMin: 3,
+  squadMax: 5,
+  /** Squads at once (a level setting later). */
+  maxSquads: 4,
+  /** Most field knights at once (maxSquads full squads). */
+  maxField: 20,
+  /** A squad with this many knights left (or fewer) breaks: the rest march home, a new squad may come. */
+  breakAt: 1,
+  /** Gap between knights bursting out of the gate. */
+  leaveGap: 0.3,
+  /** Sprint speed as a multiple of TROOPS.speed, and the sprint clip's speed. */
+  sprintScale: 2.5,
+  sprintClipSpeed: 1.5,
+  /** Their spots at the aimed point: this far apart sideways, and the second row this far behind. */
+  holdSpread: 3.5,
+  holdBack: 3,
+  /**
+   * The squad rule (v2 run 2 rewrite, headset test: one knight walked up and
+   * fell, then the next, and goblins ran past): a squad sees every goblin
+   * within senseRadius of any of its knights, on the way out or at its spot,
+   * and every knight not fighting goes for one of them (the least crowded,
+   * the nearest), so the whole squad fights; then they go on to their spot.
+   * Every goblin (runners too) within goblinSense of a field knight stops
+   * and fights instead of walking on toward the castle (it waits there,
+   * facing the knight, until a knight takes it on). Sizes in cm.
+   */
+  senseRadius: 22,
+  goblinSense: 16,
+  /** At their spot they never chase a goblin farther than this from it (then they walk back). On the way out, no leash. */
+  leash: 35,
+  /**
+   * Safety net: a knight walking up to its goblin that has not reached it
+   * after this long lets go (seconds), and leaves that goblin alone for
+   * ignoreTime (headset test: knights ran in place beside goblins, nobody
+   * fighting). The console says so ("[troops] a knight could not reach"), to
+   * find the cause if it shows up.
+   */
+  /** The horn lesson's goblins stop this far out in front of the squad's spot (cm along the road), waiting to be fought. */
+  lessonHoldOut: 6,
+  closeGiveUp: 4,
+  ignoreTime: 3,
+  /** A knight in a moving mode that has not moved for this long is put where it was going (seconds, the run-in-place watchdog). */
+  stuckTime: 2,
+  /** A knight's strike lands this share (the garrison's guards use TROOPS.strikeChance). */
+  strikeChance: 0.35,
+  /** Walking back to their spot after a fight (multiple of TROOPS.speed). */
+  postSpeedScale: 1.6,
+  /** The crash: goblins this close to the first goblin met are knocked over (at most crashMax). */
+  crashRadius: 12,
+  crashMax: 6,
+  /** A runner's hop (Goblins.hop; knights no longer make runners hop past, every goblin near a knight stops to fight). */
+  hopTime: 0.35,
+  hopHeight: 3,
+  /** The squad's banner, carried by its first knight in its left hand, held this far above the pole's foot (cm). */
+  bannerGrip: 1.2,
+  bannerHeight: 8,
+  bannerWidth: 2.6,
+  bannerLength: 1.8,
+  bannerColor: 0x4673d2,
+  bannerTrim: 0xffc446,
+  poleColor: 0x5a4330,
+  /** The banner of the squad the horn would move (aiming at the limit) pulses this much bigger, this fast. */
+  answerPulse: 0.35,
+  answerPulseSpeed: 7,
+  answerColor: 0x9cc2ff,
+};
+
+/**
+ * Aiming the horn (v2, src/ui/hornAim.ts). While the horn is held (anywhere,
+ * so nothing covers the view), the head points it (Quest 3S has no eye
+ * tracking: head gaze). Built from Meta's ray and gaze specs: for a head ray
+ * the cue is on the target, not a long laser, so on the board: a soft glowing
+ * pool on the road where the knights will go (like the system's gaze
+ * spotlight, no hard ring), a light pillar up from it and a see-through ghost
+ * banner. The spot only moves to a new road spot once the head has pointed
+ * there for consensusTime (Meta's gaze consensus window), so it never
+ * flickers. Lifted to the lips it locks: gold, a click, and the path the
+ * knights will take lights up along the roads. Sizes in board cm.
+ */
+export const HORN_AIM = {
+  /**
+   * The look ray points this far below where the head points (degrees). The
+   * headset knows only the head, and in VR most people rest their eyes a
+   * little below it (headset test: the spot sat too far out, so the player
+   * kept looking up with the eyes). 7 was still too far: 12 lets the head
+   * stay level instead of bending the neck down for long. Tune it here.
+   */
+  gazeDropDeg: 12,
+  /** The look ray is searched from just outside the wall out to this far (cm from the center). */
+  minRadius: 62,
+  maxRadius: 320,
+  /** Step along the look ray when finding where it meets the ground (cm). */
+  rayStep: 4,
+  /** The spot snaps to the nearest road within this far of where the look meets the ground (cm). */
+  snapRadius: 22,
+  /** A new spot takes over only after it is pointed at this long (seconds), and if this far from the old one (cm). */
+  consensusTime: 0.2,
+  moveAtLeast: 4,
+  /** The spot glides to its new place with this smoothing (seconds). */
+  glide: 0.06,
+  /** The light pillar up from the spot (cm), fading upward; locked, it grows by up to pillarGrow as the call charges. */
+  pillarHeight: 22,
+  pillarRadius: 0.9,
+  pillarGrow: 0.8,
+  pillarOpacity: 0.6,
+  /**
+   * The path along the roads (cm): ribbon width, a point every pathStep
+   * (finer than the road's own 4 cm, so it never cuts under a bump), this
+   * far above the road top (each edge on the ground where it is), and its opacity.
+   */
+  pathWidth: 1.6,
+  pathStep: 2,
+  pathLift: 0.5,
+  pathOpacity: 0.7,
+  /** Raised into the blow zone with a spot: everything turns gold. */
+  lockColor: 0xffc23a,
+  /** The glowing pool on the road: radius (cm) and its strongest opacity. A slow breathing pulse. */
+  poolRadius: 7,
+  poolOpacity: 0.55,
+  poolPulse: 0.15,
+  /** Colors: a spot the knights can go to, and none in sight (grey, the horn will not blow). */
+  color: 0xfff1b8,
+  noneColor: 0x8a8a8a,
+  /**
+   * Off the road (headset test: the faint grey glow was hard to see): a
+   * white ring with a dark edge where the look meets the ground (radius, cm),
+   * and an arrow on the ground toward the nearest road, arrowGap out from the
+   * ring, nudging arrowBob that way. Drawn over the hills.
+   */
+  /**
+   * No lock step (changed 2026-11-11): the spot follows the look the whole
+   * time, and a call goes to the spot looked at callLookBack seconds before
+   * it (blowing moves the head a little). The path is built again when the
+   * spot moves to another road or this far along it (cm).
+   */
+  callLookBack: 0.3,
+  pathRebuild: 6,
+  /** While the look slides along one road, the path is built again at most this often (seconds). */
+  pathEvery: 0.12,
+  /** The spot (and its path) stays this long after the look slips off the roads (seconds), so a slip never rebuilds it. */
+  loseAfter: 0.3,
+  /** After a call the spot stays marked (gold) until the squad arrives, at most this long (seconds). */
+  calledMax: 30,
+  offRoad: { radius: 4.5, color: 0xffffff, edgeColor: 0x1a1410, arrowSize: 3, arrowGap: 2, arrowBob: 1.5 },
+  /** The ghost banner's opacity. */
+  ghostOpacity: 0.55,
+};
+
+/**
+ * The glass sign (src/ui/kit/glassSign.ts): the see-through variant of the
+ * hint sign. A small dark glass label a little above the look's center (it
+ * never covers what the player looks at), following the look smoothly. Used
+ * by lessons where the player must watch what is in front of them (the horn,
+ * the balloon: `Hint.glass`, which hides the hint sign, so only one sign shows)
+ * and by the horn while it is held (what to do now, and at the lips a live
+ * bar: the blow against the line it must pass, or the quiet hold). Meters,
+ * degrees, seconds.
+ */
+export const GLASS_SIGN = {
+  distance: 0.6,
+  /** Above the look's center by this much (degrees). */
+  aboveDeg: 9,
+  width: 0.26,
+  height: 0.09,
+  /** Text size on its 512 px wide canvas (shrinks to fit two lines). */
+  fontPx: 40,
+  glass: 'rgba(30, 22, 16, 0.55)',
+  /** The Fantasy UI Borders frame inside the glass: its corner size (canvas px) and how strong it shows. */
+  frameCorner: 22,
+  frameOpacity: 0.7,
+  /** Follows the look with this smoothing. */
+  smoothing: 0.12,
+  bar: {
+    width: 0.2,
+    height: 0.012,
+    /** Its middle, below the sign's middle. */
+    y: -0.027,
+    /** The shown level falls back this slowly (seconds for a full bar), so a short blow reads. */
+    fall: 0.4,
+    color: 0x7fd36a,
+    overColor: 0xffc23a,
+    lineColor: 0xffffff,
+  },
+  /** The horn's blow bar is full at this many times HORN.blowLevel (its line sits at 1 / hornBarMax). */
+  hornBarMax: 1.6,
+  /** After the horn sounds, the bar stays full and gold this long (seconds), so the player sees the blow counted. */
+  blownHold: 1.5,
 };
 
 /**
@@ -1445,6 +2943,30 @@ export const GEAR = {
       axis2: [0, 0, 1],
       dir2: R_OUT,
       scale: 0.75,
+    },
+    /** v2: goblins carry swords too (the soldiers' Kenney sword, a little smaller). */
+    goblinSword: {
+      model: 'props/mini-arena/weapon-sword.glb',
+      bone: 'arm-right',
+      at: RIGHT_HAND,
+      anchor: [0, 0.05, 0],
+      axis: [0, -1, 0],
+      dir: [0.45, 0.35, 0.82],
+      axis2: [0, 0, 1],
+      dir2: R_OUT,
+      scale: 0.75,
+    },
+    /** v2: goblin shields (the soldiers' round shield, a little smaller). */
+    goblinShield: {
+      model: 'props/mini-dungeon/shield-round.glb',
+      bone: 'arm-left',
+      at: [0.2, 0.08, 0.02],
+      anchor: [0, 0, 0],
+      axis: [0, 0, 1],
+      dir: L_OUT,
+      axis2: [0, 1, 0],
+      dir2: L_UP,
+      scale: 0.62,
     },
     roundShield: {
       model: 'props/mini-dungeon/shield-round.glb',
@@ -1564,6 +3086,49 @@ export interface TroopKindSpec {
   speed: number;
 }
 
+/**
+ * Villagers (src/units/villagers.ts): peaceful people in the village squares
+ * who walk about, stop to work or look about, and walk on. The human and the
+ * archer bodies without gear, in plain work clothes (brown, cream, straw,
+ * moss green). perVillage each, at most max in all. Walk spots are shares of
+ * the village size from its middle (inside the ring of houses). They
+ * animate every animEvery frames: every frame now, since every third
+ * looked very choppy; to pay for it they walk less (longer stops) and turn
+ * smoothly toward where they go (turnTime, seconds) instead of snapping.
+ */
+export const VILLAGERS = {
+  enabled: true,
+  height: 3.9,
+  /** Four in each of the bigger villages now (were 2). */
+  perVillage: 4,
+  max: 16,
+  speed: 2.4,
+  walkFrom: 0.1,
+  walkTo: 0.4,
+  /** Share of stops spent working (the rest standing and looking about), and how long each lasts (seconds). */
+  workShare: 0.6,
+  workSeconds: [4, 9] as [number, number],
+  lookSeconds: [3, 7] as [number, number],
+  animEvery: 1,
+  turnTime: 0.25,
+  kinds: [
+    {
+      body: 'characters/mini-dungeon/character-human.glb',
+      recolor: [
+        { mesh: 'body', uv: [3 / 16, 4 / 16, 0.5, 1], color: [138, 92, 56] },
+        { mesh: 'body', uv: [13 / 16, 14 / 16, 0.5, 1], color: [222, 206, 168] },
+      ] as Recolor[],
+    },
+    {
+      body: 'characters/mini-forest/character-archer.glb',
+      recolor: [
+        { mesh: 'body', uv: [3 / 16, 4 / 16, 0.75, 1], color: [196, 160, 84] },
+        { mesh: 'head', uv: [3 / 16, 4 / 16, 0.75, 1], color: [110, 128, 70] },
+      ] as Recolor[],
+    },
+  ],
+};
+
 export const TROOP_KINDS: Record<TroopKind, TroopKindSpec> = {
   sword: {
     body: 'characters/mini-arena/character-soldier.glb',
@@ -1610,34 +3175,106 @@ export const TROOP_KINDS: Record<TroopKind, TroopKindSpec> = {
   },
 };
 
-/** Archers: they stop and shoot arrows (one instanced pool) at goblins within their range. */
+/**
+ * Arrows of the wall garrison's archers (v2, docs/v2-plan.md 2.7): easy to
+ * see. 3 to 4 times longer than before, white feathers, a short light streak
+ * behind, a high arc so they rise against the sky, and the archers fire
+ * together as a volley (GARRISON.volleyEvery). Damage is decided in code
+ * (random hits, a miss lands with a puff), arrows have no hitboxes. One
+ * instanced mesh for the arrows and one for the streaks, a small pool.
+ */
 export const ARCHERS = {
-  /** A shot this often (seconds), and the share that knocks the goblin out. */
-  shootEvery: 1.6,
+  /** The share of arrows that hit (the goblin is knocked out, or loses its helmet or shield). */
   hitChance: 0.55,
-  /** Arrow flight time (seconds) and arc height (cm). */
-  flightTime: 0.45,
-  arcHeight: 4,
-  /** Arrow size (cm). */
-  length: 2.2,
-  poolSize: 12,
+  /** Arrow flight time (seconds) and arc height (cm). A little lower and quicker since the range is shorter. */
+  flightTime: 0.75,
+  arcHeight: 16,
+  /** Arrow size (cm). Was 2.2, then 7.5 (too long after the headset test). */
+  length: 4.5,
+  /** The light streak behind it (cm long) and its look. */
+  streakLength: 4.5,
+  streakColor: 0xfff6d8,
+  streakOpacity: 0.45,
+  poolSize: 16,
   shaftColor: 0x8a5a2b,
   tipColor: 0xd8dbe6,
   featherColor: 0xffffff,
 };
 
 /**
- * Goblin gear (build step 7): some grunts carry a spear, some wear a helmet.
- * A helmet is one extra hit from a slingshot pebble or a soldier: it flies
- * off instead (big hits like the swatter, kegs and boulders go through).
- * Peppered goblins drop their spear, which flies off. Runners and climbers
- * stay bare handed (they need their hands to run and climb).
+ * The wall garrison (v2, docs/v2-plan.md 2.7, src/units/garrison.ts): on the
+ * rampart, at most 4 archers and 2 guards (swordsmen), one per stretch of
+ * wall between two towers, each with its home stretch. When there are fewer,
+ * one new one climbs up from the courtyard every refillEvery until all are
+ * back. They walk along the rampart (one angle on a ring, cheap) toward the
+ * nearest threat on their stretch. Archers shoot outward at goblins walking
+ * in (range), together as a volley, and back away from goblins on the
+ * rampart. Guards fight goblins on the rampart up close. Goblins on the
+ * rampart attack them (an archer goes down in 2 hits). Sizes in cm, times in
+ * seconds, angles in degrees.
+ */
+export const GARRISON = {
+  archers: 4,
+  guards: 2,
+  /** Home stretches (degrees, the middles between towers): guards first, then archers. */
+  homesDeg: [0, 180, 60, 120, 240, 300],
+  /** Where they stand on the wall top (cm from the center), a little inside the goblins' path. */
+  radius: 47.8,
+  /** A missing archer is replaced every refillEvery, a missing guard every guardRefillEvery (slower, so helping them matters). */
+  refillEvery: 15,
+  guardRefillEvery: 30,
+  /** Climbing up from the courtyard takes this long. */
+  climbTime: 2.2,
+  /** Walking speed along the rampart (cm per second), and the guards' (they hunt goblins round the whole wall). */
+  walkSpeed: 4,
+  guardSpeed: 8,
+  /**
+   * Archers shoot goblins this far from them (cm, flat), all together this
+   * often, a little staggered. Was 100 with one arrow per knockout (goblins
+   * never reached the wall), then 35 (too short). Now longer again, but an
+   * arrow is weaker than a sword: it takes arrowsPerHit arrows to make one
+   * hit (a bare goblin, or a helmet or shield coming off). 85 reached almost
+   * to the end of the first ring of roads (headset test): 60 now.
+   */
+  archerRange: 60,
+  arrowsPerHit: 2,
+  volleyEvery: 2.2,
+  volleyStagger: 0.07,
+  /** Archers back away from a goblin on the rampart this close (cm along the wall). */
+  backAway: 9,
+  /** Guards walk to a goblin on their stretch, and fight it this close (cm along the wall). */
+  guardReach: 3,
+  /** A goblin on the rampart attacks a garrison soldier this close (cm along the wall). */
+  goblinReach: 3,
+};
+
+/**
+ * Goblin gear (v2, docs/v2-plan.md 2.5, rules in src/rules/gear.ts): grunts
+ * carry a spear or a sword (or nothing), some wear a helmet, some carry a
+ * shield. Helmet and shield are each one extra hit, for every hit (pebble,
+ * arrow, soldier, swatter, goblin shot): it flies off instead and the goblin
+ * reels back. Triggers (keg, boulder, tree) ignore armor. A spear doubles
+ * wall damage, a sword strikes soldiers faster. Runners stay bare handed.
  */
 export const GOBLIN_GEAR = {
-  spearShare: 0.6,
+  spearShare: 0.4,
+  swordShare: 0.25,
   helmetShare: 0.35,
+  shieldShare: 0.3,
   /** Helmets only from this wave (1 based), so the first lessons stay one hit. */
   helmetFromWave: 3,
+  /** Shields from this wave (1 based). */
+  shieldFromWave: 4,
+  /** A spear's wall hit does this many times the damage. */
+  spearWallDamage: 2,
+  /** A sword strikes at soldiers this much more often (its strike gap is multiplied by this). */
+  swordStrikeScale: 0.6,
+  /**
+   * After armor takes a hit, the goblin cannot be hit again for this long
+   * (seconds): one swatter swing over several frames, or two pebbles at once,
+   * take one piece, not all of them.
+   */
+  hitGrace: 0.35,
   /** Gear knocked off: flies up and out (cm per second), spins, lands and shrinks away. */
   flySpeed: 45,
   flyUp: 70,
@@ -1659,16 +3296,28 @@ export const GOBLIN_GEAR = {
 export const BALLOONS = {
   /** Most balloons at once (one instanced mesh for all). */
   max: 6,
-  /** Envelope radius, and its height over the board (center). Riders hang under the basket. */
+  /** Envelope radius, and its height over the board (center). */
   radius: 5.5,
   height: 44,
+  /**
+   * The basket (cm): wide enough for both riders side by side, standing in
+   * it, heads and shoulders over the rim (they used to hang under it).
+   */
+  basketRadius: 2.5,
+  basketHeight: 2.4,
+  riderGap: 1.8,
   /** Riders per balloon (grunts). */
   riders: 2,
   /** Where it comes in from (cm from the center) and how fast it floats (cm per second). */
   startRadius: 175,
   speed: 7.5,
-  /** The scripted first balloon (wave 4 banner) starts closer, right in front. */
+  /**
+   * The balloon lesson (in the slingshot wave): one balloon starts closer,
+   * right in front, and hovers this far out (outside the wall, clear of its
+   * threat flash) with its riders until the player pops it.
+   */
   introRadius: 120,
+  lessonWaitAt: 80,
   /** It stops over the courtyard here and drops one rider every dropGap. */
   dropRadius: 43,
   dropGap: 0.6,
@@ -1763,9 +3412,6 @@ export const JUICE = {
   /** Shot pebbles leave a faint trail: a puff this often (seconds). */
   pebbleTrailEvery: 0.035,
   pebbleTrailColors: [0xffffff, 0xf3ead8] as number[],
-  /** The camps shake while they rumble before a group comes out (tilt in radians, and speed). */
-  campWobble: 0.12,
-  campWobbleSpeed: 38,
   /** The health flag jolts when the castle is hit (degrees, seconds), and the wave flag pops when it climbs. */
   flagJoltDeg: 14,
   flagJoltTime: 0.35,
@@ -1782,40 +3428,17 @@ export const JUICE = {
  */
 export const SKY = {
   enabled: true,
-  /**
-   * Sun direction: compass angle from the player's first view (degrees,
-   * 0 = front, positive = right) and height above the horizon (low, a
-   * morning sun). A little right of front, so the sunrise glow is in view
-   * and clear of the hint sign.
-   */
-  sunAngleDeg: 35,
-  sunElevationDeg: 13,
+  /** The sun and the moon are this far away (meters). Where they are, and all the sky colors, change with the time of day (DAY_NIGHT). */
   sunDistance: 150,
-  /** The sunlight comes from the sun's side, but higher, so the board's tops stay bright (degrees above the horizon). */
-  lightElevationDeg: 40,
-  /**
-   * Sunlight strength. Raised from 1.6 while the soft sky fill (the scene
-   * file's IBLGradient intensity) went from 1 to 0.6, so slopes facing the sun
-   * are clearly lit and the ones facing away clearly shaded, live as the
-   * board spins.
-   */
-  lightIntensity: 2.2,
-  /** The sky dome (meters, inside the camera's 200 m far plane) and its colors: top, horizon (the fog color too), below the horizon. */
+  /** The sky dome (meters, inside the camera's 200 m far plane). */
   domeRadius: 175,
-  domeTopColor: 0x46a8ff,
-  domeHorizonColor: 0xb1e5fe,
-  domeBottomColor: 0xa2d1e1,
   /**
-   * The sunrise glow on the dome: a wide orange haze and a tight yellow one
-   * around the sun, strongest low on the horizon. Spread is how wide each one
-   * is (higher = tighter), strength how strong (0 to 1).
+   * The glow on the dome around the sun (or the moon at night): a wide haze
+   * and a tight one, strongest low on the horizon. Spread is how wide each
+   * one is (higher = tighter). Colors and strengths are in DAY_NIGHT.
    */
-  glowOrange: 0xff9a3c,
-  glowYellow: 0xffe08a,
   glowOrangeSpread: 3,
-  glowOrangeStrength: 0.85,
   glowYellowSpread: 18,
-  glowYellowStrength: 0.9,
   /** How much the glow keeps above the horizon (0 = only on the horizon, 1 = the same all the way up). */
   glowHighShare: 0.35,
   /**
@@ -1879,6 +3502,318 @@ export const SKY = {
   cloudShade: 0xcde6fe,
   /** The clouds are sorted far to near this often (seconds), so nearer ones paint over farther ones. */
   sortEvery: 0.5,
+  /** The moon (meters): a faceted ball, pale blue-white with a darker edge, and a soft cool glow behind (a share of its radius). */
+  moonRadius: 3.6,
+  moonColor: 0xeef3ff,
+  moonEdgeColor: 0xa9b8e0,
+  moonGlowColor: 0x9fb8ff,
+  moonGlowShare: 4,
+  /** Stars: one mesh of points on the upper sky (count, size in screen pixels, lowest height above the horizon in degrees). */
+  starCount: 360,
+  starSize: 5,
+  starMinElevationDeg: 8,
+  starColor: 0xf4f7ff,
+  /**
+   * Twinkle: now and then a star quickly dims and shrinks, each at its own
+   * pace. How much dimmer at its lowest (0 = never, 1 = out), how much smaller,
+   * and how fast (radians per second, from, to). Raised from 0.6 and 1.2 to 3.5
+   * after the first headset look: a slow soft pulse on tiny dots did not show.
+   */
+  starTwinkle: 0.9,
+  starTwinkleShrink: 0.5,
+  starTwinkleSpeed: [2.5, 7] as [number, number],
+  /**
+   * The ringed planet (night only): big, straight in front, high in the
+   * sky and far away (smaller and more faded than at first, when it looked
+   * like it sat on the ground). It rises from below the horizon as night
+   * comes (DayLook.planetAt; anything below the horizon is cut off). Meters:
+   * ball radius, distance (inside the 200 m far plane with its rings), the
+   * rings' inner and outer edge as a share of the radius. Tilted toward the
+   * player (degrees) so the rings read as rings, and rolled a little.
+   */
+  planetAngleDeg: 0,
+  planetRadius: 17,
+  planetDistance: 178,
+  planetRingInner: 1.35,
+  planetRingOuter: 2.35,
+  planetTiltDeg: 20,
+  planetRollDeg: -14,
+  /** Squashed front to back, so the far side of the rings stays inside the far plane. Seen from the front it looks the same. */
+  planetDepth: 0.3,
+  /**
+   * One color in different shades: the planet's color, the shade of each
+   * wavy band from the top down and of each ring band from the inside out
+   * (1 = the color, 0 = a gap in the rings). A background piece, so its
+   * colors are blended toward the night sky around it by `planetSkyBlend`
+   * (0 = its own color, 1 = the sky), and its light and dark sides stay soft.
+   */
+  planetColor: 0xb7a4e0,
+  planetBands: [1.06, 0.9, 1, 0.8, 0.95, 0.84, 1.02, 0.9],
+  planetRingBands: [1.08, 0.94, 0, 0.82, 1, 0.88],
+  /**
+   * A warm orange-red mixed into some bands (share of it per band, 0 = the
+   * lavender only), so the planet has warm stripes and a warm ring.
+   */
+  planetWarm: 0xe0704a,
+  planetWarmBands: [0, 0.55, 0.15, 0.75, 0, 0.6, 0.25, 0.45],
+  planetWarmRings: [0.2, 0.65, 0, 0.4, 0.8, 0.3],
+  planetSkyBlend: 0.55,
+};
+
+/** The four times of day, in order. */
+export const TIMES_OF_DAY = ['morning', 'day', 'sunset', 'night'] as const;
+export type TimeOfDay = (typeof TIMES_OF_DAY)[number];
+
+/** How the sky and the light look at one time of day. Angles: compass from the player's first view (0 = front, positive = right), and degrees above the horizon. */
+export interface DayLook {
+  /** Sky dome: top, horizon (the fog color too) and below the horizon. */
+  domeTop: number;
+  domeHorizon: number;
+  domeBottom: number;
+  /** The glow on the dome around the sun (or the moon when the sun is down): a wide haze and a tight one, each with a strength (0 to 1). */
+  glowWide: number;
+  glowTight: number;
+  glowWideStrength: number;
+  glowTightStrength: number;
+  /** Where the sun is, how big (0 = gone, 1 = full size) and its tint (white = its own colors). */
+  sunAt: [number, number];
+  sunShow: number;
+  sunTint: number;
+  /** Where the moon is and how much it shows (0 to 1). */
+  moonAt: [number, number];
+  moonShow: number;
+  /** How bright the stars are (0 to 1). */
+  stars: number;
+  /** The one real light (sun or moon): where it comes from (higher than the sun, so the board's tops stay lit), color, strength. */
+  lightAt: [number, number];
+  lightColor: number;
+  lightIntensity: number;
+  /** The soft sky fill on every lit thing (scene.environmentIntensity; the scene file's IBLGradient intensity by day). */
+  fill: number;
+  /** Clouds are tinted by this (white = their own colors). */
+  cloudTint: number;
+  /** The bright edge on troops and goblins (0 = off, 1 = full), so they stand out at night. */
+  rim: number;
+  /**
+   * The board, the castle and the hills: their colors are multiplied by this
+   * tint (white = their own colors) times terrainBright, after losing
+   * terrainGrey of their color (0 = none, 1 = grey). Cool and dark at night,
+   * warm and golden in the noon sun. Anything that glows is left out.
+   */
+  terrainTint: number;
+  terrainBright: number;
+  terrainGrey: number;
+  /** Height of the ringed planet's middle above the horizon (degrees; below the horizon is cut off). Low enough and it is gone. */
+  planetAt: number;
+  /** How bright the night lights are: glowing windows, torches, lanterns (0 = off, 1 = full). */
+  lights: number;
+}
+
+/**
+ * Day and night (docs/mvp.md, "Day and night cycle"). Time follows the waves,
+ * not a clock: the first wave is in the morning, the last at night, the one
+ * before it at sunset, the rest by day (src/rules/dayNight.ts). It changes
+ * only between waves, while the board is quiet, and stays still during a
+ * wave, so it costs nothing while fighting. Only colors and the sky pieces
+ * move, nothing on the board, so it is fine for comfort.
+ *
+ * Readability first: the night stays a bright moonlit blue, never dark, and
+ * troops and goblins get a bright edge (the rim), so they are always easy to
+ * spot. All of these are starting values to tune in the headset.
+ */
+export const DAY_NIGHT = {
+  enabled: true,
+  /** How long one change takes (seconds), starting when a wave is cleared. Shorter reads as a flicker. */
+  changeSeconds: 8,
+  /** The rim: how thin it is (higher = thinner, only the very edge) and its color on each side. */
+  rimPower: 2.4,
+  rimGoblin: 0xc6ff6e,
+  rimTroop: 0xffd66b,
+  looks: {
+    // The first look, as tuned in the headset tests: a low sun a little right of front, so the
+    // sunrise glow is in view and clear of the hint sign. Sunlight 2.2 with the fill at 0.6,
+    // so slopes facing the sun are clearly lit and the ones facing away clearly shaded.
+    morning: {
+      domeTop: 0x46a8ff,
+      domeHorizon: 0xb1e5fe,
+      domeBottom: 0xa2d1e1,
+      glowWide: 0xff9a3c,
+      glowTight: 0xffe08a,
+      glowWideStrength: 0.85,
+      glowTightStrength: 0.9,
+      sunAt: [35, 13],
+      sunShow: 1,
+      sunTint: 0xffffff,
+      moonAt: [55, -15],
+      moonShow: 0,
+      stars: 0,
+      lightAt: [35, 40],
+      lightColor: 0xfff4e0,
+      lightIntensity: 2.2,
+      fill: 0.6,
+      cloudTint: 0xffffff,
+      rim: 0,
+      terrainTint: 0xffffff,
+      terrainBright: 1,
+      terrainGrey: 0,
+      planetAt: -25,
+      lights: 0,
+    },
+    // Super sunny: a high sun, warm golden light, a soft blue top over a warm orange haze (the fog
+    // too, so the air has an orange tint), a wide warm glow, cream clouds. Warmer after the
+    // first look: the cool blue day did not feel sunny. Then more orange and red, and the
+    // terrain golden like grass in strong sun (it read too green). Then less pink: a blue top
+    // fading into a peach horizon mixes to pink in between, so the top is a greener sky blue
+    // and the horizon a yellower orange with little blue in it.
+    day: {
+      domeTop: 0x5ab4e4,
+      domeHorizon: 0xffb450,
+      domeBottom: 0xeea04c,
+      glowWide: 0xff8a2c,
+      glowTight: 0xffdc8c,
+      glowWideStrength: 0.55,
+      glowTightStrength: 0.75,
+      sunAt: [20, 42],
+      sunShow: 0.9,
+      sunTint: 0xffffff,
+      moonAt: [55, -15],
+      moonShow: 0,
+      stars: 0,
+      lightAt: [20, 62],
+      lightColor: 0xffc27a,
+      lightIntensity: 2.7,
+      fill: 0.7,
+      cloudTint: 0xffdcaa,
+      rim: 0,
+      // Less blue and a little less green, a little brighter: green grass turns golden yellow-green.
+      terrainTint: 0xffe2b4,
+      terrainBright: 1.1,
+      terrainGrey: 0,
+      planetAt: -25,
+      lights: 0,
+    },
+    // The sun low on the left, deep orange, a warm horizon under a violet-blue top.
+    sunset: {
+      domeTop: 0x5b70d2,
+      domeHorizon: 0xffb27a,
+      domeBottom: 0xd99a80,
+      glowWide: 0xff6a2a,
+      glowTight: 0xffc060,
+      glowWideStrength: 1,
+      glowTightStrength: 0.9,
+      sunAt: [-40, 7],
+      sunShow: 1.1,
+      sunTint: 0xffa070,
+      moonAt: [55, -15],
+      moonShow: 0,
+      stars: 0,
+      lightAt: [-40, 30],
+      lightColor: 0xffb070,
+      lightIntensity: 2,
+      fill: 0.5,
+      cloudTint: 0xffc4a6,
+      rim: 0.35,
+      terrainTint: 0xf3f4f9,
+      terrainBright: 1,
+      terrainGrey: 0.045,
+      planetAt: -25,
+      lights: 0.35,
+    },
+    // A deep blue night with stars, the moon and the ringed planet rising in front. Darker
+    // after the first headset look (it was too bright). The units keep their bright rim and
+    // the terrain fades to grey-blue, so goblins still stand out.
+    night: {
+      domeTop: 0x040a22,
+      domeHorizon: 0x122246,
+      domeBottom: 0x0d1834,
+      glowWide: 0x6f8ad8,
+      glowTight: 0xc4d4ff,
+      glowWideStrength: 0.25,
+      glowTightStrength: 0.4,
+      sunAt: [-55, -12],
+      sunShow: 0,
+      sunTint: 0xff8050,
+      moonAt: [45, 24],
+      moonShow: 1,
+      stars: 1,
+      lightAt: [45, 50],
+      lightColor: 0xa9bfff,
+      lightIntensity: 0.7,
+      fill: 0.3,
+      cloudTint: 0x3a4670,
+      rim: 1,
+      // Darker, a little blue and a little less colorful, never lighter.
+      terrainTint: 0xbfc6e1,
+      terrainBright: 1,
+      terrainGrey: 0.21,
+      planetAt: 21,
+      lights: 1,
+    },
+  } satisfies Record<TimeOfDay, DayLook>,
+};
+
+/**
+ * Night lights (decor only, src/world/nightLights.ts): warm glowing village
+ * windows, a torch on the courtyard side of each castle tower, and a glow on
+ * each village lantern. No real lights: bright unlit colors and soft additive
+ * glows, 5 draw calls, and only while they show (DayLook.lights). Board cm
+ * unless it says otherwise.
+ */
+export const NIGHT_LIGHTS = {
+  /** A window's warm pane as a share of one wall tile (wide, tall), its middle's height on the tile, and how far out (the wall's outside is at 0.5). */
+  paneSize: [0.3, 0.36] as [number, number],
+  paneHeight: 0.52,
+  paneOut: 0.515,
+  paneColor: 0xffb43c,
+  /** The soft glow around each window, on the wall (share of a tile across), its color and strength. Brighter and more yellow-orange after the step 7 and 8 test. */
+  windowGlowSize: 1.3,
+  windowGlowColor: 0xffa024,
+  windowGlowStrength: 1.4,
+  /** Torches: distance from the board's middle (just inside each tower), the flame's height above the board, the stick's length and the flame's size. */
+  torchRadius: 44.2,
+  torchHeight: 8.4,
+  torchStick: 3,
+  torchFlame: 1.4,
+  torchStickColor: 0x6b4a2b,
+  /** The flame from its base to its tip. */
+  flameBase: 0xff5a14,
+  flameTip: 0xfff0a0,
+  /** Flicker: how much a flame's size wobbles (share) and how fast. */
+  flicker: 0.2,
+  flickerSpeed: 9,
+  /**
+   * The small soft halos that always face the player, right at each castle
+   * torch's flame and each village lantern (cm across), their color and
+   * strength. Small on purpose: the first 10 cm glows read as floating balls,
+   * not light (headset test). The road torches have none: their light is the
+   * pool on the ground.
+   */
+  torchGlowSize: 2.8,
+  lanternGlowSize: 3,
+  glowColor: 0xffa030,
+  glowStrength: 1.15,
+  /** Where the lantern model's light is (share of its height). */
+  lanternLightAt: 0.82,
+  /**
+   * Torches beside the roads (src/world/boardBuilder.ts roadTorchSpots):
+   * one every roadTorchEvery cm along each road, sides taking turns,
+   * roadTorchOut cm past the road's edge, only between roadTorchFrom and
+   * roadTorchTo cm from the middle, at most roadTorchMax. A taller post, and
+   * a pool of warm light on the ground around each (cm across, color,
+   * strength): a soft oval roadPoolStretch times longer along the road, its
+   * size flickering with the flame by up to roadPoolFlicker (share).
+   */
+  roadTorchEvery: 45,
+  roadTorchOut: 3,
+  roadTorchFrom: 85,
+  roadTorchTo: 380,
+  roadTorchMax: 40,
+  roadTorchStick: 6,
+  roadPoolSize: 22,
+  roadPoolStretch: 1.6,
+  roadPoolFlicker: 0.08,
+  roadPoolColor: 0xff9a3a,
+  roadPoolStrength: 0.6,
 };
 
 /** One ring of hills around the board (board cm). */
@@ -1938,10 +3873,6 @@ export const DEBUG = {
   stressMax: 120,
   /** Gap between stress test grunts leaving their camps (seconds). */
   stressGap: 0.25,
-  /** Food added per "Add food" press. */
-  foodAdd: 3,
-  /** "Start at wave": extra food per skipped wave, for the climbers that would have been eaten. */
-  startFoodPerWave: 1,
   /** Castle damage per "Damage castle" press (health is out of CASTLE_HEALTH.maxHealth). */
   castleDamage: 20,
   /** Board turn and height per debug page press (degrees, cm). */
@@ -1971,12 +3902,31 @@ export const STRESS_TEST = {
   /** Stop here even if it still passes. */
   maxUnits: 120,
   /**
-   * Standing for the whole test since build step 7: this many soldiers (all
-   * three kinds, walking on the spot) and balloons with riders (hovering),
-   * so the budget counts the army and the flying enemies too.
+   * Standing for the whole test (v2): the full wall garrison on the rampart
+   * (GARRISON, 2 guards and 4 archers) and the full knight squads on roads
+   * around the board (KNIGHTS.maxSquads of squadMax), all walking on the spot so they cost what
+   * moving soldiers cost but never fight, plus balloons with riders
+   * (hovering), so the budget counts the army and the flying enemies too.
    */
-  troops: 8,
+  garrison: 6,
+  /** KNIGHTS.maxSquads full squads (4 of 5). */
+  knights: 20,
   balloons: 2,
+};
+
+/**
+ * The live loudness panel (debug, src/debug/micPanel.ts): like the FPS panel,
+ * on the other side of front. The loudest level over the last recentSeconds,
+ * redrawn at most every drawEvery seconds (only when a number changed).
+ */
+export const MIC_PANEL = {
+  radius: 27,
+  angleDeg: 16,
+  aboveRing: 1,
+  width: 13.6,
+  height: 6.8,
+  recentSeconds: 3,
+  drawEvery: 0.25,
 };
 
 /** Live frame rate panel for performance checks (debug). */
@@ -1987,7 +3937,7 @@ export const FPS = {
   refresh: 0.5,
   /** The panel redraws at most this often, and only when its text changed (seconds). */
   drawEvery: 1,
-  /** Hidden by default. The debug page's "FPS on/off" button (or key F) shows it, and ?fps in the URL on the hosted build. */
+  /** Hidden by default. The debug page's "FPS on/off" button shows it, and ?fps in the URL on the hosted build. */
   showInDev: false,
   /** Panel spot: on the ring, a little left of front (clear of the Next button), standing just above it (cm, degrees). */
   radius: 27,

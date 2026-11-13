@@ -1,4 +1,4 @@
-// Debug spawner from the toy test (build step 1): the debug keys, the stress
+// Debug spawner from the toy test (build step 1): the debug page, the stress
 // test and the optional auto trickle use it, apart from the tutorial
 // director. Like a director, it only calls the goblin system.
 import { DEBUG, DEBUG_SPAWN as TOY_SPAWN, type GoblinType } from '../config/game.js';
@@ -23,9 +23,15 @@ export class ToySpawner {
     private rng: Random,
   ) {}
 
+  /** A new map (src/game.ts loadMap): the queue is dropped (its roads are gone). */
+  setRoadCount(count: number): void {
+    this.queue.length = 0;
+    this.roadCount = count;
+  }
+
   /** Queues a small group walking in from one camp. */
   sendGroup(type: GoblinType, road = this.rng.int(this.roadCount)): void {
-    const size = type === 'runner' ? TOY_SPAWN.runnerGroup : type === 'grunt' ? TOY_SPAWN.gruntGroup : 1;
+    const size = type === 'runner' ? TOY_SPAWN.runnerGroup : TOY_SPAWN.gruntGroup;
     for (let i = 0; i < size; i++) this.queue.push({ type, road, wait: TOY_SPAWN.groupGap });
   }
 
@@ -41,7 +47,6 @@ export class ToySpawner {
         this.timer = TOY_SPAWN.trickleInterval;
         this.groups++;
         this.sendGroup(this.groups % TOY_SPAWN.runnerEvery === 0 ? 'runner' : 'grunt');
-        if (this.groups % TOY_SPAWN.climberEvery === 0) this.sendGroup('climber');
       }
     }
     // Goblins in the queue come out one by one.

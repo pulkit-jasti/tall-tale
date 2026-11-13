@@ -1,39 +1,64 @@
-// The bell (docs/giant-tools.md): the megaphone's hands-only twin, on the same
-// platform. Grab it and shake it: every goblin on the board is stunned, and
-// harder shaking stuns longer. Like the pepper, a shake is found from the
-// bell's own movement (a quick move that turns back on the one before is one
-// stroke, two strokes close together a shake), so no hand pose is needed.
-// It is one use (6 food, free in the tutorial), then it goes back.
+// The bell (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): the only stun.
+// Rewritten from scratch (headset tests: it rang and nothing happened, more
+// than once). Only the model (handBell in src/world/shapes.ts) is kept.
+//
+// Grab it with a fist and give it one quick swing: that is a ring.
+//   - How a ring is found (second rewrite, after a speed check never rang):
+//     Meta's docs (design "Hands Technology") say hands are tracked at 30 Hz
+//     by default, quick shaky motion is smoothed, and fast motion can lose
+//     tracking, so a measured speed stays low and gaps come in. And the bell
+//     follows the hand with its own smoothing. So it reads the HAND itself
+//     (its palm, in fixedRig cm, which never moves), only on frames where the
+//     hand is really tracked, and looks at distance, not speed: a slow
+//     "anchor" follows the hand (BELL.anchorSmoothing), and when the hand
+//     gets BELL.ringOffset cm away from it, that is a ring. A quick flick or
+//     swing gets far from the anchor; carrying it calmly does not (the anchor
+//     keeps up). It must come back within BELL.rearmOffset before the next
+//     ring (and BELL.ringGap passes), so one swing is one ring. Right after
+//     the grab it waits BELL.grabQuiet.
+//   - A ring that stuns: the game's onRing stuns every goblin on the board
+//     (the shock ring runs out across it) and knocks the rampart goblins back
+//     down (src/tools/stunWave.ts, Goblins.knockOffRampart). The first ring
+//     starts the short use window; more rings while the stun still runs only
+//     ring. When the window runs out it goes back and recharges.
+//   - The sound plays last and on its own, so nothing it does can stop the stun.
+// Every ring leaves a note on the debug page (src/debug/notes.ts) saying what it did.
 import { Vector3 } from 'three';
 import { BELL, STUN, TOOL_SPOTS } from '../config/game.js';
+import { note } from '../debug/notes.js';
+import type { HandState } from '../player/hands.js';
 import { handBell } from '../world/shapes.js';
 import { HandTool, type ToolParts } from './handTool.js';
-import type { StunWave } from './stunWave.js';
 
-const current = new Vector3();
-const raw = new Vector3();
-const direction = new Vector3();
-const world = new Vector3();
+const here = new Vector3();
+const at = new Vector3();
 
 export class Bell extends HandTool {
+  /** The bell's middle in its own frame (from the model). */
   private middleLocal = new Vector3();
-  private last = new Vector3();
-  private hasLast = false;
-  private velocity = new Vector3();
-  private lastDirection = new Vector3();
-  private hasDirection = false;
-  private lastStroke = -Infinity;
-  /** The fastest speed of this stroke, for how hard it rings. */
-  private peak = 0;
+  /** The slow anchor that follows the hand (fixedRig cm), and if it is set yet. */
+  private anchor = new Vector3();
+  private hasAnchor = false;
+  /** Back near the anchor since the last ring, so the next swing can ring. */
+  private armed = true;
+  /** Since the grab, and since the last ring (seconds). */
+  private heldTime = 0;
+  private sinceRing = Infinity;
+  /** While held: the farthest the hand got from the anchor (cm), tracked frames, and rings (for the note when it is put down). */
+  private topOffset = 0;
+  private trackedFrames = 0;
+  private rings = 0;
 
-  constructor(
-    parts: ToolParts,
-    private stunWave: StunWave,
-  ) {
+  /** True while a stun is running (set by the game). A ring then only rings. */
+  stunning: () => boolean = () => false;
+  /** A ring that stuns, at `where` (world) for `seconds`: the game stuns and knocks goblins down. Returns how many it hit. */
+  onRing: (where: Vector3, seconds: number) => number = () => 0;
+
+  constructor(parts: ToolParts) {
     super(
       'bell',
       parts,
-      TOOL_SPOTS.rightSide,
+      TOOL_SPOTS.leftMiddle,
       { from: BELL.gripFrom, to: BELL.gripTo, radius: BELL.grabRadius },
       0,
       BELL.bellMouth + 0.5,
@@ -49,56 +74,93 @@ export class Bell extends HandTool {
     this.middleLocal.copy(middle);
   }
 
+  /** A note on each grab too: no "held" note after it means the swing was never measured. */
+  grab(hand: HandState, viaPinch: boolean): void {
+    super.grab(hand, viaPinch);
+    note(`[bell] grabbed (${viaPinch ? 'pinch' : 'fist'})`);
+  }
+
   protected resetMotion(): void {
-    this.hasLast = false;
-    this.hasDirection = false;
-    this.velocity.set(0, 0, 0);
-    this.lastStroke = -Infinity;
-    this.peak = 0;
+    // Put down (or just grabbed): a note with how far it was swung while held, to tune BELL.ringOffset from real numbers.
+    if (this.heldTime > 0.2) {
+      note(
+        `[bell] held ${this.heldTime.toFixed(1)} s, hand tracked ${this.trackedFrames} frames, ` +
+          `farthest swing ${this.topOffset.toFixed(1)} cm (rings at ${BELL.ringOffset}), ${this.rings} rings`,
+      );
+    }
+    this.topOffset = 0;
+    this.trackedFrames = 0;
+    this.rings = 0;
+    this.hasAnchor = false;
+    this.armed = true;
+    this.heldTime = 0;
   }
 
   protected heldUpdate(dt: number): void {
-    // The bell in fixedRig, which never moves, so its speed is the hand's.
-    this.bodyToWorld(this.middleLocal, current);
-    this.stage.fixedRig.worldToLocal(current);
-    if (!this.hasLast || dt <= 0) {
-      this.last.copy(current);
-      this.hasLast = true;
+    if (dt <= 0) return;
+    this.heldTime += dt;
+    this.sinceRing += dt;
+    const hand = this.heldHand;
+    // Only frames where the hand is really seen (not the short grace while tracking is lost).
+    if (!hand || !hand.tracked || hand.lostTime > 0) return;
+    this.trackedFrames++;
+    this.stage.fixedRig.worldToLocal(here.copy(hand.palm));
+    if (!this.hasAnchor) {
+      this.anchor.copy(here);
+      this.hasAnchor = true;
       return;
     }
-    raw.subVectors(current, this.last).divideScalar(dt);
-    this.last.copy(current);
-    this.velocity.lerp(raw, 1 - Math.exp(-dt / BELL.speedSmoothing));
-    const speed = this.velocity.length();
-    if (speed <= BELL.ringSpeed) return;
-    this.peak = Math.max(this.peak, speed);
-    direction.copy(this.velocity).divideScalar(speed);
-    const turned = this.hasDirection && direction.dot(this.lastDirection) < -0.3;
-    this.lastDirection.copy(direction);
-    this.hasDirection = true;
-    if (!turned) return;
-    // One stroke: the bell rings, louder the harder it is shaken.
-    const hard = Math.min(1, (this.peak - BELL.ringSpeed) / (BELL.hardSpeed - BELL.ringSpeed));
-    this.peak = 0;
-    this.bodyToWorld(this.middleLocal, world);
-    this.audio.play('bell', world, 0.6 + 0.4 * hard, BELL.soundGap);
-    const shake = this.time - this.lastStroke < BELL.ringWindow;
-    this.lastStroke = this.time;
-    if (!shake) return;
-    if (this.active) {
-      // Ringing on: the stun lasts longer.
-      this.stunWave.extend(STUN.extraPerSecond * (0.25 + 0.25 * hard));
+    // The anchor follows slowly; the hand's distance from it is the swing.
+    this.anchor.lerp(here, 1 - Math.exp(-dt / BELL.anchorSmoothing));
+    const offset = here.distanceTo(this.anchor);
+    // Still settling into the hand after the grab: no ring.
+    if (this.heldTime < BELL.grabQuiet) return;
+    this.topOffset = Math.max(this.topOffset, offset);
+    if (!this.armed) {
+      if (offset < BELL.rearmOffset) this.armed = true;
       return;
     }
-    if (!this.tryUse()) return;
-    this.onUse(this.stunWave.stun(STUN.baseSeconds + STUN.hardExtra * hard, world));
+    if (offset < BELL.ringOffset || this.sinceRing < BELL.ringGap) return;
+    this.armed = false;
+    this.sinceRing = 0;
+    this.rings++;
+    this.ring(offset);
   }
 
-  /** Debug: a hard ring without hands. Pays the food like a real one. */
+  /** One ring: the stun (if none is running and the bell is not resting), then the sound. `offset`: how far the swing went (cm). */
+  private ring(offset: number): void {
+    this.bodyToWorld(this.middleLocal, at);
+    const hard = Math.min(1, Math.max(0, (offset - BELL.ringOffset) / (BELL.hardOffset - BELL.ringOffset)));
+    if (this.stunning()) {
+      note('[bell] ring: a stun is still running, no new one');
+    } else if (this.tryUse()) {
+      const seconds = STUN.baseSeconds + STUN.hardExtra * hard;
+      const hit = this.onRing(at, seconds);
+      note(`[bell] ring: stun ${seconds.toFixed(1)} s, ${hit} goblins (swing ${offset.toFixed(1)} cm)`);
+      // A use counts even with no goblin about, so the bell lesson always ends.
+      this.onUse(Math.max(1, hit));
+    } else {
+      note('[bell] ring: it is resting, no stun');
+    }
+    this.playSound(at, hard);
+  }
+
+  /** The ring sound, on its own: an error in it is noted and never stops anything else. */
+  private playSound(where: Vector3, hard: number): void {
+    try {
+      this.audio.play('bell', where, 0.6 + 0.4 * hard);
+    } catch (error) {
+      note(`[bell] sound failed: ${String(error)}`);
+    }
+  }
+
+  /** Debug page: a hard ring without hands (a recharging bell is made ready first). */
   debugRing(): void {
     if (!this.debugStart()) return;
-    this.bodyToWorld(this.middleLocal, world);
-    this.audio.play('bell', world);
-    this.onUse(this.stunWave.stun(STUN.baseSeconds + STUN.hardExtra, world));
+    this.bodyToWorld(this.middleLocal, at);
+    const hit = this.onRing(at, STUN.baseSeconds + STUN.hardExtra);
+    note(`[bell] debug ring: ${hit} goblins`);
+    this.onUse(Math.max(1, hit));
+    this.playSound(at, 1);
   }
 }

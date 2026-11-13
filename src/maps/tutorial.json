@@ -2,10 +2,10 @@
   "name": "tutorial",
   "seed": 1234,
   "nodes": [
-    { "id": "campNorth", "kind": "camp", "at": [255, 6], "size": 24 },
-    { "id": "campEast", "kind": "camp", "at": [277, 86], "size": 28 },
-    { "id": "campSouth", "kind": "camp", "at": [265, 196], "size": 22 },
-    { "id": "campWest", "kind": "camp", "at": [227, -82], "size": 18 },
+    { "id": "campNorth", "kind": "camp", "at": [300, 6], "size": 30 },
+    { "id": "campEast", "kind": "camp", "at": [425, 86], "size": 35 },
+    { "id": "campSouth", "kind": "camp", "at": [415, 196], "size": 28 },
+    { "id": "campWest", "kind": "camp", "at": [390, -82], "size": 23 },
 
     { "id": "jNorth", "kind": "junction", "at": [132, 2] },
     { "id": "jNorthEast", "kind": "junction", "at": [138, 44] },
@@ -26,32 +26,45 @@
     { "id": "wWest", "kind": "wall", "at": [58, -60] }
   ],
   "roads": [
-    { "from": "campNorth", "to": "jNorth", "via": [[196, 9]] },
+    { "from": "campNorth", "to": "jNorth", "via": [[255, 6], [196, 9]] },
     { "from": "jNorth", "to": "kNorth", "via": [[108, -4]] },
     { "from": "kNorth", "to": "wNorth", "via": [[72, 4]] },
     { "from": "kNorth", "to": "wNorthEast", "via": [[76, 38]] },
     { "from": "jNorth", "to": "jNorthEast", "via": [[138, 22]] },
     { "from": "jNorthEast", "to": "wNorthEast", "via": [[104, 50], [78, 57]] },
 
-    { "from": "campEast", "to": "jEast", "via": [[210, 84]] },
+    { "from": "campEast", "to": "jEast", "via": [[355, 86], [280, 80], [210, 84]] },
     { "from": "jEast", "to": "jNorthEast", "via": [[142, 68]] },
     { "from": "jEast", "to": "kEast", "via": [[112, 96]] },
     { "from": "kEast", "to": "wEast", "via": [[72, 112]] },
 
-    { "from": "campSouth", "to": "jSouth", "via": [[198, 200]] },
+    { "from": "campSouth", "to": "jSouth", "via": [[345, 196], [270, 204], [198, 200]] },
     { "from": "jSouth", "to": "kSouth", "via": [[108, 183]] },
     { "from": "kSouth", "to": "wSouth", "via": [[72, 179]] },
     { "from": "jSouth", "to": "wSouthWest", "via": [[112, 216], [82, 234]] },
 
-    { "from": "campWest", "to": "jWest", "via": [[176, -84]] },
+    { "from": "campWest", "to": "jWest", "via": [[320, -82], [250, -90], [176, -84]] },
     { "from": "jWest", "to": "kWest", "via": [[104, -70]] },
     { "from": "kWest", "to": "wWest", "via": [[72, -61]] },
     { "from": "jWest", "to": "jNorth", "via": [[130, -40]] }
   ],
   "gate": { "at": [52, 180] },
   "triggers": [
-    { "kind": "keg", "wave": 2, "at": [118, -2] },
-    { "kind": "boulder", "wave": 4, "at": [126, 104] },
-    { "kind": "tree", "wave": 4, "at": [100, 190] }
+    { "kind": "keg", "wave": 3, "at": [118, -2] },
+    { "kind": "keg", "wave": 3, "at": [170, 85] },
+    { "kind": "keg", "wave": 3, "at": [131, -46] },
+    { "kind": "keg", "wave": 3, "at": [116, 185] },
+    { "kind": "keg", "wave": 3, "at": [150, -81] },
+    { "kind": "keg", "wave": 3, "at": [138, 30] },
+    { "kind": "boulder", "wave": 3, "at": [196, 9] },
+    { "kind": "boulder", "wave": 3, "at": [205, 84] },
+    { "kind": "boulder", "wave": 3, "at": [190, -84] },
+    { "kind": "boulder", "wave": 3, "at": [195, 200] },
+    { "kind": "boulder", "wave": 3, "at": [110, 50] },
+    { "kind": "tree", "wave": 3, "at": [86, 6] },
+    { "kind": "tree", "wave": 3, "at": [104, 97] },
+    { "kind": "tree", "wave": 3, "at": [102, -69] },
+    { "kind": "tree", "wave": 3, "at": [100, 223] },
+    { "kind": "tree", "wave": 3, "at": [142, 64] }
   ]
 }

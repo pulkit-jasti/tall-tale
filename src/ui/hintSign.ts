@@ -4,16 +4,14 @@
 // and never follows the head. A shared Panel with Kenney UI images, redrawn
 // only when its text changes. The sign is out of reach, so its Next button
 // stands apart, in front between the tool platforms (HINT_SIGN.nextAt).
-import { Group, type Object3D } from 'three';
+import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { HINT_SIGN, POKE } from '../config/game.js';
+import { BOARD, HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { HandState } from '../player/hands.js';
-import { degToRad } from '../rules/boardMath.js';
-import { post } from '../world/shapes.js';
-import { centerAbove, Panel, PANEL_INK as INK } from './panel.js';
-import { PokeButton } from './pokeButton.js';
-import { drawBanner, drawIcon, drawNineSlice, wrapText, type UiImageName } from './uiImages.js';
+import { centerAbove, drawIcon, drawLine, drawNineSlice, drawTitleBanner, Panel, StandButton, UI_COLORS, wrapText, type UiImageName } from './kit/index.js';
+
+const INK = UI_COLORS.ink;
 
 export interface SignContent {
   /** 'lesson' shows a checkbox, 'banner' a wave title. */
@@ -31,71 +29,111 @@ export interface SignContent {
   next?: boolean;
 }
 
-const SUB_INK = '#8a5a34';
+const SUB_INK = UI_COLORS.note;
 
 export class HintSign {
   private panel: Panel;
   private drawn = '';
-  private next: PokeButton;
-  /** The Next button's stand, in reach in front of the player. */
-  private nextStand = new Group();
+  /** The Next button on its stand, in reach in front of the player. */
+  private next: StandButton;
+  /** How long the Next button has waited for a poke (seconds); it blinks after HINT_SIGN.nextBlinkAfter. */
+  private nextWait = 0;
+  /** The sign's middle in a wave (up, out of the way), while no wave is fought (in front of the eyes), and where it goes now (cm). */
+  private battleY: number;
+  private calmY: number;
+  /** Low, under the way to a target in the air (the balloon lesson), so neither it nor the shot is hidden. */
+  private lowY: number;
+  private targetY: number;
 
   constructor(parent: Object3D, audio: GameAudio) {
     const { width, height, radius, y, tiltDeg } = HINT_SIGN;
+    this.battleY = centerAbove(y, height, tiltDeg);
+    this.lowY = centerAbove(HINT_SIGN.lowY, height, tiltDeg);
+    this.calmY = BOARD.eyeToBoard * 100 - HINT_SIGN.calmBelowEyes;
+    this.targetY = this.calmY;
     this.panel = new Panel(parent, {
       width,
       height,
       radius,
-      centerY: centerAbove(y, height, tiltDeg),
+      centerY: this.calmY,
       tiltDeg,
       layoutWidth: 768,
       canvasScale: 1.5,
       anisotropy: 4,
     });
-    // "Next" button straight in front, in reach, its face tilted up toward the eyes.
-    this.next = new PokeButton(audio, { radius: HINT_SIGN.nextRadius, icon: 'next' });
-    this.next.group.rotation.x = -degToRad(HINT_SIGN.nextTiltDeg);
-    // A post down to the board, so it stands like the tool platforms.
-    const stem = post(HINT_SIGN.nextY - HINT_SIGN.nextRadius);
-    stem.position.y -= HINT_SIGN.nextRadius;
-    this.nextStand.add(this.next.group, stem);
-    this.nextStand.position.set(0, HINT_SIGN.nextY, -HINT_SIGN.nextAt);
-    this.nextStand.visible = false;
-    parent.add(this.nextStand);
+    // "Next" button in front a little to the right (the pause button's spot), in reach, its face tilted up toward the eyes.
+    this.next = new StandButton(parent, audio, {
+      radius: HINT_SIGN.nextRadius,
+      icon: 'next',
+      at: HINT_SIGN.nextAt,
+      y: HINT_SIGN.nextY,
+      tiltDeg: HINT_SIGN.nextTiltDeg,
+      angleDeg: HINT_SIGN.nextAngleDeg,
+    });
+  }
+
+  /**
+   * While no wave is fought (the first lessons, the breathers) the sign
+   * hangs lower, right in front of the eyes, so it is not missed; in a wave
+   * it goes back up, out of the way of the enemies. It glides between them.
+   */
+  setCalm(calm: boolean): void {
+    this.targetY = calm ? this.calmY : this.battleY;
+  }
+
+  /** A lesson whose target is in the air: the sign glides down, below the way to it (call after setCalm). */
+  setLow(): void {
+    this.targetY = this.lowY;
   }
 
   show(content: SignContent | null): void {
     if (!content) {
       this.panel.visible = false;
-      this.nextStand.visible = false;
+      this.next.show(false);
       this.drawn = '';
       return;
     }
     this.panel.visible = true;
-    if (!!content.next !== this.nextStand.visible) {
-      this.nextStand.visible = !!content.next;
-      this.next.reset();
-    }
+    if (!!content.next !== this.next.visible) this.nextWait = 0;
+    this.next.show(!!content.next);
     const key = JSON.stringify(content);
     if (key === this.drawn) return;
     // A new instruction pops in. Ticking the box or a counter change does not.
     const sameText = this.drawn && JSON.parse(this.drawn).text === content.text;
     if (!sameText) {
       this.panel.popIn(HINT_SIGN.popTime);
-      // A new step: a finger still on Next must not skip it too.
+      // A new step: a finger still on Next must not skip it too, and its blink waits again.
       this.next.lock(POKE.lockAfterChange);
+      this.nextWait = 0;
+      this.next.setBlink(null);
     }
     this.drawn = key;
     this.draw(content);
   }
 
+  /** The Next button is out (the pause button, on the same spot, steps aside). */
+  get nextShown(): boolean {
+    return this.panel.visible && this.next.visible;
+  }
+
   /** True on the frame the "Next" button is poked (only while it shows). */
   pokedNext(hands: HandState[], dt: number): boolean {
-    return this.panel.visible && this.nextStand.visible && this.next.update(hands, dt);
+    return this.panel.visible && this.next.update(hands, dt);
   }
 
   update(dt: number): void {
     this.panel.update(dt);
+    // Glide up or down to where it hangs now.
+    const root = this.panel.root;
+    root.position.y += (this.targetY - root.position.y) * Math.min(1, dt / HINT_SIGN.moveTime * 3);
+    // Next waits a while for the player to read, then blinks until it is poked, so it is not missed.
+    if (this.next.visible && this.panel.visible) {
+      const before = this.nextWait;
+      this.nextWait += dt;
+      if (before < HINT_SIGN.nextBlinkAfter && this.nextWait >= HINT_SIGN.nextBlinkAfter) {
+        this.next.setBlink({ color: HINT_SIGN.nextBlinkColor, intensity: HINT_SIGN.nextBlinkIntensity, speed: HINT_SIGN.nextBlinkSpeed });
+      }
+    }
   }
 
   private draw(content: SignContent): void {
@@ -107,20 +145,14 @@ export class HintSign {
     const pad = 18;
     // Header: a hanging banner for waves, a plain line with a checkbox for lessons.
     const headerH = 70;
-    c.textBaseline = 'middle';
     if (content.kind === 'banner') {
-      drawBanner(c, w * 0.2, pad, w * 0.6, headerH);
-      c.fillStyle = '#fff4dc';
-      c.textAlign = 'center';
-      c.font = 'bold 40px sans-serif';
-      c.fillText(content.header, w / 2, pad + headerH / 2);
+      drawTitleBanner(c, content.header, w * 0.2, pad, w * 0.6, headerH, 40);
     } else {
-      c.fillStyle = SUB_INK;
-      c.textAlign = 'left';
-      c.font = 'bold 34px sans-serif';
-      c.fillText(content.header, pad + 30, pad + headerH / 2);
-      drawIcon(c, content.done ? 'checkOn' : 'checkOff', w - pad - 30 - 58, pad + 6, 58);
+      drawLine(c, content.header, pad + 30, pad + headerH / 2, w - pad * 2 - 30 - 58 - 40, 34, SUB_INK, 'left');
+      // A green tick once done, so it reads as done at a glance.
+      drawIcon(c, content.done ? 'checkOn' : 'checkOff', w - pad - 30 - 58, pad + 6, 58, content.done ? HINT_SIGN.doneColor : undefined);
     }
+    c.textBaseline = 'middle';
     // Body: icon on the left, the instruction on the right.
     const bodyTop = pad + headerH + 6;
     const subH = content.sub ? 46 : 0;

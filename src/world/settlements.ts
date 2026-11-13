@@ -25,11 +25,11 @@
 // the burned village, forests and lumber camps; the terrain flattens them),
 // then the hilltop and hillside places on the finished terrain. Built from kit pieces (houses from wall tiles and roofs)
 // into one StaticBatch: a few draw calls for all of it.
-import { Group, Matrix4, Quaternion, Vector3 } from 'three';
+import { Group, Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import { BOARD, ROADS, SETTLEMENTS, type LandmarkKind } from '../config/game.js';
-import { groundAt, polarX, polarZ } from '../rules/boardMath.js';
+import { degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
-import { loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
+import { cloneStatic, loadTemplate, StaticBatch, type ModelTemplate } from './models.js';
 import type { Road } from './roads.js';
 import { campDistance, type CampSpot, type RoadField, type Terrain } from './terrain.js';
 
@@ -100,7 +100,7 @@ function roadGap(roads: RoadField, x: number, z: number, size: number): number {
  * Step 1, before the terrain: villages beside the roads, their fields, and
  * the forests. The villages and fields go back to the terrain as flat spots.
  */
-export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random): SettlementPlan {
+export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random, keepClear: Spot[] = []): SettlementPlan {
   const { villages: V, farms: F, forests: W } = SETTLEMENTS;
   const villages: Spot[] = [];
   for (let tries = 0; villages.length < V.count && tries < 4000; tries++) {
@@ -108,7 +108,7 @@ export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random
     const size = rng.range(...V.radius);
     const gap = roadGap(roads, x, z, size);
     if (gap < V.roadGap[0] || gap > V.roadGap[1]) continue;
-    if (campDistance(camps, x, z) < V.campGap) continue;
+    if (campDistance(camps, x, z) < V.campGap || gapTo(keepClear, x, z) < size) continue;
     if (villages.some((v) => distance(v, x, z) < V.spacing)) continue;
     villages.push({ x, z, size });
   }
@@ -127,7 +127,7 @@ export function planSettlements(roads: RoadField, camps: CampSpot[], rng: Random
       const z = village.z - Math.cos(a) * d;
       if (Math.hypot(x, z) - size < 90 || Math.hypot(x, z) + size > BOARD.outerRadius - 40) continue;
       if (roadGap(roads, x, z, size) < 2) continue;
-      if (campDistance(camps, x, z) < 40) continue;
+      if (campDistance(camps, x, z) < 40 || gapTo(keepClear, x, z) < size) continue;
       if (gapTo(villages, x, z) < size * 0.6 || fields.some((f) => distance(f, x, z) < f.size + size + 2)) continue;
       // Its local x along the village's edge, so the long side faces the village.
       fields.push({ x, z, size, length, width, yaw: Math.atan2(Math.cos(a), Math.sin(a)) + Math.PI / 2, crop: rng.pick(CROPS), village });
@@ -191,9 +191,10 @@ export function flatSpots(plan: SettlementPlan): CampSpot[] {
 }
 
 /** Step 2, on the finished terrain: watch towers on hilltops by the roads, the windmill, the wrecks by the camps. */
-export function placeLandmarks(plan: SettlementPlan, terrain: Terrain, camps: CampSpot[], rng: Random): void {
+export function placeLandmarks(plan: SettlementPlan, terrain: Terrain, camps: CampSpot[], rng: Random, keepClear: Spot[] = []): void {
   const { towers: T, windmill: M, ruins: R } = SETTLEMENTS;
-  const homes: Spot[] = [...plan.villages, ...plan.fields];
+  // The triggers on the roads count as homes here: towers, the windmill and wrecks keep clear of them.
+  const homes: Spot[] = [...plan.villages, ...plan.fields, ...keepClear];
   // Towers: the highest spots right beside a road.
   const candidates: { x: number; z: number; height: number }[] = [];
   for (let i = 0; i < 900; i++) {
@@ -352,6 +353,15 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     pumpkin,
     melon,
     fence,
+    bench,
+    hedge,
+    bucket,
+    barrelOpen,
+    woodPile,
+    planks,
+    chest,
+    bannerRed,
+    bannerGreen,
     ...wrecks
   ] = await Promise.all([
     town('wall'),
@@ -382,10 +392,26 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     load('farm/nature/crop_pumpkin'),
     load('farm/nature/crop_melon'),
     load('farm/nature/fence_simple'),
+    town('stall-bench'),
+    town('hedge'),
+    load('props/survival/bucket'),
+    load('props/survival/barrel-open'),
+    load('props/survival/resource-wood'),
+    load('props/survival/resource-planks'),
+    load('props/survival/chest'),
+    town('banner-red'),
+    town('banner-green'),
     ...['siege-catapult', 'siege-trebuchet', 'siege-ram', 'siege-ballista', 'siege-tower'].map((n) => load(`props/castle-kit/${n}-demolished`)),
   ]);
   const batch = new StaticBatch();
-  const add = (template: ModelTemplate, matrix: Matrix4): void => batch.add(template, matrix);
+  // Where every window tile and lantern goes, for the night lights (src/world/nightLights.ts).
+  const windows: Matrix4[] = [];
+  const lanterns: Matrix4[] = [];
+  const add = (template: ModelTemplate, matrix: Matrix4): void => {
+    batch.add(template, matrix);
+    if (template === wallWindow || template === woodWindow) windows.push(matrix.clone());
+    else if (template === lantern) lanterns.push(matrix.clone());
+  };
   const H = SETTLEMENTS.houses;
 
   /** A house: four wall tiles (the door toward the square), one or two floors, a roof, sometimes a chimney. */
@@ -404,28 +430,68 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
   };
 
   for (const village of plan.villages) {
-    // Houses around the square, doors toward it.
+    // Houses in an arc on the far side of the square, doors toward it: the side toward the castle stays open,
+    // so the player looks into the square and sees the villagers there (houses all round hid them).
     const count = rng.int(SETTLEMENTS.villages.houses[1] - SETTLEMENTS.villages.houses[0] + 1) + SETTLEMENTS.villages.houses[0];
-    const start = rng.range(0, Math.PI * 2);
+    const away = Math.atan2(village.x, -village.z);
+    const arc = degToRad(SETTLEMENTS.villages.houseArcDeg);
+    const start = away - arc / 2;
     for (let i = 0; i < count; i++) {
-      const a = start + (i / count) * Math.PI * 2 + rng.range(-0.2, 0.2);
+      const a = start + (count > 1 ? (i / (count - 1)) * arc : arc / 2) + rng.range(-0.08, 0.08);
       const d = village.size * rng.range(0.55, 0.68);
       const x = village.x + Math.sin(a) * d;
       const z = village.z - Math.cos(a) * d;
       house(x, z, facing(x, z, village.x, village.z));
     }
-    // The square: a stall, a lantern, a cart and some barrels and boxes.
+    // The square: two stalls, two lanterns, a cart, benches, and barrels, boxes, wood and buckets about.
     const y = (px: number, pz: number): number => groundAt(px, pz) - 0.05;
     const s = (dx: number, dz: number): [number, number] => [village.x + dx, village.z + dz];
-    const [sx, sz] = s(rng.range(-2, 2), rng.range(-2, 2));
-    add(rng.pick([stall, stallRed, stallGreen]), place(sx, y(sx, sz), sz, rng.range(0, Math.PI * 2), 3.2));
-    const [lx, lz] = s(rng.range(-4, 4), rng.range(-4, 4));
-    add(lantern, place(lx, y(lx, lz), lz, 0, 2.6));
-    const [cx, cz] = s(rng.range(-5, 5), rng.range(-5, 5));
+    /** A spot in the square, within `share` of the village's size from its middle. */
+    const inSquare = (share: number): [number, number] => {
+      const a = rng.range(0, Math.PI * 2);
+      const d = rng.range(0, share) * village.size;
+      return s(Math.sin(a) * d, -Math.cos(a) * d);
+    };
+    const stalls = [stall, stallRed, stallGreen];
+    for (let i = 0; i < 2; i++) {
+      const [sx, sz] = inSquare(0.3);
+      add(stalls[(i + rng.int(3)) % 3], place(sx, y(sx, sz), sz, rng.range(0, Math.PI * 2), 3.2));
+    }
+    for (let i = 0; i < 2; i++) {
+      const [lx, lz] = inSquare(0.35);
+      add(lantern, place(lx, y(lx, lz), lz, 0, 2.6));
+    }
+    const [cx, cz] = inSquare(0.35);
     add(cart, place(cx, y(cx, cz), cz, rng.range(0, Math.PI * 2), 3));
-    for (let i = 0; i < 4; i++) {
-      const [bx, bz] = s(rng.range(-5, 5), rng.range(-5, 5));
+    const P = SETTLEMENTS.villages.props;
+    for (let i = 0; i < P.barrels; i++) {
+      const [bx, bz] = inSquare(0.4);
       add(rng.pick([barrel, box, boxLarge]), place(bx, y(bx, bz), bz, rng.range(0, Math.PI * 2), 3.4));
+    }
+    const extras: [ModelTemplate, number][] = [
+      [bench, 3],
+      [bucket, 3.4],
+      [barrelOpen, 3.4],
+      [woodPile, 3],
+      [planks, 3],
+      [chest, 3.2],
+    ];
+    for (let i = 0; i < P.extras; i++) {
+      const [template, size] = extras[i % extras.length];
+      const [ex, ez] = inSquare(0.42);
+      add(template, place(ex, y(ex, ez), ez, rng.range(0, Math.PI * 2), size));
+    }
+    // A banner on the square's edge (the kingdom's red or green), and hedges between some houses.
+    const [fx, fz] = inSquare(0.45);
+    add(rng.next() < 0.5 ? bannerRed : bannerGreen, place(fx, y(fx, fz), fz, rng.range(0, Math.PI * 2), 5));
+    // Between the houses of the arc only, never on the open side toward the castle.
+    for (let i = 0; i < count - 1; i++) {
+      if (rng.next() < 0.4) continue;
+      const a = start + ((i + 0.5) / (count - 1)) * arc;
+      const hx = village.x + Math.sin(a) * village.size * 0.82;
+      const hz = village.z - Math.cos(a) * village.size * 0.82;
+      // The hedge's length (its z) along the ring of houses.
+      add(hedge, place(hx, y(hx, hz), hz, Math.PI / 2 - a, 4));
     }
     // A signpost where the village meets its road.
     signpostBy(village, roads, (x, z, yaw) => add(signpost, place(x, groundAt(x, z), z, yaw, 4.5)));
@@ -441,10 +507,30 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     add(towerMid, base.clone().multiply(local(1.01, 0)));
     add(towerTop, base.clone().multiply(local(2.02, 0)));
   }
-  // The windmill, its sails toward the giant.
+  // The windmill: a tall mill house (the kit's windmill model is only the
+  // sails, centered on their axle), its door and sails toward the giant. The
+  // sails are their own object, so they can turn (see Windmill below).
+  let sails: Object3D | null = null;
   if (plan.windmill) {
     const { x, z } = plan.windmill;
-    add(windmill, place(x, lowestGround(x, z, 4) - 0.3, z, facing(x, z, 0, 0), SETTLEMENTS.windmill.height / 3.11));
+    const M = SETTLEMENTS.windmill;
+    const tile = M.height / (M.floors + 0.5);
+    const base = place(x, lowestGround(x, z, tile) - 0.15, z, facing(x, z, 0, 0), tile);
+    for (let floor = 0; floor < M.floors; floor++) {
+      for (let side = 0; side < 4; side++) {
+        const piece = floor === 0 && side === 0 ? wallDoor : side % 2 === 0 ? wallWindow : wall;
+        add(piece, base.clone().multiply(local(floor, side)));
+      }
+    }
+    add(roofPoint, base.clone().multiply(local(M.floors, 0)));
+    // The sails on the front wall, near the top, their axle (the model's x) straight out of the wall.
+    const pivot = new Group();
+    base.clone().multiply(new Matrix4().makeTranslation(0.5 + M.axleOut, M.floors - 0.35, 0)).decompose(pivot.position, pivot.quaternion, pivot.scale);
+    const blades = cloneStatic(windmill);
+    blades.scale.setScalar((M.sailRadius * 2) / 3.11);
+    pivot.add(blades);
+    pivot.userData.blades = blades;
+    sails = pivot;
   }
   // Wrecked siege machines by the camps.
   for (const ruin of plan.ruins) {
@@ -454,7 +540,23 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
   await buildFarPlaces(plan, add, { walls: [wall, wallWindow, wood, woodWindow, wallDoor, woodDoor], roof: roofGable, cart, barrel, box, boxLarge }, rng);
   const group = batch.build();
   group.name = 'settlements';
+  group.userData.windows = windows;
+  group.userData.lanterns = lanterns;
+  group.userData.lanternHeight = lantern.size.y;
+  if (sails) {
+    group.add(sails);
+    group.userData.sails = sails.userData.blades;
+  }
   return group;
+}
+
+/** Turns the windmill's sails slowly (decor only). */
+export class Windmill {
+  constructor(private blades: Object3D | null) {}
+
+  update(dt: number): void {
+    if (this.blades) this.blades.rotation.x += dt * SETTLEMENTS.windmill.spin;
+  }
 }
 
 type Add = (template: ModelTemplate, matrix: Matrix4) => void;

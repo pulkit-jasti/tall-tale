@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "gen": "node scripts/gen.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

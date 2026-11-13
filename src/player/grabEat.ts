@@ -50,6 +50,16 @@ export class GrabEat {
   onEat: (goblin: Goblin) => void = () => {};
   /** Called with each goblin picked up (the tutorial waits for it). */
   onGrab: (goblin: Goblin) => void = () => {};
+  /** Called with each goblin let go away from the mouth, and how fast it flew off (cm per second): the toss lesson waits for one. */
+  onToss: (goblin: Goblin, speed: number) => void = () => {};
+
+  /** True while this hand holds anything: a goblin, the slingshot or a pebble, or a tool. */
+  handBusy(hand: HandState): boolean {
+    if (this.slots.get(hand)?.held) return true;
+    if (this.slingshot.isBusy(hand)) return true;
+    for (const t of this.tools) if (t.isBusy(hand)) return true;
+    return false;
+  }
 
   /** True while a hand holds this goblin. */
   isHolding(goblin: Goblin): boolean {
@@ -107,8 +117,9 @@ export class GrabEat {
           this.eat(goblin, headPosition, headForward);
           this.clearHeld(slot);
         } else if (letGo) {
-          this.goblins.drop(goblin);
+          const speed = this.goblins.drop(goblin);
           this.clearHeld(slot);
+          this.onToss(goblin, speed);
         }
         continue;
       }
@@ -167,7 +178,7 @@ export class GrabEat {
         const tool = target.tool;
         const viaPinch = !hand.fist.started;
         if (hand.fist.started || (TOOLS.acceptPinch && hand.pinch.started)) {
-          // Not enough food: a buzz and a wobble instead of a grab.
+          // Recharging (or tied down): a buzz and a wobble instead of a grab.
           if (!tool.usable) {
             tool.refuse();
           } else {

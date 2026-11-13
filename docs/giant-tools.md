@@ -1,6 +1,6 @@
-# Giant Tools and Food
+# Giant Tools
 
-Status: first pass decided. Numbers are starting values for tuning.
+Status: v2 (run 1 built and tuned on the headset, 2026-11-10 to 11-11, see [v2-plan.md](v2-plan.md)). Numbers are starting values for tuning. The food currency, food jar and price tags of the MVP are gone.
 
 Back to [GDD index](GDD.md).
 
@@ -12,82 +12,51 @@ The player's abilities are split into categories:
 
 | Category | What it is | Limited by |
 |---|---|---|
-| Castle machines | Human-built war machines on the wall (catapult, cannon, arrow volley...), modified with chains, gears and buttons so the giant can run them | Supply carts, fixed wedge of coverage |
-| **Giant tools** | Tools built for the giant. Handheld, used directly on the battlefield | Food currency |
-| Body abilities | Grab and eat. Always available | Hand reach |
+| **Giant tools** | Tools built for the giant. Handheld, used directly on the battlefield | A use window, then a recharge |
+| Body abilities | Grab, throw and eat. Always available | Hand reach |
 | Food powers | Powers from eating specific enemies | Ideas only, not designed yet |
 
-This file covers giant tools and the food currency that powers them. Grab and eat are described in [controls-and-ui.md](controls-and-ui.md#3-grab-and-eat).
+Castle machines are dropped (v2, [castle-machines.md](castle-machines.md) stays as history). This file covers the giant tools. Grab and eat are described in [controls-and-ui.md](controls-and-ui.md#3-grab-and-eat).
 
 ---
 
 ## 2. Design rules
 
-- **Powerful but limited.** Giant tools can turn a battle, so their use must cost something. Otherwise they remove the challenge.
+- **Powerful but limited.** Giant tools can turn a battle, so each has a short use window and then a recharge. The player chooses which tool to use when, instead of using one favorite all the time.
 - **Counters are "much better", never "the only way".** A wrong pick should make a fight harder, not impossible.
 - **Simple to use.** Handheld tools need no aiming UI and no area circles. The tool's own visuals show what it hits.
 - **Each tool has a clear zone and role**, so tools do not overlap.
-- **No refill for free.** Tool use is only refilled through play (eating), never by a timer or between waves.
+- **Two hands are a natural limit too:** the slingshot needs both, a held tool means that hand cannot grab a goblin, and eating needs a free hand.
 
 ---
 
-## 3. Food currency
+## 3. Use windows and recharge (v2)
 
-One shared food bar powers all giant tools (except the slingshot).
+Tools are free. Rules in `src/rules/recharge.ts`, numbers in `TOOLS` in `src/config/game.ts`.
 
-- Eating fills the bar.
-- Each tool has a food cost. As long as you have enough food, you can use any unlocked tool.
-- When the bar is empty, no tool can be used (the slingshot still works).
-- The bar does not drain over time. It is a resource, not a hunger meter. The old hunger idea is replaced by this.
+| Tool | Use | Recharge |
+|---|---|---|
+| Slingshot | always | none |
+| Swatter | 10 s | 20 s |
+| Pepper | 8 s | 20 s |
+| Bell | one stun | 35 s |
+| Horn | one call | 30 s |
 
-### Starting values
+- **The use window starts with the first use** (the first swat, shake, ring or blow), not the grab, so an accidental grab never wastes it.
+- **The recharge starts when the tool is back on its platform**, and only fills while it rests there.
+- **How it shows:** while recharging, the tool is dimmed (the Locked look) and a flat ring on its platform fills up in blue. While a use runs, the ring drains in cream. Hidden while the tool is ready. Readable with the sound off. A hand near a recharging tool shows Locked, and closing the hand buzzes and wobbles it.
 
-| Item | Food |
-|---|---|
-| Eat a basic goblin | +1 |
-| Eat a seasoned goblin (peppered) | +2 |
-| Pepper shaker | costs 3 |
-| Fly swatter | costs 4 |
-| Megaphone / bell | costs 6 |
-| Food bar max | 10 |
-| Food at the start of a battle | 4 |
+### Eating fills every recharge ring
 
-- Food carries over between waves within a battle. It resets to the starting value at the start of each battle.
+- **Each goblin eaten fills every recharging tool's ring by 10% of that tool's full recharge** (a 30 s recharge gets 3 s back). A **seasoned** (peppered) goblin fills 20%.
+- All rings jump forward together with the gulp (a white flash on each ring and a chime), so it is easy to see.
+- It never shortens or extends a use window, and never makes a ready tool "more ready".
+- **The balance idea:** more goblins means more to eat, faster tools, and more power to clear the wave. If the snowball is too strong in playtests, lower the share (`TOOLS.eatRefill`, `seasonedRefill`), not the idea.
+- Eating is also the only way to deal with goblins in the courtyard without tools.
 
-### Where food comes from
+**Where the goblins to eat come from:** every goblin climbs the wall now ([enemies.md](enemies.md)), so there is always something on the rampart in reach, plus intruders and balloon riders dropped into the courtyard.
 
-Food only comes from play, so smart play is rewarded.
-
-**Hidden climbers**
-- Every wave has some enemies that climb the wall unseen and suddenly pop up on the rampart, in reach.
-- If ignored for a few seconds, they jump down into the courtyard and become intruders (see [enemies.md](enemies.md#6-intruders-enemies-inside-the-castle)).
-- If grabbed, they are instant food. Eating is defense, not just a snack.
-
-**Intruders**
-- Goblins that get inside the courtyard (dropped by balloons, or missed climbers) are fully in reach and can be grabbed and eaten. See [enemies.md](enemies.md).
-
-**Prisoner carts (on hold, not in the MVP)**
-- Decide after the first playtest, based on how food feels and available time.
-- Story reason: the kingdom's side of the deal is to feed the giant.
-- Enemies that are stunned (megaphone) or disarmed (pepper) can be captured by nearby troops with a net.
-- Troops wheel them back to the castle in a cage cart. The player lifts the cage lid, grabs a goblin and eats it.
-- This creates the core loop:
-
-```
-use tools -> enemies stunned / disarmed -> troops capture them
-    ^                                            |
-    |                                            v
- spend food  <-  eat  <-  prisoner cart arrives at the castle
-```
-
-**Self balancing**
-- Losing: more enemies reach the wall, so more climbers come into reach.
-- A losing player gets more food chances, not fewer. No death spiral.
-- With prisoner carts (later): winning also feeds you, because troops capture more.
-- MVP: food comes only from climbers and intruders, so each wave must have enough climbers. The climber count per wave is in the tutorial wave table ([mvp.md](mvp.md#tutorial-waves)). Tune in playtests.
-
-**First five minutes**
-- In wave 1, one goblin is scripted to climb the wall right in front of the player, so the eating moment happens in the first minute.
+**First five minutes:** before wave 1, one goblin is scripted to climb the wall right in front of the player, so the eating moment happens in the first minute.
 
 ---
 
@@ -98,8 +67,8 @@ use tools -> enemies stunned / disarmed -> troops capture them
 - **Role:** precision. Breaks shields, pops balloons, hits single targets.
 - **Zone:** middle and far.
 - **Use:** pull back and release. Projectile path, so a short trajectory preview is fine here (see aim assist below).
-- **Cost:** no food. Uses pebbles from a bowl beside the player.
-- **Limit:** soldiers keep topping up the bowl from a stone pile. The refill rate and the pull-back time limit spamming. The player always has one direct action, even with no food.
+- **Cost:** free, no timer, always in the loadout. Uses pebbles from a bowl beside the player.
+- **Limit:** soldiers keep topping up the bowl from a stone pile. The refill rate and the pull-back time limit spamming. The player always has one direct action, even with every other tool recharging.
 - **How it works (step 2, changed after the first slingshot headset test):**
   1. Grab the slingshot's handle with either hand (fist or pinch, like the ring handle, with the same short open-hand wait first). It follows that hand, so the player aims by turning the hand and the body, which is faster than fine moves with one hand. Once the pouch is pulled, the slingshot locks where it is until the shot, and the aim comes only from the pulling hand. The holding hand is often hidden behind the pulling hand then, and its guessed pose must not move the shot.
   2. Pinch a pebble from the bowl and bring it to the pouch. Close enough, it clicks into the pouch and stays there however the slingshot moves. Let go. A pebble let go over the bowl goes back in. Let go anywhere else, it keeps the hand's speed, like a tossed goblin (see "Thrown pebbles" below).
@@ -107,9 +76,9 @@ use tools -> enemies stunned / disarmed -> troops capture them
   - **Hidden hands:** pulling straight back can hide the holding hand behind the pulling hand. Then the slingshot stays where it is for a moment instead of dropping, and during a pull the holding hand never lets go because it looks open (its fingers are only guessed). If the pulling hand is lost, the pouch waits at its last spot. When the hand comes back, the pull goes on if the pinch reads again, or is cancelled. It never shoots by itself. Numbers are `holdLostGrace`, `pullLostGrace` and `pullSettle` in `SLINGSHOT`.
   - Letting go of the handle glides the slingshot back to its platform. A loaded pebble stays in. It also shoots while it rests on the platform, so it works with one hand.
   - No auto reload. An empty pouch or an empty bowl shows Locked (wobble and buzz). The pile in the bowl shrinks as pebbles are taken and refills over time.
-  - Pebbles are 2.5 cm with a 4 cm hit area. One hit knocks out any goblin. If aiming is still too hard, the next step is a bigger goblin hit box. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
+  - Pebbles are 2.5 cm with a 4 cm hit area. One hit knocks out a bare goblin; a helmet or a shield takes one hit each (v2, see section 5). If aiming is still too hard, the next step is a bigger goblin hit box. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
 - **Thrown pebbles:** a pebble thrown by hand only knocks the goblin it hits back a little, dazed for a moment. It never knocks one out, so the slingshot keeps its job (range and knock outs). It buys a second near the wall. A slow let go just drops the pebble and does nothing. Thrown pebbles will not set off triggers (powder kegs, boulders, trees), so those stay a slingshot moment. Numbers are in `PEBBLE_THROW`.
-- **Goblin shot:** a held goblin brought to the empty pouch clicks in like a pebble. Shot, it tumbles through the air, knocks out the goblin it hits, knocks back the goblins within about 8 cm of the impact (dazed), and poofs. Landing without a hit still knocks back the goblins around it. It costs a goblin the player could have eaten, so it is a choice: food or a stronger shot. Numbers are in `GOBLIN_SHOT`. Debug key J loads one, L shoots it.
+- **Goblin shot:** a held goblin brought to the empty pouch clicks in like a pebble. Shot, it tumbles through the air, hits the goblin it lands on (v2: armor counts, like every hit), knocks back the goblins within about 8 cm of the impact (dazed), and poofs. Landing without a hit still knocks back the goblins around it. It costs a goblin the player could have eaten (and the recharge it would have given), so it is a choice. Numbers are in `GOBLIN_SHOT`. The debug page can load one and shoot it.
 
 #### Slingshot aim assist
 
@@ -130,44 +99,49 @@ Rules:
 
 - **Role:** crowd clearing. Kills groups of basic goblins and gives the army a fighting chance.
 - **Zone:** near zone and the edge of the middle zone (the swatter's length extends reach).
-- **Use:** once activated, the player has about **10 seconds** to swat as many times as they want.
-- **Cost:** 4 food.
-- **Weakness:** cannot break shields or armor.
+- **Use:** the first swat starts a **10 second** window to swat as many times as the player wants, then a 20 s recharge.
+- **Armor (v2):** a helmet or a shield takes one swat each (it flies off and the goblin reels back); it is no longer a special big hit.
 - **Hand tracking note:** fast swings can blur tracking. Detect hits along the whole swing path, use a generous hit area, and let slams count, not only fast swipes.
-- **How it works (step 4):** it rests on the left side platform, leaning back 18 degrees along the rim, so its head is behind the left shoulder. Grab the handle with a fist (`TOOLS.acceptPinch` allows a pinch too, if the fist tracks poorly). A swat is the head touching a goblin, or the ground on the way down. The first swat pays the food and starts the timer. Each swat knocks out every goblin within 6.5 cm of the head's path since the last frame, at any speed above 35 cm/s, so slow slams count. A swish sound plays on fast swings. Numbers are in `SWATTER` and `TOOLS` in `src/config/game.ts`. Debug key 2 swats the front of the wall.
+- **How it works:** it rests on the left side platform, leaning back 18 degrees along the rim, so its head is behind the left shoulder. Grab the handle with a fist (`TOOLS.acceptPinch` allows a pinch too, if the fist tracks poorly). A swat is the head touching a goblin, or the ground on the way down. The first swat starts the use window. Each swat hits every goblin within 6.5 cm of the head's path since the last frame, at any speed above 35 cm/s, so slow slams count. After armor takes a hit the goblin shrugs off hits for 0.35 s (`GOBLIN_GEAR.hitGrace`), so one swing over several frames takes one piece. It already works on goblins on the walls and the rampart. Numbers are in `SWATTER` and `TOOLS` in `src/config/game.ts`. The debug page's swat button swats the front of the wall.
 
-### Pepper shaker
+### Pepper shaker (reworked in v2)
 
-- **Role:** strips defenses and seasons enemies for eating.
-- **Zone:** near zone, at the wall.
-- **Use:** shake over enemies for about **5 to 10 seconds**. Pepper falls where the hand is. The falling particles show where it lands, like seasoning real food. No aiming UI.
-- **Effect:** enemies sneeze hard and drop shields, helmets and weapons (gear flies off). Basic goblins with no gear sneeze and stumble back a little.
-- **Seasoned:** every peppered enemy counts as seasoned and gives +2 food when eaten. Funny, and a possible achievement ("seasoned before eating").
-- **Cost:** 3 food.
-- **Combo:** pepper a shield group at the wall, then swat them, let the rampart machines finish them, or eat them.
-- **How it works (step 4):** it rests on the front left platform. Grab it with a fist and shake it: a quick move that turns back on the one before is one stroke, and two strokes within 0.7 s are a shake, so no hand pose is needed. The first shake pays the food and starts the timer. While shaking, pepper specks fall straight down from the shaker, and every goblin within 7 cm of the spot below it is peppered once: it sneezes and turns a dusty brown (seasoned). Goblins outside the wall stumble back, goblins on the wall or in the courtyard sneeze in place, climbers keep climbing. No gear flies off yet, because MVP goblins wear none. Numbers are in `PEPPER` and `TOOLS`. Debug key 3 peppers the front of the wall.
+- **Role:** disarms. The power is the disarm, balanced by the small area and the recharge.
+- **Zone:** near zone, at the wall and on the rampart (a small area under the shaker).
+- **Use:** the first shake starts an **8 second** window, then a 20 s recharge. Pepper falls where the hand is. The falling particles show where it lands, like seasoning real food. No aiming UI.
+- **Effect:** every goblin under it is **disarmed: weapon, shield and helmet fly off**, so it becomes a one-hit goblin. It sneezes for a few seconds (5 s) and cannot attack meanwhile (no wall hits, no bashing, no attacks on the garrison). **No push back, no throw:** it sneezes where it is (one on the rampart or in the courtyard stops a moment).
+- **Seasoned:** every peppered goblin is seasoned and fills the recharge rings twice as much (20%) when eaten. Pepper then eat is one of the achievements later.
+- **How it works:** it rests on the front left platform. Grab it with a fist and shake it: a quick move that turns back on the one before is one stroke, and two strokes within 0.7 s are a shake, so no hand pose is needed. While shaking, pepper specks fall straight down from the shaker, and every goblin within 7 cm of the spot below it is peppered once (`Goblins.pepper`, `Goblins.disarm`): it sneezes, its gear flies off and it turns a dusty brown (seasoned). Numbers are in `PEPPER` and `TOOLS`. The debug page's pepper button peppers the front of the wall.
 
-### Megaphone (voice) / Bell (quiet mode)
+### Bell (reworked in v2)
 
-- **Role:** panic button. Stuns every enemy on the battlefield.
+- **Role:** panic button, the only stun.
 - **Zone:** everywhere.
-- **Use (megaphone):** one scream. Mic loudness is tracked. Passing the threshold triggers the stun. Louder and longer means a stronger effect (longer stun). Then the megaphone is used up.
-- **Use (bell):** shake the bell. Harder shaking means a stronger effect. Same result, hands only.
-- **Cost:** 6 food (most expensive).
-- **Mic permission:** asked on the 2D start page, before entering VR (see [controls-and-ui.md](controls-and-ui.md#4-menus)).
-- **Threshold:** the MVP uses one fixed loudness threshold. Later, a quick test shout at the start sets it per player, since mics and voices differ.
-- **MVP: one of the two, never both.** The megaphone is out when the player gave mic permission, the bell when they did not. Either one triggers the stun for 6 food. So the game is fully playable without voice. (First built side by side on one platform; changed after the step 5 review, since two new things at once is too much.) A setting to pick the bell even with the mic on comes later.
-- **How it works (step 5):** it rests on the right side platform (82 degrees): the bell on its mouth, handle up, or the megaphone standing on its grip, its cone pointing out. Grab it with a fist (held like a real one, `HOLD.poses`). Megaphone: scream into it. While it is held, a thin loudness bar on top of the cone fills in real time, with a pulsing red dot at the scream level (80% along it). The mic loudness (RMS, `src/audio/mic.ts`) over `MEGAPHONE.screamLevel` (0.04) for 0.1 s is a scream: it pays 6 food and stuns every goblin for 3.5 s, and screaming on (louder counts more) adds up to 8 s in total. Bell: shake it like the pepper (a quick move that turns back is a ring, two rings close together a shake). The first shake pays and stuns for 3.5 s plus up to 2 s for a hard shake, ringing on adds more. Each is one use: after a 2.5 s window it goes back to its platform. Stunned goblins freeze, play `emote-no` and get two dizzy stars over the head, and a shock ring runs across the board. Numbers in `MEGAPHONE`, `BELL`, `STUN` and `TOOLS`. Debug keys 4 (scream) and 5 (ring).
-- **Quiet mode (later):** chosen at the start. Hides the megaphone so only the bell is shown. Offered to everyone (speech difficulty, playing at night, around other people), so no one has to declare a disability.
+- **Use:** shake it. **Every goblin on the board is stunned**, and **every goblin on the rampart is knocked back down outside the wall** (it lands dazed, walks back and climbs again later). It does not disarm. One stun per use, then the longest recharge (35 s). Hands only, no voice.
+- **How it works:** it rests on its own platform on the left (-68 degrees). Grab it with a fist (held like a real one, `HOLD.poses`) and ring it with one quick swing (`src/tools/bell.ts`, rewritten twice). Speed checks on the bell never rang: Meta's docs say hands are tracked at 30 Hz with fast motion smoothed and sometimes lost. So it reads the holding hand itself, only on tracked frames, and rings when the hand gets 3 cm away from a slow anchor that follows it (`BELL.ringOffset`, `anchorSmoothing`); it must come back within 1.2 cm before the next ring, and never rings in the first 0.4 s after the grab. Each put-down leaves a note with the farthest swing. The game does the stun (`Bell.onRing`), the sound plays last and on its own. A ring while a stun still runs only rings. The debug page's notes say what each ring did. The stun lasts 3.5 s plus up to 2 s for a hard shake (`STUN`). Its use window is only 1.2 s, then it goes back. Stunned goblins freeze, play `emote-no` and get two dizzy stars over the head, and a shock ring runs across the board. Goblins knocked off the rampart fly out with a squeal (`Goblins.knockOffRampart`). Numbers in `BELL`, `STUN` and `TOOLS`. Debug page: the bell button.
+
+### War horn (new in v2, replaces the megaphone)
+
+- **Role:** calls the field knights ([core-loop.md](core-loop.md#2-troops)) to a road spot the player picks by looking at it. Up to 4 squads; at the limit the squad nearest the spot moves there.
+- **Look, raise, blow (changed 2026-11-11: no lock step, and not at the lips, which were too close to the headset for hand tracking):**
+  1. **Look:** the moment it is held, the head aims it: a glowing pool, a light pillar, a ghost banner and the path the knights will take along the roads show at once. The spot follows the look the whole time (the path is built again when it moves to another road or 6 cm along it, `HORN_AIM.pathRebuild`).
+  2. **Raise it in front of the face:** the blow zone is a 20 cm ball in front of the mouth (its middle 12 cm ahead of the eyes, with the look kept level, and 10 cm below them; `HORN.zoneForward`, `zoneDown`, `zoneRadius`). The lips and a horn raised a hand's length out both count; one resting at the chest or held out to the side does not. Once in, it stays in 5 cm farther out, and a tracking dropout under 0.3 s does not count as leaving (`zoneExitMargin`, `zoneGrace`). In the zone with a spot, everything turns gold with a click. (Fixed 2026-11-12: the first try, a 32 cm cone from the eyes, left out the mouth itself, which sits below the eyes.)
+  3. **Blow into the mic:** a blow counts only in the zone with a spot, when the raw loudness of a single frame reaches 0.015 (no holding it, no smoothing; set from the live loudness panel). A cough or loud talking there can set it off: raise `HORN.blowLevel` from the panel's numbers if it does. A **live bar** in front of the eyes shows the blow against the white line it has to pass. With the mic on, holding it there never fires it. With the **Quiet horn** setting (or no mic), keeping it in the zone for 1.2 s sends them, so voice is never required. The knights go to the spot looked at 0.3 s before the call (`HORN_AIM.callLookBack`), so a head that moves while blowing does not move the spot. A loud frame still counts for 0.25 s (`HORN.blowMemory`), so a blow that starts just before the horn is in place is not lost. The path is drawn from the road's own saved surface (`Road.surfaceAt`, written when the road is built), every 2 cm, both sides, pulled over the road (2026-11-12: it sank under the road on slopes and vanished on legs walked against a road's direction). It costs almost nothing to build: no terrain lookups and no garbage (the first fix made some 1500 terrain lookups per rebuild, and the dropped frames made the sun and clouds flicker). It is built again at most every 0.12 s while the look slides along a road (`HORN_AIM.pathEvery`), and the spot stays 0.3 s after the look slips off a road (`loseAfter`), so a slip never rebuilds the path or redraws the glass sign. Its builds are marked `horn path` on the FPS panel.
+- **A silent mic never breaks the horn** (2026-11-12, the bar sat at zero on the headset): a live mic always hears some room noise, so dead silence for 1 s while held (`HORN.silentLevel`, `silentFallback`) switches that hold to the quiet hold ("No mic sound: hold it there"). Each grab and each mic reopen writes a debug note with the mic's state (the audio context, the track, the level), to find why it went silent.
+- **The cue goes where the eyes go** (the glass sign, `GLASS_SIGN`, `src/ui/kit/glassSign.ts`; in the horn lesson it carries the lesson's text, and the hint sign steps away): while it is held, a small label floats a little above the look's center and follows the look: "Look at a road", "Raise it and blow" (or "Raise it in front of you" with the quiet horn), then "Blow!" with the live bar (or "Hold it there" with the quiet horn's progress). The lesson: "Look around" for at least 6 s (the horn does not call yet), "Raise the horn in front of your face", then "Blow into the horn!" (`TUTORIAL_TIMING.hornLookTime`); the ghost hand raises it a hand's length in front of the face.
+- One call per use: its use window and its 30 s recharge start only when it sounds, never on the grab.
+- **Mic permission** stays on the 2D start page, for the horn. The megaphone and its scream are gone. The settings' Accessibility tab has the **Quiet horn** switch (always on without a mic).
+- **The model never covers the view:** a curved ivory hunting horn with brass bands, held from below: the mouthpiece on top of the grip toward the face, the body curving forward and down past the fist, the bell low and a little to the side (`HORN.curve`). Near the face it fades to see-through (15% at 13 cm from the eyes). It rests on the right side platform (86 degrees), standing on its bell. Held like the megaphone was (`HOLD.poses.horn`). Little puffs come out of the bell while the call charges. Sound: the `waveHorn` war horn. Code `src/tools/horn.ts`, numbers in `HORN`. Debug page: the horn button.
 
 ### Summary
 
-| Tool | Zone | Effect | Duration | Food |
+| Tool | Zone | Effect | Use | Recharge |
 |---|---|---|---|---|
-| Slingshot | Middle, far | Precise hits, breaks shields, pops balloons | Per shot | Free |
-| Fly swatter | Near, edge of middle | Kills basic goblins, no shield break | ~10 s | 4 |
-| Pepper shaker | Near (wall) | Strips gear, seasons for eating | 5 to 10 s | 3 |
-| Megaphone / bell | Everywhere | Stuns all enemies | One use | 6 |
+| Slingshot | Middle, far | Precise hits, pops balloons, sets off triggers | Per shot | None |
+| Fly swatter | Near, edge of middle, rampart | Hits groups (armor takes a hit) | 10 s | 20 s |
+| Pepper shaker | Near (wall, rampart) | Disarms everything, seasons | 8 s | 20 s |
+| Bell | Everywhere | Stuns all, knocks the rampart down | One stun | 35 s |
+| War horn | The road in front | Calls a knight squad | One call | 30 s |
 
 ---
 
@@ -175,9 +149,12 @@ Rules:
 
 - **No health bars** on normal enemies. Health bars turn the game into math and clutter the view.
 - **Basic enemies die in one hit.**
-- **Tough enemies wear their health** as gear that breaks off: helmet (one extra hit), shield (blocks from the front until broken), balloon (riders fall when popped), armor pieces.
+- **Tough enemies wear their health** as gear that breaks off (v2, rules in `src/rules/gear.ts`): **helmet** one extra hit, **shield** one extra hit, counted separately (helmet and shield: 3 hits). This counts for **every hit**: pebble, arrow, soldier, swatter, goblin shot. **Triggers (keg, boulder, tree) ignore armor**, they are the big environmental hits. Balloons: riders fall when popped.
+- **Weapons have real effects:** a **spear** doubles wall damage, a **sword** strikes soldiers faster in a fight.
+- **Pepper strips all of it** (section 4).
+- **The same rules apply to our troops:** a soldier's shield is one extra hit.
 - **Bosses** get one big health bar. It is the only health bar in the game.
-- So tools differ by **what they can do** (break shields, hit groups, strip gear, stun), not by damage numbers.
+- So tools differ by **what they can do** (hit groups, disarm, stun, call knights), not by damage numbers.
 
 ### Juice for hits (kept light for performance)
 
@@ -193,8 +170,8 @@ Rules:
 
 ## 6. Unlocks and progression
 
-- **No loadout.** There is no tool choice before a battle. Every unlocked tool is always on its platform.
-- **The tutorial battle introduces one tool per wave.** A tool's platform stays empty until its wave. Then the tool appears on it with a poof and glows until the player grabs it once, and the tutorial's hint sign teaches it step by step (see [mvp.md](mvp.md#tutorial-director)). After the tutorial every tool is always available in every mode. No gating (see [modes-and-progression.md](modes-and-progression.md)).
+- **v2 (run 2, not built yet):** a battle has the slingshot plus 3 tools, and tools unlock in the campaign ([v2-plan.md](v2-plan.md#24-loadout-slingshot-plus-3)). Until then every tool comes in the tutorial.
+- **The tutorial battle introduces one tool per wave.** A tool's platform stays empty until its wave. Then the tool appears on it with a poof and glows until the player grabs it once, and the tutorial's hint sign teaches it step by step (see [mvp.md](mvp.md#tutorial-director)). Run 1 order: the horn before wave 1, the slingshot in wave 2, the swatter in 3, the pepper in 4, the bell in 5. The first tool's grab lesson says tools rest after use and eating fills the ring.
 - Custom Game and daily twists can limit tools (for example "pepper only").
 
 ---
@@ -203,33 +180,31 @@ Rules:
 
 ### Platforms
 
-- Tools sit on small platforms beside the player: **2 on each side**, slightly forward (about 45 degrees off center), not straight out to the sides. Easy to grab without twisting, and visible at the edge of view.
-- 4 spots, one per tool: the slingshot plus the 3 food tools.
+- Tools sit on small platforms beside the player, slightly forward, not straight out to the sides. Easy to grab without twisting, and visible at the edge of view.
+- 5 spots, one per tool (v2): the slingshot, the swatter, the pepper, the bell and the horn.
 - **The platforms stay with the player.** They do not turn when the board rotates (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 - The player chooses which side the slingshot sits on (handedness setting).
 
 ### Using and returning
 
-Built in step 4 for the swatter and the pepper (`src/tools/handTool.ts`, shared by every food tool). Food rules are plain functions in `src/rules/food.ts`, tested in `food.test.ts`. The jar is `src/world/foodJar.ts`.
+Shared by every hand tool (`src/tools/handTool.ts`). Recharge rules are plain functions in `src/rules/recharge.ts`.
 
-- **Grabbing is free. First use costs food** (first swat, first shake, first scream). Accidental grabs never waste food.
-- **Free in the tutorial** (`TOOLS.freeInTutorial`): while the tutorial runs, food tools cost nothing and their price tags say "Free", so a player who used up the jar is never locked out of the next tool. The costs apply in later battles.
-- **When the use is over**, the tool shrinks, poofs and reappears on its platform.
-- **If dropped mid-use**, it floats back to the hand area after about 1 second. Its timer keeps running.
-- **In the tutorial, the timer waits:** while a tool's use lesson runs, its timer is held, so a player who pays with an early swat before the goblins arrive keeps the tool until they do. The lesson is done when one goblin is hit, anywhere. Then the timer starts with its full time (`timerHeld` in `src/tools/handTool.ts`).
-- **Not enough food:** the tool looks dimmed or tied down with a little rope, so it reads as locked without any text. Step 4 does both: dimmed colors and a rope ring around its base. A hand near it shows Locked (wobble), and closing the hand buzzes instead of grabbing. A tool already paid for stays usable with an empty jar until its timer ends.
-- **End of a use:** the tool blinks during the last 2 seconds, so the end is no surprise.
+- **Grabbing is free. The first use starts the use window** (first swat, shake, ring or blow). Accidental grabs never waste it.
+- **When the use is over**, the tool shrinks, poofs and reappears on its platform, then recharges there (the ring fills).
+- **If dropped mid-use**, it glides back to its platform like any other time. Its use window keeps running, and it can be grabbed again there.
+- **In the tutorial, the use window waits:** while a tool's use lesson runs, its window is held, and a tool still recharging from an early use is made ready when the lesson starts. The lesson is done when one goblin is hit, anywhere (the horn: when it sounds). Then the window starts with its full time (`timerHeld` in `src/tools/handTool.ts`).
+- **Recharging:** dimmed colors (the Locked look) and the ring on the platform filling. A hand near it shows Locked (wobble), and closing the hand buzzes instead of grabbing. The tied-down rope remains for a tool the game ties down (none for now).
+- **End of a use:** the tool blinks during the last 2 seconds of a long use (swatter, pepper), so the end is no surprise.
 
-### Cost and food display
+### Layout and the ring
 
-- Each food tool's platform has a **price tag**: a small wooden board on its front edge with a food ball and the cost as a number, like a price on a market stall. Cream number = the jar has enough, red = not enough, a tick = a paid use is running. (The first build used food pips, a row of small balls. A number with an icon reads faster.) Config `PRICE_TAG`, code `src/ui/priceTag.ts`.
-- The **food meter is an object**: a jar or basket beside the tool platforms that fills with little food items. The player sees it naturally when reaching for a tool. Step 4: a pot between the two left platforms with a heap of food balls on its mouth, one ball per food. Crumbs pop out and a chime plays when food goes in.
-- **Layout (after the step 4 review):** slingshot front right (30 degrees) with the pebble bowl beside it (58), megaphone or bell right side (82, step 5), pepper front left (-30), swatter left side (-82), food jar between the two left platforms (-56). All **just outside the ring handle**, 33.5 cm from the seat, with low platforms (tops 6 cm above the board), in the reach band ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)). They rise and fall with the board but never turn, so the ring never passes through them. The flags stand just behind them (38.5 cm). First built inside the ring at 19 cm and 10 cm up, which was too close to the body and hard to grab (`TOOL_SPOTS`, `FOOD_JAR`, `PEBBLE_BOWL`).
+- **The ring** (`TOOLS.ring`): flat on the platform top around the tool's base, a dark track with a colored fill. One mesh per ring, the fill is a draw range, so it costs nothing to change. Unlit, so it reads at night.
+- **Layout (2026-11-12: everything about 12% nearer the front, so the head turns less):** slingshot right (53 degrees) with the pebble bowl beside it (70), horn right side (86), pepper left (-50), bell left (-68), swatter left side (-88), at least 17 degrees (about 10 cm) apart so a hand fits between two tools; the red flag at -34 and the pause and Next buttons at 34. Was 30, 58, 82, -30, -56, -82, then 50, 70, 90, -50, -68, -86, then 60, 78, 96, -56, -78, -100 (flags at 39). All **just outside the ring handle**, 33.5 cm from the seat, with low platforms (tops 6 cm above the board), in the reach band ([controls-and-ui.md](controls-and-ui.md#reach-band-where-interactive-things-go)). They rise and fall with the board but never turn, so the ring never passes through them. The flags stand just behind them (38.5 cm) (`TOOL_SPOTS`, `PEBBLE_BOWL`). The food jar and the price tags are gone (v2).
 - No floating panels in front of the player. The battlefield stays clear. See [controls-and-ui.md](controls-and-ui.md).
 
 ---
 
 ## 8. Open questions
 
-- Tribute food (non-enemy food like roast chicken after a good wave): yes or no.
-- Exact food costs, starting food and bar size (tune in playtests).
+- Exact use and recharge times and refill shares (tune in playtests).
+- Loadout: does the player pick their 3 tools per level, or does each level set them? ([v2-plan.md](v2-plan.md#5-still-open))

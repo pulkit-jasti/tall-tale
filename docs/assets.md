@@ -21,12 +21,14 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 
 | Thing | File | Target size | Tint |
 |---|---|---|---|
-| Troop (main) | `characters/mini-arena/character-soldier.glb` | 2.5 cm tall | Own colors |
-| Troop (variety) | `characters/mini-forest/character-archer.glb` | 2.5 cm tall | Own colors |
+| Troop (main) | `characters/mini-arena/character-soldier.glb` | 3.9 cm tall (the goblins' size since step 6) | Own colors |
+| Troop (variety) | `characters/mini-forest/character-archer.glb` | 3.9 cm tall | Own colors |
 | Worker in the courtyard | `characters/mini-dungeon/character-human.glb` | 2.5 cm tall | Own colors |
 | Grunt | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Green (own colors) |
 | Runner | `characters/mini-dungeon/character-orc.glb` | 3.35 cm tall | Yellow accent |
-| Climber | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Purple accent |
+| Goblin sword and shield (v2) | `props/mini-arena/weapon-sword.glb`, `props/mini-dungeon/shield-round.glb` (the soldiers' models, a little smaller) | Merged into the orc's skinned mesh (`GEAR.pieces.goblinSword`, `goblinShield`) | Fly off when knocked off or peppered |
+
+(The climber type is gone in v2: every goblin climbs.)
 
 - Goblin types share one model and differ by size, tint and speed (each type has its own color accent, see [enemies.md](enemies.md)). The agent picks the exact tints.
 - **Performance fallback:** 40 to 80 skinned characters may be too slow on Quest 3S. If the frame rate drops, switch goblins to code-made shapes (one InstancedMesh per body part, animated in code). First headset test: about 50 skinned goblins hold 72 Hz, so the fallback is not needed yet. Decide again with troops in step 5 ([performance.md](performance.md)).
@@ -38,13 +40,14 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Moment | Clip |
 |---|---|
 | Walking on a road | `walk` |
-| Runner moving | `sprint` |
-| Grunt or runner hitting the wall, troops fighting | `attack-melee-right`, `attack-melee-left` (alternate) |
-| Climber climbing the wall | `interact-right` while moving up |
-| Climber popping up on the rampart | `jump` |
+| Runner moving, field knights charging (v2) | `sprint` |
+| Goblins bashing the wall, troops fighting, goblins on the rampart striking the garrison | `attack-melee-right`, `attack-melee-left` (alternate) |
+| Any goblin climbing the wall (v2), a garrison soldier climbing up from the courtyard | `interact-right` while moving up |
+| A goblin popping up on the rampart | `jump` |
+| Garrison archer's volley | `holding-left-shoot` (once) |
 | Held by the player (struggling) | `fall` (loop) |
-| Dropped back on the board, dazed | `crouch`, then `idle` |
-| Stunned by the megaphone or bell | `emote-no` (loop) |
+| Dropped back on the board, dazed, or knocked off the rampart by the bell | `fall` in the air, then `crouch`, then `idle` |
+| Stunned by the bell | `emote-no` (loop) |
 | Sneezing from pepper | `emote-no` (once) |
 | Death (before the poof) | `die` |
 | Waiting, troops at the gate | `idle` |
@@ -68,11 +71,10 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Thing | File | Target size | Notes |
 |---|---|---|---|
 | Board, roads, slope | Code | See [map.md](map.md) | See [placeholder-shapes.md](placeholder-shapes.md) |
-| Camp hill | `props/castle-kit/ground-hills.glb` | 15 to 30 cm wide (bigger camp = bigger hill) | Sinks as enemies come out |
-| Camp rocks | `rocks/survival/rock-sand-a.glb`, `rock-sand-b.glb`, `rock-sand-c.glb` | 3 to 6 cm | 3 to 6 around each hill |
-| Camp tents | `camp/survival/tent.glb`, `tent-canvas.glb`, `camp/nature/tent_smallClosed.glb` | 4 to 5 cm | 1 to 3 per camp |
-| Big camp tent (largest camp only) | `camp/goblin/tent_3.glb` | 8 cm | Heavy (592 triangles). On trial, remove if slow |
-| Camp fence and fire | `camp/goblin/branch_fence_1.glb`, `camp/survival/campfire-pit.glb` | Fence 6 cm long, fire 2 cm | |
+| Camp hill | `props/castle-kit/ground-hills.glb` | 23 to 35 cm wide (bigger camp = bigger hill) | Sinks as enemies come out |
+| Camp palisade and gate | `camp/survival/fence-fortified.glb`, `fence-doorway.glb` | 6 cm pieces in a ring at the camp's edge | The gate faces the castle, on the road. About 120 triangles a piece, 24 to 37 pieces a camp |
+| War camp: banners, tents, catapult | `town/fantasy-town/banner-red.glb`, `camp/goblin/tent_3.glb` (war tent), `tent_1.glb`, `tent_5.glb`, `props/castle-kit/siege-catapult.glb` | Banners 8 cm, war tent 10 cm, tents 6 cm, catapult 9 cm (all for a camp of 30, they grow with it) | Two banners at the gate, the war tent at the back, the catapult aimed at the castle |
+| War camp: rack, fire, rocks | `props/mini-arena/weapon-rack.glb`, `camp/nature/campfire_logs.glb`, `rocks/nature/rock_tallA.glb` to `C` | Rack 3 cm, fire 3 cm, rocks 8 to 14 cm tall | Tall rocks loom outside the fence, behind the camp. Everything but the hill merged into one mesh per material (`CAMP_LOOK`) |
 | Powder keg (trigger) | `props/survival/barrel.glb` | 2 cm tall | Tint red bands if it needs to read as explosive |
 | Boulder (trigger) | `rocks/nature/rock_smallH.glb` | 4 cm | The roundest rock. Spins as it rolls |
 | Boulder hill | `rocks/nature/rock_largeA.glb` to `rock_largeD.glb` | 8 to 10 cm | Beside the road, under the boulder |
@@ -103,8 +105,11 @@ Not in the MVP map as gameplay: siege machines, bridge, forest, mud, hill featur
 | Castle health flag | `castle/castle-kit/flag-banner-long.glb` | Banner 8 cm tall | Tint red. Slides down a code-made pole as health drops |
 | Wave flag | `castle/castle-kit/flag-pennant.glb` | 6 cm tall | Tint blue. Rises one notch per wave on a code-made pole |
 | Tool platforms | `castle/castle-kit/tower-hexagon-top.glb` | 12 to 15 cm wide | One per tool |
-| Food jar | `props/mini-dungeon/pot.glb` | 7 cm tall (10 did not fit between the platforms) | The pot has a narrow neck, so the food shows as a code-made heap of food balls on its mouth, one per food |
-| Pebbles | `rocks/survival/resource-stone.glb` | 2.5 cm (bigger than first planned, easier to see and hit) | Instanced and pooled |
+| Trophies (home screen, v2 run 2) | `props/mini-arena/trophy.glb` (Kenney Mini Arena, CC0) | 6 cm tall (`MENU.shelves.trophies.height`) | 9 on the achievements shelf, colors dimmed until earned (run 3 gives each its own shape and riddle). Replaced a code-made grey cup |
+| Pebbles | Code: a low-poly lumpy ball like the sun ([placeholder-shapes.md](placeholder-shapes.md)) | 2.5 cm (bigger than first planned, easier to see and hit) | Instanced and pooled. Was `rocks/survival/resource-stone.glb` |
+| Villagers (decor) | `characters/mini-dungeon/character-human.glb`, `characters/mini-forest/character-archer.glb`, no gear, recolored to work clothes (`VILLAGERS`) | 3.9 cm like the soldiers | Four per village (up to 18), walking about the square, working, looking about (`src/units/villagers.ts`) |
+| Village square props | `town/fantasy-town/stall-bench`, `hedge`, `banner-red`, `banner-green`, `props/survival/bucket`, `barrel-open`, `resource-wood`, `resource-planks`, `chest` (with the stalls, lanterns, carts, barrels and boxes) | 1 to 4 cm | Two stalls and two lanterns per square, benches, wood, buckets, a chest, a banner, hedges between some houses (`SETTLEMENTS.villages.props`) |
+| Story scenes (decor) | Stone circle: `rocks/nature/rock_tallA` to `C`, `props/mini-dungeon/stones`. Ruined tower: `castle/castle-kit/tower-base`, `stairs-stone`, `flag-banner-long`, `props/castle-kit/rocks-large`, `rocks-small`. Old battlefield: `props/mini-arena/weapon-sword`, `weapon-spear`, `props/mini-dungeon/shield-round`, `shield-rectangle`, `props/castle-kit/siege-ram-demolished`. Shrine: `props/mini-arena/statue`, `town/fantasy-town/pillar-stone`, `hedge`. Travelers: `camp/survival/tent`, `tent-canvas`, `campfire-pit`, `props/survival/chest`, `barrel-open`, `bucket`. Archery range: `props/mini-forest/target`, `props/mini-arena/weapon-rack`. Goblin trap: `props/mini-dungeon/trap`, `coin`, `props/survival/chest` | 1 to 9 cm | 11 scenes in the empty land (`STORY_SPOTS`, `src/world/storySpots.ts`), merged into one mesh per material |
 | Pebble pile in the bowl | `rocks/survival/resource-stone-large.glb` | 6 cm | Shrinks as pebbles are taken |
 | Slingshot target (tutorial only, optional) | `props/mini-forest/target.glb` | 8 cm | |
 
