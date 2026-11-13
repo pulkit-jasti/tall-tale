@@ -28,7 +28,7 @@ import { armorHit, rollGear, type GearShares, type GoblinWeapon } from '../rules
 import { bashSeconds, climbSpeed } from '../rules/climb.js';
 import { popIn } from '../fx/ease.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
-import { angleDelta, angleOf, clearOfTowers, degToRad, groundAt, landingHeight, polarX, polarZ, towerGap, zoneAt } from '../rules/boardMath.js';
+import { angleDelta, angleOf, clearOfTowers, groundAt, landingHeight, polarX, polarZ, zoneAt } from '../rules/boardMath.js';
 import type { Particles } from '../fx/particles.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
@@ -289,6 +289,8 @@ export class Goblins {
   readonly list: Goblin[] = [];
   /** Most goblins at once. The debug stress test can raise it. */
   cap = GOBLIN_RULES.maxGoblins;
+  /** Goblins that reached the wall and started bashing, since the game started (v3: the per-wave debug note). */
+  wallArrivals = 0;
   /** The goblin the slingshot is about to hit (glows while aiming). */
   private aimed: Goblin | null = null;
   private template!: ModelTemplate;
@@ -805,6 +807,31 @@ export class Goblins {
     return true;
   }
 
+  /**
+   * v3 (docs/v3-plan.md 1.4): the swatter bounces off a helmet or a shield.
+   * The goblin keeps its gear, is not knocked out, and a grounded one is
+   * knocked back a little and dazed (one on the wall just reels). A clonk
+   * and a spark on the gear. Returns false when it has no helmet or shield
+   * (the swat knocks it out as usual).
+   */
+  clonk(goblin: Goblin, fromX: number, fromZ: number): boolean {
+    if (!this.isHittable(goblin)) return false;
+    if (!goblin.helmet && !goblin.shield) return false;
+    if (goblin.hitGrace > 0) return true;
+    goblin.hitGrace = GOBLIN_GEAR.hitGrace;
+    const p = goblin.root.position;
+    temp2.set(p.x, p.y + goblin.stats.height * (goblin.helmet ? 0.95 : 0.5), p.z);
+    this.particles?.burst(this.board.localToWorld(temp2), HELMET_SPARKS, 8, 0.2);
+    this.audio.play('swatClonk', temp2, 1, 0.05);
+    this.onArmor(goblin, temp2);
+    this.flash(goblin);
+    if (goblin.mode === 'walking' || goblin.mode === 'toWall' || goblin.mode === 'atWall' || goblin.mode === 'fighting' || goblin.mode === 'dazed') {
+      if (goblin.mode === 'fighting') this.endFight(goblin);
+      this.knockBack(goblin, p.x - fromX, p.z - fromZ);
+    }
+    return true;
+  }
+
   /** Its gear flies off as it poofs (knocked out by a tool, a trigger or a soldier). */
   private scatterGear(goblin: Goblin): void {
     if (!this.debris || !goblin.root.visible) return;
@@ -988,7 +1015,7 @@ export class Goblins {
   /**
    * Peppered (v2, docs/v2-plan.md 2.3): it is disarmed (weapon, helmet and
    * shield fly off), sneezes for PEPPER.sneezeFor (harmless meanwhile) and is
-   * seasoned (eating it fills the tool rings twice as much). No push back:
+   * seasoned (eaten, it counts as 2 meals for the horn, v3). No push back:
    * one on the rampart or in the courtyard stops a moment where it stands, a
    * climber keeps climbing. Returns false if it was seasoned already or
    * cannot be peppered.
@@ -1306,6 +1333,7 @@ export class Goblins {
 
   /** Step 1: bashes the wall for a few seconds, then climbs. */
   private startAttacking(g: Goblin): void {
+    this.wallArrivals++;
     g.mode = 'atWall';
     g.timer = this.rng.range(0.1, 0.8);
     g.bashLeft = bashSeconds(GOBLIN_RULES.bashTime, GOBLIN_RULES.bashJitter, this.rng.next());
@@ -1324,16 +1352,13 @@ export class Goblins {
     g.play('interact-right', true, 1.4);
   }
 
-  /** The climber pops up on the rampart, in reach, facing the giant. */
   /**
-   * Climbers on the rampart run about, causing chaos: short dashes back and
-   * forth along the wall top between the two towers, with quick stops, until
-   * they jump into the courtyard.
+   * The climber on the rampart, in reach, facing the giant. v3 (docs/v3-plan.md
+   * 1.2): it stands still instead of dashing about, so it is easy to read and
+   * to grab, until its rampart time ends (then it fights the garrison or jumps in).
    */
   private runOnRampart(g: Goblin, dt: number): void {
-    const p = g.root.position;
-    const at = angleOf(p.x, p.z);
-    // Whatever stretch of wall it stands or runs on flashes red, like a wall hit (no damage).
+    // The stretch of wall it stands on flashes red, like a wall hit (no damage).
     g.markTimer -= dt;
     if (g.markTimer <= 0) {
       g.markTimer = GOBLIN_RULES.rampartMarkEvery;
@@ -1342,34 +1367,9 @@ export class Goblins {
     if (g.dashPause > 0) {
       g.dashPause -= dt;
       if (g.dashPause <= 0) {
-        // The next dash: somewhere else along the wall top, between the same two towers.
-        const [lo, hi] = towerGap(at);
-        const a = at + degToRad(this.rng.range(-GOBLIN_RULES.rampartDashDeg, GOBLIN_RULES.rampartDashDeg));
-        g.dashTo = Math.min(hi, Math.max(lo, a));
-        g.hasTarget = true;
-        g.play('sprint', true, 1.4);
+        g.play('idle');
+        g.faceCenter();
       }
-      return;
-    }
-    if (!g.hasTarget) {
-      g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
-      return;
-    }
-    // Along the wall's own curve, never across it: always right on the rampart.
-    const step = ((g.speed * GOBLIN_RULES.rampartRunShare) / CASTLE.rampartRadius) * dt;
-    // The short way round (angles wrap at the back of the board).
-    const d = angleDelta(at, g.dashTo);
-    const arrived = Math.abs(d) <= step;
-    const next = arrived ? at + d : at + Math.sign(d) * step;
-    p.set(polarX(CASTLE.rampartRadius, next), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, next));
-    // Facing along the wall, the way it runs.
-    const s = Math.sign(d) || 1;
-    g.face(Math.cos(next) * s, Math.sin(next) * s);
-    if (arrived) {
-      g.hasTarget = false;
-      g.dashPause = this.rng.range(...GOBLIN_RULES.rampartStop);
-      g.play('idle');
-      g.faceCenter();
     }
   }
 

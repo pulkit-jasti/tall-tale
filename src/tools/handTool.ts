@@ -30,7 +30,7 @@ import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { holdMatrix } from '../player/hold.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
-import { chargeUsable, createCharge, endUse, readyNow, refillCharge, tickCharge, useCharge } from '../rules/recharge.js';
+import { chargeUsable, createCharge, endUse, readyNow, refillCharge, spendUse, tickCharge, useCharge } from '../rules/recharge.js';
 import type { Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate } from '../world/models.js';
 import { post, toolRope } from '../world/shapes.js';
@@ -120,8 +120,9 @@ export abstract class HandTool {
   private ready: ToolReady = 'idle';
   private wobble = 0;
   private dimmed = false;
-  /** The use and recharge ring on the platform (null for a tool without a platform of its own). */
+  /** The use and recharge ring on the platform (null for a tool without a platform of its own): one fill, or one per pip. */
   private ring: Mesh | null = null;
+  private ringFills: Mesh[] = [];
   private ringMaterial: MeshBasicMaterial | null = null;
   private ringFlash = 0;
   private rope!: Mesh;
@@ -182,6 +183,22 @@ export abstract class HandTool {
     return TOOLS.recharge[this.name];
   }
 
+  /** v3: the use is counted in swings (useSeconds is then the swings per charge), not seconds. */
+  get swingUse(): boolean {
+    return TOOLS.swings[this.name];
+  }
+
+  /** v3: it charges only by eating (no time recharge): the horn. */
+  get eatCharged(): boolean {
+    return this.rechargeSeconds <= 0;
+  }
+
+  /** Pips on its ring: one per swing, or one per meal; 0 for a smooth ring. */
+  get pips(): number {
+    if (this.swingUse) return this.useSeconds;
+    return this.eatCharged ? TOOLS.hornMeals : 0;
+  }
+
   /**
    * Tied down whatever the ring: dimmed, the rope on, and a grab buzzes.
    * Nothing ties a tool down for now (it was the megaphone without a mic).
@@ -216,13 +233,20 @@ export abstract class HandTool {
   }
 
   /**
-   * A goblin was eaten (v2, docs/v2-plan.md 2.2): a recharging ring jumps
-   * forward by `share` of the full recharge, with a flash. Returns true if it moved.
+   * A goblin was eaten (v3, docs/v3-plan.md 1.5, only the horn): its ring
+   * gains `share` (one pip), with a flash. Returns 'ready' when that filled
+   * it, 'filled' when it only moved, null when nothing happened.
    */
-  refill(share: number): boolean {
-    if (!this.root.visible || !refillCharge(this.use, share)) return false;
-    this.ringFlash = TOOLS.ring.flashTime;
-    return true;
+  refill(share: number): 'ready' | 'filled' | null {
+    if (!this.root.visible) return null;
+    const result = refillCharge(this.use, share);
+    if (result) this.ringFlash = TOOLS.ring.flashTime;
+    return result;
+  }
+
+  /** How full its charge is now, 0 to 1 (1 while ready or in use). */
+  get chargeShare(): number {
+    return this.use.phase === 'recharging' ? this.use.charge : 1;
   }
 
   /** Ready at once, ring full (a new battle, the tutorial's help, debug). */
@@ -369,16 +393,32 @@ export abstract class HandTool {
       new RingGeometry(R.inner - 0.15, R.outer + 0.15, R.segments, 1),
       new MeshBasicMaterial({ color: R.trackColor, transparent: true, opacity: 0.8, depthWrite: false }),
     );
-    const fill = new Mesh(new RingGeometry(R.inner, R.outer, R.segments, 1), new MeshBasicMaterial({ color: R.chargeColor }));
-    // Flat, facing up. The fill sits a hair above the track (its local +z is up).
+    const material = new MeshBasicMaterial({ color: R.chargeColor });
+    // Flat, facing up. Placed at the tool's spot by placeSpot().
     track.rotation.x = -Math.PI / 2;
-    // Placed at the tool's spot by placeSpot().
-    fill.position.set(0, 0, 0.08);
-    track.add(fill);
+    const pips = this.pips;
+    if (pips > 0) {
+      // v3: one arc per pip (a swing, a meal) with a small gap between them, sharing one material.
+      const gap = degToRad(R.pipGapDeg);
+      const arc = (Math.PI * 2) / pips;
+      const segs = Math.max(2, Math.round(R.segments / pips));
+      for (let i = 0; i < pips; i++) {
+        const pip = new Mesh(new RingGeometry(R.inner, R.outer, segs, 1, Math.PI / 2 - (i + 1) * arc + gap / 2, arc - gap), material);
+        pip.position.set(0, 0, 0.08);
+        track.add(pip);
+        this.ringFills.push(pip);
+      }
+    } else {
+      const fill = new Mesh(new RingGeometry(R.inner, R.outer, R.segments, 1), material);
+      // The fill sits a hair above the track (its local +z is up).
+      fill.position.set(0, 0, 0.08);
+      track.add(fill);
+      this.ringFills.push(fill);
+    }
     track.visible = false;
     this.root.add(track);
-    this.ring = fill;
-    this.ringMaterial = fill.material as MeshBasicMaterial;
+    this.ring = this.ringFills[0];
+    this.ringMaterial = material;
   }
 
   /** The ring shows how much is left of a use, or how full the recharge is. Hidden while ready. */
@@ -393,10 +433,17 @@ export abstract class HandTool {
     track.visible = show;
     if (!show) return;
     const share = using ? this.use.useLeft / this.useSeconds : this.use.charge;
-    const segments = Math.max(0, Math.min(R.segments, Math.ceil(share * R.segments)));
-    fill.geometry.setDrawRange(0, segments * 6);
+    // Each fill (one, or one per pip) shows its part of the share (each segment is 6 indices).
+    const fills = this.ringFills;
+    const total = share * fills.length;
+    for (let i = 0; i < fills.length; i++) {
+      const part = Math.max(0, Math.min(1, total - i));
+      const segs = (fills[i].geometry as RingGeometry).parameters.thetaSegments;
+      fills[i].geometry.setDrawRange(0, Math.ceil(part * segs - 1e-6) * 6);
+    }
     this.ringFlash = this.quiet ? 0 : Math.max(0, this.ringFlash - dt);
-    material.color.setHex(this.ringFlash > 0 ? R.flashColor : using ? R.useColor : R.chargeColor);
+    const restColor = this.eatCharged ? R.mealColor : R.chargeColor;
+    material.color.setHex(this.ringFlash > 0 ? R.flashColor : using ? R.useColor : restColor);
   }
 
   // ---- Hands (called from GrabEat, which picks one target per hand) ----
@@ -494,6 +541,15 @@ export abstract class HandTool {
     return true;
   }
 
+  /**
+   * A use counted in swings (the swatter): one swing done. The last one ends
+   * the use and it goes back to recharge. Free while the tutorial holds the use.
+   */
+  protected spendSwing(): void {
+    if (this.timerHold || !this.active) return;
+    if (spendUse(this.use)) this.startShrink();
+  }
+
   /** A one-use tool (the bell, the horn) did its thing: the use ends now and it goes back to recharge. */
   protected finishUse(): void {
     if (!this.active) return;
@@ -516,7 +572,7 @@ export abstract class HandTool {
     this.phaseTime += dt;
     // The use window runs down (unless the tutorial holds it), the recharge fills only on the platform.
     const onPlatform = this.phase === 'resting' && this.returnLeft <= 0 && !this.holder;
-    if (tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold, onPlatform) === 'ended') this.startShrink();
+    if (tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold && !this.swingUse, onPlatform) === 'ended') this.startShrink();
     switch (this.phase) {
       case 'held':
         this.updateHeld(dt);

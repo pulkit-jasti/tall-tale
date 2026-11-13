@@ -161,8 +161,9 @@ export const LEVEL_SETTINGS: SettingDef[] = [
     ],
     default: 'normal',
   },
-  { key: 'goblins', group: 'waves', label: 'Goblins in wave 1', kind: 'count', min: 4, max: 30, default: 10 },
-  { key: 'growth', group: 'waves', label: 'More each wave', kind: 'range', min: 0, max: 0.6, step: 0.05, default: 0.25, unit: 'percent' },
+  // v3 (docs/v3-plan.md 1.5): bigger waves (was 10 and 25%), so enough goblins reach the wall to feed the horn about twice a wave.
+  { key: 'goblins', group: 'waves', label: 'Goblins in wave 1', kind: 'count', min: 4, max: 40, default: 22 },
+  { key: 'growth', group: 'waves', label: 'More each wave', kind: 'range', min: 0, max: 0.6, step: 0.05, default: 0.2, unit: 'percent' },
   { key: 'runners', group: 'waves', label: 'Runners', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.25, unit: 'percent' },
   { key: 'balloons', group: 'waves', label: 'Balloons', kind: 'count', min: 0, max: 4, default: 1 },
   { key: 'helmets', group: 'waves', label: 'Helmets', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.35, unit: 'percent' },

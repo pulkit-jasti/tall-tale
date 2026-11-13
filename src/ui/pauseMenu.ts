@@ -14,7 +14,7 @@
 import { Group, type Object3D, type Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mic } from '../audio/mic.js';
-import { BOARD, MENU, PAUSE, POKE, SLIDER, SWITCH, TABS, UI_SPACING } from '../config/game.js';
+import { BOARD, BOARD_TURN, MENU, PAUSE, POKE, SLIDER, SWITCH, TABS, UI_SPACING } from '../config/game.js';
 import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
 import { access, hornHearsMic } from '../player/accessSettings.js';
@@ -121,6 +121,8 @@ export class PauseMenu {
   private bellSwitch: Switch;
   /** "Unlock all tools" (Access tab, v2 run 2). */
   private unlockSwitch: Switch;
+  /** "Snap turning" (Access tab, v3). */
+  private snapSwitch: Switch;
   /** The "Unlock all tools" switch was flipped (the game saves it and the shelves show it). */
   onUnlockAll: (on: boolean) => void = () => {};
   /** Follows the head lazily while open, like the Quest's own menus. */
@@ -194,6 +196,13 @@ export class PauseMenu {
       this.onUnlockAll(on);
       this.repaintSettings();
     };
+    // Snap turning (v3, docs/v3-plan.md 1.7): the board turns in steps instead of smoothly (comfort). Off by default.
+    this.snapSwitch = new Switch(audio, { on: access.snapTurn });
+    add(this.snapSwitch.group, controlLeft + SWITCH.width / 2, S.firstRowY - 4 * S.accessRowGap, this.tabGroups.access);
+    this.snapSwitch.onChange = (on) => {
+      access.setSnapTurn(on);
+      this.repaintSettings();
+    };
     SOUND_CATEGORIES.forEach((c, i) => {
       const y = S.firstRowY - i * S.rowGap;
       // Just a slider per group: all the way down is off.
@@ -215,6 +224,14 @@ export class PauseMenu {
 
   get isOpen(): boolean {
     return this.open;
+  }
+
+  /** The way the panel faces out from the player (world, flat), as it follows the head: the pause height rail turns with it. */
+  facing(out: Vector3): Vector3 {
+    this.holder.updateWorldMatrix(true, false);
+    out.set(0, 0, -1).transformDirection(this.holder.matrixWorld);
+    out.y = 0;
+    return out.lengthSq() > 1e-8 ? out.normalize() : out.set(0, 0, -1);
   }
 
   /** Where the pause button is, while it shows (for the tutorial). */
@@ -305,13 +322,14 @@ export class PauseMenu {
     this.bellSwitch.set(!hornHearsMic());
     this.bellSwitch.setLocked(!mic.on);
     this.unlockSwitch.set(progress.unlockAll);
+    this.snapSwitch.set(access.snapTurn);
     armControls([this.back, this.tabs, ...this.tabControls()]);
     this.repaintSettings();
   }
 
   /** The controls of the tab that shows. */
   private tabControls(): Control[] {
-    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table, this.unlockSwitch];
+    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table, this.unlockSwitch, this.snapSwitch];
   }
 
   private repaintSettings(): void {
@@ -367,6 +385,7 @@ export class PauseMenu {
     if (this.table.update(hands, dt)) return 'resetTable';
     this.bellSwitch.update(hands, dt);
     this.unlockSwitch.update(hands, dt);
+    this.snapSwitch.update(hands, dt);
     return null;
   }
 
@@ -400,6 +419,7 @@ export class PauseMenu {
     name('audioOff', 'Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
     name('rotate', 'Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
     name('unlocked', 'Unlock all tools', S.firstRowY - 3 * S.accessRowGap, 'Tools only, not levels', UI_COLORS.note);
+    name('next', 'Snap turning', S.firstRowY - 4 * S.accessRowGap, `Turn in ${BOARD_TURN.snapDeg} degree steps`, UI_COLORS.note);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {

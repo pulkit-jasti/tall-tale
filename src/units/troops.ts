@@ -606,7 +606,7 @@ export class Troops {
     const squad: Squad = { crashed: false, anchor: { ...target }, post: new Vector3(), out: new Vector3(), members: [], pending: 0, broken: false };
     this.placeSquad(squad, target);
     const room = Math.max(0, KNIGHTS.maxField - this.fieldCount);
-    // In the tutorial a full squad comes (so its first fight is won); otherwise 3 to 5 at random.
+    // In the tutorial a full squad comes (so its first fight is won); otherwise squadMin to squadMax (v3: a fixed 5).
     const size = Math.min(room, this.fullSquads ? KNIGHTS.squadMax : KNIGHTS.squadMin + this.rng.int(KNIGHTS.squadMax - KNIGHTS.squadMin + 1));
     if (size <= 0) return false;
     for (let i = 0; i < size; i++) this.waiting.push({ legs, squad, kind: this.pickFieldKind(), wait: i * KNIGHTS.leaveGap, slot: i });
@@ -1482,7 +1482,7 @@ export class Troops {
     t.attackRight = !t.attackRight;
     t.play(t.attackRight ? 'attack-melee-right' : 'attack-melee-left', false);
     this.clash(p);
-    // Field knights land fewer blows than the guards (KNIGHTS.strikeChance), so a squad slows a group rather than wiping it.
+    // Field knights land KNIGHTS.strikeChance of their blows (v3: strong, a squad beats a goblin group on its own).
     if (this.rng.next() >= KNIGHTS.strikeChance) return;
     // A helmet takes the blow: it flies off, the goblin reels back, and the fight goes on.
     if (this.goblins.armor(g, p.x, p.z)) {
@@ -1513,8 +1513,8 @@ export class Troops {
       this.audio.play('pebbleHit', this.board.localToWorld(temp.copy(temp2)), 0.7, 0.05);
       return false;
     }
-    // The shield is already counted above, so the base number of hits is left.
-    if (++t.hits >= troopHitsToDown(TROOPS.hitsToDown, false)) {
+    // The shield is already counted above, so the base number of hits is left. Field knights are tougher (v3, KNIGHTS.hitsToDown).
+    if (++t.hits >= troopHitsToDown(t.squad ? KNIGHTS.hitsToDown : TROOPS.hitsToDown, false)) {
       this.remove(t, true);
       return true;
     }

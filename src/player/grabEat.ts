@@ -1,6 +1,7 @@
 // What the bare hands do: pinch a goblin to pick it up and hold it near the
 // mouth to eat it (no letting go, no head tilt, so the palm never has to face
-// the headset and open the Quest menu). Fist or pinch grabs the ring handle.
+// the headset and open the Quest menu). Fist or pinch grabs the compass crank
+// (v3, the 'ring' target: it took the ring handle's place).
 // The slingshot: fist or pinch grabs its handle, a pinch on the bowl takes a
 // pebble, a pinch on the pouch pulls it (the slingshot does the rest).
 // The food tools (swatter, pepper): a fist grabs them, or buzzes when there
@@ -13,7 +14,7 @@ import type { Particles } from '../fx/particles.js';
 import type { HandTool } from '../tools/handTool.js';
 import type { SlingPart, Slingshot } from '../tools/slingshot.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
-import type { BoardHandles } from './handles.js';
+import type { CompassCrank } from './crank.js';
 import type { HandState, HandTracker } from './hands.js';
 
 type Target =
@@ -70,7 +71,8 @@ export class GrabEat {
   constructor(
     private hands: HandTracker,
     private goblins: Goblins,
-    private handles: BoardHandles,
+    /** v3: the compass crank (the ring handle's place in battles), still a 'ring' target here. */
+    private handles: CompassCrank,
     private slingshot: Slingshot,
     private tools: HandTool[],
     private audio: GameAudio,
@@ -190,8 +192,9 @@ export class GrabEat {
         }
         toolReady.set(tool, tool.usable ? 'ready' : 'locked');
       } else if (target?.kind === 'ring' && armed) {
-        if (closing && !this.handles.busy) {
-          this.handles.grab(hand, !hand.fist.started);
+        // The crank's knob: a pinch only, never a fist (2026-11-13).
+        if (hand.pinch.started && !this.handles.busy) {
+          this.handles.grab(hand, true);
           this.audio.play('grab', hand.palm);
           slot.target = null;
           slot.openTime = 0;

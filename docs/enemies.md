@@ -29,7 +29,7 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 ### Toughness (no health bars)
 
 - **Basic enemies die in one hit.**
-- **Tough enemies wear their health as gear** that breaks off (v2, `src/rules/gear.ts`): **helmet** one extra hit, **shield** one extra hit, counted separately, so helmet and shield take 3 hits. This counts for every hit, the swatter too; only triggers (keg, boulder, tree) ignore armor. Balloon: riders fall when popped.
+- **Tough enemies wear their health as gear** that breaks off (v2, `src/rules/gear.ts`): **helmet** one extra hit, **shield** one extra hit, counted separately, so helmet and shield take 3 hits. This counts for every hit (pebble, arrow, soldier, goblin shot); only triggers (keg, boulder, tree) ignore armor. **v3: armor stops the swatter** ([v3-plan.md](v3-plan.md) 1.4): the swat clonks off, the goblin keeps its gear and is knocked back a little, dazed. Armor needs the pepper, triggers, slingshot hits (one piece each) or eating. Balloon: riders fall when popped.
 - **Weapons:** a **spear** doubles wall damage, a **sword** strikes soldiers faster in a fight. **Pepper strips everything** (weapon, helmet, shield).
 - Gear mix (`GOBLIN_GEAR`): grunts carry a spear (40%), a sword (25%) or nothing, helmets from wave 3 (35%), shields from wave 4 (30%). Runners stay bare handed. Kenney's sword and round shield models, merged into the goblin's skinned mesh like the spear and helmet (`src/units/gear.ts`).
 - No health bars on regular enemies. A boss may get the only big bar in the game (boss is not designed yet).
@@ -39,12 +39,16 @@ Every enemy is made from three simple parts. Mixing them gives a lot of variety 
 
 There is no separate climber type any more. Every goblin that reaches the wall goes through four steps, each more dangerous than the last (`src/rules/climb.ts`, `GOBLIN_RULES`):
 
-1. **Bash the wall** for about 5 s (plus or minus 20%), on a stretch between two towers: wall damage and the red wall flash.
+1. **Bash the wall** for about 3 s (v3, was 5; plus or minus 20%), on a stretch between two towers: wall damage and the red wall flash.
 2. **Climb:** grunts 2 cm/s, runners 4 cm/s, a helmet slows it to 1.5 cm/s (`GoblinStats.climbSpeed`, `helmetClimbSpeed`). The wall is 6 cm high.
-3. **Run around on the rampart** for about 8 s: no castle damage, but they **attack the wall garrison** ([core-loop.md](core-loop.md#2-troops)). A giggle (`goblinCackle`) plays where one pops up, a sound cue for where to look.
+3. **Stand on the rampart** for about 4 s (v3, was 8 s of dashing about; now they stand still, easy to read and to grab): no castle damage, but they **attack the wall garrison** ([core-loop.md](core-loop.md#2-troops)). A giggle (`goblinCackle`) plays where one pops up, a sound cue for where to look.
 4. **Jump into the courtyard** as intruders (the biggest damage).
 
-So the player always knows the order: deal with the ones on top first. Goblins can no longer hide behind the wall, there is much more to eat, and armored goblins come close enough for the pepper. Variety comes from runners, gear and balloons. The red wall flash and the red threat arrow stay, as helpers. Goblins walk faster too (grunts 7.5 cm/s, runners 15).
+So the player always knows the order: deal with the ones on top first. Goblins can no longer hide behind the wall, there is much more to eat, and armored goblins come close enough for the pepper. Variety comes from runners, gear and balloons. The red wall flash and the red threat arrow stay, as helpers. Goblins walk faster too (v3: grunts 12 cm/s, about 25 s to the wall, runners 22; were 7.5 and 15).
+
+**Groups and pushes (v3, [v3-plan.md](v3-plan.md) 1.2, `WAVES`, `src/units/waveSpawner.ts`):** goblins leave a camp in tight groups (grunts 5, runners 4, a small leftover joins the last group) that walk as one. A wave comes in 3 to 4 pushes with 5 to 8 s of calm between them; the groups of one push come from different camps where they can. A camp sends its next group only once its last one is at the wall or gone (at most 12 s of waiting). Every group is warned 3 s ahead by the camp's drum and its amber compass wedge and tent.
+
+**Knights (v3, 1.6, `KNIGHTS`):** a squad is a fixed 5 knights; one knight beats about 2 bare goblins (4 goblin blows to go down, lands 55% of its strikes), so a squad beats a group on its own. A squad holds its spot across waves until it is down to `breakAt`. What beats it: two groups at once, armored groups.
 
 ---
 
@@ -79,9 +83,9 @@ So the player always knows the order: deal with the ones on top first. Goblins c
 - **Question:** "Can you look up?"
 - **Behavior:** float over the wall at about head height. Drop bombs on machines and carts, or drop goblins into the courtyard.
 - **Toughness:** pop the balloon and the riders fall.
-- **In the MVP (build step 7):** only the goblin drop into the courtyard (no bombs, since there are no machines or carts yet). First seen in wave 4. Details in [mvp.md](mvp.md#build-order). Built: two grunts stand in each balloon's basket (`BALLOONS`, `src/units/balloons.ts`). A popped balloon's riders fall and poof. Riders can be pinched off, swatted or knocked out one by one, and a stun stops the balloon in the air.
+- **In the MVP (build step 7):** only the goblin drop into the courtyard (no bombs, since there are no machines or carts yet). First seen in wave 4. Details in [mvp.md](mvp.md#build-order). Built: two grunts stand in each balloon's basket (`BALLOONS`, `src/units/balloons.ts`). A popped balloon's riders fall and poof. Riders can be pinched off or knocked out one by one, and a stun stops the balloon in the air. v3: the swatter pushes a balloon (or one hit through its riders) away for a moment instead; it comes back.
 - **Best answer:** slingshot.
-- **Also works:** grab or swat when close, the bell (a stunned balloon stops).
+- **Also works:** grab when close, the swatter buys time (pushed away), the bell (a stunned balloon stops).
 - **Weak:** pepper.
 
 ### Climbers (no longer their own type, v2)
@@ -123,9 +127,9 @@ v2: castle machines are dropped; the horn (knights) and the bell take their colu
 | Enemy | Slingshot | Swatter | Pepper | Bell | Horn (knights) | Hands |
 |---|---|---|---|---|---|---|
 | Grunt | ✓ | ★ | ✓ | ✓ | ★ (a group on a road) | ✓ |
-| Armored grunt (helmet, shield) | ✓ (slow) | ✓ (3 swats) | ★ | ✓ | ✓ | ✓ |
+| Armored grunt (helmet, shield) | ✓ (slow) | ✗ (clonks off, v3) | ★ | ✓ | ✓ | ✓ |
 | Runners | ✗ | ★ | ✓ | ✓ | ✓ (they stop and fight, slowed by nothing else) | ✓ (on the rampart) |
-| Balloons | ★ | ✓ (when close) | ✗ | ✓ | ✗ | ✓ (when close) |
+| Balloons | ★ | ✓ (pushed away, v3) | ✗ | ✓ | ✗ | ✓ (when close) |
 | Goblins on the rampart | ✗ | ✓ | ✓ | ★ (knocked down) | ✗ | ★ |
 | Boom goblin | ★ | ✗ (explodes at the wall) | ✓ | ✓ | ✓ | ✓ (at the wall) |
 | Tinker | ★ | ✓ (when close) | ✓ | ✓ | ✓ | ✓ (when close) |

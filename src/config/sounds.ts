@@ -68,6 +68,10 @@ export const SOUNDS = {
     volume: 0.35,
     positional: true,
   },
+  /** v3 (docs/v3-plan.md 1.4): the swatter bounces off a helmet or shield. */
+  swatClonk: { files: ['impact/impactTin_medium_000.ogg', 'rpg/metalPot1.ogg'], volume: 0.9, positional: true },
+  /** v3 (docs/v3-plan.md 1.7): the compass crank, every notch of turn. */
+  crankClick: { files: ['interface/click_001.ogg', 'interface/click_002.ogg'], volume: 0.45, positional: false },
   debris: {
     files: ['impact/impactPlank_medium_000.ogg', 'impact/impactWood_heavy_000.ogg', 'impact/impactWood_heavy_001.ogg'],
     volume: 0.8,
@@ -137,6 +141,8 @@ const GROUPS: Record<Exclude<SoundCategory, 'music'>, SoundName[]> = {
     'foodAdded',
     'swatWhoosh',
     'swatSplat',
+    'swatClonk',
+    'crankClick',
     'pepperShake',
     'bell',
     'balloonPop',

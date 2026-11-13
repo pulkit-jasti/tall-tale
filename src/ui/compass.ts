@@ -6,15 +6,16 @@
 // the board and never turns). A gold needle points straight ahead of the
 // player, so as the board spins, the marks move round it.
 //
-//   - Rim wedges, COMPASS.segments of them pointing in. Their color is how
-//     close the worst thing in that direction is: a camp about to send
-//     (amber pulse, its drums), goblins far on the roads (dim red), near
-//     (red), at the wall, climbing or inside (bright red, blinking). Their
-//     height is how many goblins are there (the 3D part says how many, the
-//     color says how close). The wedges beside a threat light one level
-//     lower, at the base height.
+//   - Rim wedges, COMPASS.segments of them pointing in. v3 (docs/v3-plan.md
+//     1.3): their color is the state of the worst thing in that direction: a
+//     camp about to send (amber, slow pulse, its drums), goblins walking in
+//     (bright yellow, steady), goblins attacking the wall, climbing, on the
+//     rampart or inside (full red, pulsing: never color alone). Their size
+//     is how many goblins are there. The wedges beside a threat show its
+//     color dimmer, at the base height.
 //   - Little tents on the lip: every camp that is up (a camp still under the
-//     ground has none), dim while quiet, amber and bobbing while its drums play.
+//     ground has none), light cream with a dark outline while quiet, amber
+//     and bobbing while its drums play.
 //   - The middle: the wave ("Wave 2 of 4") and the goblins left in it, on a
 //     raised brass boss, a canvas redrawn only when a number changes.
 //
@@ -23,6 +24,7 @@
 // and a post. Only looked at, never touched, so it is not in the reach
 // check. The red threat arrow stays as the last warning.
 import {
+  BackSide,
   CircleGeometry,
   Color,
   ConeGeometry,
@@ -48,8 +50,8 @@ import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { post } from '../world/shapes.js';
 import { CanvasLabel, drawIcon } from './kit/index.js';
 
-/** Threat levels: none, a camp about to send, goblins far, near, at the wall. */
-export type ThreatLevel = 0 | 1 | 2 | 3 | 4;
+/** Threat levels (v3): none, a camp about to send, goblins walking in, goblins attacking the wall. */
+export type ThreatLevel = 0 | 1 | 2 | 3;
 
 const matrix = new Matrix4();
 const at = new Vector3();
@@ -67,6 +69,8 @@ export class Compass {
   private dish = new Group();
   private wedges: InstancedMesh;
   private tents: InstancedMesh;
+  /** A dark, slightly bigger copy of each tent behind it: its outline. */
+  private tentOutlines: InstancedMesh;
   /** This frame: the worst level and the goblins in each direction; the heights shown (they glide). */
   private levels = new Uint8Array(C.segments);
   private counts = new Uint16Array(C.segments);
@@ -154,7 +158,15 @@ export class Compass {
     this.tents.frustumCulled = false;
     this.tents.count = 0;
     for (let i = 0; i < C.maxCamps; i++) this.tents.setColorAt(i, tentIdle);
-    this.dish.add(dish, face, boss, bossTop, this.label.mesh, needle, this.wedges, this.tents);
+    // The outline: the same cone a little bigger, dark, only its back faces drawn (so it shows round the edge).
+    this.tentOutlines = new InstancedMesh(
+      new ConeGeometry(C.tentRadius, C.tentHeight, 4).translate(0, C.tentHeight / 2, 0),
+      new MeshBasicMaterial({ color: C.tentOutlineColor, fog: false, side: BackSide }),
+      C.maxCamps,
+    );
+    this.tentOutlines.frustumCulled = false;
+    this.tentOutlines.count = 0;
+    this.dish.add(dish, face, boss, bossTop, this.label.mesh, needle, this.wedges, this.tentOutlines, this.tents);
     this.group.visible = false;
     parent.add(this.group);
   }
@@ -176,12 +188,18 @@ export class Compass {
     return Math.atan2(lx, -lz);
   }
 
-  /** A threat at a board point (boardSpin cm). Goblins (levels 2 to 4) also count toward the wedge's height. */
+  /** A threat at a board point (boardSpin cm). Goblins (levels 2 and 3) also count toward the wedge's size. */
   add(x: number, z: number, level: ThreatLevel): void {
     const n = C.segments;
     const i = ((Math.round((this.angleOf(x, z) / (Math.PI * 2)) * n) % n) + n) % n;
     if (level > this.levels[i]) this.levels[i] = level;
     if (level >= 2) this.counts[i]++;
+  }
+
+  /** The brightness of a level now: red pulses fast, amber slow, yellow is steady. */
+  private shadeOf(level: number): number {
+    const wave = (hz: number) => C.pulseLow + (1 - C.pulseLow) * (0.5 + 0.5 * Math.sin(this.time * Math.PI * 2 * hz));
+    return level === 3 ? wave(C.blinkHz) : level === 1 ? wave(C.pulseHz) : 1;
   }
 
   /** A camp that is up, at a board point (boardSpin cm); `sending`: its drums play. */
@@ -201,19 +219,21 @@ export class Compass {
     if (!shown) return;
     this.time += dt;
     const n = C.segments;
-    const blink = 0.55 + 0.45 * Math.sin(this.time * Math.PI * 2 * C.blinkHz);
-    const pulse = 0.6 + 0.4 * Math.sin(this.time * Math.PI * 2 * C.pulseHz);
+    const pulse = this.shadeOf(1);
     const glide = 1 - Math.exp(-dt / C.barGlide);
     for (let i = 0; i < n; i++) {
       let level = this.levels[i];
-      // The wedges beside a threat light one level lower (an amber one does not spread).
-      if (C.spread) {
+      let share = 1;
+      // The wedges beside goblins show their color dimmer (an amber one does not spread).
+      if (C.spread && level === 0) {
         const side = Math.max(this.levels[(i + 1) % n], this.levels[(i + n - 1) % n]);
-        if (side >= 2 && side - 1 > level) level = side - 1;
+        if (side >= 2) {
+          level = side;
+          share = C.spreadShare;
+        }
       }
-      const shade = level === 4 ? blink : level === 1 ? pulse : 1;
       color.copy(colors[level]);
-      if (level > 0) color.multiplyScalar(shade);
+      if (level > 0) color.multiplyScalar(this.shadeOf(level) * share);
       this.wedges.setColorAt(i, color);
       // Taller and bigger for more goblins there, gliding to it (the size follows the height).
       const want = C.barBase + C.barPer * Math.min(this.counts[i], C.barMax);
@@ -233,11 +253,18 @@ export class Compass {
       turn.setFromAxisAngle(Y, -a);
       matrix.compose(at, turn, size.set(1, 1, 1));
       this.tents.setMatrixAt(k, matrix);
+      // The outline: the same spot, a little bigger, its base sunk a hair so it frames the base too.
+      at.y -= C.tentHeight * (C.tentOutline - 1) * 0.3;
+      matrix.compose(at, turn, size.setScalar(C.tentOutline));
+      this.tentOutlines.setMatrixAt(k, matrix);
       color.copy(sending ? tentSending : tentIdle);
-      if (sending) color.multiplyScalar(pulse);
+      // Amber pulses, but never darker than half, so a sending camp stays bright.
+      if (sending) color.multiplyScalar(0.5 + 0.5 * pulse);
       this.tents.setColorAt(k, color);
     }
     this.tents.count = camps;
+    this.tentOutlines.count = camps;
+    this.tentOutlines.instanceMatrix.needsUpdate = true;
     this.tents.instanceMatrix.needsUpdate = true;
     if (this.tents.instanceColor) this.tents.instanceColor.needsUpdate = true;
     this.text(wave, total, left);
@@ -320,6 +347,16 @@ export class Compass {
         }
       }
     });
+  }
+
+  /** The tipped dish (its local +y up from the face, -z straight ahead, cm): the crank lives on its rim (v3). */
+  get dishFrame(): Group {
+    return this.dish;
+  }
+
+  /** True while it shows (a battle runs). */
+  get shown(): boolean {
+    return this.group.visible;
   }
 
   /** The dish's middle (world), for the tutorial's arrow. */

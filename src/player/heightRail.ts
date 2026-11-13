@@ -41,6 +41,11 @@ export class HeightRail {
     this.group.add(railArc(wood, HANDLES.menuRail.halfSpanDeg), verticalDoubleArrow(arrow, radius, 0, ringY + ringRadius + 0.2));
   }
 
+  /** True while any hand holds it (the pause rail stops turning with the panel then). */
+  get isHeld(): boolean {
+    return this.holder !== null;
+  }
+
   /** True while a hand holds it (that hand grabs nothing else). */
   isHeldBy(hand: HandState): boolean {
     return this.holder?.hand === hand;

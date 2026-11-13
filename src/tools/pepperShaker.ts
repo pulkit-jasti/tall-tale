@@ -4,7 +4,7 @@
 // is, so the falling specks show where it lands. No aiming UI. Every goblin
 // in the small area under it is disarmed (weapon, helmet and shield fly off),
 // sneezes for a few seconds without attacking, and is seasoned: eating it
-// fills the tool rings twice as much. No push back.
+// counts as 2 meals for the horn (v3). No push back.
 //
 // Shaking is found from the shaker's own movement: a quick move that turns
 // back on the one before is one stroke, two strokes close together are a shake.

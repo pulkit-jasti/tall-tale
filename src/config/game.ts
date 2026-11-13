@@ -601,25 +601,29 @@ export interface GoblinStats {
 export const GOBLINS: Record<GoblinType, GoblinStats> = {
   // Heights raised about 11% (from 3.5, 3 and 3.5) after a headset test, so they read better on the hills.
   // v2: faster (grunts 6 to 7.5, runners 13 to 15), so waves do not drag now that the camps are far out.
-  grunt: { height: 3.9, speed: 7.5, climbSpeed: 2, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.55 },
-  runner: { height: 3.35, speed: 15, climbSpeed: 4, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.55 },
+  // v3 (docs/v3-plan.md 1.1): faster again (grunts 7.5 to 12, about 25 s to the wall; runners 15 to 22), the board stays big.
+  grunt: { height: 3.9, speed: 12, climbSpeed: 2, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.55 },
+  runner: { height: 3.35, speed: 22, climbSpeed: 4, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.55 },
 };
 
 export const GOBLIN_RULES = {
   /** Things (not goblins or soldiers, they poof) shrink away over this long (seconds), with a small elastic swell first. */
   vanishTime: 0.32,
   /**
-   * Climbers on the rampart run about, causing chaos: dashes of up to this
-   * far along the wall (degrees, between the two towers), at this share of
-   * their speed, with stops of this long between them (seconds, from, to).
+   * v3 (docs/v3-plan.md 1.2): climbers on the rampart stand still (no more
+   * dashing about). After popping up they catch their breath for
+   * rampartStop[1] (seconds); when hunting a garrison soldier they walk
+   * along the wall at this share of their speed (was 1.8, a sprint).
    */
-  rampartDashDeg: 18,
-  rampartRunShare: 1.8,
+  rampartRunShare: 1,
   rampartStop: [0.15, 0.6] as [number, number],
   /** The stretch of wall under a climber on the rampart flashes red this often (seconds), like a wall hit, without damage. */
   rampartMarkEvery: 0.35,
-  /** Most goblins on the board at once (unit budget, docs/mvp.md). */
-  maxGoblins: 40,
+  /**
+   * Most goblins on the board at once (v3, docs/v3-plan.md 1.5: was 40;
+   * bigger waves so the horn gets fed; the frame rate is judged by playing).
+   */
+  maxGoblins: 100,
   /** Random speed change per goblin (0.1 = plus or minus 10%). */
   speedJitter: 0.1,
   /** Seconds between wall hits for one goblin. */
@@ -633,12 +637,12 @@ export const GOBLIN_RULES = {
    * helmet slows it to helmetClimbSpeed), runs about on the rampart for
    * rampartWait, then jumps into the courtyard.
    */
-  bashTime: 5,
+  bashTime: 3,
   bashJitter: 0.2,
   bashStandOff: 1.2,
   helmetClimbSpeed: 1.5,
   /** How long a goblin runs about on the rampart before jumping into the courtyard (seconds). */
-  rampartWait: 8,
+  rampartWait: 4,
   /** The giggle when a goblin reaches the rampart: at most this often for all goblins (seconds). */
   cackleGap: 0.6,
   /** Dazed time after being dropped (seconds). */
@@ -731,17 +735,33 @@ export const CASTLE_HEALTH = {
 
 /** How a wave's enemies come out of their camps (the numbers per wave are in src/director/tutorial.ts). */
 export const WAVES = {
-  /** Goblins per group. Climbers come alone. */
-  gruntGroup: 3,
+  /**
+   * Goblins per group (v3, docs/v3-plan.md 1.2: tight groups of 4 to 5 that
+   * walk together, was 3 and 4). Never bigger than a knight squad can beat
+   * (KNIGHTS). A leftover smaller than minGroup joins the last group.
+   */
+  gruntGroup: 5,
   runnerGroup: 4,
-  /** A camp rumbles this long before its group comes out (seconds). */
+  minGroup: 3,
+  /** A camp drums this long before its group comes out (seconds); the compass lights it meanwhile. */
   rumbleLead: 3,
-  /** Gap between goblins of one group leaving the camp (seconds). */
-  groupGap: 0.8,
-  /** Group times follow t = spawnTime * x^curve: below 1, the start is calm and the end is a push. */
+  /** Gap between goblins of one group leaving the camp (seconds; was 0.8, now they walk as one). */
+  groupGap: 0.45,
+  /** Push times follow t = spawnTime * x^curve: below 1, the start is calm and the end is a push. */
   curve: 0.75,
-  /** Random shift of each group time, as a share of the gap between groups. */
-  jitter: 0.3,
+  /**
+   * v3: the groups of a wave come in this many pushes (from, to; fewer when
+   * there are fewer groups). The groups of one push start within pushSpread
+   * (seconds), and pushes are at least pushCalm apart (seconds, from, to).
+   */
+  pushes: [3, 4] as [number, number],
+  pushSpread: 3,
+  pushCalm: [5, 8] as [number, number],
+  /**
+   * v3: a camp sends its next group only when its last one is no longer on
+   * its way (at the wall, or gone). A group waits for that at most this long (seconds).
+   */
+  holdMax: 12,
   /** The first group comes this long after the wave starts (seconds), after its rumble. */
   firstGroupAt: 1,
   /** A camp sinks this much (share of its height) when all its enemies of the wave are out. */
@@ -792,10 +812,14 @@ export const COMPASS = {
    * 2026-11-12). Out here the eyes see it over the ring, and the goblins at
    * the front wall still show over it.
    */
-  at: 37,
-  y: 7,
-  /** Tipped toward the eyes (was 8, nearly flat: hard to read from the seat, headset test 2026-11-12). */
-  tiltDeg: 35,
+  // v3 (docs/v3-plan.md 1.7): its rim carries the crank. Headset test 2026-11-13: 30 out and 10 up was too high and
+  // covered the view in front, so it sits low now (4.5 up), a little farther out (33) for the bigger crank wheel
+  // (CRANK.wheelOut). Being lower puts the wheel about 54 to 58 cm from the eyes (the reach band's edge, the
+  // developer's choice: the view in front matters more). Its far side stays under the line of sight to the wall.
+  at: 33,
+  y: 4.5,
+  /** Tipped toward the eyes (was 8, nearly flat: hard to read from the seat, headset test 2026-11-12; 35, then 25 so the low, wide wheel stays clear of the ground). */
+  tiltDeg: 25,
   radius: 5.5,
   /** The dish: its wall height and how far its lip stands out over the face (cm). */
   dishDepth: 0.9,
@@ -822,22 +846,35 @@ export const COMPASS = {
   barMax: 6,
   /** Wedges grow to their new height with this smoothing (seconds), so a count change never jumps. */
   barGlide: 0.15,
-  /** Colors by level: none, camp about to send, far, near, at the wall. */
-  levelColors: [0x3a332d, 0xffb030, 0x8a2a20, 0xe0402c, 0xff5a3c],
-  /** A goblin on the board closer than this to the middle (cm) is "near". */
-  near: 150,
-  /** The top level blinks this often (per second), the amber one pulses slower. */
+  /**
+   * v3 (docs/v3-plan.md 1.3): the color is the state, not the distance.
+   * Levels: none, a camp about to send (amber, slow pulse: the warning before
+   * a push), walking in (bright yellow, steady), attacking the wall (bashing,
+   * climbing, on the rampart or inside: full red, pulsing). Never color
+   * alone: red also pulses. All far above 4.5 to 1 against the dark face.
+   */
+  levelColors: [0x3a332d, 0xff9a1f, 0xffe03a, 0xff2a1a],
+  /** The red level pulses this often (per second), the amber one slower. */
   blinkHz: 1.6,
   pulseHz: 0.6,
-  /** The wedges beside a threat light one level lower (at the base height), so a group reads as a wide arrow. */
+  /** A pulsing wedge dims down to this share of its color at the low point. */
+  pulseLow: 0.3,
+  /** The wedges beside a threat show its color at this share (at the base height), so a group reads as a wide arrow. */
   spread: true,
-  /** Camp tents on the lip: most shown, their size (cm), how high a sending one bobs, and their colors. */
+  spreadShare: 0.4,
+  /**
+   * Camp tents on the lip: most shown, their size (cm), how high a sending
+   * one bobs, and their colors (v3: light cream with a dark outline, never
+   * grey; amber while its drums play). The outline is a dark copy this much bigger.
+   */
   maxCamps: 12,
-  tentRadius: 0.5,
-  tentHeight: 0.9,
+  tentRadius: 0.55,
+  tentHeight: 1,
   tentBob: 0.35,
-  tentColor: 0x6b5a48,
-  tentSendingColor: 0xffb030,
+  tentColor: 0xf3e6c4,
+  tentSendingColor: 0xff9a1f,
+  tentOutlineColor: 0x0d0a08,
+  tentOutline: 1.3,
   /** The gold needle pointing straight ahead (cm): its length out from the boss (short of the wedges' tips) and its width. */
   needleLength: 0.75,
   needleWidth: 0.7,
@@ -859,6 +896,44 @@ export const COMPASS = {
   dotDoneColor: '#f2c14e',
   dotNowColor: '#ffffff',
   dotLaterColor: '#8a7a62',
+};
+
+/**
+ * The compass crank (v3, docs/v3-plan.md 1.7, src/player/crank.ts): a brass
+ * wheel round the compass dish's rim with a knob on it. Pinch the knob (a
+ * pinch only, never a fist, 2026-11-13) and move the hand round in a circle: one turn of the wheel is one
+ * turn of the board (the angle, 1:1). The knob turns with the board. It is
+ * the only thing that spins the board in a battle (the ring handle is gone).
+ * Sizes in cm, in the dish's tipped frame.
+ */
+export const CRANK = {
+  /**
+   * The wheel: this far outside the dish's lip (headset test 2026-11-13: was 0.45, too small; a wider circle
+   * turns more precisely and less jumpy), this thick (tube radius), joined to the dish by `spokes` spokes.
+   */
+  wheelOut: 3.5,
+  wheelTube: 0.4,
+  spokes: 8,
+  spokeRadius: 0.18,
+  /** The knob on the wheel: a short post and a ball on top (bigger since 2026-11-13). */
+  knobRadius: 0.65,
+  knobHeight: 1.7,
+  ballRadius: 1.05,
+  wheelColor: 0xd9a441,
+  knobColor: 0x7a3b1e,
+  /** Pinch zone around the knob's ball (meters, real size; generous, like the goblins' pinch zone). */
+  grabRadius: 0.05,
+  /** The hand must be this far from the wheel's middle (cm, in its plane) for its angle to count (near the axis it is noise). */
+  minRadius: 2.5,
+  /** A click every this many degrees of turn (also the snap step's sound). */
+  clickDeg: 30,
+  /** The knob at board spin 0 (degrees round the dish: 0 the far side, 180 the near side toward the player). */
+  knobStartDeg: 180,
+};
+
+/** Board turning (v3, docs/v3-plan.md 1.7): the snap turning setting's step (degrees). Height stays smooth. */
+export const BOARD_TURN = {
+  snapDeg: 30,
 };
 
 /** Map loading (docs/custom-mode.md section 11, step 5): the map key of the tutorial map. */
@@ -1236,9 +1311,10 @@ export const LEVEL_GEN = {
   triggerNear: 8,
   /**
    * The unit budget (docs/performance.md): goblins on the board at once.
-   * A wave's goblins are capped so its estimate stays in it.
+   * A wave's goblins are capped so its estimate stays in it. v3 (docs/v3-plan.md
+   * 1.5): 100 (was 50); the old stress test result is out of date, play judges it.
    */
-  unitBudget: 50,
+  unitBudget: 100,
   /** Of a wave's goblins, about this share is on the board at once (they come out over the wave and walk in). */
   atOnceShare: 0.75,
   /** Rising camps: share of the camps up from the start, by difficulty (the rest rise in waves 2 to 4). */
@@ -1463,9 +1539,11 @@ export const PAUSE = {
     /**
      * Round to the right, on the blue wave flag's old spot (2026-11-12): the
      * compass ring took the spot straight in front. Same distance, so the same reach.
-     * 34 since 2026-11-12 (was 39): everything nearer the front.
+     * 34 since 2026-11-12 (was 39): everything nearer the front. 24 since
+     * 2026-11-13 (headset test: nearer the compass), just clear of the crank's
+     * wheel and knob (about 16 cm from the compass's middle).
      */
-    angleDeg: 34,
+    angleDeg: 24,
   },
   /**
    * The Quest menu can stop the frames without the page ever seeing a
@@ -1561,7 +1639,8 @@ export const PAUSE = {
      * The Access tab's rows (Measure reach, Quiet horn, Reset table, Unlock all tools): farther apart,
      * the buttons are round. 5.5 (was 6) so the fourth row (v2 run 2) keeps its gap above the tabs.
      */
-    accessRowGap: 5.5,
+    // v3: 5.2 (was 5.5), so a fifth row (Snap turning) fits.
+    accessRowGap: 5.2,
     sliderX: 8.6,
     sliderLength: 27,
   },
@@ -2051,10 +2130,11 @@ export const AIM_ASSIST = {
   /**
    * 4. Gentle pull toward a target within this cone after release (degrees).
    * Raised from 7 and 30 after the headset tests, to make up for hand tracking jitter.
+   * v3 (docs/v3-plan.md 1.8): a little stronger again (was 10 and 45), toward goblins, balloons and triggers.
    */
-  coneDeg: 10,
+  coneDeg: 12,
   /** Most it bends per second (degrees). Times `strength`. */
-  turnDegPerSec: 45,
+  turnDegPerSec: 55,
   /** Overall assist strength (0 = off, 1 = normal). An accessibility option later. */
   strength: 1,
   /** Assist share per enemy type. Weak on runners: the slingshot is meant to be weak against them. */
@@ -2119,12 +2199,24 @@ export const TOOLS = {
    * The bell and the horn are one use each (one stun, one call): their
    * window is only the short moment until the tool goes back.
    */
-  use: { swatter: 10, pepper: 8, bell: 1.2, horn: 1.4 },
-  /** The recharge after a use, while the tool is back on its platform (seconds). */
-  recharge: { swatter: 20, pepper: 20, bell: 35, horn: 30 },
-  /** Each goblin eaten fills every recharging tool's ring by this share of its full recharge (a seasoned one by seasonedRefill). */
-  eatRefill: 0.1,
-  seasonedRefill: 0.2,
+  use: { swatter: 3, pepper: 8, bell: 1.2, horn: 1.4 },
+  /**
+   * v3 (docs/v3-plan.md 1.4): these tools count their use in swings, not
+   * seconds (`use` above is then the swings per charge). The ring shows one pip per swing.
+   */
+  swings: { swatter: true, pepper: false, bell: false, horn: false },
+  /**
+   * The recharge after a use, while the tool is back on its platform
+   * (seconds; v3 1.1 shorter). The horn has none: it charges only by eating (hornMeals).
+   */
+  recharge: { swatter: 10, pepper: 12, bell: 25, horn: 0 },
+  /**
+   * v3 (docs/v3-plan.md 1.5): eating charges only the horn. This many goblins
+   * fill it, a seasoned (peppered) one counts as seasonedMeals. The other
+   * tools recharge on time only. The horn starts each battle full.
+   */
+  hornMeals: 5,
+  seasonedMeals: 2,
   /**
    * The ring on the platform (readable with the sound off): while a use runs
    * it drains (useColor), while recharging it fills (chargeColor) over a
@@ -2142,6 +2234,10 @@ export const TOOLS = {
     /** The ring flashes this bright for this long when eating fills it (seconds). */
     flashColor: 0xffffff,
     flashTime: 0.25,
+    /** Pips (a swatter's swings, the horn's meals): the gap between two pips (degrees). */
+    pipGapDeg: 10,
+    /** The horn's ring while it waits for meals (gold, not the time recharge blue), and full of meals. */
+    mealColor: 0xffc23a,
   },
   /** The hand must be open near the tool this long before closing it grabs (seconds). Same as the ring. */
   readyTime: 0.15,
@@ -2269,6 +2365,15 @@ export const SWATTER = {
   /** Whoosh sound above this head speed (cm per second), at most this often (seconds). */
   whooshSpeed: 160,
   whooshGap: 0.35,
+  /**
+   * v3 (docs/v3-plan.md 1.4): 3 swings per charge (TOOLS.use.swatter). A
+   * swing starts when the head passes swingSpeed (cm per second) or swats
+   * something, and ends after the head stays under swingEndSpeed for
+   * swingEndTime (seconds). Waving it about still uses swings.
+   */
+  swingSpeed: 150,
+  swingEndSpeed: 60,
+  swingEndTime: 0.18,
   splatColors: [0x6a8f3a, 0x8fb04a, 0xffffff, 0xd23c28],
 };
 
@@ -2317,7 +2422,7 @@ export const PEPPER = {
    * It sneezes for this long after the pepper (seconds), and cannot attack
    * meanwhile (no wall hits, no bashing, no attacks on the garrison, an
    * intruder does not count). Then it can hurt the castle again; it stays
-   * seasoned (it fills the tool rings twice as much when eaten). v2: a few
+   * seasoned (eaten, it counts as 2 meals for the horn, v3). v2: a few
    * seconds (was 10): the power is the disarm.
    */
   sneezeFor: 5,
@@ -2660,13 +2765,23 @@ export const TROOPS = {
  * Runners dodge past with a quick hop. Sizes in cm, times in seconds.
  */
 export const KNIGHTS = {
-  /** Knights per squad, picked at random from min to max. */
-  squadMin: 3,
+  /**
+   * Knights per squad, picked at random from min to max. v3 (docs/v3-plan.md
+   * 1.6): a fixed 5 (was 3 to 5), so the player can plan: one squad beats a
+   * goblin group (WAVES.gruntGroup) on its own and holds its spot all wave.
+   */
+  squadMin: 5,
   squadMax: 5,
   /** Squads at once (a level setting later). */
   maxSquads: 4,
   /** Most field knights at once (maxSquads full squads). */
   maxField: 20,
+  /**
+   * v3: one knight beats about 2 bare goblins. It takes this many goblin
+   * blows to go down (guards keep TROOPS.hitsToDown), and lands strikeChance
+   * of its strikes (below; armor and swords still matter).
+   */
+  hitsToDown: 4,
   /** A squad with this many knights left (or fewer) breaks: the rest march home, a new squad may come. */
   breakAt: 1,
   /** Gap between knights bursting out of the gate. */
@@ -2704,8 +2819,8 @@ export const KNIGHTS = {
   ignoreTime: 3,
   /** A knight in a moving mode that has not moved for this long is put where it was going (seconds, the run-in-place watchdog). */
   stuckTime: 2,
-  /** A knight's strike lands this share (the garrison's guards use TROOPS.strikeChance). */
-  strikeChance: 0.35,
+  /** A knight's strike lands this share (the garrison's guards use TROOPS.strikeChance). v3: 0.55 (was 0.35), strong squads. */
+  strikeChance: 0.55,
   /** Walking back to their spot after a fight (multiple of TROOPS.speed). */
   postSpeedScale: 1.6,
   /** The crash: goblins this close to the first goblin met are knocked over (at most crashMax). */
@@ -3321,6 +3436,13 @@ export const BALLOONS = {
   /** It stops over the courtyard here and drops one rider every dropGap. */
   dropRadius: 43,
   dropGap: 0.6,
+  /**
+   * v3 (docs/v3-plan.md 1.4): the swatter pushes a balloon away instead of
+   * popping it: it drifts outward this fast (cm per second) for this long
+   * (seconds), then comes back. Popping stays the slingshot's job.
+   */
+  pushSpeed: 30,
+  pushTime: 1.6,
   /** Then it rises (cm per second) and drifts away outward, and is gone past this far or this high. */
   leaveRise: 6,
   leaveSpeed: 9,

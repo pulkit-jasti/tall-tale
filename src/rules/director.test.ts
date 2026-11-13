@@ -117,6 +117,11 @@ function idleApi(): TutorialApi & {
       this.cleared++;
     },
     lessonClimber: () => {},
+    sendScouts: () => {},
+    keepScouts: () => {},
+    scoutsInFront: () => false,
+    scoutsAttacking: () => false,
+    lessonFromScouts: () => false,
     showTool(tool) {
       this.shown.push(tool);
     },
@@ -190,6 +195,8 @@ function eagerApi(): ReturnType<typeof idleApi> {
     slingLoaded: () => true,
     triggersSetOff: more,
     pausedCount: more,
+    scoutsInFront: () => true,
+    scoutsAttacking: () => true,
   };
 }
 
@@ -331,7 +338,7 @@ describe('tutorial director', () => {
     const api = idleApi();
     const steps = buildTutorialSteps(['slingshot', 'swatter', 'pepper'], TUTORIAL_WAVES, 2);
     expect(steps[0].id).toBe('wave-2-cleared');
-    expect(steps.some((s) => s.id === 'learn-spin' || s.id === 'learn-sling-grab')).toBe(false);
+    expect(steps.some((s) => s.id === 'learn-crank' || s.id === 'learn-sling-grab')).toBe(false);
     const director = new Director<TutorialApi>(steps, api);
     director.update(0.1);
     // The breather clears wave 2, then the food jar is shown before the swatter.
@@ -403,7 +410,7 @@ describe('tutorial director', () => {
     expect(director.current?.id).toBe('learn-pause');
     api.pausedCount = () => 1;
     director.update(0.1);
-    expect(director.current?.id).toBe('learn-spin');
+    expect(director.current?.id).toBe('learn-crank');
     const idle = new Director<TutorialApi>(buildTutorialSteps(['slingshot']), idleApi());
     run(idle, 50);
     expect(idle.current?.id).not.toBe('learn-pause');

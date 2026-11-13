@@ -9,6 +9,8 @@ import {
   BUTTON_SIZE,
   HEADER,
   CASTLE,
+  COMPASS,
+  CRANK,
   CUSTOM_GAME,
   TABS,
   MENU,
@@ -103,8 +105,15 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
   const backButton = onPanel(P.radius, settingsCenter, P.tiltDeg, sby, sbx);
   const [stx, sty] = tabsAt(S.width, S.height);
   const tabRow = onPanel(P.radius, settingsCenter, P.tiltDeg, sty, stx);
+  // v3: the compass crank (its wheel round the tipped dish) replaced the ring in battles; its near and far side.
+  // Marked rare: since 2026-11-13 it sits low (the developer's choice, so it never covers the view), at the band's edge.
+  const wheel = COMPASS.radius + CRANK.wheelOut;
+  const tilt = (COMPASS.tiltDeg * Math.PI) / 180;
+  const wheelY = COMPASS.y + COMPASS.dishDepth * Math.cos(tilt);
   return [
-    { name: 'ring handle', radius: HANDLES.radius, y: HANDLES.ringY },
+    { name: 'compass crank, near side', radius: COMPASS.at - wheel * Math.cos(tilt), y: wheelY - wheel * Math.sin(tilt), rare: true },
+    { name: 'compass crank, far side', radius: COMPASS.at + wheel * Math.cos(tilt), y: wheelY + wheel * Math.sin(tilt), rare: true },
+    { name: 'height rail (pause, home screen)', radius: HANDLES.radius, y: HANDLES.ringY, rare: true },
     { name: 'slingshot handle', radius: TOOL_SPOTS.slingshot.radius, y: top + SLINGSHOT.handleHeight / 2 },
     { name: 'pebble bowl', radius: PEBBLE_BOWL.radius, y: PEBBLE_BOWL.rimY },
     { name: 'swatter grip', radius: TOOL_SPOTS.leftSide.radius, y: top + (SWATTER.gripFrom + SWATTER.gripTo) / 2 },

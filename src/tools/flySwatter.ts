@@ -1,8 +1,10 @@
-// The fly swatter (docs/giant-tools.md): crowd clearing near the wall. Grab
-// it, then swat: the first swat (the head touching the ground or a goblin)
-// starts about 10 seconds to swat as often as the player wants, then it
-// recharges (v2, free tools). Each swat knocks out every goblin the head touches. A helmet or a
-// shield takes one swat each (v2, src/rules/gear.ts).
+// The fly swatter (docs/giant-tools.md): crowds of bare goblins near the
+// wall. v3 (docs/v3-plan.md 1.4): 3 swings per charge (a swing is a fast
+// move of the head or a swat, hit or miss), then it recharges. Each swat
+// knocks out every bare goblin the head touches. A helmet or a shield stops
+// it: a clonk, the goblin keeps its gear and is knocked back a little,
+// dazed. A swatted balloon (or its riders) is pushed away for a moment,
+// never popped (that is the slingshot's job).
 //
 // Fast swings blur hand tracking, so hits are found along the whole path of
 // the head since the last frame, with a generous hit area, and slow slams
@@ -10,6 +12,7 @@
 import { Vector3 } from 'three';
 import { CASTLE, SWATTER, TOOL_SPOTS } from '../config/game.js';
 import { landingHeight } from '../rules/boardMath.js';
+import type { Balloons } from '../units/balloons.js';
 import type { Goblin } from '../units/goblins.js';
 import { flySwatter } from '../world/shapes.js';
 import { HandTool, type ToolParts } from './handTool.js';
@@ -28,8 +31,15 @@ export class FlySwatter extends HandTool {
   /** A ground swat counts again only after the head lifted off. */
   private armed = true;
   private hits: Goblin[] = [];
+  /** A swing is under way (v3), and how long the head has been slow (seconds). */
+  private swinging = false;
+  private calmTime = 0;
   /** Every swat, at the head's world point (juice: a ring on the ground). */
   onSplat: (world: Vector3) => void = () => {};
+  /** The balloons (set by the game): a swat pushes them away. */
+  balloons: Balloons | null = null;
+  /** A swat bounced off armor (the tutorial's swatter wave can count it). */
+  onClonk: () => void = () => {};
 
   constructor(parts: ToolParts) {
     super(
@@ -49,8 +59,18 @@ export class FlySwatter extends HandTool {
   }
 
   protected resetMotion(): void {
+    // Let go mid-swing: that swing is spent.
+    this.endSwing();
     this.hasLast = false;
     this.armed = true;
+    this.calmTime = 0;
+  }
+
+  /** A swing is over: one of the charge's swings is used up (the last one sends it back). */
+  private endSwing(): void {
+    if (!this.swinging) return;
+    this.swinging = false;
+    this.spendSwing();
   }
 
   protected heldUpdate(dt: number): void {
@@ -92,25 +112,55 @@ export class FlySwatter extends HandTool {
         if (toGoblin.lengthSq() < r2) this.hits.push(g);
       }
     }
+    // A balloon near the head (v3): pushed away, not popped.
+    const balloon = speed > SWATTER.minHitSpeed ? (this.balloons?.near(current, SWATTER.hitRadius) ?? null) : null;
     this.last.copy(current);
-    if ((groundSwat || this.hits.length > 0) && this.tryUse()) this.swat(this.bodyToWorld(HEAD_LOCAL, world));
+    const contact = groundSwat || this.hits.length > 0 || balloon !== null;
+    // v3: a swing starts with a fast head or a swat, and ends when the head has been slow a moment.
+    if (!this.swinging && (contact || speed > SWATTER.swingSpeed)) {
+      if (!this.tryUse()) {
+        this.hits.length = 0;
+        return;
+      }
+      this.swinging = true;
+      this.calmTime = 0;
+    }
+    if (this.swinging) {
+      if (balloon && this.balloons?.push(balloon)) this.onUse(1);
+      if (groundSwat || this.hits.length > 0) this.swat(this.bodyToWorld(HEAD_LOCAL, world));
+      this.calmTime = speed < SWATTER.swingEndSpeed ? this.calmTime + dt : 0;
+      if (this.calmTime >= SWATTER.swingEndTime) this.endSwing();
+    }
+    this.hits.length = 0;
   }
 
-  /** Splat: every goblin in this.hits is knocked out with a poof. */
+  /**
+   * Splat: every bare goblin in this.hits is knocked out with a poof. A
+   * helmet or shield stops it (v3, a clonk), and a rider pushes its balloon away.
+   */
   private swat(at: Vector3): void {
     this.audio.play('swatSplat', at, 1, 0.08);
     this.particles.burst(at, SWATTER.splatColors, 6, 0.15);
     this.onSplat(at);
+    this.stage.boardSpin.worldToLocal(front.copy(at));
+    let knocked = 0;
     for (const g of this.hits) {
-      // Armor takes the swat too (v2): a helmet or shield flies off and the goblin reels back, away from the head.
-      this.stage.boardSpin.worldToLocal(front.copy(at));
-      if (this.goblins.armor(g, front.x, front.z)) continue;
+      if (g.mode === 'riding') {
+        const carrier = this.balloons?.carrierOf(g);
+        if (carrier && this.balloons!.push(carrier)) knocked++;
+        continue;
+      }
+      if (this.goblins.clonk(g, front.x, front.z)) {
+        this.onClonk();
+        continue;
+      }
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, SWATTER.splatColors, 10);
       this.audio.play('poof', world, 1, 0.05);
       this.goblins.kill(g, true);
+      knocked++;
     }
-    if (this.hits.length > 0) this.onUse(this.hits.length);
+    if (knocked > 0) this.onUse(knocked);
     this.hits.length = 0;
   }
 
@@ -127,5 +177,7 @@ export class FlySwatter extends HandTool {
       if (Math.hypot(g.root.position.x - front.x, g.root.position.z - front.z) < r) this.hits.push(g);
     }
     this.swat(this.stage.boardSpin.localToWorld(front));
+    // One debug swat is one swing.
+    this.spendSwing();
   }
 }

@@ -33,6 +33,7 @@ export type DebugCommand =
   | 'rechargeTools'
   | 'drainTools'
   | 'eatRefill'
+  | 'nearHead'
   | 'showTools'
   | 'swat'
   | 'pepper'
@@ -167,7 +168,14 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'bowlFill', group: 'slingshot', icon: '🫙', label: 'Fill bowl', does: 'Fill the pebble bowl' },
   { id: 'rechargeTools', group: 'food', icon: '🔋', label: 'Recharge tools', does: 'Every tool is ready at once (its recharge ring full)' },
   { id: 'drainTools', group: 'food', icon: '🪫', label: 'Drain tools', does: 'Every tool that is out ends its use and recharges from empty (dimmed, the ring on its platform filling)' },
-  { id: 'eatRefill', group: 'food', icon: '😋', label: 'Eat refill', does: 'What eating one goblin does: every recharging ring jumps forward 10% of its full recharge' },
+  {
+    id: 'nearHead',
+    group: 'performance',
+    icon: '🔍',
+    label: 'What is near my head?',
+    does: 'Press while a strange object floats in front of you: a note lists every visible mesh within 40 cm of the eyes (its path, size, color, on top or not)',
+  },
+  { id: 'eatRefill', group: 'food', icon: '😋', label: 'Feed the horn', does: 'What eating one goblin does (v3): the horn gains one meal of 5; the other tools recharge on time only' },
   { id: 'showTools', group: 'food', icon: '🧰', label: 'Show tools', does: 'The horn, fly swatter, pepper shaker and bell pop onto their platforms now (normally in waves 1, 3, 4 and 5)' },
   { id: 'swat', group: 'food', icon: '🪰', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (starts its 10 s use, then a 20 s recharge)' },
   { id: 'pepper', group: 'food', icon: '🌶️', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },

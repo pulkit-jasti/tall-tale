@@ -11,11 +11,14 @@ const STORAGE_KEY = 'tallTale.access';
 class AccessSettings {
   /** The horn never listens to the mic, even with one: hold it at the mouth to blow. */
   quietHorn = false;
+  /** v3 (docs/v3-plan.md 1.7): the board turns in steps (BOARD_TURN.snapDeg) instead of smoothly (comfort). */
+  snapTurn = false;
 
   constructor() {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { quietHorn?: unknown };
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { quietHorn?: unknown; snapTurn?: unknown };
       if (typeof saved.quietHorn === 'boolean') this.quietHorn = saved.quietHorn;
+      if (typeof saved.snapTurn === 'boolean') this.snapTurn = saved.snapTurn;
     } catch {
       // No storage (private window): the defaults stay.
     }
@@ -23,8 +26,17 @@ class AccessSettings {
 
   setQuietHorn(on: boolean): void {
     this.quietHorn = on;
+    this.save();
+  }
+
+  setSnapTurn(on: boolean): void {
+    this.snapTurn = on;
+    this.save();
+  }
+
+  private save(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ quietHorn: this.quietHorn }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ quietHorn: this.quietHorn, snapTurn: this.snapTurn }));
     } catch {
       // No storage: it still holds for this visit.
     }

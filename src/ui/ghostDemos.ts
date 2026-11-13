@@ -27,7 +27,8 @@ import { SWATTER } from '../config/game.js';
 export type GhostPose = 'open' | 'pinch' | 'fist';
 
 export type GhostAnchor =
-  | 'ring'
+  /** The compass crank's knob, moved `arcDeg` round the wheel from where it is now (v3, replaced the ring). */
+  | 'crank'
   | 'lessonGoblin'
   | 'mouth'
   | 'reach'
@@ -51,7 +52,7 @@ export interface GhostKey {
   rod?: Dir;
   fingers?: Dir;
   palm: Dir;
-  /** Ring only: degrees along the ring from the front (positive to the right). */
+  /** Crank only: degrees round the wheel from the knob (positive: clockwise seen from above). */
   arcDeg?: number;
 }
 
@@ -67,8 +68,6 @@ export interface GhostDemo {
 }
 
 // Grips used by the demos.
-/** Right hand over the ring from above: knuckles along the rail, thumb to the left, palm down and a little forward. */
-const RING_GRIP = { rod: [-1, 0, 0] as Dir, palm: [0, -1, 0.25] as Dir };
 /**
  * Right hand reaching across to an upright handle on the left (the pepper
  * front left, the bell): thumb up, palm facing in (left) and a bit forward.
@@ -135,30 +134,22 @@ export const GHOST_DEMOS = {
       key(3.6, 'reach', [-3, -8, -32], 'open', REACH_GRIP),
     ],
   },
-  /** Come down onto the ring from above, close the fist, follow the ring to the left, let go, lift off. */
-  spin: {
+  /**
+   * v3 (docs/v3-plan.md 1.7): the compass crank. Come down onto the knob
+   * from above, pinch it (a pinch only, never a fist), circle once with it
+   * round the wheel (a key every 45 degrees, so the hand stays on the rim's
+   * curve; the anchor is the knob's ball moved round from where it is), let
+   * go, lift off. A full circle is a full turn of the board.
+   */
+  crank: {
     hand: 'right',
     keys: [
-      key(0, 'ring', [0, 7, -3], 'open', RING_GRIP, 12),
-      key(0.7, 'ring', [0, 0, 0], 'open', RING_GRIP, 12),
-      key(1.0, 'ring', [0, 0, 0], 'fist', RING_GRIP, 12),
-      // 50 degrees along the ring, most of the lesson's spin goal in one pull.
-      key(2.3, 'ring', [0, 0, 0], 'fist', RING_GRIP, -38),
-      key(2.6, 'ring', [0, 0, 0], 'open', RING_GRIP, -38),
-      key(3.1, 'ring', [0, 7, -3], 'open', RING_GRIP, -38),
-    ],
-  },
-  /** Close the fist on the ring, move it up, then down, let go. */
-  height: {
-    hand: 'right',
-    keys: [
-      key(0, 'ring', [0, 7, -3], 'open', RING_GRIP, 6),
-      key(0.7, 'ring', [0, 0, 0], 'open', RING_GRIP, 6),
-      key(1.0, 'ring', [0, 0, 0], 'fist', RING_GRIP, 6),
-      key(1.8, 'ring', [0, 7, 0], 'fist', RING_GRIP, 6),
-      key(2.8, 'ring', [0, -3, 0], 'fist', RING_GRIP, 6),
-      key(3.1, 'ring', [0, -3, 0], 'open', RING_GRIP, 6),
-      key(3.6, 'ring', [0, 5, -3], 'open', RING_GRIP, 6),
+      key(0, 'crank', [0, 6, -2], 'open', PINCH_DOWN, 0),
+      key(0.7, 'crank', [0, 0, 0], 'open', PINCH_DOWN, 0),
+      key(1.0, 'crank', [0, 0, 0], 'pinch', PINCH_DOWN, 0),
+      ...[45, 90, 135, 180, 225, 270, 315, 360].map((deg, i) => key(1.0 + (i + 1) * 0.35, 'crank', [0, 0, 0], 'pinch', PINCH_DOWN, deg)),
+      key(4.1, 'crank', [0, 0, 0], 'open', PINCH_DOWN, 360),
+      key(4.6, 'crank', [0, 6, -2], 'open', PINCH_DOWN, 360),
     ],
   },
   /** Come down over the goblin, pinch it, lift it. */

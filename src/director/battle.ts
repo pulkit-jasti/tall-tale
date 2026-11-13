@@ -5,6 +5,7 @@
 // does for the lessons. Nothing tutorial-only lives in those systems.
 import { Vector3 } from 'three';
 import { hornHearsMic } from '../player/accessSettings.js';
+import { note } from '../debug/notes.js';
 import type { GameAudio } from '../audio/sound.js';
 import {
   CALIBRATION,
@@ -14,7 +15,6 @@ import {
   END_PANEL,
   GHOST_HAND,
   GOBLIN_RULES,
-  HANDLES,
   HINT_SIGN,
   GOBLIN_GEAR,
   BALLOONS,
@@ -28,7 +28,7 @@ import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
 import { ReachCheck } from '../player/reachCheck.js';
 import { clearWave, createBattle, damageCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
-import { angleDelta, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { wallHitDamage } from '../rules/gear.js';
 import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
@@ -53,6 +53,7 @@ import type { WaveSpawner } from '../units/waveSpawner.js';
 import type { Flags } from '../world/flags.js';
 import type { RisingCamps } from '../world/risingCamps.js';
 import type { Compass } from '../ui/compass.js';
+import type { CompassCrank } from '../player/crank.js';
 import type { Level, LevelRules } from '../level/level.js';
 import { buildLevelSteps, hiddenAtStart, levelWavePlans, risingByWave } from './levelDirector.js';
 import type { Stage } from '../world/stage.js';
@@ -145,6 +146,8 @@ export interface BattleParts {
   camps: RisingCamps;
   /** The compass ring in front (where enemies come from, the wave and the goblins left). */
   compass: Compass;
+  /** The compass crank (v3): its wheel and knob, for the crank lesson's ghost hand and marker. */
+  crank: CompassCrank;
   /** The wall garrison's size and refill: a level's rules, or null for the usual (GARRISON). */
   setGarrison: (rules: LevelRules | null) => void;
 }
@@ -283,6 +286,11 @@ export class Battle implements TutorialApi {
     this.loadBoardScale();
   }
 
+  /** True once the player's reach was measured (now or on an earlier visit, saved in the browser). */
+  get reachIsKnown(): boolean {
+    return this.reachKnown;
+  }
+
   /** The board size saved by an earlier reach check, if any. */
   private loadBoardScale(): void {
     try {
@@ -377,6 +385,9 @@ export class Battle implements TutorialApi {
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     this.lessonGoblin = null;
+    this.scouts = [];
+    this.scoutsToSend = 0;
+    this.scoutCamp = null;
     this.squadFoes = [];
     this.lessonTrigger = null;
     this.triggerCount = noTriggers();
@@ -694,7 +705,9 @@ export class Battle implements TutorialApi {
       this.quietTools(step);
       // No new goblins while any are inside the castle (v2): the player has to deal with the intruders first.
       // And none at all while a lesson runs: only the lesson's own goblins are out (headset test: other goblins confused).
-      const inLesson = step?.hint?.kind === 'lesson';
+      // In the tutorial also none in the gap between two steps (the green tick and the pause after a lesson,
+      // headset test 2026-11-13: goblins kept coming then), so the wave only goes on once a lesson is fully over.
+      const inLesson = step?.hint?.kind === 'lesson' || (this.teach && !!this.director && step === null);
       spawner.rate = inLesson || goblins.countMode('intruder') > 0 ? 0 : (this.director?.spawnRate ?? 1);
       spawner.update(dt);
       if (this.state.phase !== 'playing') this.end();
@@ -876,11 +889,9 @@ export class Battle implements TutorialApi {
   /** Exact points the ghost hand touches (world, meters). */
   private ghostAnchor(anchor: GhostAnchor, out: Vector3, arcDeg = 0): Vector3 | null {
     switch (anchor) {
-      case 'ring': {
-        // The center of the ring's tube, at an angle along it from the seat's front.
-        const a = degToRad(arcDeg);
-        return this.parts.stage.boardLift.localToWorld(out.set(polarX(HANDLES.radius, a), HANDLES.ringY, polarZ(HANDLES.radius, a)));
-      }
+      case 'crank':
+        // The center of the wheel's tube, round it from the near side.
+        return this.parts.crank.wheelWorld(arcDeg, out);
       case 'pebbles':
         return this.parts.slingshot.partWorld('pebbles', out);
       case 'mouth':
@@ -913,8 +924,8 @@ export class Battle implements TutorialApi {
   private markerPosition(target: MarkerTarget | undefined, out: Vector3): Vector3 | null {
     const { stage, goblins, flags, slingshot } = this.parts;
     switch (target) {
-      case 'ring':
-        return stage.boardLift.localToWorld(out.set(0, HANDLES.ringY + HANDLES.ringRadius, -HANDLES.radius));
+      case 'crank':
+        return this.parts.crank.knobWorld(out);
       case 'lessonGoblin': {
         const g = this.lessonGoblin;
         // Only while it is on the board: in the hand it needs no marker.
@@ -1039,13 +1050,28 @@ export class Battle implements TutorialApi {
 
   // ---- TutorialApi ----
 
+  /** What the wave's debug note counts from (v3, docs/v3-plan.md 1.5): eaten, at the wall and horn calls when it started. */
+  private waveFrom = { eaten: 0, wall: 0, horn: 0 };
+
+  /** v3: a debug note per wave, to tune the horn's food: goblins sent, reached the wall, eaten, horn calls. */
+  private noteWave(how: string): void {
+    if (this.wave < 0) return;
+    const f = this.waveFrom;
+    note(
+      `[waves] wave ${this.wave + 1} ${how}: sent ${this.parts.spawner.spawned}, reached the wall ${this.parts.goblins.wallArrivals - f.wall}, eaten ${this.eatenCount - f.eaten}, horn calls ${this.toolUses('horn') - f.horn}`,
+    );
+  }
+
   startWave(index: number): void {
     this.wave = index;
     this.inWave = true;
+    this.waveFrom = { eaten: this.eatenCount, wall: this.parts.goblins.wallArrivals, horn: this.toolUses('horn') };
     this.sinceDamage = 0;
     // A lesson goblin still waiting from before becomes an ordinary goblin, so it never holds the wave up.
     const old = this.lessonGoblin;
     if (old && old.mode !== 'dead') this.parts.goblins.makeOrdinary(old);
+    // The tutorial's scouts still on the wall go on like any goblin of the wave.
+    this.releaseScouts();
     const plan = this.waves[index];
     // A level wave hands out its own gear shares from wave 1; the tutorial's helmets and shields come from their wave on.
     this.parts.goblins.gearShares = plan.gear ?? GOBLIN_GEAR;
@@ -1079,6 +1105,7 @@ export class Battle implements TutorialApi {
   }
 
   endWave(): void {
+    if (this.inWave) this.noteWave('ended');
     this.inWave = false;
     this.parts.spawner.stop();
     this.parts.troops.recall();
@@ -1086,6 +1113,7 @@ export class Battle implements TutorialApi {
   }
 
   clearWave(): void {
+    if (this.inWave) this.noteWave('cleared');
     this.inWave = false;
     this.parts.troops.recall();
     clearWave(this.state, CASTLE_HEALTH);
@@ -1117,6 +1145,84 @@ export class Battle implements TutorialApi {
     const wait = this.inWave ? GOBLIN_RULES.rampartWait : TUTORIAL_TIMING.lessonClimberWait;
     const goblin = goblins.spawnClimberAt(angle, onRampart, wait);
     if (goblin) this.lessonGoblin = goblin;
+  }
+
+  // ---- The live compass lessons' scouts (2026-11-13) ----
+
+  /** The scouts out so far (with the serial they had, so a pooled goblin reused for something else no longer counts). */
+  private scouts: { g: Goblin; serial: number }[] = [];
+  private scoutCamp: string | null = null;
+  private scoutsToSend = 0;
+  private scoutTimer = 0;
+
+  private liveScouts(): Goblin[] {
+    return this.scouts.filter((s) => s.g.serial === s.serial && s.g.mode !== 'dead').map((s) => s.g);
+  }
+
+  sendScouts(): void {
+    // Wave 1's first camp: it rises now (with its drum and dust), and the wave's own rise is then nothing new.
+    const camp = this.waves[0]?.camps[0];
+    if (!camp) return;
+    this.scoutCamp = camp;
+    this.parts.camps.raise([camp]);
+    this.scoutsToSend = TUTORIAL_TIMING.scouts.count;
+    this.scoutTimer = TUTORIAL_TIMING.scouts.delay;
+  }
+
+  keepScouts(dt: number): void {
+    if (this.scoutsToSend <= 0 || !this.scoutCamp) return;
+    this.scoutTimer -= dt;
+    if (this.scoutTimer > 0) return;
+    const g = this.parts.spawner.spawnFrom(this.scoutCamp, 'grunt');
+    // At the unit cap: try again next frame.
+    if (!g) return;
+    this.scoutsToSend--;
+    this.scoutTimer = TUTORIAL_TIMING.scouts.gap;
+    g.speed *= TUTORIAL_TIMING.scouts.speedScale;
+    // A lesson goblin: once up on the rampart it waits there to be eaten (the army leaves it alone).
+    g.rampartWait = TUTORIAL_TIMING.lessonClimberWait;
+    this.scouts.push({ g, serial: g.serial });
+  }
+
+  scoutsInFront(): boolean {
+    const front = degToRad(TUTORIAL_TIMING.scouts.frontDeg);
+    const spin = this.parts.stage.spin;
+    for (const g of this.liveScouts()) {
+      const p = g.root.position;
+      if (Math.abs(angleDelta(spin, angleOf(p.x, p.z))) < front) return true;
+    }
+    return false;
+  }
+
+  scoutsAttacking(): boolean {
+    return this.liveScouts().some((g) => g.mode === 'atWall' || g.mode === 'climbing' || g.mode === 'rampart');
+  }
+
+  lessonFromScouts(): boolean {
+    const { goblins, stage } = this.parts;
+    let best: Goblin | null = null;
+    let bestAngle = Infinity;
+    for (const g of this.liveScouts()) {
+      if (!goblins.isHittable(g) || this.parts.isHeld(g)) continue;
+      if (g.mode !== 'atWall' && g.mode !== 'climbing' && g.mode !== 'rampart') continue;
+      const p = g.root.position;
+      const a = Math.abs(angleDelta(stage.spin, angleOf(p.x, p.z)));
+      if (a < bestAngle) {
+        best = g;
+        bestAngle = a;
+      }
+    }
+    if (!best) return false;
+    this.lessonGoblin = best;
+    return true;
+  }
+
+  /** The scouts left become ordinary goblins (wave 1 starts) or are forgotten (a new battle). */
+  private releaseScouts(): void {
+    for (const g of this.liveScouts()) this.parts.goblins.makeOrdinary(g);
+    this.scouts = [];
+    this.scoutsToSend = 0;
+    this.scoutCamp = null;
   }
 
   showTool(tool: ToolName): void {

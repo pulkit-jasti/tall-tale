@@ -15,7 +15,7 @@ Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md), [Castle rul
 |---|---|
 | Castle health | The red flag on its pole ([castle-rules.md](castle-rules.md#2-the-two-flags)) |
 | Battle progress | The compass ring's middle: the wave and the goblins left (the blue wave flag was dropped 2026-11-11) |
-| Where enemies come from | The 3D compass straight in front by the wall: wedge color says how close (camps about to send, goblins far, near, at the wall), wedge height how many, tents on its lip where the camps are ([castle-rules.md](castle-rules.md#2-the-flag-and-the-compass-ring)). The pause and Next buttons stand 34 degrees to the right |
+| Where enemies come from | The 3D compass straight in front by the wall: wedge color says how close (camps about to send, goblins far, near, at the wall), wedge height how many, tents on its lip where the camps are ([castle-rules.md](castle-rules.md#2-the-flag-and-the-compass-ring)). The pause and Next buttons stand 24 degrees to the right, just beside it |
 | Where damage is happening | The wall top flashes red with a dust puff on each hit (see "Threat cues"). Later cracks, smoke and fires on the wall. Plus spatial sound |
 | Tool use and recharge (v2) | A flat ring on each tool's platform: it drains in cream while a use runs, fills in blue while the tool recharges, flashes white when eating fills it, hidden while ready ([giant-tools.md](giant-tools.md#3-use-windows-and-recharge-v2)) |
 | Tool recharging | Tool dimmed (the Locked look) and its ring filling |
@@ -47,7 +47,7 @@ Every grab, pinch and poke target must be a comfortable reach from the chair. To
 |---|---|---|
 | Under 30 cm | Too close | Nothing (it also overlaps the eat zone, 22 cm from the face) |
 | 30 to 40 cm | Close | Nothing that is reached often |
-| **40 to 50 cm** | **Best** | Everything the hands use often: the ring handle, the tool handles, the pebble bowl, the Next and panel buttons |
+| **40 to 50 cm** | **Best** | Everything the hands use often: the compass crank (v3, was the ring handle), the tool handles, the pebble bowl, the Next and panel buttons |
 | 50 to 63 cm | Edge | Only things reached now and then: goblins on the rampart, intruders in the courtyard |
 | Over 63 cm | Out of reach | Only things the tools reach (the slingshot, the swatter's long handle), and things to look at (the hint sign) |
 
@@ -68,7 +68,8 @@ Arm length varies a lot between players, and the default size felt too close in 
 - **Countdown:** once a hand is out and still, the sign shows "Great, hold it there... 3", then 2, then 1, with a tick each second (the text pops on each number). If the arm drops for more than 0.4 s, it waits again. When it ends, a chime plays and the ticked sign says "Done! You can rest your arm now."
 - **What it measures:** the farthest the pinch point gets, as a level distance from the head (not the seat, so leaning forward does not count), smoothed so a tracking spike never counts.
 - **What it changes:** the whole board (everything in `boardLift`: board, castle, goblins, ring, tools, flags, sign, panels) scales so the rampart sits at 88% of the measured reach, a comfortable reach rather than a full stretch. Everything keeps its place relative to the wall. The scale stays within 0.85 to 1.45, and the board grows or shrinks to it smoothly, so the player sees it fit them.
-- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. "Measure reach" on the pause panel runs the check again right away, on the frozen battle, without starting it again. "Measure reach again" on the debug page forgets it and starts the battle with the check.
+- **Always once (v3, 1.10):** on a first visit it runs before the home screen, whether the tutorial is played (its first step) or skipped (Skip tutorial runs it first, then the home screen comes).
+- **Once per player:** the size is saved in the browser. Without tracked hands (browser), it gives up after 40 s and keeps the default size. "Measure it again" in the settings' Access tab runs the check again right away, on the frozen battle, without starting it again. "Measure reach again" on the debug page forgets it and starts the battle with the check.
 - Numbers in `CALIBRATION` in `src/config/game.ts`, code in `src/player/reachCheck.ts`.
 
 ### Holding a tool
@@ -95,16 +96,20 @@ Players who cannot hear, or play with the sound off, still need to know where go
 - **Wall hit flash:** every hit makes that part of the wall top flash red and fade, with a small dust puff. The wall top is easy to see from the seat, also out of the corner of the eye.
 - An "attack compass" arc with red marks inside the ring was tried and removed after the headset test: the wall flash alone reads well enough.
 
+### The player's hand models (lost tracking)
+
+IWSDK draws each tracked hand as a white outline hand (`world.input.xr.visualAdapters.hand`). It keeps that model visible even when the headset loses a hand (it forces `visible = isPrimary` every frame but skips moving it when the joint poses fail), so a lost hand stayed drawn at a stale spot in a broken pose, often right at the eyes: the "white artifact" of the 2026-11-13 headset test, seen only while one hand was untracked. `hideLostHandModels` in `src/game.ts` hides a hand's model on every frame our hand tracker did not read that hand, after IWSDK's input update. It was never caused by a recent commit (IWSDK and its config did not change); it shows whenever a hand drops out of tracking.
+
 ### Pinch and grab (the two hand actions)
 
 | Action | How | Used for |
 |---|---|---|
 | **Pinch** | Thumb and index finger together | Small things: picking up goblins, pulling back the slingshot pouch, taking pebbles from the bowl, other small actions |
-| **Grab** | Close the whole hand into a fist | Big things: the slingshot handle, fly swatter, pepper shaker, bell, war horn, the ring handle |
+| **Grab** | Close the whole hand into a fist | Big things: the slingshot handle, fly swatter, pepper shaker, bell, war horn (the compass crank's knob is a pinch only) |
 
 - Buttons (Play, pause panel, pause button) are poked with the index finger, not pinched or grabbed.
 - Each object accepts only its own action, so a pinch never picks up the swatter and a fist never picks up a goblin.
-- Exception: the ring handle and the slingshot handle accept a pinch too. In the first headset test a fist with the back of the hand toward the headset tracked poorly, because the fingers are hidden.
+- Exception: the slingshot handle accepts a pinch too (so did the old ring handle). The compass crank's knob takes a pinch only. In the first headset test a fist with the back of the hand toward the headset tracked poorly, because the fingers are hidden.
 - A fist counts when 3 of 4 fingers are curled, so one badly tracked finger does not break it.
 
 ---
@@ -113,7 +118,20 @@ Players who cannot hear, or play with the sound off, still need to know where go
 
 The board is a full circle all the time. There are no 120 or 180 degree modes. A seated game does not need a small play area, it needs a world that is easy to bring to you.
 
-### Rotating and adjusting by hand
+### The compass crank (v3, built 2026-11-13, replaces the ring in battles)
+
+[v3-plan.md](v3-plan.md) 1.7, `CRANK` and `BOARD_TURN` in config, `src/player/crank.ts`.
+
+- **A brass wheel round the compass dish**, 3.5 cm out from its lip on 8 spokes (one merged mesh), with a knob on it (headset test 2026-11-13: the first wheel, right on the lip, was too small; a wider circle turns more precisely and less jumpy, and the knob is bigger). **Pinch the knob** (a pinch only, never a fist, 2026-11-13: the knob is made to be caught between two fingers; the pinch zone is 5 cm round its ball; the hand open near it for a moment first, like every big handle) and **move the hand round in a circle**: the board follows the hand's angle round the dish's middle 1:1, so **one circle is one turn of the board**, however wide the circle. Not a wrist twist (a wrist only turns about half way, the ring's old regrab problem). Near the dish's middle (under 2.5 cm) the angle is ignored, so it never jumps.
+- **The knob turns with the board**, like the compass wedges, so the player drags the threat they see on the compass to the front.
+- A click every 30 degrees of turn (`crankClick`). Idle, Ready and Held looks with emissive color only.
+- **Where:** the compass is 33 cm out, 4.5 cm up, tipped 25 degrees (2026-11-13: lower, it covered the view in front at 10 up); the wheel is about 54 to 58 cm from the eyes, the reach band's edge (the developer's choice; both sides are in `reachSpots()`, marked rare).
+- **Snap turning (Access tab, off by default, saved):** the board jumps 30 degrees at a time (`BOARD_TURN.snapDeg`) each time the hand passes a notch, with a click; the knob still follows the hand freely. One circle is still 12 steps, a full turn.
+- **The ring handle is gone from battles** (it took space in front and was grabbed by accident). `src/player/handles.ts` is no longer used.
+- **Board height:** the home screen's height rail also shows **while paused** (at its spot in front, up and down only, hidden on resume), never during a wave or a breather. The compass and its crank hide while paused, since the rail stands where they are (they overlapped). The pause rail turns with the pause panel, which follows the head, so it is always in front of the player (it stops turning while held). The reach check sets a good height at the start, so most players rarely need it.
+- Ghost demo `crank`: the right hand pinches the wheel's near side from above and circles once to the right, a key every 45 degrees along the rim.
+
+### The ring handle (until v3, kept as a record)
 
 One **ring handle** on the inner rim, right in front of the player, below where the hands do most of the work. It is a wooden rail in a full circle around the player on short poles, a little lower than the wall top. Small bands are spread evenly around it, so it is easy to see it turn. (Being tested as a full circle. It started as a 120 degree arc in front, and `halfSpanDeg` in config switches back.) It works with one hand, which also helps players who can only use one hand.
 
@@ -145,7 +163,7 @@ One **ring handle** on the inner rim, right in front of the player, below where 
 
 - **Only the board rotates.** The sky, the horizon, the hills, the tool platforms (with the pebble bowl), the red flag and the compass ring never turn. The platforms, the flag, the compass and the hint sign rise and fall with the board, so they always stand at the same spot on it and the ring never passes through them. If the whole world spins around the player, it causes motion sickness, even when the player is the one spinning it (a whole-world turn was tried on paper after the step 5 review and dropped for this reason).
 - **Movement follows the hands exactly (1:1)**, with no smoothing or lag. Moving the world is only comfortable when the player clearly causes it.
-- **Comfort setting (later):** for players who get motion sick, the board turns in snap steps (30 degrees) instead of smoothly.
+- **Snap turning (built in v3):** for players who get motion sick, the board turns in snap steps (30 degrees) instead of smoothly. A switch in the settings' Access tab. Height stays smooth.
 - Later ideas: a small "momentum" flick spin for fun.
 
 ### Placement and fallbacks
@@ -282,7 +300,9 @@ None of these are in the MVP. They come after the first playtest (see [mvp.md](m
 - **Quiet mode:** built in v2 as the "Quiet horn" switch (Access tab): the horn works by holding it at the mouth. Offered to everyone, no one has to declare a disability. See [giant-tools.md](giant-tools.md).
 - **Mic calibration:** a quick test blow sets the horn's blow threshold per player.
 - **Handedness:** which side the slingshot platform sits on.
-- **Snap rotation:** the board turns in 30 degree steps instead of smoothly.
+- **Snap turning:** built in v3 (Access tab, off by default): the board turns in 30 degree steps instead of smoothly. See "The compass crank".
+- **Color blind friendly compass (v3):** red (attacking) also pulses, so the compass never relies on color alone.
+- **Measure reach again** (Access tab): the reach check runs again, for another player or a different chair. On a first visit it runs before the home screen, even when the tutorial is skipped (v3).
 - **Stronger slingshot aim assist** (see [giant-tools.md](giant-tools.md#slingshot-aim-assist)).
 - **Reduced effects:** softer flashes and less shaking (planned).
 - **More visual threat cues:** smoke or a glow at enemy camps and approaching groups. (The wall hit flash is already in, on by default, see "Threat cues".)

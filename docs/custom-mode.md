@@ -109,7 +109,7 @@ The planning parts (where things go) move into the generator, with no models or 
 - **Not every camp is there from the start.** A level's camps can appear later: a new camp rises **the moment its wave starts** (with the wave banner), never in the breather before and never mid-wave. This is the feel of progression and growing danger.
 - **The tutorial does it too**: each wave's new camp rises as that wave starts.
 - **The animation** is the one the menu and the castle walls use (`src/world/sceneSwap.ts`): the camp group slides up out of the ground, a transform only, no frame cost. A camp not up yet is hidden (fewer draw calls early on).
-- **Seen without sound or looking**: the drum sound from its direction, a dust burst, and the red threat arrow points at it until the player looks.
+- **Seen without sound or looking**: the drum sound from its direction, a dust burst, and its tent on the compass. (The red threat arrow pointed at it until the player looked; dropped 2026-11-13, it looked random. The arrow is only for goblins at the wall now.)
 - **The road to it is there from the start**: a road to an empty hill hints that something will come.
 - **Data**: each camp in a blueprint gets the wave it appears in. Campaign presets set it; Custom Game leaves it to the generator (no setting, section 4).
 
