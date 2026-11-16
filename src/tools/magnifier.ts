@@ -17,7 +17,8 @@
 //     - A goblin without a helmet under the beam: burned after burnTime
 //       (pants smoke, poof). A helmet stops it, with nothing special shown.
 //     All of it is slower at sunset and slowest at night (never dead).
-//   - Haystacks (2.1) and Sun charge (2.6) come later.
+//   - Haystacks (2.1): lit like a keg (the sun ring snaps to them too).
+//   - Sun charge (2.6) comes later.
 import { AdditiveBlending, CylinderGeometry, Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
 import { GLASS, RENDER_ORDER, TOOL_SPOTS, type TimeOfDay } from '../config/game.js';
 import type { Goblin } from '../units/goblins.js';
