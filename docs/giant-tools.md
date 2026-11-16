@@ -32,7 +32,7 @@ Castle machines are dropped (v2, [castle-machines.md](castle-machines.md) stays 
 
 ## 3. Use windows and recharge (v2, v3 numbers)
 
-Tools are free. Rules in `src/rules/recharge.ts`, numbers in `TOOLS` in `src/config/game.ts`. v3 (built 2026-11-13, [v3-plan.md](v3-plan.md) 1.1, 1.4, 1.5): shorter recharges, the swatter's 10 s window (it counted swings until 2026-11-16, to be changed back in code), and the horn charges only by eating.
+Tools are free. Rules in `src/rules/recharge.ts`, numbers in `TOOLS` in `src/config/game.ts`. v3 ([v3-plan.md](v3-plan.md) 1.1, 1.4, 2.5): shorter recharges, the swatter's 10 s window (back from swings 2026-11-16), and the horn on a 30 s timer again (2026-11-16; eating heals the castle instead). Every tool starts a battle full.
 
 | Tool | Use | Recharge |
 |---|---|---|
@@ -40,21 +40,21 @@ Tools are free. Rules in `src/rules/recharge.ts`, numbers in `TOOLS` in `src/con
 | Swatter | 10 s | 10 s |
 | Pepper | 8 s | 12 s |
 | Bell | one stun | 25 s |
-| Horn | one call | 5 goblins eaten (no time recharge) |
+| Horn | one call or boost (a move is free) | 30 s |
 
 - **The use window starts with the first use** (the first swat, shake, ring or blow), not the grab, so an accidental grab never wastes it.
 - **The recharge starts when the tool is back on its platform**, and only fills while it rests there.
-- **How it shows:** while recharging, the tool is dimmed (the Locked look) and a flat ring on its platform fills up in blue. While a use runs, the ring drains in cream. Hidden while the tool is ready. Readable with the sound off. A hand near a recharging tool shows Locked, and closing the hand buzzes and wobbles it.
+- **How it shows:** while recharging, the tool is dimmed (the Locked look) and a flat ring on its platform fills up in blue. While a use runs, the ring drains in cream. Hidden while the tool is ready. Readable with the sound off. A hand near a recharging tool shows Locked, and closing the hand buzzes and wobbles it. Except the horn (v3 2.5): it can be held while recharging, for a free move; a call or a boost then shows why it cannot blow.
 
-- **Pips (v3):** the swatter's ring is 3 pips that empty, one per swing (they fill again on time while it recharges); the horn's ring is 5 gold pips that fill, one per goblin eaten (`TOOLS.ring.pipGapDeg`, `mealColor`).
+- **Pips:** a use counted in swings shows one pip per swing (`TOOLS.swings`, `TOOLS.ring.pipGapDeg`). No tool counts swings now.
+- **The cost preview (v3 2.5):** while the horn aims a call or a boost and holds a charge, its ring shows full and pulses orange and white (`TOOLS.ring.costColor`): that is what the blow will spend. Calm for a free move.
 
-### Eating charges the horn (v3, replaces "eating fills every ring")
+### Eating heals (v3 2.5, replaces "eating charges the horn", which replaced "eating fills every ring")
 
-- **Only the horn gains from eating.** 5 goblins fill it (`TOOLS.hornMeals`), a **seasoned** (peppered) goblin counts as 2 (`seasonedMeals`). Each meal adds a pip with a white flash and a chime; full, the horn pulses Ready until grabbed.
-- **The other tools recharge on time only** (the old 10% refill was never felt).
-- The horn starts each battle full (the first call is free) and is empty after each call.
-- **The choice:** swat (fast, many at once, gives nothing) or eat (one at a time, but it pays for knights).
-- **Tuning:** a debug note per wave says goblins sent, reached the wall, eaten and horn calls (target about 2 calls per wave). The debug page's "Feed the horn" button adds one meal.
+- **Eating is the only way to heal.** Each goblin eaten heals 2% of the castle's max health (`CASTLE_HEALTH.eatHeal`), a **seasoned** (peppered) goblin double (`seasonedHealScale`). The red flag rises a notch with a chime and a sparkle on its cloth. The breather no longer repairs ([castle-rules.md](castle-rules.md)).
+- **It cannot be farmed:** a goblin only gets into reach after bashing and climbing, which already cost more than it heals back.
+- **Every tool recharges on time only.**
+- **Tuning:** a debug note per wave says goblins sent, reached the wall, eaten and horn calls. The debug page's "Eat heal" button heals as one goblin would, and each heal writes a debug note.
 - Eating is also the only way to deal with goblins in the courtyard without tools.
 
 **Where the goblins to eat come from:** every goblin climbs the wall now ([enemies.md](enemies.md)), so there is always something on the rampart in reach, plus intruders and balloon riders dropped into the courtyard.
@@ -81,7 +81,7 @@ Tools are free. Rules in `src/rules/recharge.ts`, numbers in `TOOLS` in `src/con
   - No auto reload. An empty pouch or an empty bowl shows Locked (wobble and buzz). The pile in the bowl shrinks as pebbles are taken and refills over time.
   - Pebbles are 2.5 cm with a 4 cm hit area. One hit knocks out a bare goblin; a helmet or a shield takes one hit each (v2, see section 5). If aiming is still too hard, the next step is a bigger goblin hit box. Numbers are in `SLINGSHOT`, `AIM_ASSIST` and `PEBBLE_BOWL` in `src/config/game.ts`.
 - **Thrown pebbles:** a pebble thrown by hand only knocks the goblin it hits back a little, dazed for a moment. It never knocks one out, so the slingshot keeps its job (range and knock outs). It buys a second near the wall. A slow let go just drops the pebble and does nothing. Thrown pebbles will not set off triggers (powder kegs, boulders, trees), so those stay a slingshot moment. Numbers are in `PEBBLE_THROW`.
-- **Goblin shot:** a held goblin brought to the empty pouch clicks in like a pebble. Shot, it tumbles through the air, hits the goblin it lands on (v2: armor counts, like every hit), knocks back the goblins within about 8 cm of the impact (dazed), and poofs. Landing without a hit still knocks back the goblins around it. It costs a goblin the player could have eaten (and the horn meal it would have given), so it is a choice. Numbers are in `GOBLIN_SHOT`. The debug page can load one and shoot it.
+- **Goblin shot:** a held goblin brought to the empty pouch clicks in like a pebble. Shot, it tumbles through the air, hits the goblin it lands on (v2: armor counts, like every hit), knocks back the goblins within about 8 cm of the impact (dazed), and poofs. Landing without a hit still knocks back the goblins around it. It costs a goblin the player could have eaten (and the heal it would have given, v3 2.5), so it is a choice. Numbers are in `GOBLIN_SHOT`. The debug page can load one and shoot it.
 
 #### Slingshot aim assist
 
@@ -114,7 +114,7 @@ Rules:
 - **Zone:** near zone, at the wall and on the rampart (a small area under the shaker).
 - **Use:** the first shake starts an **8 second** window, then a 12 s recharge (v3, was 20). Pepper falls where the hand is. The falling particles show where it lands, like seasoning real food. No aiming UI.
 - **Effect:** every goblin under it is **disarmed: weapon, shield and helmet fly off**, so it becomes a one-hit goblin. It sneezes for a few seconds (5 s) and cannot attack meanwhile (no wall hits, no bashing, no attacks on the garrison). **No push back, no throw:** it sneezes where it is (one on the rampart or in the courtyard stops a moment).
-- **Seasoned:** every peppered goblin is seasoned and counts as 2 horn meals when eaten (v3). Pepper then eat is one of the achievements later.
+- **Seasoned:** every peppered goblin is seasoned and heals double when eaten (v3 2.5). Pepper then eat is one of the achievements later.
 - **How it works:** it rests on the front left platform. Grab it with a fist and shake it: a quick move that turns back on the one before is one stroke, and two strokes within 0.7 s are a shake, so no hand pose is needed. While shaking, pepper specks fall straight down from the shaker, and every goblin within 7 cm of the spot below it is peppered once (`Goblins.pepper`, `Goblins.disarm`): it sneezes, its gear flies off and it turns a dusty brown (seasoned). Numbers are in `PEPPER` and `TOOLS`. The debug page's pepper button peppers the front of the wall.
 
 ### Bell (reworked in v2)
@@ -126,14 +126,18 @@ Rules:
 
 ### War horn (new in v2, replaces the megaphone)
 
-- **Role:** calls the field knights ([core-loop.md](core-loop.md#2-troops)) to a road spot the player picks by looking at it. Up to 4 squads; at the limit the squad nearest the spot moves there.
+- **Role:** commands the field knights at a road spot the player picks by looking at it. **v3 2.5, three kinds** (`Troops.plan`, `HornPlan`), at most 3 squads (`KNIGHTS.maxSquads`):
+  - **Call** (an empty road, below the cap): a new squad of 5 marches out. Costs the charge.
+  - **Boost** (within 12 cm of a squad's spot, `KNIGHTS.boostRadius`): instant; its fallen knights pop back at their places, the standing ones lose their wounds, and it strikes faster for 10 s (`boostTime`, `boostStrikeScale`). Costs the charge.
+  - **Move** (an empty road, at the cap): the nearest squad walks there. Free, then 3 s before the next move (`moveLockout`). The horn stays in the hand and must be lowered out of the blow zone before it blows again. So the horn can also be held while it recharges (`Horn.grabbable`), which pauses its recharge.
+- **What a blow will do shows first** (`src/ui/hornAim.ts`, `HORN_AIM`), by shape first, color second, sound third: a call shows five gold see-through ghost knights, the ghost banner and the gold path; a boost a red orange ring rising at the squad's feet, chevrons over it and ghosts where its fallen stood; a move silver rings under its knights, a dashed silver path and an arrow on the spot. Grey with an empty clock means no charge, a shrinking silver ring the move lockout. A settling sound plays once per new kind (`hornHintCall`, `hornHintBoost`, `hornHintMove`). The kind is worked out when the gaze settles and every 0.25 s.
 - **Look, raise, blow (changed 2026-11-11: no lock step, and not at the lips, which were too close to the headset for hand tracking):**
   1. **Look:** the moment it is held, the head aims it: a glowing pool, a light pillar, a ghost banner and the path the knights will take along the roads show at once. The spot follows the look the whole time (the path is built again when it moves to another road or 6 cm along it, `HORN_AIM.pathRebuild`).
   2. **Raise it in front of the face:** the blow zone is a 20 cm ball in front of the mouth (its middle 12 cm ahead of the eyes, with the look kept level, and 10 cm below them; `HORN.zoneForward`, `zoneDown`, `zoneRadius`). The lips and a horn raised a hand's length out both count; one resting at the chest or held out to the side does not. Once in, it stays in 5 cm farther out, and a tracking dropout under 0.3 s does not count as leaving (`zoneExitMargin`, `zoneGrace`). In the zone with a spot, everything turns gold with a click. (Fixed 2026-11-12: the first try, a 32 cm cone from the eyes, left out the mouth itself, which sits below the eyes.)
   3. **Blow into the mic:** a blow counts only in the zone with a spot, when the raw loudness of a single frame reaches 0.015 (no holding it, no smoothing; set from the live loudness panel). A cough or loud talking there can set it off: raise `HORN.blowLevel` from the panel's numbers if it does. A **live bar** in front of the eyes shows the blow against the white line it has to pass. With the mic on, holding it there never fires it. With the **Quiet horn** setting (or no mic), keeping it in the zone for 1.2 s sends them, so voice is never required. The knights go to the spot looked at 0.3 s before the call (`HORN_AIM.callLookBack`), so a head that moves while blowing does not move the spot. A loud frame still counts for 0.25 s (`HORN.blowMemory`), so a blow that starts just before the horn is in place is not lost. The path is drawn from the road's own saved surface (`Road.surfaceAt`, written when the road is built), every 2 cm, both sides, pulled over the road (2026-11-12: it sank under the road on slopes and vanished on legs walked against a road's direction). It costs almost nothing to build: no terrain lookups and no garbage (the first fix made some 1500 terrain lookups per rebuild, and the dropped frames made the sun and clouds flicker). It is built again at most every 0.12 s while the look slides along a road (`HORN_AIM.pathEvery`), and the spot stays 0.3 s after the look slips off a road (`loseAfter`), so a slip never rebuilds the path or redraws the glass sign. Its builds are marked `horn path` on the FPS panel.
 - **A silent mic never breaks the horn** (2026-11-12, the bar sat at zero on the headset): a live mic always hears some room noise, so dead silence for 1 s while held (`HORN.silentLevel`, `silentFallback`) switches that hold to the quiet hold ("No mic sound: hold it there"). Each grab and each mic reopen writes a debug note with the mic's state (the audio context, the track, the level), to find why it went silent.
-- **The cue goes where the eyes go** (the glass sign, `GLASS_SIGN`, `src/ui/kit/glassSign.ts`; in the horn lesson it carries the lesson's text, and the hint sign steps away): while it is held, a small label floats a little above the look's center and follows the look: "Look at a road", "Raise it and blow" (or "Raise it in front of you" with the quiet horn), then "Blow!" with the live bar (or "Hold it there" with the quiet horn's progress). The lesson: "Look around" for at least 6 s (the horn does not call yet), "Raise the horn in front of your face", then "Blow into the horn!" (`TUTORIAL_TIMING.hornLookTime`); the ghost hand raises it a hand's length in front of the face.
-- One call per use, only when it sounds, never on the grab. v3: no time recharge; 5 goblins eaten fill it again (section 3). Squads are 5 strong knights that hold their spot until they break ([enemies.md](enemies.md)).
+- **The cue goes where the eyes go** (the glass sign, `GLASS_SIGN`, `src/ui/kit/glassSign.ts`; in the horn lesson it carries the lesson's text, and the hint sign steps away): while it is held, a small label floats a little above the look's center and follows the look: "Look at a road", "Call: raise it and blow" (or "Call: raise it in front of you" with the quiet horn; "Boost" or "Move" for those), then "Call: blow!" with the live bar (or "Call: hold it there" with the quiet horn's progress). When it cannot blow: "The horn is resting" (no charge) or "Wait to move again" (the lockout); after a move, "Lower it, then raise it again". The lesson: "Look around" for at least 6 s (the horn does not call yet), "Raise the horn in front of your face", then "Blow into the horn!" (`TUTORIAL_TIMING.hornLookTime`); the ghost hand raises it a hand's length in front of the face.
+- One call or boost per charge, spent only when it sounds, never on the grab; then a 30 s recharge (v3 2.5, section 3). Squads are 5 strong knights that hold their spot until they break ([enemies.md](enemies.md)).
 - **Mic permission** stays on the 2D start page, for the horn. The megaphone and its scream are gone. The settings' Accessibility tab has the **Quiet horn** switch (always on without a mic).
 - **The model never covers the view:** a curved ivory hunting horn with brass bands, held from below: the mouthpiece on top of the grip toward the face, the body curving forward and down past the fist, the bell low and a little to the side (`HORN.curve`). Near the face it fades to see-through (15% at 13 cm from the eyes). It rests on the right side platform (86 degrees), standing on its bell. Held like the megaphone was (`HOLD.poses.horn`). Little puffs come out of the bell while the call charges. Sound: the `waveHorn` war horn. Code `src/tools/horn.ts`, numbers in `HORN`. Debug page: the horn button.
 
@@ -145,7 +149,7 @@ Rules:
 | Fly swatter | Near, edge of middle, rampart | Hits bare groups (armor clonks, balloons pushed away) | 10 s | 10 s |
 | Pepper shaker | Near (wall, rampart) | Disarms everything, seasons | 8 s | 12 s |
 | Bell | Everywhere | Stuns all, knocks the rampart down | One stun | 25 s |
-| War horn | The road looked at | Calls a knight squad | One call | 5 goblins eaten |
+| War horn | The road looked at | Calls, boosts or moves a knight squad | One call or boost (a move is free) | 30 s |
 
 ---
 
@@ -197,7 +201,7 @@ Shared by every hand tool (`src/tools/handTool.ts`). Recharge rules are plain fu
 - **When the use is over**, the tool shrinks, poofs and reappears on its platform, then recharges there (the ring fills).
 - **If dropped mid-use**, it glides back to its platform like any other time. Its use window keeps running, and it can be grabbed again there.
 - **In the tutorial, the use window waits:** while a tool's use lesson runs, its window is held, and a tool still recharging from an early use is made ready when the lesson starts. The lesson is done when one goblin is hit, anywhere (the horn: when it sounds). Then the window starts with its full time (`timerHeld` in `src/tools/handTool.ts`).
-- **Recharging:** dimmed colors (the Locked look) and the ring on the platform filling. A hand near it shows Locked (wobble), and closing the hand buzzes instead of grabbing. The tied-down rope remains for a tool the game ties down (none for now).
+- **Recharging:** dimmed colors (the Locked look) and the ring on the platform filling. A hand near it shows Locked (wobble), and closing the hand buzzes instead of grabbing (not the horn, which can be held while recharging for a free move, v3 2.5). The tied-down rope remains for a tool the game ties down (none for now).
 - **End of a use:** the tool blinks during the last 2 seconds of a long use (swatter, pepper), so the end is no surprise.
 
 ### Layout and the ring

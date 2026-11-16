@@ -25,7 +25,7 @@ import { buildStorySpots, planStorySpots } from './storySpots.js';
 import { Meadow } from './grass.js';
 import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
 import { campDistance, RoadField, Terrain, type CampSpot } from './terrain.js';
-import { placeTriggers, triggerGround } from './triggers.js';
+import { addSpareSpots, placeTriggers, triggerGround, type TriggerPlacement } from './triggers.js';
 import { buildRoadside, planRoadside } from './roadside.js';
 import { flatMaterial } from './shapes.js';
 
@@ -313,6 +313,8 @@ export interface BuiltBoard {
   roadTorches: RoadTorch[];
   /** The villages (for the villagers who walk about in them). */
   villages: Spot[];
+  /** v3 2.8: every trap spot, the blueprint's and the spares (src/world/triggers.ts). */
+  trapSpots: TriggerPlacement[];
 }
 
 /**
@@ -334,7 +336,9 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   // Where people live comes first (the villages sit by the roads, so this needs road distances far out).
   const roadField = new RoadField(network.roads, ROADS.width / 2 + SETTLEMENTS.villages.radius[1] + SETTLEMENTS.villages.roadGap[1] + 6);
   // The triggers on the roads: flat ground under them and toward the castle (never hidden by a hill), and nothing built beside them.
-  const triggerSpots = triggerGround(placeTriggers(network, blueprint.triggers));
+  // v3 2.8: the blueprint's traps and their spare spots (where used ones come back), all with flat ground and kept clear.
+  const trapSpots = addSpareSpots(network, placeTriggers(network, blueprint.triggers), createRandom(seed + 13));
+  const triggerSpots = triggerGround(trapSpots);
   const plan = planSettlements(roadField, campSpots, createRandom(seed + 6), triggerSpots.clear);
   // Then the terrain, flat under the camps, villages, fields and triggers: from here on groundAt() has its hills.
   const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan), ...triggerSpots.flats], createRandom(seed));
@@ -374,6 +378,7 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
     lanternHeight: settlements.userData.lanternHeight as number,
     roadTorches,
     villages: plan.villages,
+    trapSpots,
   };
 }
 

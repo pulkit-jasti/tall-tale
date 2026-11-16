@@ -363,7 +363,7 @@ export class GameSystem extends createSystem({}) {
       this.villagers.load(),
       this.slingshot.load(),
       this.troops.load(),
-      this.triggers.load(blueprint.triggers),
+      this.triggers.load(built.trapSpots),
       this.goblins
         .load()
         .then(() => this.gearDebris.load(['goblinSpear', 'goblinSword', 'goblinHelmet', 'goblinShield', 'roundShield', 'rectShield'], this.goblins.unitScale)),
@@ -843,7 +843,7 @@ export class GameSystem extends createSystem({}) {
       this.waves.setMap(built.network, built.hills);
       this.bait.setNetwork(built.network);
       this.spawner.setRoadCount(built.network.graph.camps.length);
-      this.triggers.place(built.network, blueprint.triggers);
+      this.triggers.place(built.network, built.trapSpots);
       this.triggers.hideAll();
       for (const target of this.triggers.targets) this.slingshot.addTarget(target);
       this.villagers.setVillages(built.villages);
@@ -1710,7 +1710,7 @@ export class GameSystem extends createSystem({}) {
         this.garrison.thin(2);
         break;
       case 'triggersReset':
-        this.triggers.setWave(this.battle.totalWaves);
+        this.triggers.setWave(this.battle.totalWaves, true);
         break;
       case 'triggerLesson': {
         // What the keg lesson does: a small group waits by the keg nearest the front until it is set off.

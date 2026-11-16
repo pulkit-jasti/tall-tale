@@ -1,6 +1,6 @@
 # v3 Plan: Faster, Clearer, Deeper
 
-Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are built** (2026-11-16, not tested on the headset; "2.0 as built", "2.5 as built"; 2.3 was dropped). The rest of Phase 2 and Phases 3 to 5 are not built. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
+Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. The rest of Phase 2 and Phases 3 to 5 are not built. **Next (2026-11-16): the headset test of 2.8, then 2.2 (new tools), then 2.1, 2.7 and 2.6, in the order they appear below.** Every step: only `npm run build` with no errors as the check (no typecheck, no tests), update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
 
 Where this file disagrees with [v2-plan.md](v2-plan.md), [custom-mode.md](custom-mode.md), [giant-tools.md](giant-tools.md), [enemies.md](enemies.md) or [modes-and-progression.md](modes-and-progression.md), **this file wins**.
 
@@ -43,11 +43,11 @@ Known finds: `kenney_castle-kit` has `siege-catapult` and `siege-catapult-demoli
 
 ---
 
-## Phase 1: small changes to existing content
+## Phase 1: small changes to existing content [DONE]
 
 All of it changes systems that exist. Mostly config and rules, a few small code changes, and one new control (the compass crank). Tune on the headset in 2 or 3 short rounds, and have someone else play one round.
 
-### 1.1 Tempo
+### 1.1 Tempo [DONE]
 
 Start values below; tune on the headset. Numbers live in `src/config/game.ts`.
 
@@ -66,14 +66,14 @@ Start values below; tune on the headset. Numbers live in `src/config/game.ts`.
 - **The board stays big.** Camps stay far out; goblins cross the distance faster. The far zone gets things to do in Phases 2 and 3 (bridges, the magnet, bombers, archers; catapults are on hold), so travel time becomes time to act.
 - **Shorter battles:** a campaign level should take about 3 to 4 minutes.
 
-### 1.2 Clarity (so fast never turns into chaos)
+### 1.2 Clarity (so fast never turns into chaos) [DONE]
 
 - **Groups, not drips.** Goblins leave a camp in tight groups of 4 to 5 that walk together (`WAVES.gruntGroup` 3, `runnerGroup` 4 today). At most one group on its way per direction at a time. A group reads as one threat, gives the swatter a target and, later, gives chains a crowd. A group is never bigger than a knight squad can beat (1.6).
 - **A rhythm in every wave:** 3 to 4 pushes, with 5 to 8 s of calm between them (the spawn curve, `WAVES.curve`, already shapes this). Fast is not constant.
 - **A warning before every push:** the drum from the camp's direction and its compass wedge lighting up about 3 s before the group leaves (`WAVES.rumbleLead` is 3 today: check the compass shows it too). The player is never surprised, only rushed.
 - **Calmer rampart goblins:** no more dashing about (`rampartDashDeg`, `rampartRunShare`). They stand and fight the garrison, so they are easy to read and to grab.
 
-### 1.3 The compass: readable at a glance
+### 1.3 The compass: readable at a glance [DONE]
 
 **What it has today:** wedges on the rim that point where goblins come from (color: how close, size: how many; no marker per goblin), camp tents on its lip, and the goblins left with wave dots in the middle. **The problems:** the camp markers are grey diamonds on a dark dish (far too little contrast), and a group still walking and a group bashing the wall look alike.
 
@@ -94,7 +94,7 @@ Start values below; tune on the headset. Numbers live in `src/config/game.ts`.
 
 Code: the compass (`COMPASS` in config, its system in `src/ui/`); the art comes from `public/ui/` or the Kenney packs (no hand-made art, AGENTS.md).
 
-### 1.4 The swatter vs armor and balloons
+### 1.4 The swatter vs armor and balloons [DONE]
 
 The swatter is for crowds of bare goblins. It no longer answers everything.
 
@@ -105,7 +105,7 @@ The swatter is for crowds of bare goblins. It no longer answers everything.
 - Code: `src/rules/gear.ts` (who a hit breaks gear for), the swatter's hit code, `src/rules/recharge.ts`.
 - [enemies.md](enemies.md) and [giant-tools.md](giant-tools.md) change to match.
 
-### 1.5 Eating charges the horn
+### 1.5 Eating charges the horn [DONE, then replaced by 2.5]
 
 > **Replaced by 2.5 (2026-11-15):** the horn recharges on time like every tool, and eating heals instead. Kept below as a record of what Phase 1 built.
 
@@ -127,7 +127,7 @@ Eating gets a reward that only eating gives, and it ties the weakest mechanic to
 - **Gameplay first, not the old unit budget:** the stress test result is out of date (play felt smooth past where it failed), so the developer judges the frame rate by playing. Raise the generator's cap on goblins at once (`LEVEL_GEN`, about 100 with troops to start) and the wave caps, and size waves for the gameplay.
 - **A built-in catch-up:** a player who struggles has more goblins at the wall, so more food and more knights. A strong player stops them far out and needs the knights less. Good, keep it.
 
-### 1.6 Knights: strong squads that hold a side
+### 1.6 Knights: strong squads that hold a side [DONE]
 
 > **Changed by 2.5 (2026-11-15):** a call costs a horn charge (no meals), the squad cap is about 3, and moving a squad is free. The rest still holds.
 
@@ -143,7 +143,7 @@ The horn call now costs 5 meals, so each squad must be worth it. The developer's
 - **Knights and traps:** goblins fighting a squad stand still in a clump, so a keg or a tree next to a held junction becomes a planned combo (Phase 2 objects).
 - `KNIGHTS.maxSquads` stays 4.
 
-### 1.7 The compass crank (turning the board fast)
+### 1.7 The compass crank (turning the board fast) [DONE]
 
 A small wheel around the compass with a knob on its rim. Grab the knob and move the hand in a circle: **one turn of the wheel is one turn of the board** (the angle is 1:1, not the hand's distance). One quick circle turns the board all the way around.
 
@@ -171,17 +171,17 @@ A small wheel around the compass with a knob on its rim. Grab the knob and move 
 - The reach check sets a good height at the start (1.10), so most players rarely need it.
 - Update AGENTS.md (hard rule 3 and the ring handle rules) when built: the ring becomes the crank, height moves to pause and the home screen.
 
-### 1.8 Slingshot aim assist
+### 1.8 Slingshot aim assist [DONE]
 
 The loading speed is fine as it is (developer's playtests). Only the aim assist gets a little stronger, toward goblins, balloons and triggers in the shot's direction (slingshot config; [giant-tools.md](giant-tools.md) changes to match).
 
-### 1.9 A shorter tutorial
+### 1.9 A shorter tutorial [DONE]
 
 - Target: about 5 to 6 minutes (about 8 today), so a judge reaches a campaign level.
 - Fewer info steps and quicker lessons with the new tempo; nothing new is added. The new swatter rule is learned by doing (the "clonk" on a helmet in the swatter wave), the horn refill by eating (1.5), the crank in one step (1.7).
 - Which steps go: decided on the headset with the new tempo, written in [mvp.md](mvp.md).
 
-### 1.10 The reach check always runs once
+### 1.10 The reach check always runs once [DONE]
 
 - The reach check ("Show me how big you are, giant!") sizes the whole board. Today it is part of the tutorial, so a player who skips the tutorial on the first visit never does it.
 - **Now:** on the first visit, the reach check runs **before the home screen**, whether the tutorial is played or skipped.
@@ -214,7 +214,7 @@ Build passes; `npm test` has the same 14 old failures in `director.test.ts` as b
 
 Each new object and tool **works on its own** and is useful alone. How they set each other off (chains) comes in Phase 4. So every object gets its inputs and outputs written down now (in the trigger registry), but nothing passes them on yet.
 
-### 2.0 A livelier board (build and test first, decided 2026-11-15)
+### 2.0 A livelier board (build and test first, decided 2026-11-15) [DONE]
 
 The developer builds and tests these visual changes before the rest of Phase 2.
 
@@ -240,11 +240,11 @@ Build passes. Not tested on the headset. Not committed.
 - **New models** (Kenney, CC0): `fountain-round`, `cart-high`, `wheel`, `fence-broken`, `wall-broken`, `wall-wood-broken`, `signpost-single`, `workbench` (listed in [assets.md](assets.md)). The village house code is now `addHouse()` in `src/world/settlements.ts`, shared with the cottages.
 - **Stars** (`src/world/sky.ts`): the dip power went from 3 to 1.4 (`starTwinklePower`), so many more twinkle at once; a short flash brighter and bigger than normal (`starSparkle`, `starSparkleGrow`, `starSparklePower`); normal stars now shine at 0.4 to 0.8 so a flash has room; the first 20 stars are hero stars, 2.2 times bigger at full shine with a 1.5 times stronger twinkle and flash (`starHeroCount`, `starHeroSize`, `starHeroBoost`).
 
-### 2.4 Twinkling stars
+### 2.4 Twinkling stars [DONE in 2.0]
 
 Moved to 2.0 (built first).
 
-### 2.5 Eating heals, the horn on a timer (decided 2026-11-15, replaces 1.5)
+### 2.5 Eating heals, the horn on a timer (decided 2026-11-15, replaces 1.5) [DONE]
 
 - **Eating is the only way to heal.** The giant and the castle share one health (Phase 3, blocking projectiles). Each goblin eaten heals about **2% of max health** (start value, tune on the headset). The red flag rises a notch with each eat, with a small chime.
 - **Story:** the kingdom feeds the giant, and food keeps the giant strong.
@@ -286,13 +286,23 @@ Build passes. Not tested on the headset. Not committed.
   - **Committing:** raised into the blow zone the ghosts and markers turn more solid with the click, as before.
   - **The glass sign** names the kind ("Call: raise it in front of you", "Boost: blow!", "Move: hold it there") or the reason ("The horn is resting", "Wait to move again").
 
-### 2.8 Waves are breathers inside one battle (decided 2026-11-15)
+### 2.8 Waves are breathers inside one battle (decided 2026-11-15) [BUILT, headset test next]
 A wave never resets the battle. Plants, knights, gear torn off by the magnet and the castle's health carry over. Only things with their own timer (the pepper ring, a plant's wilting) run out. Used traps come back **during waves too**, at a new random spot, so the player keeps looking for new ways to use the land and can't memorize the board:
 - A used trap comes back about 25 s after it was used. One trap appears at a time (no frame dip, with a `mark()` for the FPS panel), never right next to a goblin group.
 - The generator makes about twice as many valid spots per trap kind as traps (a keg on a road, a boulder on a slope, a tree by a road), and a rebuilt trap picks a free one at random (seeded random).
 - Rope bridges stay in place (they cannot move). The bell tower drops its bell once per battle and is never rebuilt; the potion cart is rare (both in 2.1).
 - A poof and a sound show where each trap reappears.
 - Today a trap is rebuilt in its old spot (`Trigger.reset` in `src/world/triggers.ts`); this changes that.
+
+### 2.8 as built (2026-11-16)
+
+Build passes; `npm test` has the same 14 old failures in `director.test.ts`, none new. Not tested on the headset. Not committed.
+
+- **What carries over** was mostly there already: knights stay between waves, and since 2.5 the castle's health carries over (no breather repair). Plants and magnet gear come with 2.2.
+- **Spare spots** (`addSpareSpots` in `src/world/triggers.ts`, `TRIGGERS.respawn`): worked out when a map is built, from its roads and its own seeded stream, not stored in the blueprint, so every map gets them (the hand-made tutorial map too) with no regenerating of levels. For each kind, as many spares as the map has traps of it (`spareShare` 1, so twice the spots), on the roads at the same distances from the castle as the blueprint's traps (20 cm either way, never nearer than 90), at least 30 cm from every other trap spot. The ground is flattened and kept clear under the spares like under every trap (the roadside scenes, villages and decor keep away from them too). `buildBoard` returns them (`trapSpots`).
+- **Coming back:** one trap object stands ready on every spot, the spares hidden. A used trap comes back 25 s later (`delay`), during waves too, at a free spot of its kind picked at random (seeded), never its old one; its old spot is cleared (a boulder's hill goes with a poof). One at a time (`gap` 1 s), never with a goblin within 18 cm (`goblinClear`, tried again a second later), never while the old one still acts (a fallen tree blocking its road), and never more of a kind than the map has. A poof and the tool poof sound show where, with a `mark('trap back')` for the FPS panel.
+- **A wave no longer resets the traps:** at a wave's start only blueprint traps of that wave that have not stood yet come out (the tutorial's lessons still bring theirs with `revealKind` and `readyNearest`). The debug button "Reset triggers" still puts every blueprint trap back in its old spot.
+- Rope bridges (stay in place), the bell tower (once per battle) and the rare potion cart come with 2.1.
 
 ### 2.2 New tools
 

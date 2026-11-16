@@ -32,7 +32,7 @@ Every grabbable or pokeable thing (goblins, tools, handles, buttons, the pause b
 | Idle | Hand far away | Normal | None |
 | Ready | Hand within grab or poke range | Soft white brighten | Soft tick |
 | Held / pressed | Grabbed or poked | Orange | Grab or click |
-| Locked | Ready, but cannot be used (a tool recharging, an empty pouch) | Stays dimmed, small wobble | A buzz |
+| Locked | Ready, but cannot be used (a tool recharging, an empty pouch; not the horn, which can be held while recharging for a free move, v3 2.5) | Stays dimmed, small wobble | A buzz |
 
 - **Only one target per hand.** Only the nearest thing in range is Ready, so the player always knows what they will grab.
 - **The tutorial hint is different:** a slow pulse, not a steady brighten, so "look here" never gets confused with "you can grab this".

@@ -48,7 +48,7 @@ So the player always knows the order: deal with the ones on top first. Goblins c
 
 **Groups and pushes (v3, [v3-plan.md](v3-plan.md) 1.2, `WAVES`, `src/units/waveSpawner.ts`):** goblins leave a camp in tight groups (grunts 5, runners 4, a small leftover joins the last group) that walk as one. A wave comes in 3 to 4 pushes with 5 to 8 s of calm between them; the groups of one push come from different camps where they can. A camp sends its next group only once its last one is at the wall or gone (at most 12 s of waiting). Every group is warned 3 s ahead by the camp's drum and its amber compass wedge and tent.
 
-**Knights (v3, 1.6, `KNIGHTS`):** a squad is a fixed 5 knights; one knight beats about 2 bare goblins (4 goblin blows to go down, lands 55% of its strikes), so a squad beats a group on its own. A squad holds its spot across waves until it is down to `breakAt`. What beats it: two groups at once, armored groups.
+**Knights (v3, 1.6, `KNIGHTS`):** a squad is a fixed 5 knights; one knight beats about 2 bare goblins (4 goblin blows to go down, lands 55% of its strikes), so a squad beats a group on its own. A squad holds its spot across waves until it is down to `breakAt`. What beats it: two groups at once, armored groups. v3 2.5: at most 3 squads; the horn can boost a squad (its fallen come back, faster strikes for 10 s) or move one for free ([giant-tools.md](giant-tools.md) "War horn").
 
 ---
 

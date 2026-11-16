@@ -2672,6 +2672,17 @@ export const STUN = {
 export const TRIGGERS = {
   /** Aim assist share (like AIM_ASSIST.typeShare for goblins). Big still things, so the full bend. */
   assist: 1,
+  /**
+   * v3 (docs/v3-plan.md 2.8): a used trap comes back `delay` seconds later,
+   * during waves too, at a new spot picked at random (seeded) from the free
+   * spots of its kind: the blueprint's and spareShare times as many spares,
+   * made on the roads between spareFrom and the blueprint traps' distances
+   * (spareSlack either way), sampled every spareStep and at least spareGap
+   * from every other trap spot (cm). One trap appears at a time (gap
+   * seconds), never with a goblin within goblinClear (cm; tried again after
+   * retry seconds).
+   */
+  respawn: { delay: 25, gap: 1, retry: 1, goblinClear: 18, spareShare: 1, spareFrom: 90, spareSlack: 20, spareStep: 6, spareGap: 30 },
   /** A trigger the slingshot aims at wobbles a little (degrees, speed). */
   aimWobbleDeg: 5,
   aimWobbleSpeed: 16,

@@ -142,7 +142,7 @@ When the developer starts a cloud session to build the MVP, these rules replace 
 
 - Work through the build order in docs/mvp.md without stopping to ask, unless a hard rule would be broken or the docs truly do not answer a question.
 - Commit and push to the session's branch after each build step. Never push to `master`. Every push deploys to GitHub Pages automatically (`.github/workflows/deploy.yml`).
-- Before each push, `npm run build` and `npm test` must pass. **Never run `npm run typecheck`** (decided 2026-11-11: it costs too many tokens; the build catches what breaks the game).
+- Before each push, `npm run build` must finish with no errors (no tests: decided 2026-11-16, see Developer preferences). **Never run `npm run typecheck`** (decided 2026-11-11: it costs too many tokens; the build catches what breaks the game).
 - Use iwsdk-reference and the metavr docs and API tools for every API question, before writing the code.
 - Do not use iwsdk-runtime, browser screenshots, the emulator or the metavr device and performance tools. There is no headset or GPU in the cloud.
 - IWSDK skills (for example `iwsdk-dev`) ask for runtime checks and screenshots. Skip those parts and check with the build and tests instead (never typecheck).
@@ -155,7 +155,7 @@ When the developer starts a cloud session to build the MVP, these rules replace 
 - Do not commit, push or deploy unless the developer explicitly asks.
 - Ask before adding any dependency.
 - Do not run formatters, linters or scripts that were not approved.
-- **Never run `npm run typecheck` or `tsc`** (decided 2026-11-11, to save tokens). `npm run build` is the check; run `npm test` only when the change touches tested code. Known old type errors (the bell, `director.test.ts`) stay as they are.
+- **Never run `npm run typecheck` or `tsc`** (decided 2026-11-11, to save tokens). **The only check is `npm run build`: it must finish with no errors** (decided 2026-11-16). Never run `npm test` and never write or update tests, unless the developer asks. Known old type errors (the bell, `director.test.ts`) and the stale tests stay as they are.
 - Never use em dashes or en dashes in code comments, docs or UI text.
 - Keep explanations short and simple. The developer knows React, React Native, Node/Express and Python well, but is new to 3D and VR.
 - No co-author lines in commits or files.

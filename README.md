@@ -2,7 +2,7 @@
 
 A seated, hands-only VR game for Meta Quest.
 
-You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Your little army does most of the fighting. You turn the battle with giant tools (a slingshot, a fly swatter, a pepper shaker, a bell and a war horn that calls your knights), and when goblins climb the wall, you pick one up and eat it. Tools are free but rest after each use, and eating fills them up faster.
+You are a giant who made a deal with a small kingdom: you protect them, they feed you. You sit in the middle of their round castle while a tiny battle rages all around you. Your little army does most of the fighting. You turn the battle with giant tools (a slingshot, a fly swatter, a pepper shaker, a bell and a war horn that calls your knights), and when goblins climb the wall, you pick one up and eat it. Tools are free but rest after each use, and eating goblins heals the castle.
 
 The feeling we want: being a kid playing with toy soldiers, making up your own battle story, except the toys are alive.
 

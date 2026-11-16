@@ -92,6 +92,51 @@ export interface TriggerPlacement {
   /** The road's center at that spot (board cm). */
   x: number;
   z: number;
+  /** v3 2.8: a spare spot (not in the blueprint), where a used trap of its kind may come back. */
+  spare: boolean;
+}
+
+/**
+ * v3 (docs/v3-plan.md 2.8): spare spots for the traps to come back at. For
+ * each kind, TRIGGERS.respawn.spareShare times as many spots as the map has
+ * of it, on the roads at the same distances from the castle as the
+ * blueprint's (a little either way), at least spareGap from every other
+ * trap spot. Seeded (the map's own stream), flat math only, so it runs
+ * before the terrain (the ground is flattened under the spares too). Works
+ * on every map, the hand-made tutorial map too. Returns the blueprint's
+ * spots followed by the spares.
+ */
+export function addSpareSpots(network: RoadNetwork, placements: TriggerPlacement[], rng: Random): TriggerPlacement[] {
+  const R = TRIGGERS.respawn;
+  const all = [...placements];
+  if (placements.length === 0) return all;
+  const rs = placements.map((p) => Math.hypot(p.x, p.z));
+  const from = Math.max(R.spareFrom, Math.min(...rs) - R.spareSlack);
+  const to = Math.max(from + 10, Math.max(...rs) + R.spareSlack);
+  const candidates: { road: number; along: number; x: number; z: number }[] = [];
+  network.roads.forEach((road, i) => {
+    for (let d = R.spareStep / 2; d < road.length; d += R.spareStep) {
+      road.curve.getPointAt(Math.min(1, d / road.length), temp);
+      const r = Math.hypot(temp.x, temp.z);
+      if (r >= from && r <= to) candidates.push({ road: i, along: d, x: temp.x, z: temp.z });
+    }
+  });
+  const kinds = [...new Set(placements.map((p) => p.kind))];
+  for (const kind of kinds) {
+    const want = Math.round(placements.filter((p) => p.kind === kind).length * R.spareShare);
+    for (let k = 0; k < want && candidates.length > 0; k++) {
+      // A few random tries for a free spot (far enough from every trap spot so far).
+      for (let tries = 0; tries < 40; tries++) {
+        const i = rng.int(candidates.length);
+        const c = candidates[i];
+        if (all.some((p) => Math.hypot(p.x - c.x, p.z - c.z) < R.spareGap)) continue;
+        all.push({ kind, wave: 1, road: c.road, along: c.along, x: c.x, z: c.z, spare: true });
+        candidates.splice(i, 1);
+        break;
+      }
+    }
+  }
+  return all;
 }
 
 /** Each blueprint trigger on the road nearest its spot. Only flat math, so it runs before the terrain is built. */
@@ -111,7 +156,7 @@ export function placeTriggers(network: RoadNetwork, spots: BlueprintTrigger[]): 
     });
     const along = network.roads[road].nearestAlong(x, z);
     network.roads[road].curve.getPointAt(Math.min(1, along / network.roads[road].length), temp);
-    return { kind: spot.kind, wave: spot.wave, road, along, x: temp.x, z: temp.z };
+    return { kind: spot.kind, wave: spot.wave, road, along, x: temp.x, z: temp.z, spare: false };
   });
 }
 
@@ -243,6 +288,13 @@ export abstract class Trigger implements SlingTarget {
 
   abstract readonly radius: number;
   readonly assist = TRIGGERS.assist;
+  /** v3 2.8: a spare spot: it only stands when a used trap of its kind comes back here. */
+  spare = false;
+
+  /** Has it stood this battle yet (a blueprint trap shows by its wave only once; after that it comes back on the timer). */
+  get seenThisBattle(): boolean {
+    return this.seen;
+  }
 
   constructor(
     readonly kind: TriggerKind,
@@ -383,6 +435,17 @@ export abstract class Trigger implements SlingTarget {
       this.center(temp);
       this.owner.poof(temp, 10);
     }
+  }
+
+  /** True while it is set off and still doing its thing (a rolling boulder, a fallen tree blocking its road). */
+  get acting(): boolean {
+    return this.phase === 'acting';
+  }
+
+  /** v3 2.8: it comes back here (a used trap rebuilt at a new spot): standing, with a poof. */
+  appear(): void {
+    this.seen = false;
+    this.reset(Infinity);
   }
 
   hide(): void {
@@ -778,8 +841,15 @@ export class Triggers {
     board.add(this.group);
   }
 
-  /** Loads the models and puts the triggers of the blueprint on the map, each on the road nearest its spot. */
-  async load(spots: BlueprintTrigger[]): Promise<void> {
+  /**
+   * v3 2.8: used traps waiting to come back (seconds left), one at a time
+   * (appearWait), each at a free spot of its kind (never its old one).
+   */
+  private respawns: { kind: TriggerKind; from: Trigger; left: number }[] = [];
+  private appearWait = 0;
+
+  /** Loads the models and puts the map's traps on it (the blueprint's and the spare spots, from buildBoard). */
+  async load(spots: TriggerPlacement[]): Promise<void> {
     const [keg, rock, tree, planks, wood, ...hills] = await Promise.all([
       loadTemplate('props/survival/barrel.glb', { height: TRIGGERS.keg.height }),
       loadTemplate('rocks/nature/rock_smallH.glb', { width: TRIGGERS.boulder.size }),
@@ -803,9 +873,10 @@ export class Triggers {
    * map, src/game.ts loadMap). The old map's triggers go: unregister their
    * slingshot targets before, register the new ones after.
    */
-  place(network: RoadNetwork, spots: BlueprintTrigger[]): void {
+  place(network: RoadNetwork, spots: TriggerPlacement[]): void {
     const models = this.models;
     if (!models) return;
+    this.respawns.length = 0;
     // Everything but the debris pool goes (the triggers, and the boulders' hills).
     const keep = new Set<Object3D>(this.debrisPool.map((d) => d.object));
     for (const child of [...this.group.children]) if (!keep.has(child)) this.group.remove(child);
@@ -815,12 +886,14 @@ export class Triggers {
       d.object.visible = false;
     }
     this.network = network;
-    for (const spot of placeTriggers(network, spots)) {
+    // One trap object per spot, the spares too (hidden until a used trap of their kind comes back there).
+    for (const spot of spots) {
       const { road, along } = spot;
       let trigger: Trigger;
       if (spot.kind === 'keg') trigger = new Keg(this, spot.wave, road, along, models.keg);
       else if (spot.kind === 'boulder') trigger = new Boulder(this, spot.wave, road, along, models.rock, this.rng.pick(models.hills));
       else trigger = new Tree(this, spot.wave, road, along, models.tree);
+      trigger.spare = spot.spare;
       this.group.add(trigger.root);
       this.list.push(trigger);
     }
@@ -831,14 +904,26 @@ export class Triggers {
     return this.list;
   }
 
-  /** A new wave (1 based): every trigger of this wave or an earlier one stands ready again. */
-  setWave(wave: number): void {
-    for (const t of this.list) t.reset(wave);
+  /**
+   * A new wave (1 based). v3 2.8: a wave never resets the battle: a
+   * blueprint trap of this wave or an earlier one that has not stood yet
+   * comes out; used ones come back on their own timer at a new spot (see
+   * update). `rebuild` (debug) puts every blueprint trap back now instead.
+   */
+  setWave(wave: number, rebuild = false): void {
+    if (rebuild) this.respawns.length = 0;
+    for (const t of this.list) {
+      if (t.spare) {
+        if (rebuild) t.hide();
+        continue;
+      }
+      if (rebuild || (!t.seenThisBattle && t.hiddenNow)) t.reset(wave);
+    }
   }
 
-  /** Brings every hidden trigger of one kind onto the roads now (its lesson), with a poof. */
+  /** Brings every hidden trigger of one kind onto the roads now (its lesson), with a poof. Spare spots stay empty. */
   revealKind(kind: TriggerKind): void {
-    for (const t of this.list) if (t.kind === kind && t.hiddenNow) t.reset(Infinity);
+    for (const t of this.list) if (t.kind === kind && t.hiddenNow && !t.spare) t.reset(Infinity);
   }
 
   /** The standing trigger of a kind closest to a board angle (radians, 0 = the board's front), or null. */
@@ -919,11 +1004,76 @@ export class Triggers {
     // The lesson goblins waiting by it are free to go (or be squashed, or turn back).
     this.goblins.releaseWaiting();
     this.onSetOffKind(trigger.kind);
+    // v3 2.8: it comes back at a new spot after a while, during waves too.
+    this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay });
   }
 
-  /** Before the battle, or at its end: every trigger gone, every road open. */
+  /** Before the battle, or at its end: every trigger gone, every road open, none waiting to come back. */
   hideAll(): void {
     for (const t of this.list) t.hide();
+    this.respawns.length = 0;
+    this.appearWait = 0;
+  }
+
+  /**
+   * v3 2.8: the traps waiting to come back, one at a time. A trap comes back
+   * at a free spot of its kind picked at random (seeded), never its old spot,
+   * never with goblins right by it (it tries again a moment later), and never
+   * more of a kind than the map's own count. A poof and a sound show where.
+   * Its old spot is cleared (the boulder's hill goes with a poof).
+   */
+  private updateRespawns(dt: number): void {
+    const R = TRIGGERS.respawn;
+    this.appearWait = Math.max(0, this.appearWait - dt);
+    for (let i = this.respawns.length - 1; i >= 0; i--) {
+      const r = this.respawns[i];
+      r.left -= dt;
+      if (r.left > 0 || this.appearWait > 0) continue;
+      // Still doing its thing (a fallen tree blocking its road): wait for it.
+      if (r.from.acting) {
+        r.left = R.retry;
+        continue;
+      }
+      // As many of a kind as the map has, never more (a lesson may have put one back already).
+      const kindCount = this.list.filter((t) => t.kind === r.kind && !t.spare).length;
+      const up = this.list.filter((t) => t.kind === r.kind && (t.standing || t.acting)).length;
+      if (up >= kindCount) {
+        this.respawns.splice(i, 1);
+        continue;
+      }
+      const free = this.list.filter((t) => t.kind === r.kind && t !== r.from && t.resettable && !this.goblinsNear(t, R.goblinClear));
+      if (free.length === 0) {
+        r.left = R.retry;
+        continue;
+      }
+      const next = this.rng.pick(free);
+      mark('trap back');
+      // The old spot is cleared (a boulder's hill goes with it), unless something already put it back there.
+      if (r.from.resettable && !r.from.hiddenNow) {
+        r.from.center(temp);
+        r.from.hide();
+        this.poof(temp, 6);
+      }
+      next.appear();
+      next.center(temp);
+      this.audio.play('toolPoof', this.board.localToWorld(world.copy(temp)), 0.9, 0.1);
+      this.respawns.splice(i, 1);
+      this.appearWait = R.gap;
+    }
+  }
+
+  /** True when a goblin on the board is within `radius` cm of a trap's spot. */
+  private goblinsNear(t: Trigger, radius: number): boolean {
+    t.center(temp2);
+    const r2 = radius * radius;
+    for (const g of this.goblins.list) {
+      if (g.mode === 'dead') continue;
+      const p = g.root.position;
+      const dx = p.x - temp2.x;
+      const dz = p.z - temp2.z;
+      if (dx * dx + dz * dz < r2) return true;
+    }
+    return false;
   }
 
   /** Debug: sets off every trigger standing now. */
@@ -942,6 +1092,7 @@ export class Triggers {
       this.countGoblins();
     }
     for (const t of this.list) t.update(dt);
+    this.updateRespawns(dt);
     this.updateDebris(dt);
   }
 

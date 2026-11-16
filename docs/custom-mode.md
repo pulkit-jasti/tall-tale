@@ -293,7 +293,7 @@ Build order steps 4 and 5 (section 11), then make Custom Game's Fight play a sav
 - **Wave director:** battles now play the fixed `TUTORIAL_WAVES` through the tutorial director (`src/director/battle.ts`, `src/director/tutorial.ts`; campaign levels play the normal battle with `teach = false`). The new director plays a level's 4 waves: breather, banner, the wave's rising camps come up (`src/world/sceneSwap.ts` slide, drum from its direction, dust, the red threat arrow), groups from `camps` with `counts` over `spawnTime`, balloons, the gear shares (`src/rules/gear.ts` `rollGear`), cleared, next; the time of day per wave as today. It only calls systems (docs/map.md section 8). The tutorial keeps its own director.
 - **Rules:** garrison size and refill (`GARRISON` in config today) and the castle's starting health (`CASTLE_HEALTH`) come from `level.rules` for a level battle.
 - **Rising camps in the tutorial too** (section 7): each tutorial wave's new camp rises as it starts.
-- **Rules to keep:** the UI rules in AGENTS.md and docs/controls-and-ui.md ("Rules learned on the headset"); never run typecheck (AGENTS.md); `npm run build` is the check, `npm test` when tested code changes.
+- **Rules to keep:** the UI rules in AGENTS.md and docs/controls-and-ui.md ("Rules learned on the headset"); never run typecheck (AGENTS.md); `npm run build` with no errors is the only check (no tests, AGENTS.md).
 
 ### As built (steps 4 and 5, 2026-11-11, build and tests only, not checked on the headset yet)
 

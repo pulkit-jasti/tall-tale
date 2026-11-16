@@ -25,7 +25,7 @@ A tall flagpole on the inner rim on the left, slightly in front of the player, a
 
 - Starts at the top. Slides down the pole as the castle takes damage.
 - The flag tears and smokes as it gets low.
-- **Repair:** during the short breather between waves, tiny soldiers at the base of the pole pull the rope and raise the flag a little. Part of the damage heals, not all of it.
+- **Healing (v3 2.5, replaces the breather repair):** eating is the only way to heal. Each goblin eaten heals 2% of max health (a seasoned one double), and the flag rises a notch with a chime and a sparkle (`CASTLE_HEALTH.eatHeal`). The breather no longer repairs (`repairShare` 0): health carries over from wave to wave (v3 2.8).
 - Later: small notches on the pole mark the star thresholds (stars are not in the MVP).
 
 ### Compass ring (replaces the blue wave flag, 2026-11-11)
