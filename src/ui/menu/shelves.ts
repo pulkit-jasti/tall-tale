@@ -54,7 +54,7 @@ import { drawLine, UI_COLORS } from '../kit/text.js';
 import { drawIconCentered, drawNineSlice } from '../uiImages.js';
 import type { CampaignPanel } from './campaignPanel.js';
 
-export type DisplayName = PickTool | 'slingshot' | 'horn';
+export type DisplayName = PickTool;
 
 /**
  * A display copy of a tool (its own materials), its origin at the end the
@@ -75,14 +75,17 @@ export const TROPHY_COUNT = 9;
 
 const TOOL_TAGS: Record<DisplayName, [string, string]> = {
   swatter: ['Fly swatter', 'Swat groups on the wall.'],
-  pepper: ['Pepper shaker', 'Goblins drop their gear.'],
-  bell: ['Bell', 'Stuns every goblin.'],
-  slingshot: ['Slingshot', 'Always in your loadout.'],
-  horn: ['War horn', 'Always in your loadout.'],
+  pepper: ['Pepper shaker', 'Pepper the ground by the wall.'],
+  drum: ['Drum', 'Stuns every goblin.'],
+  slingshot: ['Slingshot', 'Shoot pebbles far.'],
+  horn: ['War horn', 'Call, boost or move knights.'],
+  magnet: ['Magnet', 'Pull gear off goblins.'],
+  glass: ['Magnifying glass', 'Grow plants, burn goblins.'],
+  sugar: ['Sugar cubes', 'Lure goblins to a spot.'],
 };
 const POOF = [0xffffff, 0xf2c230, 0xddd6c8];
-/** The stand's platforms, left to right: the two fixed tools, then the two slots the player fills. */
-const FIXED: DisplayName[] = ['slingshot', 'horn'];
+/** v3 2.2: no fixed tools on the stand any more: all 4 slots are free. */
+const FIXED: DisplayName[] = [];
 
 /** Which level unlocks a tool (its reward), as the locked tag says it. */
 function unlockText(tool: PickTool): string {
@@ -196,10 +199,14 @@ export class Shelves {
       else this.spots.push({ place: { where: 'stand', i: i - FIXED.length }, top: spot(T.radius, angle, T.y), angle, materials });
     });
     // The tool shelf (right, back row): a wooden pedestal per spot.
+    // v3 2.2: two rows (8 tools), the upper one a little farther back so the lower one never hides it.
     for (let i = 0; i < SHELF_SPOTS; i++) {
-      const angle = S.tools.angles[i] ?? S.tools.angles[S.tools.angles.length - 1] + 14 * (i - S.tools.angles.length + 1);
-      const materials = [this.pedestal(S.tools.radius, angle, S.tools.y, S.plankDepth)];
-      this.spots.push({ place: { where: 'shelf', i }, top: spot(S.tools.radius, angle, S.tools.y), angle, materials });
+      const row = Math.floor(i / S.tools.angles.length);
+      const angle = S.tools.angles[i % S.tools.angles.length];
+      const radius = S.tools.radius + row * S.tools.rowBack;
+      const y = S.tools.y + row * S.tools.rowUp;
+      const materials = [this.pedestal(radius, angle, y, S.plankDepth)];
+      this.spots.push({ place: { where: 'shelf', i }, top: spot(radius, angle, y), angle, materials });
     }
     this.card(S.tools.radius, S.tools.cardAngle, S.tools.y + 4);
     // The pick tools, wherever the progress puts them (layout).

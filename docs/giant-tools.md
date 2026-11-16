@@ -1,5 +1,7 @@
 # Giant Tools
 
+> **OLD, kept as a record (2026-11-16).** Stale since v3 2.2: it still has the bell (now the drum), pepper that strips armor (now the pepper ring; the magnet strips gear), and no magnet, magnifying glass or sugar cubes. The tools as built are in [v3-plan.md](v3-plan.md) ("2.2 as built" sections). Coding agents: do not read or search this file unless the developer names it.
+
 Status: v2 (run 1 built and tuned on the headset, 2026-11-10 to 11-11, see [v2-plan.md](v2-plan.md)). Numbers are starting values for tuning. The food currency, food jar and price tags of the MVP are gone.
 
 Back to [GDD index](GDD.md).

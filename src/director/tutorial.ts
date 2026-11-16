@@ -13,8 +13,8 @@ import type { GearShares } from '../rules/gear.js';
 import { risingByWave } from './levelDirector.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
-/** v2: the horn replaces the megaphone, and the bell is its own tool (docs/v2-plan.md 2.3). */
-export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'horn' | 'bell';
+/** v2: the horn replaces the megaphone. v3 2.2: the drum replaces the bell. */
+export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'horn' | 'drum';
 
 export interface WavePlan {
   /** Shown on the wave banner when the wave starts. */
@@ -164,7 +164,7 @@ export type MarkerTarget =
   | 'swatterHandle'
   | 'pepperHandle'
   | 'hornHandle'
-  | 'bellHandle'
+  | 'drumHandle'
   /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
   /** The pause button on its stand in front, while it shows. */
@@ -736,7 +736,7 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     hand: 'right',
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
-    use: 'Shake pepper on them. Their armor falls off! Then eat a sneezing one.',
+    use: 'Shake pepper on them. They sneeze and stop hitting! Then eat a sneezing one.',
     locked: `The pepper is resting. ${RESTING}`,
     bait: true,
     armored: true,
@@ -764,13 +764,13 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     afterDone: PAUSE_AFTER.watch,
     strict: true,
   },
-  bell: {
+  drum: {
     hand: 'right',
-    marker: 'bellHandle',
-    grabDemo: 'bellGrab',
-    useDemo: 'bellRing',
-    use: 'Ring the bell! Goblins get dizzy and fall off your wall.',
-    locked: `The bell is resting. ${RESTING}`,
+    marker: 'drumHandle',
+    grabDemo: 'drumGrab',
+    useDemo: 'drumStrike',
+    use: 'Beat the drum! Goblins get dizzy and fall off your wall.',
+    locked: `The drum is resting. ${RESTING}`,
     bait: true,
     // Watch the goblins tumble off the wall.
     afterDone: PAUSE_AFTER.watch,
@@ -952,7 +952,7 @@ const TOOL_NAMES: Record<ToolName, string> = {
   swatter: 'the fly swatter',
   pepper: 'the pepper shaker',
   horn: 'your war horn',
-  bell: 'the bell',
+  drum: 'the drum',
 };
 
 /**

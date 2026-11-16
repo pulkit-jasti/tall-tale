@@ -9,7 +9,7 @@ You are a giant sitting in the middle of a round castle. A tiny battle happens a
 
 ## Which docs to read (decided 2026-11-13)
 
-Many docs are records of older plans. Read only what the task needs, from the "Current" list. **Never read the "Old" docs unless the developer names them.**
+Many docs are records of older plans. Read only what the task needs, from the "Current" list. **Never read, open, grep or search the "Old" docs unless the developer clearly asks for that file by name.** Leave them out of searches (for example `grep -r --exclude` or a path filter), and never act on what they say. An Old doc starts with an "OLD, kept as a record" note. Code comments and other docs still link to some Old docs (for example "docs/menus.md section 8" or "docs/giant-tools.md"): those links are old references, not a reason to open the file; use docs/v3-plan.md and the code instead.
 
 **Start here: docs/v3-plan.md.** The current plan: what to build next (Phase 1 first) and the latest design. It wins over every other doc.
 
@@ -18,11 +18,11 @@ Many docs are records of older plans. Read only what the task needs, from the "C
 | Topic | Doc |
 |---|---|
 | Levels, the generator and its CLI, the wave director, map loading, rising camps, Custom Game, the 15 campaign levels | docs/custom-mode.md |
-| Home screen, campaign panel, tool shelf and loadout, achievements shelf | docs/menus.md |
-| UI library rules, reach band, the board and handles, grab and eat, pause and settings, accessibility, interaction feedback | docs/controls-and-ui.md |
+| Home screen, campaign panel, tool shelf and loadout, achievements shelf | docs/v3-plan.md ("2.2 as built") and the code in `src/ui/menu/` |
+| UI library rules, reach band, the board and handles, grab and eat, pause and settings, accessibility, interaction feedback | docs/controls-and-ui.md (mostly current: "bell" there means the drum) |
 | Win and lose, the red flag and the compass, end of battle screens | docs/castle-rules.md |
-| The tools as built (use windows, recharge, how tools hit) | docs/giant-tools.md |
-| Goblins as built (climbing, gear, roster) | docs/enemies.md |
+| The tools as built (use windows, recharge, how tools hit) | docs/v3-plan.md (the "as built" sections) and `src/tools/` |
+| Goblins as built (climbing, gear, roster) | docs/v3-plan.md (Phase 1 and Phase 3) and `src/units/goblins.ts` |
 | Blueprints, the road graph, triggers, decor (sections 1 to 7; section 8 is replaced by custom-mode.md) | docs/map.md |
 | The tutorial director (only its "Tutorial director" section) | docs/mvp.md |
 | Frame rate: how to measure, test log | docs/performance.md |
@@ -30,14 +30,17 @@ Many docs are records of older plans. Read only what the task needs, from the "C
 
 **Old** (kept as a record; skip unless the developer names them):
 
+- docs/giant-tools.md (stale since v3 2.2: the bell, pepper stripping armor, no new tools; replaced by docs/v3-plan.md)
+- docs/menus.md (stale since v3 2.2: the fixed slingshot and horn, 2 free slots; replaced by docs/v3-plan.md)
+- docs/enemies.md (stale since v3: pepper stripping gear, the bell; replaced by docs/v3-plan.md)
 - docs/v2-plan.md (v2 is built; its design now lives in the current docs above)
-- docs/modes-and-progression.md (replaced by docs/menus.md and docs/v3-plan.md Phase 5)
+- docs/modes-and-progression.md (replaced by docs/v3-plan.md Phase 5)
 - docs/core-loop.md (early waves, troops and sound cues; replaced by v2 and v3)
 - docs/castle-machines.md (dropped in v2)
 - docs/audio.md (early sound plan; the sound mapping is `public/audio/README.md`)
 - docs/GDD.md (an old index; this list replaces it)
 - docs/mvp.md, everything except its "Tutorial director" section (the MVP build order and scope)
-- The "History" section of README.md and the mockup `maps/castle-3d.html`
+- The "Status" list and the "History" section of README.md, and the mockup `maps/castle-3d.html`
 
 When a doc moves between the lists (for example a new plan replaces v3), update this section.
 
@@ -95,7 +98,7 @@ The MCP servers in `.mcp.json` are the most reliable source of information. Chec
 - **UI library:** every piece of UI is built from our own library, imported from `src/ui/kit/index.js` (never written again by hand): `PokeButton` (sizes only from `BUTTON_SIZE`; round buttons only, the exceptions are `FightButton`, `ActionButton` (a call to action like Save) and the floating tabs; `locked` buzzes), `ScrollList` (lists drawn once, never redrawn while scrolling; tap to select; tap only, scrolled by an upright `Slider`, since swipes and taps got mixed up; every page that scrolls uses that slider in its scrollbar look, a pill-shaped handle), `Slider` (touch and slide with the index finger; touching the track jumps the handle), `Switch` (on and off shown by knob side, color and text together), `StandButton` (a button on a post in front), `Panel`, `LazyFollow` (menus that follow the head), `armControls` (a page opened: reset and lock its controls), layout math (`rowX`, `bottomRowY`, `panelMap`), canvas text (`drawTitleBanner`, `drawLine`, `drawOutlined`, `UI_COLORS`), `canvasTexture` / `canvasPlane`, and `drawOnTop` with the layer order in `RENDER_ORDER`. Something new that two places need goes into the library first. **Navigation floats outside a panel, content stays inside:** the title and Back are a `PanelHeader` over the panel's top edge, tabs (`Tabs`) and the page's call to action (`ActionButton`, like Save) float under it. **Never redraw a canvas while something is dragged:** `CanvasLabel` and `Panel.paint` wait for the drag to end on their own (`afterDrag` in `src/ui/kit/controls.ts`); anything new that redraws a canvas texture goes through `afterDrag` too (redrawing on every slider step made panels flicker, then vanish while sliding). Scrolling pages use `ScrollArea` (rows cut at the window's edges by world position in the shader, never with three.js clipping planes: they break under multiview). New menu pages are drawn with `layerPage` (on top, in their own order), like the settings page. Every menu panel gets its height from `uiCenterY` (right in front of the eyes, inside `UI_ZONE`), never a hand-picked y, and keeps the room in `UI_SPACING` around and between its controls and text. Follow Meta's hands guidelines: targets at least 22 mm, at least 12 mm apart. Details in docs/controls-and-ui.md ("UI library").
 - **The compass crank spins the board in battles** (v3, `src/player/crank.ts`, `CRANK`): a wheel round the compass dish's rim with a knob that turns with the board. Pinch its knob (a pinch only, never a fist) and circle the hand: the board follows the hand's angle round the dish 1:1, one circle is one full turn. Snap turning makes it jump `BOARD_TURN.snapDeg` per notch. The ring handle is gone from battles. **Height** is the height rail, shown only while paused and on the home screen, never during a wave or a breather. See docs/controls-and-ui.md ("The compass crank").
 - The player's bare hands only grab and eat. No smashing or slapping. Eating heals the castle, the only way to heal (v3 2.5: 2% of max health a goblin, a seasoned one double); every tool, the war horn too, recharges on time only. Letting go mid-swing tosses the goblin with simple projectile math (no physics engine), and it lands dazed. A toss is not an attack: it does no damage. Pebbles toss the same way and only knock a goblin back, dazed (knocking out stays the slingshot's job). A held goblin can be loaded into the slingshot as a stronger shot.
-- Two hand actions: **pinch** (thumb and index) for small things like goblins, pebbles and the slingshot pouch, and **grab** (fist) for big things like the slingshot handle, swatter, pepper shaker, war horn and bell. The compass crank's knob takes a pinch only. The slingshot handle accepts both, because a fist with the back of the hand toward the headset tracks poorly. See "Pinch and grab" in docs/controls-and-ui.md.
+- Two hand actions: **pinch** (thumb and index) for small things like goblins, pebbles and the slingshot pouch, and **grab** (fist) for big things like the slingshot handle, swatter, pepper shaker, war horn and drum stick. The compass crank's knob takes a pinch only. The slingshot handle accepts both, because a fist with the back of the hand toward the headset tracks poorly. See "Pinch and grab" in docs/controls-and-ui.md.
 - Goblins are tiny (about 3.9 cm, runners 3.35). The pinch zone is about 5 to 6 cm and snaps to the nearest goblin. See docs/controls-and-ui.md.
 - Hand tracking gets unreliable very close to the headset. The "eat" action triggers when a held goblin stays within about 22 cm of the face for a moment. No letting go and no head tilt, because a pinch with the palm toward the headset opens the Quest menu. It must not require touching the mouth.
 - Never use a palm-facing pinch as a game input. Quest reserves it for the system menu. Pause uses a button on a stand in front, 24 degrees to the right, just beside the compass (on the Next button's spot, at the same height; 34 degrees from 2026-11-12, 24 since 2026-11-13).
@@ -127,7 +130,7 @@ Four times of day follow the waves (docs/mvp.md, "Day and night cycle"). Anythin
 
 - The developer works on a Mac and tests on a Quest 3S over Wi-Fi in the Quest browser.
 - Make as much as possible testable in desktop Chrome with the Immersive Web Emulator, so the developer only needs the headset for feel and hand tracking checks.
-- Add debug actions, for example ones that blow the horn, ring the bell or skip a wave, so features can be tested without a mic or a headset. Things the headset cannot show in the console go in a debug note (`note()` in `src/debug/notes.ts`), which the debug page lists per game page.
+- Add debug actions, for example ones that blow the horn, beat the drum or skip a wave, so features can be tested without a mic or a headset. Things the headset cannot show in the console go in a debug note (`note()` in `src/debug/notes.ts`), which the debug page lists per game page.
 - Every debug action goes in `DEBUG_ACTIONS` in `src/debug/debugKeys.ts` (with its section `group` and an emoji `icon`) and gets a case in `GameSystem.runDebug`. It then works from a button on the laptop debug page at `/__debug` on the dev server (no keyboard keys: the headset has none), which sends it live to the headset over Vite's hot reload WebSocket (`vite-plugins/debugPage.ts`, dev only). An action with `args` gets one button per value (for example "Start at wave 1 to 4").
 - **Rapid testing:** "Start at wave N" on the debug page starts the battle at that wave (earlier lessons and waves left out, earlier tools already out). Play then starts there too, even after a reload in the same tab, until "Restart game". The pages table shows each page's current tutorial step.
 - Keep game rules data driven (unit stats, tool costs, food values in config files), so tuning does not need code changes.
@@ -155,7 +158,7 @@ When the developer starts a cloud session to build the MVP, these rules replace 
 - Do not commit, push or deploy unless the developer explicitly asks.
 - Ask before adding any dependency.
 - Do not run formatters, linters or scripts that were not approved.
-- **Never run `npm run typecheck` or `tsc`** (decided 2026-11-11, to save tokens). **The only check is `npm run build`: it must finish with no errors** (decided 2026-11-16). Never run `npm test` and never write or update tests, unless the developer asks. Known old type errors (the bell, `director.test.ts`) and the stale tests stay as they are.
+- **Never run `npm run typecheck` or `tsc`** (decided 2026-11-11, to save tokens). **The only check is `npm run build`: it must finish with no errors** (decided 2026-11-16). Never run `npm test` and never write or update tests, unless the developer asks. Known old type errors (`director.test.ts`) and the stale tests stay as they are.
 - Never use em dashes or en dashes in code comments, docs or UI text.
 - Keep explanations short and simple. The developer knows React, React Native, Node/Express and Python well, but is new to 3D and VR.
 - No co-author lines in commits or files.

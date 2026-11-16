@@ -1,5 +1,7 @@
 # Enemies
 
+> **OLD, kept as a record (2026-11-16).** Stale since v3: pepper no longer strips gear (the magnet does), the bell is now the drum, and the new enemies are planned in [v3-plan.md](v3-plan.md) Phase 3. Goblins as built are in the code (`src/units/goblins.ts`) and v3-plan.md. Coding agents: do not read or search this file unless the developer names it.
+
 Status: first set decided, v2 run 1 built (2026-11-10, [v2-plan.md](v2-plan.md)): every goblin climbs, gear has real effects. Numbers and behavior details will be tuned in playtests.
 
 Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md).

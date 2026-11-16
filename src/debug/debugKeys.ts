@@ -38,7 +38,13 @@ export type DebugCommand =
   | 'swat'
   | 'pepper'
   | 'horn'
-  | 'bell'
+  | 'drum'
+  | 'pepperRing'
+  | 'magnet'
+  | 'sugar'
+  | 'garden'
+  | 'newTools'
+  | 'newTraps'
   | 'troops'
   | 'troopsToggle'
   | 'thinGarrison'
@@ -143,7 +149,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     args: [1, 2, 3, 4, 5, 6],
   },
   { id: 'winBattle', group: 'menu', icon: '🏆', label: 'Win battle', does: 'Win the battle now, with the castle health as it is (a campaign level saves its stars)' },
-  { id: 'unlockAll', group: 'menu', icon: '🔓', label: 'Unlock all tools', does: 'Flip the "Unlock all tools" setting (the bell can be put on the loadout stand)' },
+  { id: 'unlockAll', group: 'menu', icon: '🔓', label: 'Unlock all tools', does: 'Flip the "Unlock all tools" setting (the drum can be put on the loadout stand)' },
   { id: 'openCustom', group: 'menu', icon: '🛠️', label: 'Open Custom Game', does: 'Go to the Custom Game page (the empty state, or the list of saved levels). A save writes the level summary as a debug note' },
   { id: 'fightCustom', group: 'menu', icon: '⚔️', label: 'Fight newest custom level', does: 'From the menu: load the newest saved Custom Game level\'s map and play its waves (a debug note says how long the map took)' },
   { id: 'resetCustom', group: 'menu', icon: '🗑️', label: 'Forget custom levels', does: 'Delete every saved Custom Game level (the page shows the empty state again)' },
@@ -176,11 +182,17 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     does: 'Press while a strange object floats in front of you: a note lists every visible mesh within 40 cm of the eyes (its path, size, color, on top or not)',
   },
   { id: 'eatRefill', group: 'food', icon: '😋', label: 'Eat heal', does: 'What eating one goblin does (v3 2.5): the castle heals 2% and the red flag rises a notch' },
-  { id: 'showTools', group: 'food', icon: '🧰', label: 'Show tools', does: 'The horn, fly swatter, pepper shaker and bell pop onto their platforms now (normally in waves 1, 3, 4 and 5)' },
+  { id: 'showTools', group: 'food', icon: '🧰', label: 'Show tools', does: 'The horn, fly swatter, pepper shaker and drum pop onto their platforms now (normally in waves 1, 3, 4 and 5)' },
   { id: 'swat', group: 'food', icon: '🪰', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (starts its 10 s use, then a 20 s recharge)' },
-  { id: 'pepper', group: 'food', icon: '🌶️', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },
+  { id: 'pepper', group: 'food', icon: '🌶️', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 12 s recharge). Peppered goblins sneeze, keep their gear and heal double when eaten' },
+  { id: 'newTraps', group: 'food', icon: '🌾', label: 'Show new traps', does: 'The haystacks, bell tower and rope bridge stand now and the rare potion cart shows (the "Fire all triggers" button sets them all off)' },
+  { id: 'newTools', group: 'food', icon: '🆕', label: 'Show new tools', does: 'The magnet, magnifying glass and sugar bowl pop onto the left platforms now (the swatter, pepper and drum step aside), without a loadout' },
+  { id: 'magnet', group: 'food', icon: '🧲', label: 'Magnet pull', does: 'Magnet: strips the gear off every goblin within 60 cm of the spot 120 cm out in front (starts its 8 s use, 20 s recharge)' },
+  { id: 'sugar', group: 'food', icon: '🧊', label: 'Sugar lure', does: 'Sugar cubes: a lure 100 cm out in front; goblins near it stop to eat (uses one cube)' },
+  { id: 'garden', group: 'food', icon: '🌻', label: 'Grow garden', does: 'Magnifying glass: every seed bed grows its plant at once (sunflowers shoot, mushrooms puff)' },
+  { id: 'pepperRing', group: 'food', icon: '🔴', label: 'Pepper ring front', does: 'Pepper ring: fill the 3 segments in front of you at once (each lasts 30 s, a quarter used per goblin walking through)' },
   { id: 'horn', group: 'food', icon: '📯', label: 'Blow horn', does: 'Horn: it sounds without hands or a mic and the field knights charge down the road in front of you (30 s recharge)' },
-  { id: 'bell', group: 'food', icon: '🔔', label: 'Ring bell', does: 'Bell: a hard ring without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (35 s recharge)' },
+  { id: 'drum', group: 'food', icon: '🥁', label: 'Beat drum', does: 'Drum: a hard strike without hands: every goblin is stunned and the ones on the rampart are knocked back down outside the wall (25 s recharge)' },
   { id: 'troops', group: 'army', icon: '🛡️', label: 'Send knights', does: 'What the horn does, aimed at the road about 130 cm out in front of you: a new squad of 3 to 5 knights (up to 4 squads), or at the limit the nearest squad moves there' },
   { id: 'troopsToggle', group: 'army', icon: '🚫', label: 'Troops on/off', does: 'Troops on or off for testing: off, every soldier (knights and the wall garrison) is gone; on, the garrison is back on the walls' },
   { id: 'thinGarrison', group: 'army', icon: '🏹', label: 'Thin garrison', does: 'Two soldiers of the wall garrison go down (archers first): one new one climbs up from the courtyard every 15 s' },

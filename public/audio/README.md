@@ -1,5 +1,7 @@
 # Sounds
 
+> **Partly stale (2026-11-16).** The v3 2.2 tool sounds (`drumBoom`, `drumCrash`, `pepperRingFull`, `pepperRingGone`, `magnetClank`, `magnetHum`, `sugarLand`, `glassHum`, `glassSizzle`, `plantPop`, `seedSpit`, `mushroomPuff`) are not listed below: they are in `src/config/sounds.ts`, mostly Kenney stand-ins, and the hum, sizzle and ring sizzle use the chime until real files are picked. The bell sound is kept for the bell tower (2.1).
+
 Most are CC0 from Kenney packs (the Freesound files are listed below). Short `.ogg` files (the Quest browser plays them). Numbered files are variants: pick one at random so repeats do not sound robotic. Sound names in docs/audio.md map to these files in the sound config.
 
 | Sound (docs/audio.md) | Files |
@@ -57,3 +59,5 @@ Downloaded but not used yet:
 ## Still missing
 
 Goblin chatter, burp, keg explosion, worker cheer, lose trombone, ambient wind and birds, night crickets, torch crackle. Keep `chime.mp3` as the placeholder for these.
+
+**v3 adds many more** (the magnet hum, glass hum and sizzle, the pepper ring sizzle, the 2.1 traps, and the Kenney stand-ins for the drum, horn hints and new tools). The full to-do list is in docs/v3-plan.md, "To do later".

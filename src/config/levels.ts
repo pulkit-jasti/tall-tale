@@ -10,7 +10,7 @@
 export type EnemyIcon = 'grunt' | 'runner' | 'helmet' | 'shield' | 'spear' | 'sword' | 'balloon';
 
 /** A tool a level gives when won (the bell at level 3, decided 2026-11-11; more once the tools are final), or a "???" silhouette. */
-export type LevelReward = 'swatter' | 'pepper' | 'bell' | 'mystery' | null;
+export type LevelReward = 'swatter' | 'pepper' | 'drum' | 'mystery' | null;
 
 export interface LevelEntry {
   number: number;
@@ -43,7 +43,7 @@ export const TUTORIAL_ENEMIES: EnemyIcon[] = ['grunt', 'runner', 'helmet', 'shie
 export const LEVELS: LevelEntry[] = [
   { number: 1, name: 'First Watch', flavor: 'A quiet road and hungry goblins. Find your feet.', skulls: 1, enemies: ['grunt', 'runner'], reward: null },
   { number: 2, name: "Runner's Road", flavor: 'Mostly runners. Small, fast and always in a hurry.', skulls: 1, enemies: ['runner', 'grunt'], reward: null },
-  { number: 3, name: 'The Shield Wall', flavor: 'Every goblin brought a shield. Time for some spice.', skulls: 2, enemies: ['grunt', 'shield', 'helmet'], reward: 'bell' },
+  { number: 3, name: 'The Shield Wall', flavor: 'Every goblin brought a shield. Time for some spice.', skulls: 2, enemies: ['grunt', 'shield', 'helmet'], reward: 'drum' },
   { number: 4, name: 'Balloon Festival', flavor: 'The sky is full of balloons. Keep your slingshot busy.', skulls: 2, enemies: ['grunt', 'runner', 'balloon'], reward: null },
   { number: 5, name: 'Two Fronts', flavor: 'Camps on both sides. Spin fast and call your knights.', skulls: 3, enemies: ['grunt', 'runner', 'shield', 'spear'], reward: null },
   { number: 6, name: 'Spear Rush', flavor: 'Spears everywhere. Every hit on the wall counts twice.', skulls: 2, enemies: ['grunt', 'spear'], reward: null },

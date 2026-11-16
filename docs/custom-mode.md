@@ -1,5 +1,7 @@
 # Level Generator, Custom Game and the Campaign Levels (next)
 
+> **Mostly current (2026-11-16).** Stale bits: the bell is now the drum (still the level 3 reward), and the generator also places seed beds now (v3 2.2, `src/world/garden.ts`). Where they disagree, [v3-plan.md](v3-plan.md) wins.
+
 Status: decided with the developer (2026-11-11). **First part done and tested on the headset (2026-11-11):** the generator, its command line, the new UI kit parts and the Custom Game menu (section 12). **Next: the wave director and the map loading** (build order steps 4 and 5, section 11; the handoff for them is section 13). Where it disagrees with [map.md](map.md) section 8 or [modes-and-progression.md](modes-and-progression.md), this file wins. [v2-plan.md](v2-plan.md) still wins over this file.
 
 Back to [GDD index](GDD.md). Related: [menus.md](menus.md) (the campaign panel and the 15 level cards), [map.md](map.md) (blueprints, the road graph, triggers), [controls-and-ui.md](controls-and-ui.md#ui-library) (the UI kit).

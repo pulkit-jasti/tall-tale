@@ -36,7 +36,7 @@ import { cloneStatic, loadTemplate } from '../world/models.js';
 import { post, toolRope } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
-export type HandToolName = 'swatter' | 'pepper' | 'bell' | 'horn';
+export type HandToolName = 'swatter' | 'pepper' | 'drum' | 'horn' | 'magnet' | 'glass' | 'sugar';
 
 /** What a hand near the tool shows. Held is managed by the tool. */
 export type ToolReady = 'idle' | 'ready' | 'locked';
@@ -175,6 +175,24 @@ export abstract class HandTool {
 
   /** The hand let go or the tool was taken away: forget the motion tracking. */
   protected abstract resetMotion(): void;
+
+  /** Its platform moved to (x, top, z) in boardLift (cm): a tool with a fixed part on the platform (the drum) moves it there. */
+  protected placed(_x: number, _top: number, _z: number): void {}
+
+  /** False while a running use window should not run down (the glass: only while raised). */
+  protected useTicking(): boolean {
+    return true;
+  }
+
+  /** Spends one swing of a swing-counted use (sugar cubes); public for tools that count from outside. */
+  spendOne(): void {
+    this.spendSwing();
+  }
+
+  /** Tries to start or continue a use from outside the held update (sugar cubes). */
+  tryUseNow(): boolean {
+    return this.tryUse();
+  }
 
   /** The use window (seconds) and the full recharge (seconds). */
   get useSeconds(): number {
@@ -369,6 +387,7 @@ export abstract class HandTool {
     this.rope.position.set(x, top + 1.5, z);
     this.restPosition.set(x, top + (this.options.restLift ?? 0), z);
     this.restTurn(this.spot.angleDeg, this.restQuaternion);
+    this.placed(x, top, z);
     const outward = temp.set(Math.sin(a), 0, -Math.cos(a));
     // The hand area: above the platform, a little toward the player.
     this.hoverPosition.copy(this.restPosition).addScaledVector(outward, -3);
@@ -572,7 +591,7 @@ export abstract class HandTool {
     this.phaseTime += dt;
     // The use window runs down (unless the tutorial holds it), the recharge fills only on the platform.
     const onPlatform = this.phase === 'resting' && this.returnLeft <= 0 && !this.holder;
-    if (tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold && !this.swingUse, onPlatform) === 'ended') this.startShrink();
+    if (tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold && !this.swingUse && this.useTicking(), onPlatform) === 'ended') this.startShrink();
     switch (this.phase) {
       case 'held':
         this.updateHeld(dt);

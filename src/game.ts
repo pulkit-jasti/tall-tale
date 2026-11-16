@@ -24,6 +24,7 @@ import {
   STAGE,
   STRESS_TEST,
   TIMES_OF_DAY,
+  LOADOUT_SPOTS,
   TOOL_SPOTS,
   TRIGGERS,
   XR,
@@ -67,13 +68,19 @@ import { angleOf, degToRad } from './rules/boardMath.js';
 import { timeOfWave } from './rules/dayNight.js';
 import { createRandom, type Random } from './rules/random.js';
 import { checkReach } from './rules/reach.js';
-import { Bell } from './tools/bell.js';
+import { Drum } from './tools/drum.js';
 import { FlySwatter } from './tools/flySwatter.js';
 import type { HandTool } from './tools/handTool.js';
 import { Horn } from './tools/horn.js';
 import { HornAim } from './ui/hornAim.js';
 import { PepperShaker } from './tools/pepperShaker.js';
 import { Slingshot } from './tools/slingshot.js';
+import { Magnet } from './tools/magnet.js';
+import { Magnifier } from './tools/magnifier.js';
+import { PepperRing } from './tools/pepperRing.js';
+import { SugarBowl } from './tools/sugarBowl.js';
+import { Garden } from './world/garden.js';
+import { Chickens } from './units/chickens.js';
 import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
 import { Troops } from './units/troops.js';
@@ -97,7 +104,7 @@ import { SceneSwap } from './world/sceneSwap.js';
 import { loadTemplate } from './world/models.js';
 import { Menu } from './ui/menu/menu.js';
 import { progress, resetProgress, saveProgress } from './player/progress.js';
-import { battleTools, isOpen, recordTutorial, recordWin, starsFor } from './rules/campaign.js';
+import { battleTools, isOpen, recordTutorial, recordWin, starsFor, type PickTool } from './rules/campaign.js';
 
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
@@ -159,8 +166,14 @@ export class GameSystem extends createSystem({}) {
   /** After a horn call: the full bar stays up this long yet (seconds), and if it was blown into the mic. */
   private blowShown = 0;
   private blownByMic = false;
-  private bell!: Bell;
+  private drum!: Drum;
   private stun!: StunWave;
+  private pepperRing!: PepperRing;
+  private magnet!: Magnet;
+  private glass!: Magnifier;
+  private garden!: Garden;
+  private chickens!: Chickens;
+  private sugar!: SugarBowl;
   private tools: HandTool[] = [];
   private troops!: Troops;
   private garrison!: Garrison;
@@ -331,16 +344,28 @@ export class GameSystem extends createSystem({}) {
     const toolParts = { stage: this.stage, goblins: this.goblins, audio: this.audio, particles: this.particles };
     this.swatter = new FlySwatter(toolParts);
     this.pepper = new PepperShaker(toolParts);
+    // v3 2.2: pepper on the ground outside the wall fills the pepper ring (built after fadeAtNight, so it keeps its colors at night).
+    this.pepperRing = new PepperRing(this.stage, this.goblins, this.audio, this.particles, this.compass);
+    this.pepper.onHover = (x, z) => this.pepperRing.hoverAt(x, z);
+    this.pepper.onGround = (x, z, dt) => this.pepperRing.shake(x, z, dt);
     this.stun = new StunWave(this.stage, this.goblins, this.audio, this.particles);
     this.horn = new Horn(toolParts);
-    // The bell rings, the game stuns: every goblin dizzy, the shock ring across the board, the rampart goblins knocked down.
-    this.bell = new Bell(toolParts);
-    this.bell.stunning = () => this.stun.active;
-    this.bell.onRing = (where, seconds) => {
+    // The drum is struck, the game stuns: every goblin dizzy, the shock ring across the board, the rampart goblins knocked down.
+    this.drum = new Drum(toolParts);
+    this.drum.stunning = () => this.stun.active;
+    this.drum.onStrike = (where, seconds) => {
       const stunned = this.stun.stun(seconds, where);
       return stunned + this.goblins.knockOffRampart();
     };
-    this.tools = [this.swatter, this.pepper, this.bell, this.horn];
+    // v3 2.2: the magnet, the magnifying glass (with the sun garden) and the sugar bowl.
+    this.magnet = new Magnet(toolParts);
+    this.glass = new Magnifier(toolParts);
+    this.glass.timeOfDay = () => this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves);
+    this.garden = new Garden(this.stage.boardSpin, this.goblins, this.audio, this.particles);
+    this.glass.garden = this.garden;
+    this.sugar = new SugarBowl(toolParts);
+    this.slingshot.onCubeLanded = (x, y, z) => this.sugar.landAt(x, y, z);
+    this.tools = [this.swatter, this.pepper, this.drum, this.horn, this.magnet, this.glass, this.sugar];
     this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
     // The wall garrison (v2): archers and guards on the rampart, run with the troops.
     const garrison = new Garrison(this.stage.boardSpin, this.troops, this.goblins, this.audio, this.particles, createRandom(seed + 810));
@@ -351,6 +376,12 @@ export class GameSystem extends createSystem({}) {
     // Goblins on the rampart hunt the soldiers there, and jump in only when none is left (v2).
     this.goblins.huntAngle = (g) => garrison.nearestSoldierAngle(g);
     this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
+    this.glass.triggers = this.triggers;
+    // v3 2.1: the magnet pulls bell tower bells; the potion cart turns goblins into chickens.
+    this.magnet.triggers = this.triggers;
+    this.chickens = new Chickens(this.stage.boardSpin, this.audio, this.particles, createRandom(seed + 995));
+    this.triggers.onChickens = (points) => this.chickens.spawn(points);
+    this.triggers.onClear = () => this.chickens.clear();
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
     // v3: the swatter pushes balloons away instead of popping them.
     this.swatter.balloons = this.balloons;
@@ -368,7 +399,10 @@ export class GameSystem extends createSystem({}) {
         .load()
         .then(() => this.gearDebris.load(['goblinSpear', 'goblinSword', 'goblinHelmet', 'goblinShield', 'roundShield', 'rectShield'], this.goblins.unitScale)),
       ...this.tools.map((t) => t.load()),
+      this.garden.load(),
     ]);
+    // v3 2.2: the seed beds beside this map's roads (their own seeded stream), clear of the trap spots.
+    this.garden.place(built.network, built.trapSpots, createRandom(seed + 990));
     // Every trigger can be shot: the aim assist bends toward it and it glows while aimed at.
     for (const target of this.triggers.targets) this.slingshot.addTarget(target);
     // Balloons too: a big still target, so the aim assist bends toward it.
@@ -414,11 +448,13 @@ export class GameSystem extends createSystem({}) {
       goblins: this.goblins,
       spawner: waves,
       slingshot: this.slingshot,
-      tools: { swatter: this.swatter, pepper: this.pepper, bell: this.bell, horn: this.horn },
+      tools: { swatter: this.swatter, pepper: this.pepper, drum: this.drum, horn: this.horn, magnet: this.magnet, glass: this.glass, sugar: this.sugar },
+      garden: this.garden,
       troops: this.troops,
       triggers: this.triggers,
       balloons: this.balloons,
       stun: this.stun,
+      pepperRing: this.pepperRing,
       flags,
       panel: this.endPanel,
       sign: this.sign,
@@ -499,15 +535,18 @@ export class GameSystem extends createSystem({}) {
       {
         swatter: this.swatter.displayModel(),
         pepper: this.pepper.displayModel(),
-        bell: this.bell.displayModel(),
+        drum: this.drum.displayModel(),
         horn: this.horn.displayModel(),
         slingshot: this.slingshot.displayModel(),
+        magnet: this.magnet.displayModel(),
+        glass: this.glass.displayModel(),
+        sugar: this.sugar.displayModel(),
       },
       { trophy, platform },
       // Separate copies for the campaign card's reward (a small turning tool).
-      { swatter: this.swatter.displayModel().model, pepper: this.pepper.displayModel().model, bell: this.bell.displayModel().model },
+      { swatter: this.swatter.displayModel().model, pepper: this.pepper.displayModel().model, drum: this.drum.displayModel().model },
       // And full-size copies to hold when a reward is grabbed off the card.
-      { swatter: this.swatter.displayModel(), pepper: this.pepper.displayModel(), bell: this.bell.displayModel() },
+      { swatter: this.swatter.displayModel(), pepper: this.pepper.displayModel(), drum: this.drum.displayModel() },
     );
     // Compile the home screen and upload its tags now, so the first grab or first look never hitches.
     this.menu.warm(this.renderer, this.scene, this.camera);
@@ -775,8 +814,8 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** The loadout's 2 picked hand tools for a battle (the slingshot and the horn are always out). */
-  private pickedTools(): ('swatter' | 'pepper' | 'bell' | 'horn')[] {
-    return battleTools(progress.loadout).filter((t) => t !== 'slingshot') as ('swatter' | 'pepper' | 'bell' | 'horn')[];
+  private pickedTools(): PickTool[] {
+    return battleTools(progress.loadout);
   }
 
   // ---- Map loading (docs/custom-mode.md section 11, step 5) ----
@@ -845,6 +884,7 @@ export class GameSystem extends createSystem({}) {
       this.spawner.setRoadCount(built.network.graph.camps.length);
       this.triggers.place(built.network, built.trapSpots);
       this.triggers.hideAll();
+      this.garden.place(built.network, built.trapSpots, createRandom(blueprint.seed + 990));
       for (const target of this.triggers.targets) this.slingshot.addTarget(target);
       this.villagers.setVillages(built.villages);
       this.mapKey = key;
@@ -1222,14 +1262,22 @@ export class GameSystem extends createSystem({}) {
     this.horn.headForward.copy(headForward);
     // The horn lesson's "look around" beat: the horn waits for the "blow" sign.
     this.horn.waiting = this.battle.hornWaiting;
+    // v3 2.2: the magnifying glass is aimed by the head.
+    this.glass.headPosition.copy(headPosition);
+    this.glass.headForward.copy(headForward);
     this.grabEat.update(dt, headPosition, headForward);
+    // Sugar cubes are pinched off their bowl by a free hand.
+    this.sugar.updateHands(this.hands.hands, (hand) => this.grabEat.handBusy(hand), this.slingshot, dt);
     this.slingshot.update(dt, headPosition);
     for (const tool of this.tools) tool.update(dt);
+    this.garden.update(unitDt);
+    this.chickens.update(unitDt, headPosition, headForward);
     // The horn held: the head aims it (a glowing pool, a light pillar, a ghost banner and the path along the roads);
     // raised into the blow zone it turns gold.
     this.hornAim.update(dt, this.horn.aiming, this.horn.ready, this.horn.charge, headPosition, headForward);
     this.updateGlass(dt, headPosition, headForward);
     this.stun.update(dt);
+    this.pepperRing.update(dt);
     this.threat.update(dt);
     // The red arrow only while a battle is fought, and not while a lesson's yellow arrow points the way.
     this.updateCompass(dt);
@@ -1682,7 +1730,8 @@ export class GameSystem extends createSystem({}) {
         this.battle.heal(false);
         break;
       case 'showTools':
-        for (const tool of this.tools) if (!tool.visible) tool.appear();
+        // The tutorial's tools on their own spots (the v3 2.2 tools have "Show new tools").
+        for (const tool of [this.swatter, this.pepper, this.drum, this.horn]) if (!tool.visible) tool.appear();
         break;
       case 'swat':
         this.swatter.debugSwat();
@@ -1690,11 +1739,36 @@ export class GameSystem extends createSystem({}) {
       case 'pepper':
         this.pepper.debugShake();
         break;
+      case 'pepperRing':
+        // The front segment and its two neighbors, full at once.
+        this.pepperRing.debugFillFront(true);
+        break;
+      case 'magnet':
+        this.magnet.debugPull();
+        break;
+      case 'sugar':
+        this.sugar.debugLure();
+        break;
+      case 'garden':
+        this.glass.debugGrow();
+        break;
+      case 'newTraps':
+        // v3 2.1: the haystacks, bell tower and bridge stand now, and the potion cart shows.
+        this.triggers.showNewTraps();
+        break;
+      case 'newTools':
+        // v3 2.2: the magnet, glass and sugar bowl on the left spots now (no loadout needed).
+        this.magnet.setSpot(LOADOUT_SPOTS[2]);
+        this.glass.setSpot(LOADOUT_SPOTS[3]);
+        this.sugar.setSpot(TOOL_SPOTS.leftMiddle);
+        for (const t of [this.swatter, this.pepper, this.drum]) t.setVisible(false);
+        for (const t of [this.magnet, this.glass, this.sugar]) if (!t.visible) t.appear();
+        break;
       case 'horn':
         this.horn.debugBlow();
         break;
-      case 'bell':
-        this.bell.debugRing();
+      case 'drum':
+        this.drum.debugStrike();
         break;
       case 'troops':
         // What the horn does, without the horn: a squad charges down the road in front.

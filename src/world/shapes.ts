@@ -21,7 +21,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import { BELL, HANDLES, HORN, KNIGHTS, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { DRUM, GLASS, MAGNET, SUGAR, HANDLES, HORN, KNIGHTS, PEBBLE_BOWL, PEPPER, SLINGSHOT, SWATTER, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 
 /** Flat shaded, matte material in the low-poly look. */
@@ -438,33 +438,129 @@ export function warHorn(): { group: Group; materials: MeshStandardMaterial[]; mo
 }
 
 /**
- * Hand bell: a wooden handle along +y from y = 0 (the end the hand holds,
- * with a knob on top) and a brass bell hanging below it, its open mouth at
- * y = -bellHeight. Returns the group, its materials and the bell's middle (cm).
+ * The drum (v3 2.2, docs/placeholder-shapes.md): a short 10-sided red
+ * cylinder from y = 0 up to DRUM.height, two gold rim bands (top and bottom)
+ * and a pale cream skin on top. Returns the group and the skin mesh (it
+ * bounces on a strike).
  */
-export function handBell(): { group: Group; materials: MeshStandardMaterial[]; middle: Vector3 } {
-  const { handleLength, handleRadius, bellHeight: h, bellMouth: m } = BELL;
-  const brass = flatMaterial(BELL.brassColor);
-  brass.side = DoubleSide;
-  const wood = flatMaterial(BELL.handleColor);
-  const clapperMaterial = flatMaterial(BELL.clapperColor);
+export function drum(): { group: Group; skin: Mesh } {
+  const { radius: r, height: h, sides, rimHeight: rim } = DRUM;
+  const body = new Mesh(new CylinderGeometry(r, r, h, sides), flatMaterial(DRUM.bodyColor));
+  body.position.y = h / 2;
+  const gold = flatMaterial(DRUM.rimColor);
+  const bottom = new Mesh(new CylinderGeometry(r * 1.06, r * 1.06, rim, sides), gold);
+  bottom.position.y = rim / 2;
+  const top = new Mesh(new CylinderGeometry(r * 1.06, r * 1.06, rim, sides), gold);
+  top.position.y = h - rim / 2;
+  const skin = new Mesh(new CylinderGeometry(r * 0.96, r * 0.96, 0.2, sides), flatMaterial(DRUM.skinColor));
+  skin.position.y = h + 0.05;
   const group = new Group();
-  const handle = new Mesh(new CylinderGeometry(handleRadius, handleRadius * 1.15, handleLength, 8), wood);
-  handle.position.y = handleLength / 2;
-  const knob = new Mesh(new SphereGeometry(handleRadius * 1.5, 8, 6), wood);
-  knob.position.y = handleLength + handleRadius * 0.8;
-  // The bell: a lathe from its round top down to a flared mouth.
-  const profile = [
-    new Vector2(0.01, 0.3),
-    new Vector2(m * 0.35, 0.1),
-    new Vector2(m * 0.5, -h * 0.2),
-    new Vector2(m * 0.58, -h * 0.5),
-    new Vector2(m * 0.72, -h * 0.78),
-    new Vector2(m, -h),
+  group.add(body, bottom, top, skin);
+  return { group, skin };
+}
+
+/**
+ * The horseshoe magnet (v3 2.2, docs/placeholder-shapes.md): a short leather
+ * grip along +y from y = 0, a red horseshoe on top whose bend sits over the
+ * grip and whose two arms point forward (-z, the way the knuckles point in
+ * its fist pose), with silver tips. Returns the group, its materials, the
+ * point between the tips and the way they point (cm, tool frame).
+ */
+export function horseshoeMagnet(): { group: Group; materials: MeshStandardMaterial[]; tips: Vector3; pointing: Vector3 } {
+  const { gripLength: gl, gripRadius, shoeRadius: r, shoeTube: t, tipLength } = MAGNET;
+  const red = flatMaterial(MAGNET.bodyColor);
+  const silver = flatMaterial(MAGNET.tipColor);
+  const leather = flatMaterial(MAGNET.gripColor);
+  const group = new Group();
+  const grip = new Mesh(new CylinderGeometry(gripRadius, gripRadius, gl, 8), leather);
+  grip.position.y = gl / 2;
+  const shoe = new Group();
+  shoe.position.set(0, gl + t * 0.5, -r);
+  // The bend: half a torus, turned flat so its round side is toward the player (+z).
+  const bend = new Mesh(new TorusGeometry(r, t, 6, 10, Math.PI), red);
+  bend.rotation.x = Math.PI / 2;
+  const arm = r * 0.9;
+  for (const side of [-1, 1]) {
+    const straight = new Mesh(new CylinderGeometry(t, t, arm, 6), red);
+    straight.rotation.x = Math.PI / 2;
+    straight.position.set(side * r, 0, -arm / 2);
+    const tip = new Mesh(new CylinderGeometry(t * 1.05, t * 1.05, tipLength, 6), silver);
+    tip.rotation.x = Math.PI / 2;
+    tip.position.set(side * r, 0, -arm - tipLength / 2);
+    shoe.add(straight, tip);
+  }
+  shoe.add(bend);
+  group.add(grip, shoe);
+  return { group, materials: [red, silver, leather], tips: new Vector3(0, gl + t * 0.5, -r - arm - tipLength), pointing: new Vector3(0, 0, -1) };
+}
+
+/**
+ * The magnifying glass (v3 2.2): a wooden handle along +y from y = 0, a gold
+ * rim with a clear pale blue lens on top, its face toward +z (the eyes when
+ * raised). Returns the group, its materials (handle and rim; the lens keeps
+ * its own see-through look) and the lens middle (cm).
+ */
+export function magnifyingGlass(): { group: Group; materials: MeshStandardMaterial[]; lens: Vector3 } {
+  const { handleLength: l, handleRadius, lensRadius: r, rimTube } = GLASS;
+  const wood = flatMaterial(GLASS.handleColor);
+  const gold = flatMaterial(GLASS.rimColor);
+  const glass = new MeshBasicMaterial({ color: GLASS.lensColor, transparent: true, opacity: 0.35, depthWrite: false, side: DoubleSide });
+  const group = new Group();
+  const handle = new Mesh(new CylinderGeometry(handleRadius * 0.85, handleRadius, l, 8), wood);
+  handle.position.y = l / 2;
+  const middle = new Vector3(0, l + r, 0);
+  const rim = new Mesh(new TorusGeometry(r, rimTube, 6, 20), gold);
+  rim.position.copy(middle);
+  const lens = new Mesh(new CylinderGeometry(r, r, 0.15, 20), glass);
+  lens.rotation.x = Math.PI / 2;
+  lens.position.copy(middle);
+  group.add(handle, rim, lens);
+  return { group, materials: [wood, gold], lens: middle };
+}
+
+/**
+ * The sugar bowl (v3 2.2): a short wide blue bowl with white cubes piled on
+ * top. Returns the group, its materials and the top of the pile (cm).
+ */
+export function sugarBowl(): { group: Group; materials: MeshStandardMaterial[]; top: Vector3; cubes: Mesh[] } {
+  const { bowlRadius: r, bowlHeight: h, cubeSize: c } = SUGAR;
+  const blue = flatMaterial(SUGAR.bowlColor);
+  const white = flatMaterial(SUGAR.cubeColor);
+  const group = new Group();
+  const bowl = new Mesh(new CylinderGeometry(r, r * 0.75, h, 10), blue);
+  bowl.position.y = h / 2;
+  group.add(bowl);
+  const cubes: Mesh[] = [];
+  const spots: [number, number, number][] = [
+    [-0.9, 0, -0.5],
+    [0.8, 0, -0.6],
+    [0, 0, 0.9],
+    [0, 1, 0],
   ];
-  const bell = new Mesh(new LatheGeometry(profile, 12), brass);
-  const clapper = new Mesh(new SphereGeometry(0.6, 6, 5), clapperMaterial);
-  clapper.position.y = -h + 0.9;
-  group.add(handle, knob, bell, clapper);
-  return { group, materials: [brass, wood], middle: new Vector3(0, -h / 2, 0) };
+  for (const [x, up, z] of spots) {
+    const cube = new Mesh(new BoxGeometry(c, c, c), white);
+    cube.position.set(x, h + c / 2 + up * c * 0.9, z);
+    cube.rotation.y = x + z;
+    group.add(cube);
+    cubes.push(cube);
+  }
+  return { group, materials: [blue, white], top: new Vector3(0, h + c * 1.5, 0), cubes };
+}
+
+/**
+ * The drum stick: a thin wooden cylinder along +y from y = 0 (the end the
+ * hand holds) with a round cream ball at its tip. Returns the group, its
+ * materials and the ball's center (cm).
+ */
+export function drumStick(): { group: Group; materials: MeshStandardMaterial[]; ball: Vector3 } {
+  const { stickLength: l, stickRadius: r, ballRadius } = DRUM;
+  const wood = flatMaterial(DRUM.stickColor);
+  const cream = flatMaterial(DRUM.ballColor);
+  const stick = new Mesh(new CylinderGeometry(r * 0.85, r, l, 6), wood);
+  stick.position.y = l / 2;
+  const ball = new Mesh(new SphereGeometry(ballRadius, 8, 6), cream);
+  ball.position.y = l;
+  const group = new Group();
+  group.add(stick, ball);
+  return { group, materials: [wood, cream], ball: new Vector3(0, l, 0) };
 }

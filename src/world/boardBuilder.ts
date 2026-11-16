@@ -25,7 +25,7 @@ import { buildStorySpots, planStorySpots } from './storySpots.js';
 import { Meadow } from './grass.js';
 import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
 import { campDistance, RoadField, Terrain, type CampSpot } from './terrain.js';
-import { addSpareSpots, placeTriggers, triggerGround, type TriggerPlacement } from './triggers.js';
+import { addExtraTraps, addSpareSpots, placeTriggers, triggerGround, type TriggerPlacement } from './triggers.js';
 import { buildRoadside, planRoadside } from './roadside.js';
 import { flatMaterial } from './shapes.js';
 
@@ -337,7 +337,8 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   const roadField = new RoadField(network.roads, ROADS.width / 2 + SETTLEMENTS.villages.radius[1] + SETTLEMENTS.villages.roadGap[1] + 6);
   // The triggers on the roads: flat ground under them and toward the castle (never hidden by a hill), and nothing built beside them.
   // v3 2.8: the blueprint's traps and their spare spots (where used ones come back), all with flat ground and kept clear.
-  const trapSpots = addSpareSpots(network, placeTriggers(network, blueprint.triggers), createRandom(seed + 13));
+  // v3 2.1: plus the new traps (haystacks, the bell tower, the bridge, the cart's spots), from their own stream.
+  const trapSpots = addSpareSpots(network, addExtraTraps(network, placeTriggers(network, blueprint.triggers), createRandom(seed + 14)), createRandom(seed + 13));
   const triggerSpots = triggerGround(trapSpots);
   const plan = planSettlements(roadField, campSpots, createRandom(seed + 6), triggerSpots.clear);
   // Then the terrain, flat under the camps, villages, fields and triggers: from here on groundAt() has its hills.

@@ -4,8 +4,9 @@
 // is placed. No Three.js here.
 import {
   BALLOONS,
-  BELL,
   BOARD,
+  DRUM,
+  PEPPER_RING,
   BUTTON_SIZE,
   HEADER,
   CASTLE,
@@ -118,7 +119,10 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pebble bowl', radius: PEBBLE_BOWL.radius, y: PEBBLE_BOWL.rimY },
     { name: 'swatter grip', radius: TOOL_SPOTS.leftSide.radius, y: top + (SWATTER.gripFrom + SWATTER.gripTo) / 2 },
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
-    { name: 'bell handle', radius: TOOL_SPOTS.leftMiddle.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
+    { name: 'drum stick', radius: TOOL_SPOTS.leftMiddle.radius, y: top + DRUM.height + 0.2 + (DRUM.gripFrom + DRUM.gripTo) / 2 },
+    { name: 'drum skin', radius: TOOL_SPOTS.leftMiddle.radius, y: top + DRUM.height },
+    // v3 2.2: the pepper ring is shaken from above, so the shaker's spot about 10 cm over the band's middle counts.
+    { name: 'pepper ring (shaker over it)', radius: (PEPPER_RING.inner + PEPPER_RING.outer) / 2, y: 10, rare: true },
     { name: 'horn grip', radius: TOOL_SPOTS.rightSide.radius, y: top + HORN.restLift + (HORN.gripFrom + HORN.gripTo) / 2 },
     // At the pause button's height, so like it a little past the sweet spot.
     { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY, rare: true },
@@ -208,6 +212,7 @@ function menuSpots(onPanel: OnPanel): { name: string; radius: number; y: number;
     { name: 'custom game lowest row (left end)', ...onPanel(M.radius, editY, M.tiltDeg, CG.edit.windowBottom + 2, CG.edit.windowLeft + 4), rare: true },
     { name: 'custom game scrollbar', ...onPanel(M.radius, editY, M.tiltDeg, CG.edit.windowTop - 2, CG.edit.scrollbarX), rare: true },
     { name: 'tool shelf things', ...flat(S.tools.radius, S.tools.y) },
+    { name: 'tool shelf things, upper row', ...flat(S.tools.radius + S.tools.rowBack, S.tools.y + S.tools.rowUp) },
     { name: 'trophies, low row', ...flat(S.trophies.lowRadius, S.trophies.lowY) },
     { name: 'trophies, high row', ...flat(S.trophies.highRadius, S.trophies.highY) },
     { name: 'loadout stand slots', ...flat(MENU.stand.radius, MENU.stand.y) },

@@ -39,13 +39,14 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   Quaternion,
+  RingGeometry,
   Shape,
   ShapeGeometry,
   Vector2,
   Vector3,
   type Object3D,
 } from 'three';
-import { COMPASS as C } from '../config/game.js';
+import { COMPASS as C, PEPPER_RING } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { post } from '../world/shapes.js';
 import { CanvasLabel, drawIcon } from './kit/index.js';
@@ -88,6 +89,9 @@ export class Compass {
   private wedgeAt: number;
   private tentAt: number;
   private faceY: number;
+  /** v3 2.2: one arc per pepper ring segment, and what is left in each (0: none). */
+  private pepperArcs: Mesh[] = [];
+  private pepperLeft = new Float32Array(PEPPER_RING.segments);
 
   constructor(parent: Object3D) {
     const R = C.radius;
@@ -166,6 +170,17 @@ export class Compass {
     );
     this.tentOutlines.frustumCulled = false;
     this.tentOutlines.count = 0;
+    // v3 2.2: a thin orange arc on the lip's outer edge for each peppered segment (src/tools/pepperRing.ts).
+    const P = PEPPER_RING;
+    const step = (Math.PI * 2) / P.segments;
+    const arcMaterial = new MeshBasicMaterial({ color: P.compassColor, transparent: true, fog: false, toneMapped: false, side: DoubleSide });
+    for (let i = 0; i < P.segments; i++) {
+      const arc = new Mesh(new RingGeometry(R - C.lipWidth * 0.4, R, 8, 1, Math.PI / 2 - step / 2 + 0.06, step - 0.12).rotateX(-Math.PI / 2), arcMaterial);
+      arc.position.y = C.dishDepth + 0.05;
+      arc.visible = false;
+      this.pepperArcs.push(arc);
+      this.dish.add(arc);
+    }
     this.dish.add(dish, face, boss, bossTop, this.label.mesh, needle, this.wedges, this.tentOutlines, this.tents);
     this.group.visible = false;
     parent.add(this.group);
@@ -194,6 +209,11 @@ export class Compass {
     const i = ((Math.round((this.angleOf(x, z) / (Math.PI * 2)) * n) % n) + n) % n;
     if (level > this.levels[i]) this.levels[i] = level;
     if (level >= 2) this.counts[i]++;
+  }
+
+  /** Pepper ring segment `i` (centered on board angle i x 45 degrees) has `left` of its pepper (0: none). Shown at end(). */
+  pepper(i: number, left: number): void {
+    this.pepperLeft[i] = left;
   }
 
   /** The brightness of a level now: red pulses fast, amber slow, yellow is steady. */
@@ -261,6 +281,13 @@ export class Compass {
       // Amber pulses, but never darker than half, so a sending camp stays bright.
       if (sending) color.multiplyScalar(0.5 + 0.5 * pulse);
       this.tents.setColorAt(k, color);
+    }
+    // The pepper arcs turn with the board, like the threats.
+    const step = (Math.PI * 2) / PEPPER_RING.segments;
+    for (let i = 0; i < this.pepperArcs.length; i++) {
+      const arc = this.pepperArcs[i];
+      arc.visible = this.pepperLeft[i] > 0;
+      if (arc.visible) arc.rotation.y = -this.angleOf(Math.sin(i * step), -Math.cos(i * step));
     }
     this.tents.count = camps;
     this.tentOutlines.count = camps;

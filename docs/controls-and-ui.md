@@ -1,5 +1,7 @@
 # Controls and UI
 
+> **Mostly current (2026-11-16).** Stale bits: every mention of the bell means the drum now (v3 2.2), and the new tools (magnet, magnifying glass, sugar cubes) are described only in [v3-plan.md](v3-plan.md). Where they disagree, v3-plan.md wins.
+
 Status: first pass. Only what is decided so far.
 
 Back to [GDD index](GDD.md). Related: [Giant tools](giant-tools.md), [Castle rules](castle-rules.md).

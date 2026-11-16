@@ -20,7 +20,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { CASTLE, DAY_NIGHT, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
+import { CASTLE, DAY_NIGHT, GARDEN, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
@@ -119,8 +119,15 @@ export class Goblin {
   touch: TouchState = 'idle';
   readonly target = new Vector3();
   hasTarget = false;
-  /** Stunned by the megaphone or the bell: frozen and dizzy for this long (seconds). */
+  /** Stunned by the drum: frozen and dizzy for this long (seconds). */
   stunned = 0;
+  /**
+   * v3 2.2: stopped where it stands for this long (seconds), no stars: the
+   * magnet stripped it (it looks at its empty hands), or it eats a sugar cube.
+   */
+  paused = 0;
+  /** v3 2.2: turned on its own group by a mushroom puff for this long (seconds), tinted. */
+  confused = 0;
   /** Fighting a soldier (src/units/troops.ts): the soldier, the mode to go back to after, and the strike timer. */
   foe: object | null = null;
   resumeMode: GoblinMode = 'walking';
@@ -235,6 +242,7 @@ export class Goblin {
     const [r, g, b] = this.stats.tint;
     const color = this.materials[0].color.copy(this.baseColor).multiply(tint.setRGB(r, g, b));
     if (this.seasoned) color.multiply(tint.setRGB(...PEPPER.seasonedTint));
+    if (this.confused > 0) color.multiply(tint.setHex(GARDEN.confusedTint));
   }
 
   /** `restart`: plays it fresh even when it is already the current clip. */
@@ -473,7 +481,38 @@ export class Goblins {
     return goblin.calm || goblin.bait || goblin.waitRoad >= 0 || goblin.patrolRoad >= 0 || goblin.rampartWait > GOBLIN_RULES.rampartWait;
   }
 
-  /** Pepper (v2): weapon, helmet and shield all fly off. Returns true if anything came off. */
+  /** v3 2.2: true if it carries metal gear the magnet pulls (weapon, helmet or shield). */
+  hasGear(goblin: Goblin): boolean {
+    return goblin.weapon !== 'none' || goblin.helmet || goblin.shield;
+  }
+
+  /**
+   * v3 2.2: the magnet pulled its gear off: it flies off (the debris), and
+   * the goblin stops a moment, looking at its empty hands (the "no" emote
+   * clip), then carries on. Returns true if anything came off.
+   */
+  strip(goblin: Goblin, pause: number): boolean {
+    if (!this.isHittable(goblin) || !this.disarm(goblin)) return false;
+    this.pause(goblin, pause, 'emote-no');
+    return true;
+  }
+
+  /** v3 2.2: it stops where it stands for `seconds` (no stars), playing `clip`. Only on the ground (walking, at the wall). */
+  pause(goblin: Goblin, seconds: number, clip = 'idle'): void {
+    if (goblin.mode !== 'walking' && goblin.mode !== 'toWall' && goblin.mode !== 'atWall') return;
+    goblin.paused = Math.max(goblin.paused, seconds);
+    goblin.play(clip, clip === 'idle', 1, true);
+  }
+
+  /** v3 2.2: a mushroom puff turns it on its own group for `seconds`: it stands and swings, tinted. */
+  confuse(goblin: Goblin, seconds: number): void {
+    if (goblin.mode !== 'walking' && goblin.mode !== 'toWall' && goblin.mode !== 'atWall') return;
+    goblin.confused = Math.max(goblin.confused, seconds);
+    goblin.applyColor();
+    goblin.play(goblin.attackRight ? 'attack-melee-right' : 'attack-melee-left', true);
+  }
+
+  /** Pepper (v2), the magnet (v3 2.2): weapon, helmet and shield all fly off. Returns true if anything came off. */
   disarm(goblin: Goblin): boolean {
     const p = goblin.root.position;
     let any = false;
@@ -556,6 +595,8 @@ export class Goblins {
     mark('goblin spawn');
     goblin.serial++;
     goblin.seasoned = false;
+    goblin.paused = 0;
+    goblin.confused = 0;
     goblin.setType(type);
     // Runners need their hands. Grunts carry a spear, a sword or nothing, some wear a helmet or carry a shield.
     if (type === 'grunt') {
@@ -1013,9 +1054,9 @@ export class Goblins {
   }
 
   /**
-   * Peppered (v2, docs/v2-plan.md 2.3): it is disarmed (weapon, helmet and
-   * shield fly off), sneezes for PEPPER.sneezeFor (harmless meanwhile) and is
-   * seasoned (eaten, it counts as 2 meals for the horn, v3). No push back:
+   * Peppered (v3 2.2, docs/v3-plan.md): it sneezes for PEPPER.sneezeFor
+   * (harmless meanwhile) and is seasoned (eaten, it heals double). It keeps
+   * its gear (the magnet strips gear now). No push back:
    * one on the rampart or in the courtyard stops a moment where it stands, a
    * climber keeps climbing. Returns false if it was seasoned already or
    * cannot be peppered.
@@ -1030,8 +1071,6 @@ export class Goblins {
     goblin.sneezing = PEPPER.sneezeJerkTime;
     goblin.applyColor();
     this.audio.play('sneeze', this.worldPosition(goblin, temp), 1, 0.12);
-    // v2: the sneeze disarms it: weapon, helmet and shield all fly off. A one-hit goblin now.
-    this.disarm(goblin);
     // No push back and no throw (v2): it sneezes where it is. One at the wall stops bashing while it sneezes.
     switch (goblin.mode) {
       case 'atWall':
@@ -1182,6 +1221,17 @@ export class Goblins {
       g.stunned -= dt;
       if (STUNNABLE.has(g.mode)) {
         if (g.stunned <= 0) this.playModeClip(g);
+        return;
+      }
+    }
+    // v3 2.2: paused (the magnet, a sugar cube) or turned by a mushroom: it stands where it is.
+    if (g.paused > 0 || g.confused > 0) {
+      const wasConfused = g.confused > 0;
+      g.paused = Math.max(0, g.paused - dt);
+      g.confused = Math.max(0, g.confused - dt);
+      if (wasConfused && g.confused <= 0) g.applyColor();
+      if (STUNNABLE.has(g.mode)) {
+        if (g.paused <= 0 && g.confused <= 0) this.playModeClip(g);
         return;
       }
     }

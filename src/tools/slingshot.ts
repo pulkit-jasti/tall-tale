@@ -91,7 +91,8 @@ type Target = Goblin | SlingTarget;
  * back (thrown by hand), knock it out (shot), or knock it out plus a splash
  * (a goblin shot).
  */
-type PebbleKind = 'dropped' | 'thrown' | 'shot' | 'goblin';
+/** v3 2.2: 'cube' is a sugar cube shot from the pouch: it flies like a shot, hits nothing, and becomes a lure where it lands. */
+type PebbleKind = 'dropped' | 'thrown' | 'shot' | 'goblin' | 'cube';
 
 interface Pebble {
   alive: boolean;
@@ -247,6 +248,10 @@ export class Slingshot {
   private loaded = false;
   /** The goblin in the pouch instead of a pebble, if any (held mode, so nothing else touches it). */
   private pouchGoblin: Goblin | null = null;
+  /** v3 2.2: a sugar cube in the pouch instead of a pebble. */
+  private pouchCube = false;
+  /** v3 2.2: a shot sugar cube landed at a board point (cm): the game puts a lure there. */
+  onCubeLanded: (x: number, y: number, z: number) => void = () => {};
   /** Pebbles in the bowl. */
   private bowlCount: number = PEBBLE_BOWL.capacity;
   private refillTimer = 0;
@@ -544,6 +549,18 @@ export class Slingshot {
     if (this.loaded || !this.frame.visible) return false;
     if (hand.pinchPoint.distanceTo(this.pouchWorld(temp)) >= SLINGSHOT.attachRadius) return false;
     this.putGoblinInPouch(goblin);
+    return true;
+  }
+
+  /** v3 2.2: a held sugar cube brought to the empty pouch clicks in, like a pebble. True if it did. */
+  loadCube(hand: HandState): boolean {
+    if (this.loaded || !this.frame.visible) return false;
+    if (hand.pinchPoint.distanceTo(this.pouchWorld(temp)) >= SLINGSHOT.attachRadius) return false;
+    this.loaded = true;
+    this.pouchCube = true;
+    if (this.pouchPebble) this.pouchPebble.visible = true;
+    this.audio.play('pebbleLoad', this.pouchWorld(temp));
+    this.onEvent('loaded');
     return true;
   }
 
@@ -898,11 +915,13 @@ export class Slingshot {
   /** Empties the pouch. Returns what flies: a pebble shot, or a goblin shot with its goblin. */
   private takeLoad(): [PebbleKind, Goblin | null] {
     const goblin = this.pouchGoblin;
+    const cube = this.pouchCube;
     this.loaded = false;
     this.pouchGoblin = null;
+    this.pouchCube = false;
     if (this.pouchPebble) this.pouchPebble.visible = false;
     if (goblin) this.audio.play('squeal', this.pouchWorld(temp));
-    return goblin ? ['goblin', goblin] : ['shot', null];
+    return goblin ? ['goblin', goblin] : cube ? ['cube', null] : ['shot', null];
   }
 
   /** The goblin in the pouch sits in it, wherever the slingshot goes (frame to board). */
@@ -1155,7 +1174,7 @@ export class Slingshot {
         }
       }
       // Juice: a shot leaves a faint trail of puffs.
-      if (pebble.kind === 'shot' || pebble.kind === 'goblin') {
+      if (pebble.kind === 'shot' || pebble.kind === 'goblin' || pebble.kind === 'cube') {
         pebble.trail -= dt;
         if (pebble.trail <= 0) {
           pebble.trail = JUICE.pebbleTrailEvery;
@@ -1164,7 +1183,7 @@ export class Slingshot {
       }
       temp.set(p.x + v.x * dt, p.y + v.y * dt - 0.5 * g * dt * dt, p.z + v.z * dt);
       v.y -= g * dt;
-      const hit = pebble.kind === 'dropped' ? null : this.hitAlong(p, temp);
+      const hit = pebble.kind === 'dropped' || pebble.kind === 'cube' ? null : this.hitAlong(p, temp);
       if (hit) {
         p.copy(temp);
         this.strike(pebble, hit);
@@ -1175,6 +1194,13 @@ export class Slingshot {
       if (this.landed(p)) {
         if (pebble.kind === 'goblin') {
           this.splash(p, null, pebble.goblin!);
+          this.removePebble(i);
+          continue;
+        }
+        if (pebble.kind === 'cube') {
+          // v3 2.2: a sugar cube becomes a lure where it lands.
+          const ground = landingHeight(p.x, p.z);
+          if (ground !== null) this.onCubeLanded(p.x, ground, p.z);
           this.removePebble(i);
           continue;
         }

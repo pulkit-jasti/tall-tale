@@ -6,12 +6,15 @@
 import { LEVELS, OPEN_FROM_START, TUTORIAL_ENEMIES, type EnemyIcon } from '../config/levels.js';
 
 /** The tools the player picks for the 2 free loadout slots (new tools join this list). */
-export type PickTool = 'swatter' | 'pepper' | 'bell';
-export const PICK_TOOLS: PickTool[] = ['swatter', 'pepper', 'bell'];
-/** Unlocked from the start: the tools the tutorial teaches (the bell left it, docs/v2-plan.md 2.4). */
-export const STARTING_TOOLS: PickTool[] = ['swatter', 'pepper'];
+/** v3 2.2: every tool is a pick now (4 free slots; the slingshot and the horn are no longer fixed). */
+export type PickTool = 'slingshot' | 'horn' | 'swatter' | 'pepper' | 'drum' | 'magnet' | 'glass' | 'sugar';
+export const PICK_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper', 'drum', 'magnet', 'glass', 'sugar'];
+/** Unlocked from the start: the tools the tutorial teaches (the drum is a campaign unlock; the magnet, glass and sugar are unlocked by "Unlock all tools" until their levels are decided). */
+export const STARTING_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper'];
 
-export type Loadout = [PickTool | null, PickTool | null];
+/** The number of loadout slots (v3 2.2). */
+export const LOADOUT_SLOTS = 4;
+export type Loadout = (PickTool | null)[];
 /** Spots on the tool shelf: one per pick tool, so every tool always has room. */
 export const SHELF_SPOTS = PICK_TOOLS.length;
 /** A place a pick tool can stand: one of the stand's 2 free slots, or a shelf spot. */
@@ -53,8 +56,8 @@ export function createProgress(): Progress {
     stars: {},
     open: LEVELS.filter((l) => l.number <= OPEN_FROM_START).map((l) => l.number),
     tools: [],
-    // Both pick slots start empty: the player puts the tools on the stand (the developer's choice after the first look).
-    loadout: [null, null],
+    // v3 2.2: new players start with the slingshot and the horn in two slots; the other two start empty.
+    loadout: ['slingshot', 'horn', null, null],
     shelf: [...PICK_TOOLS],
     met: [],
     unlockAll: false,
@@ -62,6 +65,8 @@ export function createProgress(): Progress {
   };
 }
 
+/** v3 2.2: the drum replaced the bell, so an old save's 'bell' reads as 'drum'. */
+const renamed = (v: unknown): unknown => (v === 'bell' ? 'drum' : v);
 const isPick = (v: unknown): v is PickTool => typeof v === 'string' && (PICK_TOOLS as string[]).includes(v);
 
 /**
@@ -82,14 +87,19 @@ export function parseProgress(raw: unknown): Progress {
     }
   }
   if (Array.isArray(r.open)) for (const n of r.open) if (typeof n === 'number' && LEVELS.some((l) => l.number === n) && !p.open.includes(n)) p.open.push(n);
-  if (Array.isArray(r.tools)) p.tools = PICK_TOOLS.filter((t) => (r.tools as unknown[]).includes(t));
-  if (Array.isArray(r.toolsSeen)) p.toolsSeen = PICK_TOOLS.filter((t) => (r.toolsSeen as unknown[]).includes(t));
+  if (Array.isArray(r.tools)) p.tools = PICK_TOOLS.filter((t) => (r.tools as unknown[]).map(renamed).includes(t));
+  if (Array.isArray(r.toolsSeen)) p.toolsSeen = PICK_TOOLS.filter((t) => (r.toolsSeen as unknown[]).map(renamed).includes(t));
   if (Array.isArray(r.met)) p.met = TUTORIAL_ENEMIES.filter((e) => (r.met as unknown[]).includes(e));
-  if (Array.isArray(r.loadout) && r.loadout.length === 2) {
-    const [a, b] = r.loadout as unknown[];
-    p.loadout = [isPick(a) ? a : null, isPick(b) && b !== a ? b : null];
+  if (Array.isArray(r.loadout)) {
+    // A save from before v3 2.2 had 2 picks with the slingshot and the horn fixed: they go in front of them.
+    const raw = (r.loadout as unknown[]).map(renamed);
+    const list = raw.length === 2 ? ['slingshot', 'horn', ...raw] : raw;
+    p.loadout = Array.from({ length: LOADOUT_SLOTS }, (_, i) => {
+      const t = list[i];
+      return isPick(t) && list.indexOf(t) === i ? t : null;
+    });
   }
-  if (Array.isArray(r.shelf)) p.shelf = (r.shelf as unknown[]).slice(0, SHELF_SPOTS).map((t) => (isPick(t) ? t : null));
+  if (Array.isArray(r.shelf)) p.shelf = (r.shelf as unknown[]).slice(0, SHELF_SPOTS).map(renamed).map((t) => (isPick(t) ? t : null));
   p.open.sort((a, b) => a - b);
   fixPlaces(p);
   return p;
@@ -142,17 +152,17 @@ export function unlockedTools(p: Progress): PickTool[] {
 /** A loadout made valid: no locked tool and no tool twice. Empty slots stay empty (the player fills them). */
 export function fixLoadout(p: Progress): Loadout {
   const open = unlockedTools(p);
-  const out: Loadout = [null, null];
-  for (let i = 0; i < 2; i++) {
+  const out: Loadout = Array.from({ length: LOADOUT_SLOTS }, () => null);
+  for (let i = 0; i < LOADOUT_SLOTS; i++) {
     const t = p.loadout[i];
     if (t && open.includes(t) && !out.includes(t)) out[i] = t;
   }
   return out;
 }
 
-/** True when both pick slots hold a tool (Fight stays locked until then). */
+/** True when every slot holds a tool, or every unlocked tool is on the stand (Fight stays locked until then). */
 export function loadoutFull(p: Progress): boolean {
-  return !p.loadout.includes(null);
+  return !p.loadout.includes(null) || unlockedTools(p).every((t) => p.loadout.includes(t));
 }
 
 /**
@@ -219,7 +229,7 @@ export function moveTool(p: Progress, tool: PickTool, place: Place): boolean {
   return true;
 }
 
-/** The battle's 4 tools from the loadout: the 2 picks (null slots left out), then the slingshot and the horn. */
-export function battleTools(loadout: Loadout): (PickTool | 'slingshot' | 'horn')[] {
-  return [...loadout.filter((t): t is PickTool => t !== null), 'slingshot', 'horn'];
+/** The battle's tools from the loadout, in slot order (empty slots left out). */
+export function battleTools(loadout: Loadout): PickTool[] {
+  return loadout.filter((t): t is PickTool => t !== null);
 }

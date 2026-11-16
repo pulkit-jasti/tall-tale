@@ -18,6 +18,7 @@ import {
   HINT_SIGN,
   GOBLIN_GEAR,
   BALLOONS,
+  LOADOUT_SPOTS,
   TOOL_SPOTS,
   TOOLS,
   TRIGGERS,
@@ -34,6 +35,8 @@ import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
 import type { HandToolName, HandTool, ToolSpot } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
+import type { PepperRing } from '../tools/pepperRing.js';
+import type { Garden } from '../world/garden.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
 import type { Balloons } from '../units/balloons.js';
@@ -72,15 +75,17 @@ import {
 
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
-const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'bell'];
-const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, bell: 0, horn: 0 });
-const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0 });
+const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'drum'];
+const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, drum: 0, horn: 0, magnet: 0, glass: 0, sugar: 0 });
+/** The hand tools with a home spot of their own (the tutorial's, and a debug battle without a loadout). */
+const TUTORIAL_HAND_TOOLS: HandToolName[] = ['swatter', 'pepper', 'drum', 'horn'];
+const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0, hay: 0, bellTower: 0, cart: 0, bridge: 0 });
 /** The tool a lesson's marker belongs to, so only that tool works during it (the others are locked). */
 const MARKER_TOOL: Partial<Record<MarkerTarget, ToolName>> = {
   swatterHandle: 'swatter',
   pepperHandle: 'pepper',
   hornHandle: 'horn',
-  bellHandle: 'bell',
+  drumHandle: 'drum',
   slingHandle: 'slingshot',
   bowl: 'slingshot',
   pouch: 'slingshot',
@@ -120,8 +125,12 @@ export interface BattleParts {
   triggers: Triggers;
   /** Balloon riders (from wave 4). */
   balloons: Balloons;
-  /** The stun of the bell. */
+  /** The stun of the drum. */
   stun: StunWave;
+  /** The pepper ring on the ground outside the wall (v3 2.2). */
+  pepperRing: PepperRing;
+  /** The sun garden's seed beds (v3 2.2): emptied for a new battle. */
+  garden: Garden;
   flags: Flags;
   panel: EndPanel;
   sign: HintSign;
@@ -174,11 +183,11 @@ export class Battle implements TutorialApi {
   /** The battle teaches (the tutorial's lessons). False after Skip tutorial, until the welcome panel's Play. */
   private teach = true;
   /**
-   * v2 run 2: the 2 picked hand tools for a battle without the tutorial (the
-   * slingshot and the horn are always out), or null for every tool. Every
-   * tool stands on its own platform spot, picked or not.
+   * v3 2.2: the loadout's tools in slot order (4 free slots, the slingshot
+   * and the horn too), or null for the tutorial's tools. Each stands on its
+   * slot's spot (LOADOUT_SPOTS); a slingshot always takes the right front.
    */
-  loadout: HandToolName[] | null = null;
+  loadout: (HandToolName | 'slingshot')[] | null = null;
   /** The campaign level being fought (its number), or null (the tutorial, or a debug battle). */
   level: number | null = null;
   /**
@@ -333,6 +342,8 @@ export class Battle implements TutorialApi {
     this.toolUseCount = noTools();
     this.toolGrabCount = noTools();
     this.parts.stun.reset();
+    this.parts.pepperRing.reset();
+    this.parts.garden.reset();
   }
 
   /** The army and the triggers off the board (before a battle, or when it stops). */
@@ -399,13 +410,23 @@ export class Battle implements TutorialApi {
     this.doneFlash = 0;
     // Every tool on its own platform, always (the loadout only picks which show). Moving the picks to the
     // left spots put a tool in front of the red flag, so they stay home now.
-    const picks: HandToolName[] | null = !teach && this.loadout ? this.loadout.filter((n) => n !== 'horn') : null;
+    const picks = !teach && this.loadout ? this.loadout : null;
+    // v3 2.1: the new traps (haystacks, bell tower, bridge, potion cart) only in loadout battles, never in the tutorial.
+    this.parts.triggers.extrasOn = !!picks;
     for (const tool of Object.values(this.parts.tools)) tool.setSpot(this.homeSpots.get(tool)!);
     if (picks) {
-      // A battle with a loadout: the slingshot, the horn and the 2 picks (docs/menus.md section 5).
-      slingshot.setVisible(true);
-      this.parts.tools.horn.setVisible(true);
-      for (const name of picks) this.parts.tools[name].setVisible(true);
+      // v3 2.2: a battle with a loadout: each tool on its slot's spot. A slingshot takes the right front
+      // (its bowl and its pull are built for that side); the hand tools fill the other spots in slot order.
+      const hasSling = picks.includes('slingshot');
+      slingshot.setVisible(hasSling);
+      const free = LOADOUT_SPOTS.filter((_, i) => !(hasSling && i === 0));
+      let next = 0;
+      for (const name of picks) {
+        if (name === 'slingshot') continue;
+        const tool = this.parts.tools[name];
+        tool.setSpot(free[next++] ?? LOADOUT_SPOTS[LOADOUT_SPOTS.length - 1]);
+        tool.setVisible(true);
+      }
     } else {
       // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
       // Without the tutorial and without a loadout (debug): every tool.
@@ -414,7 +435,8 @@ export class Battle implements TutorialApi {
         if (tool === 'slingshot') slingshot.setVisible(true);
         else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
       }
-      if (!teach) for (const t of Object.values(this.parts.tools)) t.setVisible(true);
+      // (Only the tutorial's tools: the v3 2.2 tools have no home spot of their own and come with a loadout.)
+      if (!teach) for (const t of Object.values(this.parts.tools)) if (TUTORIAL_HAND_TOOLS.includes(t.name)) t.setVisible(true);
     }
     this.reach.stop();
     const steps = this.levelRules ? buildLevelSteps(this.waves) : buildTutorialSteps(BUILT_TOOLS, this.waves, from, !this.reachKnown, teach);
@@ -962,8 +984,8 @@ export class Battle implements TutorialApi {
         return this.parts.tools.swatter.handleWorld(out);
       case 'pepperHandle':
         return this.parts.tools.pepper.handleWorld(out);
-      case 'bellHandle':
-        return this.parts.tools.bell.handleWorld(out);
+      case 'drumHandle':
+        return this.parts.tools.drum.handleWorld(out);
       case 'hornHandle':
         return this.parts.tools.horn.handleWorld(out);
       case 'slingHandle':

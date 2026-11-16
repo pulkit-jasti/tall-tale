@@ -10,6 +10,8 @@ The feeling we want: being a kid playing with toy soldiers, making up your own b
 
 ## Status
 
+> **The current state is in [docs/v3-plan.md](docs/v3-plan.md)** (v3 Phase 1, 2.0, 2.5, 2.8 and all of 2.2's tools are built, 2026-11-16). The list below is older and kept as a record; parts of it (the bell, the ring handle, the fixed slingshot and horn) are out of date.
+
 - **MVP build steps 1 to 6 are done and tested on the headset** (2026-11-03 to 2026-11-05): the board, castle and ring handle, grab and eat, the slingshot, 5 tutorial waves with a guided tutorial, both flags, the fly swatter, pepper shaker, food jar, triggers, troops, megaphone and bell, pause, and the giant's seat and body.
 - **Steps 7 and 8 are built and tested on the headset** (2026-11-05 to 2026-11-10): three troop kinds with gear (swordsmen, spearmen, archers), goblin spears and helmets, balloon riders from wave 4, the stress test with troops, and the juice pass (knockout stars, hit stop, food labels, confetti and more). Next: the stress test result, then the missing sounds.
 - Details, open items and the build order are in [docs/mvp.md](docs/mvp.md). Frame rate results are in [docs/performance.md](docs/performance.md).

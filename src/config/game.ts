@@ -1283,7 +1283,8 @@ export const MENU = {
     plankThick: 1.2,
     // Between the front and the side: at 90 degrees they were out of view without turning the head, at 36 to 80
     // they crowded the menu. Now the menu keeps about 40 degrees clear on each side.
-    tools: { radius: 47, y: 27, angles: [60, 74, 88], cardAngle: 101 },
+    // v3 2.2: 8 tools in two rows of 4 (the upper row rowBack cm farther out and rowUp cm higher).
+    tools: { radius: 47, y: 27, angles: [58, 72, 86, 100], rowBack: 4, rowUp: 11, cardAngle: 113 },
     trophies: {
       /** The trophy model's height on the shelf (cm): 6 (was 8, too big), on smaller pedestals farther apart so they never touch. */
       height: 6,
@@ -2079,7 +2080,7 @@ export const TOOL_SPOTS = {
   slingshot: { angleDeg: 53, radius: 33.5 },
   /** The horn (v2, the megaphone's old spot). */
   rightSide: { angleDeg: 86, radius: 33.5 },
-  /** The bell (v2: its own platform, where the food jar was). */
+  /** The drum (v3 2.2, the bell's old platform, where the food jar was). */
   leftMiddle: { angleDeg: -68, radius: 33.5 },
   /** Pepper shaker. The left side has room (no bowl), so its three are spread wider (were -60 and -96). */
   leftFront: { angleDeg: -50, radius: 33.5 },
@@ -2281,19 +2282,20 @@ export const TOOLS = {
    * The bell and the horn are one use each (one stun, one call): their
    * window is only the short moment until the tool goes back.
    */
-  use: { swatter: 10, pepper: 8, bell: 1.2, horn: 1.4 },
+  // v3 2.2: the magnet 8 s of pulling, the glass 12 s of beam (only while raised), sugar 3 cubes (counted like swings).
+  use: { swatter: 10, pepper: 8, drum: 1.2, horn: 1.4, magnet: 8, glass: 12, sugar: 3 },
   /**
    * Tools that count their use in swings, not seconds (`use` above is then
    * the swings per charge; the ring shows one pip per swing). None today:
    * v3 1.4 set the swatter back to a 10 s window (2026-11-16).
    */
-  swings: { swatter: false, pepper: false, bell: false, horn: false },
+  swings: { swatter: false, pepper: false, drum: false, horn: false, magnet: false, glass: false, sugar: true },
   /**
    * The recharge after a use, while the tool is back on its platform
    * (seconds; v3 1.1 shorter). v3 2.5: the horn recharges on time again
    * (30 s; eating heals instead). Every tool starts a battle full.
    */
-  recharge: { swatter: 10, pepper: 12, bell: 25, horn: 30 },
+  recharge: { swatter: 10, pepper: 12, drum: 25, horn: 30, magnet: 20, glass: 20, sugar: 20 },
   /**
    * The ring on the platform (readable with the sound off): while a use runs
    * it drains (useColor), while recharging it fills (chargeColor) over a
@@ -2384,9 +2386,13 @@ export const HOLD = {
     slingshot: { at: 3.5, face: 'back' },
     // Held like the megaphone was: the bell end points the way the knuckles point, the mouthpiece toward the wrist, so it is at the mouth when the fist is just below it.
     horn: { at: 3, face: 'back', tiltDeg: 15 },
-    // The handle on top of the bell, thumb up, the bell hanging below the fist.
-    bell: { at: 2, face: 'palm' },
-  } as Record<'swatter' | 'pepper' | 'slingshot' | 'horn' | 'bell', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
+    // The drum stick like the swatter: past the thumb, leaning forward so the ball comes down on the skin without bending the wrist.
+    drum: { at: 2.5, face: 'back', tiltDeg: 45 },
+    // v3 2.2: the magnet's tips point the way the knuckles point (like a flashlight); the glass's lens faces the eyes when raised.
+    magnet: { at: 2.5, face: 'back', tiltDeg: 10 },
+    glass: { at: 2.5, face: 'back', tiltDeg: 10 },
+    sugar: { at: 0, face: 'palm' },
+  } as Record<'swatter' | 'pepper' | 'slingshot' | 'horn' | 'drum' | 'magnet' | 'glass' | 'sugar', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
 };
 
 /**
@@ -2610,39 +2616,291 @@ export const HORN = {
   waveColors: [0xffffff, 0xfff1b8, 0xffd23f],
 };
 
-/** The bell (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): the only stun. Shake it to stun every goblin and knock the climbers down. */
-export const BELL = {
-  /** Wooden handle on top along +y from the fist (cm), the brass bell hanging below it. */
-  handleLength: 4,
-  handleRadius: 0.75,
-  bellHeight: 6,
-  bellMouth: 3.2,
-  brassColor: 0xd9a63a,
-  handleColor: 0x6b4a2e,
-  clapperColor: 0x5a4330,
-  gripFrom: 0,
-  gripTo: 4,
-  grabRadius: 0.06,
-  /**
-   * A ring (src/tools/bell.ts, second rewrite: speed checks never rang, hand
-   * tracking runs at 30 Hz and smooths fast motion, Meta docs): the holding
-   * hand's distance from a slow anchor that follows it (anchorSmoothing
-   * seconds). ringOffset cm away is a ring; back within rearmOffset (and
-   * ringGap seconds) before the next. No ring for grabQuiet seconds after the
-   * grab. The debug notes show each grab's farthest swing, to tune it.
-   */
-  // Carried steadily at v cm/s the hand trails the anchor by about v x anchorSmoothing: 15 cm/s gives
-  // about 2 cm (no ring), a swing of 40 cm/s about 6 cm (a ring).
-  anchorSmoothing: 0.15,
-  ringOffset: 3,
-  rearmOffset: 1.2,
-  ringGap: 0.25,
-  grabQuiet: 0.4,
-  /** A bigger swing stuns longer: from ringOffset up to this (cm) gives the full extra stun. */
-  hardOffset: 9,
+/**
+ * The pepper ring (v3 2.2, src/tools/pepperRing.ts): pepper shaken onto the
+ * ground just outside the wall fills one of 8 segments of 45 degrees (they
+ * turn with the board, segment 0 at the board's front). A full segment lasts
+ * `lastTime`, and each goblin walking through breathes some in (seasoned,
+ * sneezing) and uses up `goblinUse` of it; a digger (Phase 3) uses it all.
+ */
+export const PEPPER_RING = {
+  segments: 8,
+  /** The band on the ground (cm from the center): from just outside the wall to past where goblins bash. */
+  inner: 52.6,
+  outer: 63,
+  /** A goblin this far inside `inner` still counts (it bashes at wallOut + wallStandOff). */
+  goblinSlack: 1,
+  /** Shaking over one segment this long fills it (seconds); a part fill drains at `drain` per second once the shaking stops. */
+  fillTime: 1.5,
+  drain: 0.25,
+  /** A full segment lasts this long (seconds), blinking for its last `blinkTime`. */
+  lastTime: 30,
+  blinkTime: 5,
+  blinkHz: 3,
+  /** Each goblin breathing it in uses up this share. */
+  goblinUse: 0.25,
+  /** The strip on the ground: lifted this far above it (cm), its colors and opacities. */
+  lift: 0.5,
+  outlineColor: 0xff9a3c,
+  outlineOpacity: 0.28,
+  fullColor: 0xe0481c,
+  fullOpacity: 0.62,
+  /** A small gap between two segments, so each reads on its own (degrees). */
+  gapDeg: 2,
+  /** Red flecks piled in a segment as it fills: this many in a full one, this big (cm). */
+  flecks: 26,
+  fleckSize: 0.7,
+  fleckColor: 0xc8321a,
+  /** A puff where a segment runs out, and a sparkle when one fills. */
+  puffColors: [0xe0481c, 0xff9a3c, 0x6b5a45],
+  sparkleColors: [0xffffff, 0xffd84a, 0xff9a3c],
+  /** The compass: a thin orange arc on the lip for each peppered segment. */
+  compassColor: 0xff8a2a,
 };
 
-/** The stun of the bell: every goblin on the board stops, dizzy. */
+/**
+ * The drum (v3 2.2, replaces the bell: its shake was hard to detect): the
+ * only stun. A short red drum stands on its platform; grab the stick in a
+ * fist and strike the skin, the swatter's downward motion. A strike counts
+ * only when the stick's ball comes down onto the skin fast enough, so
+ * grabbing the stick or resting it on the drum never fires it.
+ */
+export const DRUM = {
+  /** The drum on the platform (cm): a short 10-sided cylinder. */
+  radius: 3,
+  height: 3.2,
+  sides: 10,
+  bodyColor: 0xb8322a,
+  rimColor: 0xd9a63a,
+  skinColor: 0xf2e6c8,
+  /** The gold rim bands, top and bottom (cm thick). */
+  rimHeight: 0.45,
+  /** The stick along +y from the end the hand holds (cm), a round ball at its tip. */
+  stickLength: 9,
+  stickRadius: 0.4,
+  ballRadius: 0.9,
+  stickColor: 0x8a5a32,
+  ballColor: 0xf2e6c8,
+  gripFrom: 0,
+  gripTo: 4.5,
+  grabRadius: 0.06,
+  /** Resting in the drum, leaning back this much (degrees). */
+  restLeanDeg: 25,
+  /**
+   * A strike: the ball's center comes down to within `contact` cm of the skin,
+   * moving down faster than `hitSpeed` (cm per second, measured in boardLift,
+   * which never turns), within the skin's radius plus `edge` cm. It must lift
+   * `rearm` cm off the skin before the next one, and `gap` seconds pass.
+   */
+  contact: 1.4,
+  edge: 0.8,
+  hitSpeed: 45,
+  rearm: 2.5,
+  gap: 0.25,
+  /** A harder strike stuns longer: from hitSpeed up to this (cm per second) gives STUN.hardExtra in full. */
+  hardSpeed: 160,
+  /** The skin bounces on a strike (cm down, seconds). */
+  thump: 0.4,
+  thumpTime: 0.18,
+};
+
+/**
+ * The 4 free loadout slots (v3 2.2): where each stand slot's tool stands in
+ * a battle. Slot 0 is the right front (the slingshot's spot, its pebble bowl
+ * beside it), 1 the right side, 2 the left front, 3 the left side. A
+ * slingshot in any slot always takes the right front (its bowl and its
+ * opposite-hand pull are built for that side); the others fill the rest in
+ * slot order.
+ */
+export const LOADOUT_SPOTS = [
+  { angleDeg: 53, radius: 33.5 },
+  { angleDeg: 86, radius: 33.5 },
+  { angleDeg: -50, radius: 33.5 },
+  { angleDeg: -88, radius: 33.5 },
+];
+
+/**
+ * The magnet (v3 2.2, src/tools/magnet.ts): a horseshoe held in a fist,
+ * pointed at the board like a flashlight. A ring on the ground where the
+ * tips point; gear of goblins inside it is pulled off after the ring has
+ * stayed on them `holdTime`.
+ */
+export const MAGNET = {
+  /** The model (cm): a grip along +y from the fist, the horseshoe on top, its two tips pointing forward (+z of the tool). */
+  gripLength: 4.5,
+  gripRadius: 0.8,
+  shoeRadius: 2.6,
+  shoeTube: 0.85,
+  tipLength: 1.4,
+  bodyColor: 0xc8262a,
+  tipColor: 0xd8dde2,
+  gripColor: 0x4a3426,
+  gripFrom: 0,
+  gripTo: 4.5,
+  grabRadius: 0.06,
+  restLeanDeg: 15,
+  /** The aim: a ray from the tips along their pointing direction, marched to the ground; up to `maxRange` cm, smoothed over `smoothing` seconds. */
+  maxRange: 420,
+  marchStep: 3,
+  smoothing: 0.12,
+  /** The ring on the ground (cm radius, about one goblin group) and its colors. */
+  ringRadius: 11,
+  ringColor: 0xd8262a,
+  ringInnerColor: 0xe8ecf0,
+  /** The inner ring shrinks to the middle again and again (seconds per pull). */
+  pullCycle: 0.7,
+  /** A goblin's gear comes off after the ring stays on it this long (seconds). */
+  holdTime: 1,
+  /** A stripped goblin stops this long, looking at its empty hands (seconds). */
+  stripPause: 1.5,
+  /** Gear rattles while pulled: this much (cm) and this fast (Hz). */
+  rattle: 0.35,
+  rattleHz: 18,
+  /** Wave arcs from the tips toward the ring: this often (seconds). */
+  arcEvery: 0.25,
+  arcColors: [0xe8ecf0, 0xd8262a, 0xffffff],
+  clankColors: [0xe8ecf0, 0xb8c0c8, 0xffd84a],
+};
+
+/**
+ * Sugar cubes (v3 2.2, src/tools/sugarBowl.ts): a bowl of cubes on a
+ * platform. Pinch a cube and toss it near the wall, or load it into the
+ * slingshot to place it far. Goblins near where it lands stop to eat it.
+ */
+export const SUGAR = {
+  /** The bowl (cm): a short wide cylinder, cubes piled on top. */
+  bowlRadius: 3.4,
+  bowlHeight: 2.2,
+  bowlColor: 0x8fb8d8,
+  cubeSize: 1.2,
+  cubeColor: 0xfaf6ee,
+  /** Pinch zone around the bowl's top to take a cube (meters). */
+  pinchRadius: 0.06,
+  /** A cube held near the pouch clicks in (the slingshot's attach radius). Let go elsewhere: it is tossed with the hand's speed. */
+  gravity: 980,
+  /** Speed kept from the hand when tossed (a toss feels lighter than the hand). */
+  tossKeep: 1,
+  /** A lure lasts this long (seconds), drawing goblins within `radius` cm on the ground. */
+  lureTime: 6,
+  radius: 22,
+  /** A lured goblin stops to eat for this long (seconds). */
+  eatTime: 4,
+  /** How many goblins one cube feeds before it is gone. */
+  feeds: 5,
+  /** Crumbs while it is eaten. */
+  crumbColors: [0xfaf6ee, 0xf2e6c8, 0xffffff],
+};
+
+/**
+ * The magnifying glass (v3 2.2, src/tools/magnifier.ts): held in a fist and
+ * aimed by the head. Raised in front of the eyes it shines a beam where the
+ * head points: grows and heals plants on seed beds, lights kegs, and burns
+ * goblins without a helmet. Slower at sunset and at night.
+ */
+export const GLASS = {
+  /** The model (cm): a handle along +y, a ring rim with a clear lens on top, facing forward (+z of the tool). */
+  handleLength: 5,
+  handleRadius: 0.7,
+  lensRadius: 2.6,
+  rimTube: 0.35,
+  handleColor: 0x6b4a2e,
+  rimColor: 0xd9a63a,
+  lensColor: 0xcfe8ff,
+  gripFrom: 0,
+  gripTo: 5,
+  grabRadius: 0.06,
+  restLeanDeg: 15,
+  /** Raised: the lens is this far in front of the eyes (meters, from, to) and within `coneDeg` of the look. */
+  eyeNear: 0.1,
+  eyeFar: 0.3,
+  coneDeg: 35,
+  /** The gaze: marched to the ground up to `maxRange` cm; aim assist snaps to a bed, plant or keg within `assistDeg` of the look. */
+  maxRange: 420,
+  marchStep: 3,
+  assistDeg: 4,
+  /** A goblin under the gaze within this (cm, flat) can be burned (no assist to goblins). */
+  goblinRadius: 3,
+  /** Beam seconds: a keg lights after `lightTime`, a bare goblin burns after `burnTime` (by day). */
+  lightTime: 1,
+  burnTime: 1,
+  /** Slower by time of day: sunset this many times slower, night this many. */
+  sunsetSlow: 1.5,
+  nightSlow: 2,
+  /** The beam's color by time of day: white by day, orange at sunset, faint blue at night. */
+  dayColor: 0xffffff,
+  sunsetColor: 0xffa040,
+  nightColor: 0x8ab8ff,
+  beamRadius: 0.35,
+  /** The pillar and the sun marker while aiming. */
+  pillarHeight: 40,
+  pillarColor: 0xfff1b8,
+  sunRadius: 4,
+  sunColor: 0xffd23f,
+  plainColor: 0xffffff,
+  smokeColors: [0x777777, 0x999999, 0xbbbbbb],
+};
+
+/**
+ * The sun garden (v3 2.2, src/world/garden.ts): seed beds placed beside the
+ * roads when a map is built. The magnifying glass grows a plant on a bed;
+ * a plant wilts over `life` seconds, healed by the beam.
+ */
+export const GARDEN = {
+  /** Beds per map, half sunflower, half mushroom, from `from` to `to` cm out, `side` cm beside the road, `gap` cm apart at least. */
+  beds: 6,
+  from: 75,
+  to: 190,
+  side: 9,
+  gap: 35,
+  step: 12,
+  bedRadius: 3.2,
+  bedColor: 0x5a3d26,
+  /** Beam seconds to grow (by day) and to heal fully. */
+  growTime: 2,
+  healTime: 1,
+  /** A full plant lasts this long (seconds), then the bed is empty again. */
+  life: 60,
+  /** Sunflower: a turret that spits seeds at the nearest goblin within range (cm), every `fireEvery` s; `seedsToKnock` knock out a grunt. */
+  sunflowerHeight: 9,
+  range: 70,
+  fireEvery: 2,
+  seedsToKnock: 2,
+  seedSpeed: 90,
+  seedColor: 0x3a2a1a,
+  /** Mushroom: every `puffEvery` s, about half of the goblins within `puffRadius` turn on each other for `confuseTime` s, until a third of them is down. */
+  mushroomHeight: 6,
+  puffEvery: 10,
+  puffRadius: 26,
+  confuseTime: 4,
+  confuseShare: 0.5,
+  keepShare: 2 / 3,
+  puffColors: [0xd8a0e8, 0xf0d0ff, 0xffffff],
+  /** A turned goblin's colors are multiplied by this (purple). */
+  confusedTint: 0xb070ff,
+  /** The grow sprout and the wilt look. */
+  sproutColor: 0x6bbf3a,
+  wiltColor: 0x8a7a50,
+};
+
+/** Chickens from the potion cart (v3 2.1, src/units/chickens.ts): a placeholder shape for now. */
+export const CHICKENS = {
+  /** Body size (cm), about a goblin's height. */
+  size: 1.5,
+  bodyColor: 0xf6f2ea,
+  combColor: 0xd8262a,
+  beakColor: 0xf2b630,
+  /** They wander up to this far (cm) from where they changed, this fast (cm per second), hopping. */
+  wander: 8,
+  speed: 4,
+  hopSpeed: 12,
+  hopHeight: 0.5,
+  /** After this long (seconds) a chicken goes, but only while it is more than viewDeg from the look. */
+  life: 20,
+  viewDeg: 60,
+  max: 30,
+};
+
+/** The stun of the drum: every goblin on the board stops, dizzy. */
 export const STUN = {
   /** The first scream or ring stuns this long (seconds)... */
   baseSeconds: 3.5,
@@ -2694,8 +2952,98 @@ export const TRIGGERS = {
    * distance where the extra flat spots on the way in sit (radius `sightSize`),
    * and `clear` how far villages, towers and decor keep from it (cm).
    */
+  /**
+   * v3 2.1: the new traps, added to every map when it is built (not stored
+   * in the blueprint, like the spare spots): how many of each and how far
+   * out (cm). Haystacks get spares like the old traps; the cart gets
+   * `cartSpots` spots, one of which it shows on now and then.
+   */
+  extra: {
+    hay: { count: 2, from: 90, to: 200 },
+    bellTower: { count: 1, from: 120, to: 210 },
+    bridge: { count: 1, from: 120, to: 220 },
+    cart: { count: 0, from: 85, to: 190 },
+    cartSpots: 3,
+    step: 6,
+    gap: 30,
+  },
+  /** Haystack (v3 2.1): set off by fire only (the magnifying glass, a blast); burns and blocks its road like the fallen tree, then leaves a burnt patch. */
+  hay: {
+    side: 6,
+    radius: 2.6,
+    height: 3.6,
+    color: 0xe2b84a,
+    darkColor: 0xb8902e,
+    burnTime: 10,
+    patchTime: 6,
+    patchColor: 0x2a2018,
+    hitRadius: 4,
+    fireEvery: 0.12,
+    fireColors: [0xff6a1a, 0xffb02a, 0xffe08a, 0x555555],
+  },
+  /**
+   * Bell tower (v3 2.1): a ruined tower beside the road, its belfry leaning
+   * over it. The magnet's ring held on the bell (MAGNET.holdTime) drops it:
+   * everything under it is knocked out, helmets too. Once per battle.
+   */
+  bellTower: {
+    side: 9,
+    /** The tower pieces' width (cm); the belfry leans this much toward the road (degrees). */
+    width: 7,
+    leanDeg: 8,
+    bellRadius: 2.2,
+    bellHeight: 2.8,
+    bellColor: 0x8a6a3a,
+    fallTime: 0.45,
+    bounce: 0.8,
+    knockRadius: 9,
+    /** The magnet's ring snaps to the bell within this (cm, flat). */
+    magnetRadius: 9,
+    hitRadius: 6,
+    dustColors: [0xb8b0a0, 0x8a8478, 0xddd6c8],
+  },
+  /**
+   * Potion cart (v3 2.1): rare, pure luck. Now and then (chance per battle,
+   * a random time in a window) it stands at one of its spots. A pebble bursts
+   * the potions: goblins within `radius` turn into chickens for good. It goes
+   * away unused after `standTime` and never comes back on the trap timer.
+   */
+  cart: {
+    side: 8,
+    chance: 0.6,
+    firstIn: [35, 90] as [number, number],
+    againIn: [90, 160] as [number, number],
+    standTime: 45,
+    radius: 14,
+    potionCount: 5,
+    potionHeight: 1.4,
+    potionTint: [0.75, 0.45, 1] as [number, number, number],
+    fizzColors: [0xb070ff, 0xe0b0ff, 0xffffff, 0x70ffb0],
+    hitRadius: 5,
+  },
+  /**
+   * Rope bridge (v3 2.1): crosses a stream (a flat blue strip, no real water)
+   * on its road, long enough for a whole goblin group. A pebble on it or a
+   * blast drops it: goblins on it are knocked out, and its road closes (the
+   * long way round) until it is rebuilt in place after `downTime`.
+   */
+  bridge: {
+    length: 28,
+    width: 5,
+    streamWidth: 34,
+    streamDepth: 12,
+    streamColor: 0x3a7ab8,
+    streamEdge: 0x2a5a88,
+    fallTime: 0.6,
+    downTime: 25,
+    hitRadius: 6,
+    /** Goblins this close to the bridge's line (cm) are on it. */
+    onRadius: 4,
+    plankColor: 0x8a5a34,
+  },
   ground: {
-    flat: { keg: 9, boulder: 14, tree: 10 } as Record<'keg' | 'boulder' | 'tree', number>,
+    // v3 2.1: the new traps too.
+    flat: { keg: 9, boulder: 14, tree: 10, hay: 8, bellTower: 10, cart: 9, bridge: 18 } as Record<'keg' | 'boulder' | 'tree' | 'hay' | 'bellTower' | 'cart' | 'bridge', number>,
     sight: [0.86, 0.72],
     sightSize: 5,
     clear: 16,

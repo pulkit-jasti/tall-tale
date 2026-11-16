@@ -61,7 +61,31 @@ export const SOUNDS = {
    * 10 s ring plays, once: shaking on while it rings adds nothing (was cut
    * at 4 s and rung again on every stroke).
    */
+  // No tool rings it since the drum replaced the hand bell (v3 2.2); kept for the bell tower (2.1).
   bell: { files: ['144497__wuola__medieval-bell-a3.wav'], volume: 0.8, positional: true, once: true },
+  /**
+   * The drum (v3 2.2): a deep boom with a crash on top, clearly not the
+   * camps' war drums. Kenney stand-ins until the developer picks the files.
+   */
+  drumBoom: { files: ['impact/impactSoft_heavy_000.ogg', 'impact/impactSoft_heavy_001.ogg', 'impact/impactSoft_heavy_002.ogg'], volume: 1, positional: true },
+  /** The pepper ring (v3 2.2): a ding when a segment fills, a sizzle when one runs out (missing: the chime until a sizzle is found). */
+  pepperRingFull: { files: ['interface/confirmation_001.ogg'], volume: 0.5, positional: true },
+  pepperRingGone: { files: [CHIME], volume: 0.4, positional: true },
+  /** v3 2.2 new tools: Kenney stand-ins until the developer picks the files (the hum and sizzle use the chime, missing). */
+  magnetClank: { files: ['impact/impactMetal_medium_000.ogg', 'impact/impactTin_medium_000.ogg'], volume: 0.8, positional: true },
+  magnetHum: { files: [CHIME], volume: 0.15, positional: true },
+  sugarLand: { files: ['impact/impactSoft_medium_000.ogg', 'impact/impactSoft_medium_001.ogg'], volume: 0.6, positional: true },
+  glassHum: { files: [CHIME], volume: 0.12, positional: true },
+  glassSizzle: { files: [CHIME], volume: 0.2, positional: true },
+  plantPop: { files: ['372182__supersound23__pop.mp3'], volume: 0.6, positional: true },
+  seedSpit: { files: ['interface/pluck_001.ogg', 'interface/pluck_002.ogg'], volume: 0.5, positional: true },
+  mushroomPuff: { files: ['impact/impactSoft_medium_002.ogg'], volume: 0.6, positional: true },
+  /** v3 2.1 traps: the chime until real files are found (the bell tower uses the old hand bell, `bell`). */
+  hayBurn: { files: [CHIME], volume: 0.4, positional: true },
+  potionFizz: { files: [CHIME], volume: 0.5, positional: true },
+  bridgeSplash: { files: ['impact/impactSoft_heavy_001.ogg'], volume: 0.7, positional: true },
+  chickenCluck: { files: [CHIME], volume: 0.25, positional: true },
+  drumCrash: { files: ['impact/impactBell_heavy_000.ogg', 'impact/impactBell_heavy_001.ogg'], volume: 0.6, positional: true },
   stunned: { files: ['interface/glass_001.ogg', 'interface/glass_002.ogg'], volume: 0.7, positional: false },
   swordClash: {
     files: ['impact/impactMetal_light_000.ogg', 'impact/impactMetal_light_001.ogg', 'impact/impactMetal_medium_000.ogg'],
@@ -159,6 +183,22 @@ const GROUPS: Record<Exclude<SoundCategory, 'music'>, SoundName[]> = {
     'crankClick',
     'pepperShake',
     'bell',
+    'drumBoom',
+    'drumCrash',
+    'pepperRingFull',
+    'pepperRingGone',
+    'magnetClank',
+    'magnetHum',
+    'sugarLand',
+    'glassHum',
+    'glassSizzle',
+    'plantPop',
+    'seedSpit',
+    'mushroomPuff',
+    'hayBurn',
+    'potionFizz',
+    'bridgeSplash',
+    'chickenCluck',
     'balloonPop',
     'stunned',
   ],

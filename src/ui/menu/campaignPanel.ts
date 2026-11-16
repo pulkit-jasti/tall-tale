@@ -47,7 +47,7 @@ const CARD_DIVIDER = 'rgba(138, 90, 52, 0.6)';
 /** The list's entries: every level, then the "More coming soon" row. */
 const ENTRIES = LEVELS.length + 1;
 
-const TOOL_NAMES: Record<string, string> = { swatter: 'Fly swatter', pepper: 'Pepper shaker', bell: 'Bell', mystery: '???' };
+const TOOL_NAMES: Record<string, string> = { swatter: 'Fly swatter', pepper: 'Pepper shaker', drum: 'Drum', mystery: '???' };
 
 export class CampaignPanel {
   private panel: Panel;
