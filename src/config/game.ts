@@ -318,6 +318,77 @@ export const DECOR = {
   ] as DecorKind[],
 };
 
+export type RoadsideKind = 'cottage' | 'fountain' | 'cart' | 'fence' | 'tent' | 'banner' | 'ruin' | 'watchtower' | 'signpost' | 'workshop';
+
+/**
+ * v3 2.0: a livelier near board (src/world/roadside.ts). Small medieval
+ * scenes beside the roads between the castle and the villages, where the
+ * board was empty: cottages, a fountain, carts, fences, tents, banners that
+ * wave, ruined walls, small watchtowers, signposts and workbenches. Decor
+ * only: beside a road, never on one, never on or in front of a trap (seen
+ * from the giant), clear of the villages, camps, story scenes and road
+ * torches. Merged into a few meshes (the banners into their own, so they can
+ * wave in the shader), no colliders. Sizes in cm.
+ */
+export const ROADSIDE = {
+  /** Scenes go between these distances from the center (cm): just past the goblins at the wall (57), out to past the villages. */
+  from: 64,
+  to: 240,
+  /** A scene every this far along a road (cm, from, to), sides taking turns. */
+  every: [14, 22] as [number, number],
+  /** Gap from the road's edge to a scene's edge (cm, from, to). */
+  roadGap: [1.5, 6] as [number, number],
+  /** Gap between scenes, and to anything else built (cm). */
+  gap: 3,
+  /** Gap to a trap's keep-clear spot, and to a road torch (cm). */
+  trapGap: 6,
+  torchGap: 3,
+  /** Never in the line from the giant to a trap: at least this far beside that line (cm). */
+  sightGap: 6,
+  /** At most this many scenes on a map. */
+  max: 46,
+  /**
+   * Each kind: how often it is picked (weight), its footprint radius (cm) and
+   * the nearest it may stand to the center (cm). The tall ones stand farther
+   * out, so nothing near the wall hides a goblin.
+   */
+  kinds: {
+    cottage: { weight: 3, radius: 4.2, from: 90 },
+    fountain: { weight: 1, radius: 3.2, from: 72 },
+    cart: { weight: 2, radius: 3, from: 64 },
+    fence: { weight: 2, radius: 5.5, from: 64 },
+    tent: { weight: 2, radius: 3.6, from: 85 },
+    banner: { weight: 2, radius: 1.2, from: 64 },
+    ruin: { weight: 2, radius: 4.5, from: 78 },
+    watchtower: { weight: 1, radius: 2.6, from: 130 },
+    signpost: { weight: 1, radius: 1.4, from: 64 },
+    workshop: { weight: 1, radius: 3.4, from: 75 },
+  } as Record<RoadsideKind, { weight: number; radius: number; from: number }>,
+  /** Prop sizes (cm): heights unless named width. */
+  sizes: {
+    fountainWidth: 5,
+    cartWidth: 4,
+    fenceWidth: 3.6,
+    tent: 4,
+    fireWidth: 2,
+    banner: 5,
+    signpost: 3.6,
+    lanternScale: 2.6,
+    workbenchWidth: 3,
+    crate: 1.3,
+    wheelWidth: 1.6,
+    towerTile: 2.8,
+  },
+  /**
+   * The banners wave (a vertex sway in their own material, one shared clock):
+   * how far the top moves (cm), how fast (radians per second), and how much
+   * the wave runs along the cloth (radians per cm).
+   */
+  bannerSway: 0.35,
+  bannerSpeed: 2.6,
+  bannerRipple: 0.8,
+};
+
 /**
  * The castle. Its size is set by the reach band (REACH below): climbers on
  * the rampart must stay in reach, so the wall cannot move further out.
@@ -2199,12 +2270,13 @@ export const TOOLS = {
    * The bell and the horn are one use each (one stun, one call): their
    * window is only the short moment until the tool goes back.
    */
-  use: { swatter: 3, pepper: 8, bell: 1.2, horn: 1.4 },
+  use: { swatter: 10, pepper: 8, bell: 1.2, horn: 1.4 },
   /**
-   * v3 (docs/v3-plan.md 1.4): these tools count their use in swings, not
-   * seconds (`use` above is then the swings per charge). The ring shows one pip per swing.
+   * Tools that count their use in swings, not seconds (`use` above is then
+   * the swings per charge; the ring shows one pip per swing). None today:
+   * v3 1.4 set the swatter back to a 10 s window (2026-11-16).
    */
-  swings: { swatter: true, pepper: false, bell: false, horn: false },
+  swings: { swatter: false, pepper: false, bell: false, horn: false },
   /**
    * The recharge after a use, while the tool is back on its platform
    * (seconds; v3 1.1 shorter). The horn has none: it charges only by eating (hornMeals).
@@ -2366,8 +2438,7 @@ export const SWATTER = {
   whooshSpeed: 160,
   whooshGap: 0.35,
   /**
-   * v3 (docs/v3-plan.md 1.4): 3 swings per charge (TOOLS.use.swatter). A
-   * swing starts when the head passes swingSpeed (cm per second) or swats
+   * A swing (only counted when TOOLS.swings.swatter is on) starts when the head passes swingSpeed (cm per second) or swats
    * something, and ends after the head stays under swingEndSpeed for
    * swingEndTime (seconds). Waving it about still uses swings.
    */
@@ -3644,6 +3715,25 @@ export const SKY = {
   starTwinkle: 0.9,
   starTwinkleShrink: 0.5,
   starTwinkleSpeed: [2.5, 7] as [number, number],
+  /**
+   * v3 2.0: the power on the dip math (was 3: dips were too rare to notice).
+   * Lower means many more stars twinkle at once.
+   */
+  starTwinklePower: 1.4,
+  /**
+   * v3 2.0: a star also flashes brighter than normal now and then: how much
+   * brighter at the peak (share), how much bigger, and the power on its wave
+   * (higher = shorter, rarer flashes). Normal stars shine between
+   * starShine (so a flash has room to brighten), hero stars at full.
+   */
+  starSparkle: 0.9,
+  starSparkleGrow: 0.7,
+  starSparklePower: 7,
+  starShine: [0.4, 0.8] as [number, number],
+  /** v3 2.0: hero stars: how many, how much bigger, and how much stronger their twinkle and flash. */
+  starHeroCount: 20,
+  starHeroSize: 2.2,
+  starHeroBoost: 1.5,
   /**
    * The ringed planet (night only): big, straight in front, high in the
    * sky and far away (smaller and more faded than at first, when it looked

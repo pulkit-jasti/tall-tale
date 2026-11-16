@@ -1,6 +1,6 @@
 // The fly swatter (docs/giant-tools.md): crowds of bare goblins near the
-// wall. v3 (docs/v3-plan.md 1.4): 3 swings per charge (a swing is a fast
-// move of the head or a swat, hit or miss), then it recharges. Each swat
+// wall. v3 (docs/v3-plan.md 1.4): a 10 s use window from the first swat,
+// then it recharges (swing counting stays behind TOOLS.swings). Each swat
 // knocks out every bare goblin the head touches. A helmet or a shield stops
 // it: a clonk, the goblin keeps its gear and is knocked back a little,
 // dazed. A swatted balloon (or its riders) is pushed away for a moment,

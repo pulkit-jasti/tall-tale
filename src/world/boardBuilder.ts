@@ -26,6 +26,7 @@ import { Meadow } from './grass.js';
 import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
 import { campDistance, RoadField, Terrain, type CampSpot } from './terrain.js';
 import { placeTriggers, triggerGround } from './triggers.js';
+import { buildRoadside, planRoadside } from './roadside.js';
 import { flatMaterial } from './shapes.js';
 
 const yAxis = new Vector3(0, 1, 0);
@@ -349,25 +350,29 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   // Little scenes in the empty land (a stone circle, a ruined tower, an old battlefield...), clear of everything built.
   const built = [...builtSpots(plan), ...triggerSpots.clear];
   const stories = planStorySpots(roadField, campSpots, built, createRandom(seed + 9));
+  // v3 2.0: small scenes beside the near roads (cottages, carts, banners...), clear of the traps and the torches.
+  const roadTorches = roadTorchSpots(network.roads);
+  const roadside = planRoadside(network.roads, roadField, [...built, ...stories], triggerSpots.clear, roadTorches, createRandom(seed + 11));
   // The courtyard stays empty until the main gameplay is done (houses and stalls come back with the polish).
   const campGroups = new Map<string, Object3D>();
-  const [camps, decor, settlements, storyScenes] = await Promise.all([
+  const [camps, decor, settlements, storyScenes, roadsideScenes] = await Promise.all([
     buildCamps(campNodes, createRandom(seed + 2), hills, campGroups),
-    buildDecor(terrain, campSpots, [...built, ...stories], plan.forests, createRandom(seed + 3)),
+    buildDecor(terrain, campSpots, [...built, ...stories, ...roadside], plan.forests, createRandom(seed + 3)),
     buildSettlements(plan, network.roads, createRandom(seed + 8)),
     buildStorySpots(stories, createRandom(seed + 10)),
+    buildRoadside(roadside, createRandom(seed + 12)),
   ]);
-  parent.add(camps, decor, settlements, storyScenes);
+  parent.add(camps, decor, settlements, storyScenes, roadsideScenes);
   return {
     network,
     hills,
     camps: campGroups,
     sails: (settlements.userData.sails as Object3D | undefined) ?? null,
     // For the night lights: every window tile and lantern (in the settlements' frame, the board's), and a lantern's height.
-    windows: settlements.userData.windows as Matrix4[],
-    lanterns: settlements.userData.lanterns as Matrix4[],
+    windows: [...(settlements.userData.windows as Matrix4[]), ...(roadsideScenes.userData.windows as Matrix4[])],
+    lanterns: [...(settlements.userData.lanterns as Matrix4[]), ...(roadsideScenes.userData.lanterns as Matrix4[])],
     lanternHeight: settlements.userData.lanternHeight as number,
-    roadTorches: roadTorchSpots(network.roads),
+    roadTorches,
     villages: plan.villages,
   };
 }

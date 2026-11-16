@@ -726,8 +726,8 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     hand: 'right',
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
-    // v3: 3 swings per charge, and armor stops it (learned by doing: the clonk).
-    use: 'Swat a goblin on your wall! Three swings, and helmets stop it.',
+    // v3: a 10 s use window, and armor stops it (learned by doing: the clonk).
+    use: 'Swat goblins on your wall! Swat fast, and helmets stop it.',
     locked: `The swatter is resting. ${RESTING}`,
     bait: true,
     afterDone: PAUSE_AFTER.finish,

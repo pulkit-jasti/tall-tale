@@ -92,6 +92,7 @@ import { Triggers } from './world/triggers.js';
 import { buildBoard, buildCastle } from './world/boardBuilder.js';
 import { buildSeatFloor, GiantBody } from './world/giant.js';
 import { Windmill } from './world/settlements.js';
+import { updateRoadside } from './world/roadside.js';
 import { Stage } from './world/stage.js';
 import { SceneSwap } from './world/sceneSwap.js';
 import { loadTemplate } from './world/models.js';
@@ -941,6 +942,7 @@ export class GameSystem extends createSystem({}) {
     this.sky?.update(dt);
     this.updateTimeOfDay(dt);
     this.windmill.update(dt);
+    updateRoadside(dt);
     this.fog.near = SKY.fogNear * this.stage.boardScale;
     this.fog.far = SKY.fogFar * this.stage.boardScale;
     // The empty tool slots hint: the glass sign in front of the eyes and a red arrow at the empty slot, for a few seconds.
@@ -1250,6 +1252,7 @@ export class GameSystem extends createSystem({}) {
     this.sky?.update(dt);
     this.updateTimeOfDay(dt);
     this.windmill.update(dt);
+    updateRoadside(dt);
     this.fog.near = SKY.fogNear * this.stage.boardScale;
     this.fog.far = SKY.fogFar * this.stage.boardScale;
   }

@@ -32,12 +32,12 @@ Castle machines are dropped (v2, [castle-machines.md](castle-machines.md) stays 
 
 ## 3. Use windows and recharge (v2, v3 numbers)
 
-Tools are free. Rules in `src/rules/recharge.ts`, numbers in `TOOLS` in `src/config/game.ts`. v3 (built 2026-11-13, [v3-plan.md](v3-plan.md) 1.1, 1.4, 1.5): shorter recharges, the swatter counts swings, and the horn charges only by eating.
+Tools are free. Rules in `src/rules/recharge.ts`, numbers in `TOOLS` in `src/config/game.ts`. v3 (built 2026-11-13, [v3-plan.md](v3-plan.md) 1.1, 1.4, 1.5): shorter recharges, the swatter's 10 s window (it counted swings until 2026-11-16, to be changed back in code), and the horn charges only by eating.
 
 | Tool | Use | Recharge |
 |---|---|---|
 | Slingshot | always | none |
-| Swatter | 3 swings | 10 s |
+| Swatter | 10 s | 10 s |
 | Pepper | 8 s | 12 s |
 | Bell | one stun | 25 s |
 | Horn | one call | 5 goblins eaten (no time recharge) |
@@ -102,7 +102,7 @@ Rules:
 
 - **Role:** crowds of bare goblins (v3: it no longer answers everything).
 - **Zone:** near zone and the edge of the middle zone (the swatter's length extends reach).
-- **Use (v3):** **3 swings per charge**, then a 10 s recharge. A swing starts when the head passes 150 cm/s or swats something, and ends once the head stays under 60 cm/s for 0.18 s (`SWATTER.swingSpeed`, `swingEndSpeed`, `swingEndTime`), so waving it about still uses swings. Letting go mid-swing spends that swing. The tutorial's use lesson holds the swings.
+- **Use:** a **10 s window** from the first swat, then a 10 s recharge (changed back 2026-11-16; Phase 1 built 3 swings per charge, and the code still counts swings until it is changed back).
 - **Armor stops it (v3):** a helmet or a shield makes the swat bounce off with a clonk (`swatClonk`) and a spark: the goblin keeps its gear, is not knocked out, and a grounded one is knocked back a little, dazed (`Goblins.clonk`). Armor needs the pepper, triggers, slingshot hits or eating.
 - **Balloons (v3):** a swatted balloon (or one of its riders) is pushed away from the castle for 1.6 s at 30 cm/s, riders aboard, then comes back (`BALLOONS.pushSpeed`, `pushTime`). Popping stays the slingshot's job.
 - **Hand tracking note:** fast swings can blur tracking. Detect hits along the whole swing path, use a generous hit area, and let slams count, not only fast swipes.
@@ -142,7 +142,7 @@ Rules:
 | Tool | Zone | Effect | Use | Recharge |
 |---|---|---|---|---|
 | Slingshot | Middle, far | Precise hits, pops balloons, sets off triggers | Per shot | None |
-| Fly swatter | Near, edge of middle, rampart | Hits bare groups (armor clonks, balloons pushed away) | 3 swings | 10 s |
+| Fly swatter | Near, edge of middle, rampart | Hits bare groups (armor clonks, balloons pushed away) | 10 s | 10 s |
 | Pepper shaker | Near (wall, rampart) | Disarms everything, seasons | 8 s | 12 s |
 | Bell | Everywhere | Stuns all, knocks the rampart down | One stun | 25 s |
 | War horn | The road looked at | Calls a knight squad | One call | 5 goblins eaten |

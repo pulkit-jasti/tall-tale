@@ -17,23 +17,28 @@ export function setTerrainLook(color: Color, greyShare: number): void {
   grey.value = greyShare;
 }
 
-function addNightFade(material: MeshStandardMaterial | MeshLambertMaterial): void {
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.terrainTint = tint;
-    shader.uniforms.terrainGrey = grey;
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 terrainTint;\nuniform float terrainGrey;')
-      .replace(
+/**
+ * The fade's shader lines, for a material that has its own shader changes
+ * too (fadeAtNight skips those): call it from that material's onBeforeCompile.
+ */
+export function applyNightFade(shader: { uniforms: Record<string, { value: unknown }>; fragmentShader: string }): void {
+  shader.uniforms.terrainGrey = grey;
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', '#include <common>\nuniform vec3 terrainTint;\nuniform float terrainGrey;')
+    .replace(
+      '#include <opaque_fragment>',
+      [
         '#include <opaque_fragment>',
-        [
-          '#include <opaque_fragment>',
-          // A little less color (toward its own brightness, so never lighter), then multiplied by the tint.
-          'float terrainLuma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));',
-          'gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(terrainLuma), terrainGrey);',
-          'gl_FragColor.rgb *= terrainTint;',
-        ].join('\n'),
-      );
-  };
+        // A little less color (toward its own brightness, so never lighter), then multiplied by the tint.
+        'float terrainLuma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));',
+        'gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(terrainLuma), terrainGrey);',
+        'gl_FragColor.rgb *= terrainTint;',
+      ].join('\n'),
+    );
+}
+
+function addNightFade(material: MeshStandardMaterial | MeshLambertMaterial): void {
+  material.onBeforeCompile = (shader) => applyNightFade(shader);
   material.customProgramCacheKey = () => 'nightFade';
 }
 

@@ -64,6 +64,16 @@ Each setting **describes itself**: its type (range, choice, on and off, number, 
 - **Rising camps (section 7) have no setting in Custom Game:** the generator decides from the camp count and difficulty. Campaign presets may set them exactly in their level file.
 - **Map and enemy mix are what you face; difficulty is how much** ([map.md](map.md#map-vs-difficulty)). New problems, never tougher goblins.
 
+### Allowed lists (decided 2026-11-16)
+
+Custom Game is a form over the generator's settings list (`LEVEL_SETTINGS`), so each of these is a setting in that list plus the generator code that uses it. The generator gets reworked anyway for the new campaign levels (section 10) and for the new tools and enemies (their numbers go into the generator too). Each list is a short column of the existing `Switch` controls (no new UI part). Campaign level files set the same lists.
+
+- **Allowed times of day:** morning, day, sunset, night. The waves are spread over only the chosen times, in that order (for example day and night only: waves 1 to 3 by day, wave 4 at night). The campaign needs it too: Nightfall is sunset, then night (section 10). The time is still decor only and still changes only between waves.
+- **Allowed tools:** which tools the loadout stand offers for this level. It never adds tools the player has not unlocked. Fewer than 4 allowed means fewer loadout slots, a valid challenge ("slingshot only").
+- **Allowed goblins:** on or off for each type: grunts, runners, balloons, and the new enemies (digger, shaman, bomber, archers) once they exist. A type's own sliders (runner share, balloon count, its gear shares) show only while it is on.
+- **Allowed traps:** on or off for each kind: keg, boulder, tree, bridge, hay, bell tower, potion cart. Works with the existing trigger settings (the count per road and the share), which then only pick among the allowed kinds.
+- **Checks** (section 5): at least one time, one tool and one goblin type must stay on, or the level is not valid and the page says why.
+
 ---
 
 ## 5. Rules every generated level keeps
@@ -191,28 +201,36 @@ All of them follow the kit's rules: Idle, Ready, Held and Locked looks with a so
 
 ## 10. The 15 campaign levels
 
-Reviewed with the developer (2026-11-11): four levels were only gear and two only runners, so 1, 5, 6, 9, 14 and 15 changed. Every level has its own map and one twist; every 5th mixes earlier twists. Each uses rising camps.
+Redone with the developer (2026-11-16, replaces the 2026-11-11 list). **Only levels 1 to 5 are built and playable;** 6 to 15 are locked teasers with a name and a card description only (not built, so they may promise things that do not exist yet). Every level uses rising camps. Every battle already moves through the day with its waves (morning, day, sunset, night; docs/mvp.md "Day and night cycle"), so each level ends with one night wave.
 
-| # | Name | Twist | Shows off |
-|---|---|---|---|
-| 1 | First Watch | One camp, then a second rises. Gentle, mostly straight roads. | Hands, the rising camps |
-| 2 | Runner's Road | Mostly runners | Swatter, slingshot |
-| 3 | The Shield Wall | Every goblin brought a shield (unlocks the bell) | Pepper |
-| 4 | Balloon Festival | Lots of balloon riders | Slingshot |
-| 5 | Two Fronts | The opposite camp rises in wave 2: a surprise from behind | Spinning, the horn |
-| 6 | Spear Rush | Spears everywhere: every wall hit counts twice, so fast hands matter | Hands, swatter |
-| 7 | Powder Valley | Kegs and boulders on every road | Slingshot and triggers |
-| 8 | Thin Walls | Only 2 archers, slow refill | Protect the garrison |
-| 9 | Camp Surge | Every wave, a new camp. By the end they are everywhere | Spinning, everything |
-| 10 | Shields and Spears | Shields in front, spears behind (mix) | Pepper, then swatter |
-| 11 | The Great Horde | One huge camp, one long winding road | The horn |
-| 12 | Sky and Stone | Balloons above, boulders below (mix) | Slingshot, triggers |
-| 13 | The Siege | The castle starts damaged | Everything |
-| 14 | Close Quarters | The camps are right outside the walls: short roads, quick hands | Hands, swatter, pepper |
-| 15 | The Last Stand | Camps rise every wave, everything at once (mix) | Everything |
+**Playable (1 to 5):** each of 3 to 5 shows off one new system, the most visual ones early (judges play only 10 to 15 minutes). Beating a level unlocks the tool the next one teaches.
 
-- **Levels 1 to 5 are open from the start**; 6 to 15 open one by one. All 15 get real level files now (they were text only).
-- The card text in `src/config/levels.ts` (name, flavor, enemies) is updated to match this table when the levels are built.
+| # | Name | Card description | Twist | Unlocks |
+|---|---|---|---|---|
+| 1 | First Watch | "A quiet morning. One camp stirs, then another behind you." | None: the walls, eating, rising camps, and turning to face the second camp (it rises behind the player) | |
+| 2 | Sky Pirates | "A fleet of balloons is drifting in. Bring them down." | Lots of balloon riders: a slingshot level | Magnet |
+| 3 | Tin Hats | "Someone sold the goblins helmets. Take them back." | Most goblins wear helmets: introduces the magnet | Magnifying glass |
+| 4 | Sun Garden | "A bright day and good soil. Make it bloom." | Many seed beds on a sunny map: introduces the magnifying glass, the sunflower and the mushroom | (open) |
+| 5 | Nightfall | "The sun is setting. They fight better in the dark." | Wave 1 at sunset, waves 2 to 4 at night with night fog, torches and the compass (needs night fog, v3-plan.md 2.7) | (open) |
+
+**Locked teasers (6 to 15):** each hints at one new enemy or system; 15 brings it all together.
+
+| # | Name | Card description |
+|---|---|---|
+| 6 | Molehill Meadow | "The ground is moving. Something is digging toward you." |
+| 7 | Drums of the Shaman | "Every time you strip them, someone hands them more." |
+| 8 | Powder Pass | "Kegs on every road, and goblins carrying their own." |
+| 9 | Arrow Rain | "Archers on the hills. Keep your knights alive." |
+| 10 | Harvest Fire | "Fields of hay as far as you can see. Bring a light." |
+| 11 | The Great Horde | "One camp. One road. Too many goblins." |
+| 12 | River Crossing | "Wooden bridges over a wide river. Drop them at the right moment." |
+| 13 | Moonless | "No moon, thick fog. Trust your compass." |
+| 14 | The Alchemist's Road | "A cart full of potions broke down nearby. Things are getting strange." |
+| 15 | The Last Stand | "Every camp, every goblin, all at once." |
+
+- **Levels 1 to 5 are open from the start**; 6 to 15 show as locked.
+- **Open:** what levels 4 and 5 unlock.
+- The card text in `src/config/levels.ts` (name, flavor, enemies) is updated to match these tables when the levels are built.
 
 ---
 

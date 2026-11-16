@@ -302,8 +302,8 @@ function starGeometry(rng: Random): BufferGeometry {
   const n = SKY.starCount;
   const positions = new Float32Array(n * 3);
   const colors = new Float32Array(n * 3);
-  /** Each star's twinkle: where in its pulse it starts, and how fast it pulses. */
-  const twinkle = new Float32Array(n * 2);
+  /** Each star's twinkle: where in its pulse it starts, how fast it pulses, and 1 for a hero star (v3 2.0). */
+  const twinkle = new Float32Array(n * 3);
   const r = SKY.domeRadius * 0.95;
   const lowest = Math.sin(SKY.starMinElevationDeg * DEG);
   for (let i = 0; i < n; i++) {
@@ -312,14 +312,16 @@ function starGeometry(rng: Random): BufferGeometry {
     const flat = Math.sqrt(1 - y * y);
     const az = rng.range(0, Math.PI * 2);
     positions.set([Math.sin(az) * flat * r, y * r, -Math.cos(az) * flat * r], i * 3);
-    const shine = rng.range(0.45, 1);
+    // The first few are the hero stars: bigger, at full shine, twinkling the most.
+    const hero = i < SKY.starHeroCount ? 1 : 0;
+    const shine = hero ? 1 : rng.range(...SKY.starShine);
     colors.set([shine, shine, shine], i * 3);
-    twinkle.set([rng.range(0, Math.PI * 2), rng.range(...SKY.starTwinkleSpeed)], i * 2);
+    twinkle.set([rng.range(0, Math.PI * 2), rng.range(...SKY.starTwinkleSpeed), hero], i * 3);
   }
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(positions, 3));
   geometry.setAttribute('color', new BufferAttribute(colors, 3));
-  geometry.setAttribute('twinkle', new BufferAttribute(twinkle, 2));
+  geometry.setAttribute('twinkle', new BufferAttribute(twinkle, 3));
   return geometry;
 }
 
@@ -479,24 +481,31 @@ export class Sky {
       depthWrite: false,
       blending: AdditiveBlending,
     });
-    // Twinkle: now and then a star quickly dims and shrinks, from one shared clock. Nothing to update per star.
-    // Two waves multiplied (one slow) and raised to a power, so the dips are short and uneven, not a steady pulse.
+    // Twinkle: a star dims and shrinks, and now and then flashes brighter and bigger, from one shared clock.
+    // Nothing to update per star. Two waves multiplied (one slow) and raised to a power, so the dips are
+    // uneven, not a steady pulse (v3 2.0: a lower power, so many more twinkle at once). The flash is a
+    // third wave raised to a high power: short and rare. Hero stars (twinkle.z = 1) are bigger and twinkle more.
     const time = this.starTime;
+    const f = (v: number): string => v.toFixed(3);
     this.starMaterial.onBeforeCompile = (shader) => {
       shader.uniforms.starTime = time;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec2 twinkle;\nuniform float starTime;')
+        .replace('#include <common>', '#include <common>\nattribute vec3 twinkle;\nuniform float starTime;')
         .replace(
           '#include <color_vertex>',
           [
             '#include <color_vertex>',
+            `float heroBoost = mix(1.0, ${f(SKY.starHeroBoost)}, twinkle.z);`,
             'float twinkleWave = 0.5 + 0.5 * sin(starTime * twinkle.y + twinkle.x);',
             'float twinkleGate = 0.5 + 0.5 * sin(starTime * twinkle.y * 0.27 + twinkle.x * 2.3);',
-            'float twinkleDip = pow(twinkleWave * twinkleGate, 3.0);',
-            `vColor.rgb *= 1.0 - ${SKY.starTwinkle.toFixed(3)} * twinkleDip;`,
+            `float twinkleDip = min(1.0, pow(twinkleWave * twinkleGate, ${f(SKY.starTwinklePower)}) * heroBoost);`,
+            'float sparkleWave = 0.5 + 0.5 * sin(starTime * twinkle.y * 0.43 + twinkle.x * 1.7);',
+            `float sparkle = pow(sparkleWave, ${f(SKY.starSparklePower)}) * heroBoost * (1.0 - twinkleDip);`,
+            `vColor.rgb *= (1.0 - ${f(SKY.starTwinkle)} * twinkleDip) * (1.0 + ${f(SKY.starSparkle)} * sparkle);`,
+            `float starScale = mix(1.0, ${f(SKY.starHeroSize)}, twinkle.z) * (1.0 - ${f(SKY.starTwinkleShrink)} * twinkleDip) * (1.0 + ${f(SKY.starSparkleGrow)} * sparkle);`,
           ].join('\n'),
         )
-        .replace('gl_PointSize = size;', `gl_PointSize = size * (1.0 - ${SKY.starTwinkleShrink.toFixed(3)} * twinkleDip);`);
+        .replace('gl_PointSize = size;', 'gl_PointSize = size * starScale;');
     };
     this.stars = new Points(starGeometry(rng), this.starMaterial);
     this.stars.renderOrder = ORDER.stars;
