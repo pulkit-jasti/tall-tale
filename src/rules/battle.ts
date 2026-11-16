@@ -31,6 +31,17 @@ export function damageCastle(state: BattleState, amount: number): void {
 }
 
 /**
+ * v3 (docs/v3-plan.md 2.5): eating heals, the only way to heal. Adds
+ * `share` of max health (never past full). Returns the health gained.
+ */
+export function healCastle(state: BattleState, share: number): number {
+  if (state.phase !== 'playing' || share <= 0) return 0;
+  const before = state.health;
+  state.health = Math.min(state.maxHealth, state.health + state.maxHealth * share);
+  return state.health - before;
+}
+
+/**
  * A wave is cleared: the wave flag climbs a notch. After the last wave the
  * battle is won. Otherwise the breather starts and repairs part of the damage.
  */

@@ -180,8 +180,8 @@ export class GrabEat {
         const tool = target.tool;
         const viaPinch = !hand.fist.started;
         if (hand.fist.started || (TOOLS.acceptPinch && hand.pinch.started)) {
-          // Recharging (or tied down): a buzz and a wobble instead of a grab.
-          if (!tool.usable) {
+          // Recharging (or tied down): a buzz and a wobble instead of a grab (the horn can still be held for a free move, v3 2.5).
+          if (!tool.grabbable) {
             tool.refuse();
           } else {
             tool.grab(hand, viaPinch);
@@ -190,7 +190,7 @@ export class GrabEat {
             continue;
           }
         }
-        toolReady.set(tool, tool.usable ? 'ready' : 'locked');
+        toolReady.set(tool, tool.grabbable ? 'ready' : 'locked');
       } else if (target?.kind === 'ring' && armed) {
         // The crank's knob: a pinch only, never a fist (2026-11-13).
         if (hand.pinch.started && !this.handles.busy) {

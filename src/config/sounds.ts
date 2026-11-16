@@ -70,6 +70,16 @@ export const SOUNDS = {
   },
   /** v3 (docs/v3-plan.md 1.4): the swatter bounces off a helmet or shield. */
   swatClonk: { files: ['impact/impactTin_medium_000.ogg', 'rpg/metalPot1.ogg'], volume: 0.9, positional: true },
+  /** v3 (docs/v3-plan.md 2.5): eating heals the castle (the red flag rises a notch). */
+  castleHeal: { files: ['interface/confirmation_001.ogg', 'interface/confirmation_002.ogg'], volume: 0.5, positional: true },
+  /**
+   * v3 2.5: the horn's aim settles on a kind (from the spot): a call (a rising
+   * hint), a boost (a deep tap) or a move (light and airy). Kenney sounds
+   * standing in until the developer picks the horn hint, drum roll and whistle.
+   */
+  hornHintCall: { files: ['interface/maximize_008.ogg'], volume: 0.45, positional: true },
+  hornHintBoost: { files: ['impact/impactSoft_heavy_000.ogg', 'impact/impactSoft_heavy_001.ogg'], volume: 0.6, positional: true },
+  hornHintMove: { files: ['interface/glass_001.ogg', 'interface/glass_002.ogg'], volume: 0.5, positional: true },
   /** v3 (docs/v3-plan.md 1.7): the compass crank, every notch of turn. */
   crankClick: { files: ['interface/click_001.ogg', 'interface/click_002.ogg'], volume: 0.45, positional: false },
   debris: {
@@ -139,6 +149,10 @@ const GROUPS: Record<Exclude<SoundCategory, 'music'>, SoundName[]> = {
     'toolPoof',
     'toolReturn',
     'foodAdded',
+    'castleHeal',
+    'hornHintCall',
+    'hornHintBoost',
+    'hornHintMove',
     'swatWhoosh',
     'swatSplat',
     'swatClonk',

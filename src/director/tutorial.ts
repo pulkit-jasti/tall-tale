@@ -750,8 +750,8 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     about: ' It calls your knights.',
     // One lesson in three beats on the glass sign (it follows the look), by what the player is doing (Hint.hornSteps).
     use: 'Hold the horn and look at a road.',
-    // v3 (docs/v3-plan.md 1.5): the horn charges only by eating.
-    locked: 'Eat 5 goblins to call your knights again!',
+    // v3 2.5: the horn recharges on time again (eating heals the castle).
+    locked: `The horn is resting. ${RESTING}`,
     hornSteps: {
       idle: 'Grab the horn with your left hand.',
       aim: 'Look around. The flag and your knights\' path go where you look.',
@@ -869,8 +869,8 @@ function squadFightStep(): TutorialStep {
     id: 'watch-knights',
     hint: lesson('Watch your knights march out.', 'star', undefined, {
       glass: true,
-      // v3 (docs/v3-plan.md 1.5): the refill is taught right after the first call. Eating calls your knights.
-      doneText: 'Your knights won! Eat 5 goblins to call them again.',
+      // v3 2.5: the horn recharges on time; eating heals the castle (the full tutorial rework comes later).
+      doneText: 'Your knights won! The horn rests, then calls them again.',
       watchSteps: { march: 'Watch your knights march out.', fight: 'Goblins! Watch your knights fight.' },
     }),
     start: () => {

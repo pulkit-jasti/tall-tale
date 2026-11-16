@@ -27,6 +27,7 @@ All CC0 from Kenney packs (license in each folder). Flat PNGs, drawn onto canvas
 | `vector/` | UI Pack Adventure (SVG) | `checkbox_beige_*`, `minimap_icon_exclamation_yellow`, `minimap_icon_star_yellow`, `banner_hanging`, `panel_brown` | Sign checkbox, tutorial marker "!", star, sharp versions of the banner and panel |
 
 | `board/` | Board Game Icons (white PNG, 128 px "Double"; their SVGs have no viewBox and draw off-canvas, so the PNGs are used) | `skull`, `suit_hearts`, `hourglass`, `crown_a` | The compass's goblin count (skull), the end panel's stats (heart, skull, hourglass), a new best and the card's "Best" (crown). Tinted in code |
+| | | `timer_0` (copied 2026-11-16), with `icons/up` and `icons/arrowDown` | The horn's previews (v3 2.5, `src/ui/hornAim.ts`): no charge (the empty clock), a boost (chevrons), a move's spot (the arrow) |
 | | | `skull` | The campaign card's difficulty skulls and its "Difficulty" label, the Goblins sound row |
 | | | `structure_tower`, `shield`, `bow` | The Custom Game card's facts row (camps, guards, archers; castle health uses the heart) |
 | | | `award` | The campaign card's "Reward" |

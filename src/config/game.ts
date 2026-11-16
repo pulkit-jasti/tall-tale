@@ -783,8 +783,19 @@ export const CASTLE_HEALTH = {
   wallHitDamage: 0.35,
   /** Damage per second from each intruder in the courtyard. Faster than outside attacks. */
   intruderDamagePerSec: 2,
-  /** Share of the missing health repaired in each breather. */
-  repairShare: 0.35,
+  /**
+   * Share of the missing health repaired in each breather. v3 2.5: 0 (was
+   * 0.35): eating is the only way to heal, and health carries over (2.8).
+   */
+  repairShare: 0,
+  /**
+   * v3 (docs/v3-plan.md 2.5): each goblin eaten heals this share of max
+   * health (a seasoned one seasonedHealScale times that), with a chime and
+   * these sparkle colors on the red flag's cloth. Start value, tune on the headset.
+   */
+  eatHeal: 0.02,
+  seasonedHealScale: 2,
+  healSparkle: [0xff6a5a, 0xffd0c8, 0xffffff],
   /**
    * A wave that is not cleared, with every goblin already out of its camp,
    * and nothing has hurt the castle for this long (seconds), is a stalemate
@@ -2279,16 +2290,10 @@ export const TOOLS = {
   swings: { swatter: false, pepper: false, bell: false, horn: false },
   /**
    * The recharge after a use, while the tool is back on its platform
-   * (seconds; v3 1.1 shorter). The horn has none: it charges only by eating (hornMeals).
+   * (seconds; v3 1.1 shorter). v3 2.5: the horn recharges on time again
+   * (30 s; eating heals instead). Every tool starts a battle full.
    */
-  recharge: { swatter: 10, pepper: 12, bell: 25, horn: 0 },
-  /**
-   * v3 (docs/v3-plan.md 1.5): eating charges only the horn. This many goblins
-   * fill it, a seasoned (peppered) one counts as seasonedMeals. The other
-   * tools recharge on time only. The horn starts each battle full.
-   */
-  hornMeals: 5,
-  seasonedMeals: 2,
+  recharge: { swatter: 10, pepper: 12, bell: 25, horn: 30 },
   /**
    * The ring on the platform (readable with the sound off): while a use runs
    * it drains (useColor), while recharging it fills (chargeColor) over a
@@ -2303,13 +2308,18 @@ export const TOOLS = {
     trackColor: 0x2a2018,
     useColor: 0xfff1b8,
     chargeColor: 0x5ab0ff,
-    /** The ring flashes this bright for this long when eating fills it (seconds). */
+    /** The ring flashes this bright for this long (seconds). */
     flashColor: 0xffffff,
     flashTime: 0.25,
-    /** Pips (a swatter's swings, the horn's meals): the gap between two pips (degrees). */
+    /** Pips (a use counted in swings): the gap between two pips (degrees). */
     pipGapDeg: 10,
-    /** The horn's ring while it waits for meals (gold, not the time recharge blue), and full of meals. */
-    mealColor: 0xffc23a,
+    /**
+     * v3 2.5: the cost preview. While the horn aims a call or a boost, its
+     * ring shows the charge a blow will spend, pulsing in this color this
+     * fast (radians per second); calm (hidden) for a free move.
+     */
+    costColor: 0xff8a3a,
+    costPulse: 9,
   },
   /** The hand must be open near the tool this long before closing it grabs (seconds). Same as the ring. */
   readyTime: 0.15,
@@ -2593,6 +2603,8 @@ export const HORN = {
   /** The horn sound's volume when held to blow, and when blown into the mic (louder). */
   heldVolume: 0.8,
   blownVolume: 1,
+  /** v3 2.5: a free move sounds softer (this share of the volume). */
+  moveVolume: 0.55,
   /** Little puffs out of the bell while it fills: this often (seconds). */
   puffEvery: 0.15,
   waveColors: [0xffffff, 0xfff1b8, 0xffd23f],
@@ -2843,10 +2855,22 @@ export const KNIGHTS = {
    */
   squadMin: 5,
   squadMax: 5,
-  /** Squads at once (a level setting later). */
-  maxSquads: 4,
+  /** Squads at once (a level setting later). v3 2.5: a cap of 3 (was 4), also for the frame budget. */
+  maxSquads: 3,
   /** Most field knights at once (maxSquads full squads). */
-  maxField: 20,
+  maxField: 15,
+  /**
+   * v3 (docs/v3-plan.md 2.5): the horn aimed within boostRadius (cm) of a
+   * squad's spot boosts it: its fallen knights come back at once and it
+   * strikes every boostStrikeScale of the usual time for boostTime
+   * (seconds). Costs a charge. A free move (at the cap) is followed by
+   * moveLockout (seconds) before the next, so squads never bounce around.
+   */
+  boostRadius: 12,
+  boostTime: 10,
+  boostStrikeScale: 0.55,
+  boostColors: [0xff7a2e, 0xffb15a, 0xffe2a8],
+  moveLockout: 3,
   /**
    * v3: one knight beats about 2 bare goblins. It takes this many goblin
    * blows to go down (guards keep TROOPS.hitsToDown), and lands strikeChance
@@ -2993,6 +3017,35 @@ export const HORN_AIM = {
   offRoad: { radius: 4.5, color: 0xffffff, edgeColor: 0x1a1410, arrowSize: 3, arrowGap: 2, arrowBob: 1.5 },
   /** The ghost banner's opacity. */
   ghostOpacity: 0.55,
+  /**
+   * v3 (docs/v3-plan.md 2.5): what a blow will do shows before it is blown,
+   * where the player looks, told apart by shape first, color second, sound
+   * third. Call: a gold see-through ghost squad on the spot, the gold path
+   * from the gate. Boost: a rising red orange ring at the squad's feet,
+   * chevrons over it, ghosts where its fallen knights stood. Move: silver
+   * rings under the squad, a dashed silver path, an arrow on the spot. Cannot
+   * blow: grey, no ghost, an empty clock (no charge) or a countdown ring (the
+   * move lockout). Sizes in board cm, times in seconds.
+   */
+  callColor: 0xffc23a,
+  boostColor: 0xff6a2a,
+  moveColor: 0xdfe7f2,
+  /** The ghost knights while aiming, and solid once raised into the blow zone. */
+  ghostAimOpacity: 0.32,
+  ghostLockOpacity: 0.6,
+  /** What a blow would do is worked out again this often while aiming (a squad broke, the cap filled). */
+  replanEvery: 0.25,
+  /** The boost's ring: its radius, how high it rises, and one rise's time. */
+  boostRing: { radius: 7, rise: 6, period: 1.1 },
+  /** The boost's chevrons over the squad: how many, their size, gap, height over the ground, and how far they bob up. */
+  chevrons: { count: 2, size: 2.6, gap: 1.8, height: 9, bob: 1.2 },
+  /** The move's ring under each of its knights, the arrow on the spot (size, height), and the dashes of its path (cm on, cm off). */
+  outlineRadius: 1.6,
+  arrow: { size: 3.2, height: 4.5, bob: 0.8 },
+  dash: 2,
+  /** Cannot blow: the clock's size and height, and the ring around it (radius). */
+  clock: { size: 3.4, height: 6 },
+  blockRing: 5,
 };
 
 /**

@@ -27,7 +27,7 @@ import { WAVE_VOICES } from '../config/sounds.js';
 import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
 import { ReachCheck } from '../player/reachCheck.js';
-import { clearWave, createBattle, damageCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
+import { clearWave, createBattle, damageCastle, healCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
 import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { wallHitDamage } from '../rules/gear.js';
 import { Director } from '../rules/director.js';
@@ -103,6 +103,9 @@ const markerAt = new Vector3();
 const pouchAt = new Vector3();
 const lastAnchor = new Vector3();
 const view: ViewFrame = { head: new Vector3(), up: new Vector3(0, 1, 0), shot: new Vector3(), aim: new Vector3() };
+
+/** The red flag's cloth (world), where a heal sparkles. */
+const healAt = new Vector3();
 
 export interface BattleParts {
   stage: Stage;
@@ -648,9 +651,26 @@ export class Battle implements TutorialApi {
     return false;
   }
 
+  /**
+   * A goblin was eaten. v3 (docs/v3-plan.md 2.5): eating heals the castle
+   * (CASTLE_HEALTH.eatHeal of max, a seasoned goblin seasonedHealScale
+   * times that), the only way to heal: the red flag rises a notch with a
+   * chime and a little sparkle on its cloth.
+   */
   noteEaten(seasoned = false): void {
     this.eatenCount++;
     if (seasoned) this.pepperedEatenCount++;
+    this.heal(seasoned);
+  }
+
+  /** Heals for one eaten goblin (also the debug "Eat heal" action). */
+  heal(seasoned = false): void {
+    const gained = healCastle(this.state, CASTLE_HEALTH.eatHeal * (seasoned ? CASTLE_HEALTH.seasonedHealScale : 1));
+    if (gained <= 0) return;
+    const at = this.parts.flags.clothWorld(healAt);
+    this.parts.audio.play('castleHeal', at);
+    this.parts.particles.burst(at, CASTLE_HEALTH.healSparkle, seasoned ? 10 : 6, 0.08);
+    note(`[heal] +${gained.toFixed(1)} (castle ${this.state.health.toFixed(0)} of ${this.state.maxHealth})`);
   }
 
   notePicked(): void {

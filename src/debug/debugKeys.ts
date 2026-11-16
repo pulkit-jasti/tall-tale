@@ -175,7 +175,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     label: 'What is near my head?',
     does: 'Press while a strange object floats in front of you: a note lists every visible mesh within 40 cm of the eyes (its path, size, color, on top or not)',
   },
-  { id: 'eatRefill', group: 'food', icon: '😋', label: 'Feed the horn', does: 'What eating one goblin does (v3): the horn gains one meal of 5; the other tools recharge on time only' },
+  { id: 'eatRefill', group: 'food', icon: '😋', label: 'Eat heal', does: 'What eating one goblin does (v3 2.5): the castle heals 2% and the red flag rises a notch' },
   { id: 'showTools', group: 'food', icon: '🧰', label: 'Show tools', does: 'The horn, fly swatter, pepper shaker and bell pop onto their platforms now (normally in waves 1, 3, 4 and 5)' },
   { id: 'swat', group: 'food', icon: '🪰', label: 'Swat front', does: 'Fly swatter: swat the goblins at the front of the wall (starts its 10 s use, then a 20 s recharge)' },
   { id: 'pepper', group: 'food', icon: '🌶️', label: 'Pepper front', does: 'Pepper shaker: pepper the goblins at the front of the wall (8 s use, 20 s recharge). Peppered goblins drop all their gear and sneeze for 5 s' },

@@ -30,7 +30,7 @@ import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { holdMatrix } from '../player/hold.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
-import { chargeUsable, createCharge, endUse, readyNow, refillCharge, spendUse, tickCharge, useCharge } from '../rules/recharge.js';
+import { chargeUsable, createCharge, endUse, readyNow, spendUse, tickCharge, useCharge } from '../rules/recharge.js';
 import type { Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate } from '../world/models.js';
 import { post, toolRope } from '../world/shapes.js';
@@ -94,6 +94,7 @@ const targetQuaternion = new Quaternion();
 const targetScale = new Vector3();
 const wobbleQuaternion = new Quaternion();
 const turnTemp = new Quaternion();
+const costWhite = new Color(0xffffff);
 
 export abstract class HandTool {
   /** Platform, post, ring and rope (they move only with the tool's spot, between battles). */
@@ -188,16 +189,16 @@ export abstract class HandTool {
     return TOOLS.swings[this.name];
   }
 
-  /** v3: it charges only by eating (no time recharge): the horn. */
-  get eatCharged(): boolean {
-    return this.rechargeSeconds <= 0;
+  /** Pips on its ring: one per swing; 0 for a smooth ring. */
+  get pips(): number {
+    return this.swingUse ? this.useSeconds : 0;
   }
 
-  /** Pips on its ring: one per swing, or one per meal; 0 for a smooth ring. */
-  get pips(): number {
-    if (this.swingUse) return this.useSeconds;
-    return this.eatCharged ? TOOLS.hornMeals : 0;
-  }
+  /**
+   * v3 2.5: the ring shows the charge a blow will spend, pulsing (the horn
+   * aiming a call or a boost). Set by the tool every frame.
+   */
+  costPreview = false;
 
   /**
    * Tied down whatever the ring: dimmed, the rope on, and a grab buzzes.
@@ -208,6 +209,11 @@ export abstract class HandTool {
   /** True when the tool can be used right now: ready, or its use window is open. */
   get usable(): boolean {
     return !this.tiedDown && !this.quiet && chargeUsable(this.use);
+  }
+
+  /** True when closing a hand on it picks it up (usable; the horn also while recharging, for its free move, v3 2.5). */
+  get grabbable(): boolean {
+    return this.usable;
   }
 
   /** True while its use window is open. */
@@ -230,18 +236,6 @@ export abstract class HandTool {
   set timerHeld(on: boolean) {
     if (!on && this.timerHold && this.active) this.use.useLeft = this.useSeconds;
     this.timerHold = on;
-  }
-
-  /**
-   * A goblin was eaten (v3, docs/v3-plan.md 1.5, only the horn): its ring
-   * gains `share` (one pip), with a flash. Returns 'ready' when that filled
-   * it, 'filled' when it only moved, null when nothing happened.
-   */
-  refill(share: number): 'ready' | 'filled' | null {
-    if (!this.root.visible) return null;
-    const result = refillCharge(this.use, share);
-    if (result) this.ringFlash = TOOLS.ring.flashTime;
-    return result;
   }
 
   /** How full its charge is now, 0 to 1 (1 while ready or in use). */
@@ -429,10 +423,12 @@ export abstract class HandTool {
     const track = fill.parent!;
     const R = TOOLS.ring;
     const using = this.active;
-    const show = !this.tiedDown && (using || this.recharging);
+    // v3 2.5: the cost preview shows the full charge a blow will spend while ready.
+    const preview = this.costPreview && this.use.phase === 'ready';
+    const show = !this.tiedDown && (using || this.recharging || preview);
     track.visible = show;
     if (!show) return;
-    const share = using ? this.use.useLeft / this.useSeconds : this.use.charge;
+    const share = preview ? 1 : using ? this.use.useLeft / this.useSeconds : this.use.charge;
     // Each fill (one, or one per pip) shows its part of the share (each segment is 6 indices).
     const fills = this.ringFills;
     const total = share * fills.length;
@@ -442,8 +438,12 @@ export abstract class HandTool {
       fills[i].geometry.setDrawRange(0, Math.ceil(part * segs - 1e-6) * 6);
     }
     this.ringFlash = this.quiet ? 0 : Math.max(0, this.ringFlash - dt);
-    const restColor = this.eatCharged ? R.mealColor : R.chargeColor;
-    material.color.setHex(this.ringFlash > 0 ? R.flashColor : using ? R.useColor : restColor);
+    if (preview) {
+      // Pulses between the cost color and white: "this is what a blow spends".
+      material.color.setHex(R.costColor).lerp(costWhite, 0.5 + 0.5 * Math.sin(this.time * R.costPulse));
+      return;
+    }
+    material.color.setHex(this.ringFlash > 0 ? R.flashColor : using ? R.useColor : R.chargeColor);
   }
 
   // ---- Hands (called from GrabEat, which picks one target per hand) ----

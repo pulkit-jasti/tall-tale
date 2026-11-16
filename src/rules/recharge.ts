@@ -7,10 +7,9 @@
 // - The use window starts with the first use (a swat, a shake, a ring), not
 //   the grab, so an accidental grab never wastes it.
 // - The recharge only fills while the tool is back on its platform.
-// - v3 (docs/v3-plan.md 1.4 and 1.5): a use can count in swings instead of
-//   seconds (the swatter: spendUse per swing), and a tool can charge only by
-//   eating (the horn: no time recharge, refillCharge per meal). Eating no
-//   longer touches the other tools.
+// - v3 (docs/v3-plan.md 1.4): a use can count in swings instead of seconds
+//   (spendUse per swing; switched off for now). v3 2.5: every tool
+//   recharges on time, and eating heals the castle instead.
 
 export type ChargePhase = 'ready' | 'using' | 'recharging';
 
@@ -63,7 +62,7 @@ export function tickCharge(state: ToolCharge, dt: number, rechargeSeconds: numbe
     endUse(state);
     return 'ended';
   }
-  // A recharge of 0 never fills by time (the horn fills only by eating).
+  // A recharge of 0 never fills by time.
   if (state.phase === 'recharging' && onPlatform && rechargeSeconds > 0) {
     state.charge += dt / rechargeSeconds;
     if (state.charge < 1) return null;
@@ -83,25 +82,6 @@ export function spendUse(state: ToolCharge): boolean {
   if (state.useLeft > 0) return false;
   endUse(state);
   return true;
-}
-
-/**
- * Eating (the horn): a recharging ring jumps forward by `share`. Returns
- * 'ready' when that filled it, 'filled' when it only moved, null when it
- * was not recharging.
- */
-export function refillCharge(state: ToolCharge, share: number): 'ready' | 'filled' | null {
-  if (state.phase !== 'recharging' || share <= 0) return null;
-  state.charge = Math.min(1, state.charge + share);
-  // A float sum of fifths can land a hair under 1.
-  if (state.charge < 1 - 1e-6) return 'filled';
-  readyNow(state);
-  return 'ready';
-}
-
-/** The share of a full horn one eaten goblin gives: 1 of `meals`, a seasoned one `seasonedMeals`. */
-export function mealShare(seasoned: boolean, meals: number, seasonedMeals: number): number {
-  return (seasoned ? seasonedMeals : 1) / Math.max(1, meals);
 }
 
 /** Ready at once (a new battle, the tutorial's help, debug). */

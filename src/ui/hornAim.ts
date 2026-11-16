@@ -29,6 +29,7 @@
 import {
   AdditiveBlending,
   BufferAttribute,
+  CanvasTexture,
   CircleGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -37,19 +38,34 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  type Object3D,
   RingGeometry,
   Shape,
   ShapeGeometry,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
   Vector3,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HORN_AIM, KNIGHTS, RENDER_ORDER } from '../config/game.js';
+import type { SoundName } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
 import { groundAt } from '../rules/boardMath.js';
 import type { RoadPoint } from '../rules/roadRoute.js';
-import type { Troops } from '../units/troops.js';
+import type { HornPlan, Troops } from '../units/troops.js';
 import { knightBanner } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
+import { iconTextureSource, type UiImageName } from './uiImages.js';
+
+/** What the horn would do (v3 2.5), or why it cannot blow. */
+export type HornKind = HornPlan['kind'];
+export type HornBlock = 'charge' | 'lockout';
+
+const HINT_SOUND: Record<HornKind, SoundName> = { new: 'hornHintCall', boost: 'hornHintBoost', move: 'hornHintMove' };
+const KIND_COLOR: Record<HornKind, number> = { new: HORN_AIM.callColor, boost: HORN_AIM.boostColor, move: HORN_AIM.moveColor };
+/** The most ghost knights and move rings shown at once (a full squad). */
+const GHOSTS = KNIGHTS.squadMax;
 
 const origin = new Vector3();
 const ahead = new Vector3();
@@ -132,8 +148,33 @@ export class HornAim {
   /** A different spot the head points at, and for how long (the consensus window). */
   private candidate: RoadPoint = { road: 0, along: 0 };
   private candidateTime = 0;
-  /** What the horn would do there (null: nothing can go). */
-  private canGo = false;
+  /** What the horn would do there (v3 2.5: call, boost or move; null: nothing can go). */
+  private plan: HornPlan | null = null;
+  /** Whether the horn can pay for a plan now (a charge for a call or boost, the lockout over for a move). Set by the game. */
+  canPay: (plan: HornPlan) => boolean = () => true;
+  /** The move lockout's share left, 0 to 1 (the countdown ring). Set by the game. */
+  lockShare: () => number = () => 0;
+  /** Time until the plan is worked out again (HORN_AIM.replanEvery). */
+  private replanIn = 0;
+  /** The kind and squad the settling sound last played for (it plays once each time the kind settles). */
+  private hinted: HornPlan | null = null;
+  /** The called spot's kind (its color and dashes stay while the knights march). */
+  private calledKind: HornKind = 'new';
+  // ---- v3 2.5 previews ----
+  private ghosts: Object3D[] = [];
+  private ghostMaterial = new MeshBasicMaterial({ color: HORN_AIM.callColor, transparent: true, opacity: HORN_AIM.ghostAimOpacity, depthWrite: false });
+  private ghostPosts = Array.from({ length: GHOSTS }, () => new Vector3());
+  private boostRing: Mesh;
+  private boostMaterial: MeshBasicMaterial;
+  private outlines: Mesh[] = [];
+  private outlineMaterial: MeshBasicMaterial;
+  private blockRing: Mesh;
+  private blockMaterial: MeshBasicMaterial;
+  private lockRing: Mesh;
+  private chevrons: Sprite[] = [];
+  private arrow: Sprite | null = null;
+  private clock: Sprite | null = null;
+  private iconsTried = false;
   private time = 0;
 
   constructor(
@@ -185,6 +226,114 @@ export class HornAim {
     this.ghostCloth = this.ghost.userData.cloth as MeshBasicMaterial;
     stage.boardSpin.add(this.ghost);
     this.buildOffRoad();
+    // v3 2.5 previews. The boost's rising ring (additive, flat, faded by opacity as it rises).
+    const flatRing = (inner: number, segments = 40): RingGeometry => new RingGeometry(inner, 1, segments, 1).rotateX(-Math.PI / 2);
+    this.boostMaterial = new MeshBasicMaterial({ color: HORN_AIM.boostColor, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide, fog: false });
+    this.boostRing = new Mesh(flatRing(0.82), this.boostMaterial);
+    this.boostRing.visible = false;
+    // The move's silver ring under each of its knights.
+    this.outlineMaterial = new MeshBasicMaterial({ color: HORN_AIM.moveColor, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: DoubleSide, fog: false });
+    for (let i = 0; i < GHOSTS; i++) {
+      const ring = new Mesh(flatRing(0.7, 24), this.outlineMaterial);
+      ring.renderOrder = RENDER_ORDER.hornAim;
+      ring.visible = false;
+      this.outlines.push(ring);
+    }
+    // Cannot blow: an empty grey ring round the spot, and the move lockout's countdown ring (its draw range shrinks).
+    this.blockMaterial = new MeshBasicMaterial({ color: HORN_AIM.noneColor, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: DoubleSide, fog: false });
+    this.blockRing = new Mesh(flatRing(0.86), this.blockMaterial);
+    this.blockRing.renderOrder = RENDER_ORDER.hornAim;
+    this.blockRing.visible = false;
+    this.lockRing = new Mesh(flatRing(0.7, 48), new MeshBasicMaterial({ color: HORN_AIM.moveColor, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false, side: DoubleSide, fog: false }));
+    this.lockRing.renderOrder = RENDER_ORDER.hornAim + 1;
+    this.lockRing.visible = false;
+    stage.boardSpin.add(this.boostRing, this.blockRing, this.lockRing, ...this.outlines);
+  }
+
+  /** The icon sprites (Kenney icons, public/ui), made the first time they are needed (the images load at start). */
+  private ensureIcons(): void {
+    if (this.iconsTried) return;
+    this.iconsTried = true;
+    const sprite = (name: UiImageName, color: number): Sprite | null => {
+      const source = iconTextureSource(name);
+      if (!source) return null;
+      const texture = new CanvasTexture(source);
+      texture.colorSpace = SRGBColorSpace;
+      const s = new Sprite(new SpriteMaterial({ map: texture, color, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+      s.renderOrder = RENDER_ORDER.hornAim + 2;
+      s.visible = false;
+      this.stage.boardSpin.add(s);
+      return s;
+    };
+    for (let i = 0; i < HORN_AIM.chevrons.count; i++) {
+      const c = sprite('chevron', HORN_AIM.boostColor);
+      if (c) this.chevrons.push(c);
+    }
+    this.arrow = sprite('arrowDown', HORN_AIM.moveColor);
+    this.clock = sprite('clock', 0xd0d0d0);
+  }
+
+  /** The ghost knights, made the first time (the knight models load at start). */
+  private ensureGhosts(): boolean {
+    if (this.ghosts.length > 0) return true;
+    for (let i = 0; i < GHOSTS; i++) {
+      const g = this.troops.makeGhost(this.ghostMaterial);
+      if (!g) return false;
+      this.ghosts.push(g);
+      this.stage.boardSpin.add(g);
+    }
+    mark('horn ghosts built');
+    return true;
+  }
+
+  /** Every v3 2.5 preview hidden. */
+  private hidePreviews(): void {
+    for (const g of this.ghosts) g.visible = false;
+    for (const o of this.outlines) o.visible = false;
+    for (const c of this.chevrons) c.visible = false;
+    if (this.arrow) this.arrow.visible = false;
+    if (this.clock) this.clock.visible = false;
+    this.boostRing.visible = this.blockRing.visible = this.lockRing.visible = false;
+  }
+
+  /** Ghost knights at the first `count` of `posts`, facing away from the castle. */
+  private showGhosts(posts: Vector3[], count: number, color: number, locked: boolean): void {
+    if (!this.ensureGhosts()) return;
+    this.ghostMaterial.color.setHex(color);
+    this.ghostMaterial.opacity = locked ? HORN_AIM.ghostLockOpacity : HORN_AIM.ghostAimOpacity;
+    for (let i = 0; i < this.ghosts.length; i++) {
+      const g = this.ghosts[i];
+      g.visible = i < count;
+      if (!g.visible) continue;
+      const p = posts[i];
+      g.position.set(p.x, groundAt(p.x, p.z), p.z);
+      g.rotation.y = Math.atan2(p.x, p.z);
+    }
+  }
+
+  /** What a blow would do now, if it can blow (else null). */
+  get kind(): HornKind | null {
+    return this.valid ? this.plan!.kind : null;
+  }
+
+  /** Why the horn cannot blow at a road spot it could otherwise act on (no charge, the move lockout), or null. */
+  get blocked(): HornBlock | null {
+    if (!this.spot || !this.plan || this.canPay(this.plan)) return null;
+    return this.plan.kind === 'move' ? 'lockout' : 'charge';
+  }
+
+  /** The plan for the spot changed (the look settled somewhere new, or the board changed): the settling sound once per new kind. */
+  private setPlan(plan: HornPlan | null): void {
+    this.plan = plan;
+    this.troops.answering = plan?.kind === 'move' ? plan.squad : null;
+    const old = this.hinted;
+    const same = !!old && !!plan && old.kind === plan.kind && (old.kind === 'new' || (old as { squad: unknown }).squad === (plan as { squad: unknown }).squad);
+    if (same || !plan || !this.spot) {
+      if (!plan) this.hinted = null;
+      return;
+    }
+    this.hinted = plan;
+    this.audio.play(HINT_SOUND[plan.kind], this.stage.boardSpin.localToWorld(this.troops.roadPointPosition(this.spot, at)), 1, 0.15);
   }
 
   /**
@@ -250,12 +399,31 @@ export class HornAim {
     this.offArrow.visible = true;
   }
 
-  /** The horn sounded: the called spot stays marked, with its path, until the squad arrives (see showCalled). */
-  markCalled(point: RoadPoint): void {
+  /**
+   * The horn is about to sound at `point` (called before the knights are
+   * sent, so the path is the walk they will take): the spot stays marked,
+   * with its path, until the squad arrives (see showCalled). A boost has no
+   * walk, so nothing stays. Returns the kind the call will be, or null.
+   */
+  markCalled(point: RoadPoint): HornKind | null {
+    const plan = this.troops.plan(point);
+    this.hidePreviews();
+    if (!plan || plan.kind === 'boost') {
+      this.called = null;
+      return plan?.kind ?? null;
+    }
     this.called = { road: point.road, along: point.along };
     this.calledTime = 0;
+    this.calledKind = plan.kind;
     // The look back may have picked a spot a little off the one shown: the path goes to the called one.
     this.buildPath(this.called);
+    return plan.kind;
+  }
+
+  /** The call did not go after all: nothing stays marked. */
+  cancelCalled(): void {
+    this.called = null;
+    this.hide();
   }
 
   /**
@@ -275,9 +443,12 @@ export class HornAim {
     this.troops.roadPointPosition(called, probe);
     const ground = groundAt(probe.x, probe.z);
     this.offRing.visible = this.offArrow.visible = false;
-    this.poolMaterial.color.setHex(HORN_AIM.lockColor);
-    this.pillarMaterial.color.setHex(HORN_AIM.lockColor);
-    this.ghostCloth.color.setHex(HORN_AIM.lockColor);
+    // Gold for a new squad, silver for a move (v3 2.5).
+    const color = KIND_COLOR[this.calledKind];
+    this.poolMaterial.color.setHex(color);
+    this.pillarMaterial.color.setHex(color);
+    this.pathMaterial.color.setHex(color);
+    this.ghostCloth.color.setHex(color);
     this.ghostCloth.opacity = 0.95;
     this.pool.position.set(probe.x, ground + 0.3, probe.z);
     this.pool.scale.setScalar(HORN_AIM.poolRadius);
@@ -285,7 +456,7 @@ export class HornAim {
     this.pool.visible = true;
     this.ghost.position.set(probe.x, ground, probe.z);
     this.ghost.rotation.y = Math.atan2(probe.x, probe.z);
-    this.ghost.visible = true;
+    this.ghost.visible = this.calledKind === 'new';
     this.pillar.position.set(probe.x, ground, probe.z);
     this.pillar.scale.set(HORN_AIM.pillarRadius, HORN_AIM.pillarHeight, HORN_AIM.pillarRadius);
     this.pillarMaterial.opacity = HORN_AIM.pillarOpacity;
@@ -293,9 +464,9 @@ export class HornAim {
     if (this.path.visible) this.pathMaterial.opacity = HORN_AIM.pathOpacity * (0.75 + 0.25 * Math.sin(this.time * 6));
   }
 
-  /** A road spot is aimed at and a squad can go there: the horn may blow. */
+  /** A road spot is aimed at, a squad can act there, and the horn can pay for it: the horn may blow. */
   get valid(): boolean {
-    return this.spot !== null && this.canGo;
+    return this.spot !== null && this.plan !== null && this.canPay(this.plan);
   }
 
   /** The aimed road spot, or null. */
@@ -334,6 +505,10 @@ export class HornAim {
     this.wasReady = false;
     for (const h of this.history) h.time = -Infinity;
     this.troops.answering = null;
+    this.plan = null;
+    this.hinted = null;
+    this.replanIn = 0;
+    this.hidePreviews();
   }
 
   /**
@@ -368,9 +543,17 @@ export class HornAim {
       this.missTime += dt;
       if (this.missTime >= HORN_AIM.loseAfter || !this.spot) {
         this.spot = null;
-        this.canGo = false;
-        this.troops.answering = null;
+        this.setPlan(null);
       }
+    }
+    // What a blow would do is worked out again now and then (a squad broke, the cap filled, a squad arrived here).
+    this.replanIn -= dt;
+    if (this.spot && this.replanIn <= 0) {
+      this.replanIn = HORN_AIM.replanEvery;
+      const before = this.plan;
+      this.setPlan(this.troops.plan(this.spot));
+      // A new kind (a move became a boost...) needs its own path.
+      if (before?.kind !== this.plan?.kind) this.pathFor = null;
     }
     this.updatePath();
     this.remember();
@@ -381,6 +564,95 @@ export class HornAim {
     }
     this.wasReady = isReady;
     this.show(dt, hit, isReady, charge);
+    this.showPreview(isReady);
+  }
+
+  /**
+   * v3 2.5: what this blow will do, on the board where the player looks.
+   * Call: gold ghost knights on the spot. Boost: a rising ring at the squad's
+   * feet, chevrons over it, ghosts where its fallen stood. Move: silver rings
+   * under its knights and an arrow on the spot. Cannot blow: an empty ring
+   * with a clock (no charge), or a countdown ring (the move lockout).
+   */
+  private showPreview(locked: boolean): void {
+    this.hidePreviews();
+    const plan = this.plan;
+    const spot = this.spot;
+    if (!plan || !spot) return;
+    this.ensureIcons();
+    const block = this.blocked;
+    const s = this.shown;
+    const ground = groundAt(s.x, s.z);
+    if (block) {
+      // Grey, no ghost, the reason as a picture.
+      if (block === 'charge') {
+        this.blockRing.position.set(s.x, ground + 0.45, s.z);
+        this.blockRing.scale.setScalar(HORN_AIM.blockRing);
+        this.blockRing.visible = true;
+        if (this.clock) {
+          this.clock.position.set(s.x, ground + HORN_AIM.clock.height, s.z);
+          this.clock.scale.setScalar(HORN_AIM.clock.size);
+          this.clock.visible = true;
+        }
+      } else {
+        const share = Math.max(0, Math.min(1, this.lockShare()));
+        const geometry = this.lockRing.geometry as RingGeometry;
+        geometry.setDrawRange(0, Math.ceil(share * geometry.parameters.thetaSegments) * 6);
+        this.lockRing.position.set(s.x, ground + 0.45, s.z);
+        this.lockRing.scale.setScalar(HORN_AIM.blockRing);
+        this.lockRing.visible = share > 0;
+        this.blockRing.position.copy(this.lockRing.position);
+        this.blockRing.scale.setScalar(HORN_AIM.blockRing);
+        this.blockRing.visible = true;
+      }
+      return;
+    }
+    const color = KIND_COLOR[plan.kind];
+    if (plan.kind === 'new') {
+      this.troops.postsAt(spot, GHOSTS, this.ghostPosts);
+      this.showGhosts(this.ghostPosts, GHOSTS, color, locked);
+      return;
+    }
+    if (plan.kind === 'boost') {
+      const post = plan.squad.post;
+      const g = groundAt(post.x, post.z);
+      // The ring rises from its feet and fades, again and again.
+      const B = HORN_AIM.boostRing;
+      const t = (this.time % B.period) / B.period;
+      this.boostRing.position.set(post.x, g + 0.3 + B.rise * t, post.z);
+      this.boostRing.scale.setScalar(B.radius * (1 - 0.25 * t));
+      this.boostMaterial.opacity = (locked ? 0.95 : 0.7) * (1 - t);
+      this.boostRing.visible = true;
+      const C = HORN_AIM.chevrons;
+      for (let i = 0; i < this.chevrons.length; i++) {
+        const c = this.chevrons[i];
+        const bob = C.bob * ((this.time * 1.6 + i * 0.5) % 1);
+        c.position.set(post.x, g + C.height + i * C.gap + bob, post.z);
+        c.scale.setScalar(C.size);
+        c.material.opacity = locked ? 1 : 0.8;
+        c.visible = true;
+      }
+      const fallen = this.troops.fallenPosts(plan.squad, this.ghostPosts);
+      if (fallen > 0) this.showGhosts(this.ghostPosts, fallen, color, locked);
+      return;
+    }
+    // Move: silver rings under the knights that will walk, and an arrow on the spot.
+    const members = this.troops.membersOf(plan.squad);
+    for (let i = 0; i < this.outlines.length && i < members.length; i++) {
+      const p = members[i].root.position;
+      const o = this.outlines[i];
+      o.position.set(p.x, groundAt(p.x, p.z) + 0.35, p.z);
+      o.scale.setScalar(HORN_AIM.outlineRadius);
+      o.visible = true;
+    }
+    this.outlineMaterial.opacity = locked ? 1 : 0.75;
+    if (this.arrow) {
+      const A = HORN_AIM.arrow;
+      this.arrow.position.set(s.x, ground + A.height + A.bob * (0.5 + 0.5 * Math.sin(this.time * 5)), s.z);
+      this.arrow.scale.setScalar(A.size);
+      this.arrow.material.opacity = locked ? 1 : 0.8;
+      this.arrow.visible = true;
+    }
   }
 
   /** This frame's spot into the history ring (for callTarget). */
@@ -397,7 +669,8 @@ export class HornAim {
 
   /** The path shows as soon as there is a spot, built again only when the spot moves to another road or far enough along it. */
   private updatePath(): void {
-    const spot = this.valid ? this.spot : null;
+    // A boost has no walk (v3 2.5): no path.
+    const spot = this.valid && this.plan?.kind !== 'boost' ? this.spot : null;
     if (!spot) {
       this.path.visible = false;
       this.pathFor = null;
@@ -436,6 +709,9 @@ export class HornAim {
     const half = HORN_AIM.pathWidth / 2;
     const p = this.pathPositions;
     let hasPrev = false;
+    // A move's path is dashed (v3 2.5): only every other HORN_AIM.dash cm is drawn.
+    const dashed = (this.called ? this.calledKind : this.plan?.kind) === 'move';
+    let walked = 0;
     for (const leg of legs) {
       const road = this.troops.road(leg.road);
       const length = Math.abs(leg.to - leg.from);
@@ -447,7 +723,8 @@ export class HornAim {
         road.surfaceAt(d, half * way, edgeR);
         edgeL.y += HORN_AIM.pathLift;
         edgeR.y += HORN_AIM.pathLift;
-        if (hasPrev) {
+        if (hasPrev) walked += length / steps;
+        if (hasPrev && (!dashed || Math.floor(walked / HORN_AIM.dash) % 2 === 0)) {
           // Two triangles from the last pair of points to this one.
           const o = n * 18;
           writePoint(p, o, prevL);
@@ -512,19 +789,24 @@ export class HornAim {
     }
     this.candidateTime = 0;
     this.spot = { road: point.road, along: point.along };
-    const plan = this.troops.plan(this.spot);
-    this.canGo = plan !== null;
-    this.troops.answering = plan?.kind === 'move' ? plan.squad : null;
+    // The kind only changes here (the gaze settled) or on a re-plan, so it never flickers.
+    const before = this.plan?.kind;
+    this.setPlan(this.troops.plan(this.spot));
+    this.replanIn = HORN_AIM.replanEvery;
+    if (before !== this.plan?.kind) this.pathFor = null;
   }
 
   /** The pool, the pillar and the ghost banner at the spot (grey without one, gold when ready to blow), and the path's pulse. */
   private show(dt: number, hit: Vector3 | null, locked: boolean, charge: number): void {
-    const color = locked ? HORN_AIM.lockColor : this.valid ? HORN_AIM.color : HORN_AIM.noneColor;
+    // v3 2.5: the kind's own color (gold call, red orange boost, silver move), grey when it cannot blow.
+    const kind = this.kind;
+    const color = kind ? KIND_COLOR[kind] : HORN_AIM.noneColor;
     this.pillarMaterial.color.setHex(color);
     this.poolMaterial.color.setHex(color);
-    this.ghostCloth.color.setHex(locked ? HORN_AIM.lockColor : KNIGHT_BLUE);
+    this.pathMaterial.color.setHex(color);
+    this.ghostCloth.color.setHex(locked ? HORN_AIM.callColor : KNIGHT_BLUE);
     this.ghostCloth.opacity = locked ? 0.95 : HORN_AIM.ghostOpacity;
-    if (this.path.visible) this.pathMaterial.opacity = HORN_AIM.pathOpacity * (0.75 + 0.25 * Math.sin(this.time * 6));
+    if (this.path.visible) this.pathMaterial.opacity = HORN_AIM.pathOpacity * (locked ? 1.2 : 0.75 + 0.25 * Math.sin(this.time * 6));
     // The pool: at the road spot, or grey where the look meets the ground.
     const spot = this.spot;
     if (spot) this.troops.roadPointPosition(spot, probe);
@@ -544,17 +826,17 @@ export class HornAim {
       this.pool.visible = false;
       this.showOffRoad(false);
     }
-    // The ghost banner where they would plant theirs.
-    this.ghost.visible = this.valid;
+    // The ghost banner where a new squad would plant theirs (a call only, v3 2.5).
+    this.ghost.visible = kind === 'new';
     const ground = groundAt(this.shown.x, this.shown.z);
-    if (this.valid) {
+    if (this.ghost.visible) {
       this.ghost.position.set(this.shown.x, ground, this.shown.z);
       // Its cloth trails toward the castle, as if planted facing the enemy.
       this.ghost.rotation.y = Math.atan2(this.shown.x, this.shown.z);
     }
     // The pillar: up from the spot, taller as the call charges once locked, so it reads over the hills.
     this.pillar.visible = this.valid;
-    if (this.valid) {
+    if (this.pillar.visible) {
       const height = HORN_AIM.pillarHeight * (locked ? 1 + HORN_AIM.pillarGrow * charge : 1);
       this.pillar.position.set(this.shown.x, ground, this.shown.z);
       this.pillar.scale.set(HORN_AIM.pillarRadius, height, HORN_AIM.pillarRadius);

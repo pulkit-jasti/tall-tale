@@ -15,6 +15,7 @@ import {
   GOBLIN_RULES,
   HORN,
   JUICE,
+  KNIGHTS,
   MAPS,
   MENU,
   PAUSE,
@@ -24,12 +25,10 @@ import {
   STRESS_TEST,
   TIMES_OF_DAY,
   TOOL_SPOTS,
-  TOOLS,
   TRIGGERS,
   XR,
   type TimeOfDay,
 } from './config/game.js';
-import { mealShare } from './rules/recharge.js';
 import type { DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -441,10 +440,8 @@ export class GameSystem extends createSystem({}) {
       crank: this.handles,
       setGarrison: (rules) => garrison.setRules(rules),
     });
-    this.grabEat.onEat = (goblin) => {
-      this.battle.noteEaten(goblin.seasoned);
-      this.feedHorn(goblin.seasoned);
-    };
+    // v3 2.5: eating heals the castle (the battle counts it and heals).
+    this.grabEat.onEat = (goblin) => this.battle.noteEaten(goblin.seasoned);
     // Juice hooks: a star and a ring on every knockout, a big hit for blasts and pops.
     this.goblins.onKnockOut = (_goblin, world) => this.juice.knockout(world, this.stage.boardScale);
     this.goblins.onArmor = (_goblin, world) => {
@@ -461,6 +458,10 @@ export class GameSystem extends createSystem({}) {
     this.hornAim = new HornAim(this.stage, this.troops, this.audio);
     this.glass = new GlassSign(root);
     this.horn.aimValid = () => this.hornAim.valid;
+    // v3 2.5: call, boost or move. A call or a boost costs a charge; a move is free after its lockout.
+    this.horn.aimKind = () => this.hornAim.kind;
+    this.hornAim.canPay = (plan) => (plan.kind === 'move' ? this.troops.moveLock <= 0 : this.horn.charged);
+    this.hornAim.lockShare = () => this.troops.moveLock / KNIGHTS.moveLockout;
     this.horn.onCall = (blown) => {
       // The full bar stays up a moment after the call (see updateGlass).
       this.blowShown = GLASS_SIGN.blownHold;
@@ -468,8 +469,13 @@ export class GameSystem extends createSystem({}) {
       // The spot looked at a moment before the blow (blowing moves the head a little).
       const target = this.hornAim.callTarget();
       // Debug (no hands, no aim): the road in front.
-      if (target && this.troops.command(target)) this.hornAim.markCalled(target);
-      else this.troops.charge(this.stage.spin);
+      if (!target) {
+        this.troops.charge(this.stage.spin);
+        return;
+      }
+      // The path is marked first (the walk the knights will take), then they go.
+      this.hornAim.markCalled(target);
+      if (!this.troops.command(target)) this.hornAim.cancelCalled();
     };
     // Their crash into the goblins: a hit stop, a ring and a pow star.
     this.troops.onCrash = (world) => {
@@ -568,20 +574,6 @@ export class GameSystem extends createSystem({}) {
 
   private get immersive(): boolean {
     return this.visibilityState.value !== VisibilityState.NonImmersive;
-  }
-
-  /** The head in XR, the camera on a desktop. */
-  /**
-   * v3 (docs/v3-plan.md 1.5): a goblin was eaten, and only the horn gains
-   * from it: one pip of its ring (a seasoned goblin two), with a chime, and
-   * a little glow. Full: it pulses Ready until grabbed.
-   */
-  private feedHorn(seasoned: boolean): void {
-    const result = this.horn.refill(mealShare(seasoned, TOOLS.hornMeals, TOOLS.seasonedMeals));
-    if (!result) return;
-    this.audio.play('foodAdded', undefined, result === 'ready' ? 1 : 0.8, 0.1);
-    if (result === 'ready') this.horn.beckon = true;
-    note(`meal: horn ${Math.round(this.horn.chargeShare * TOOLS.hornMeals)} of ${TOOLS.hornMeals}`);
   }
 
   /**
@@ -1325,17 +1317,27 @@ export class GameSystem extends createSystem({}) {
     }
     let text = this.battle.glassText;
     if (!text && horn.aiming) {
+      // v3 2.5: what the blow will do (call, boost, move), or why it cannot.
+      const kind = this.hornAim.kind;
+      const block = this.hornAim.blocked;
+      const verb = kind === 'boost' ? 'Boost' : kind === 'move' ? 'Move' : 'Call';
       text = !this.hornAim.valid
-        ? 'Look at a road'
+        ? block === 'charge'
+          ? 'The horn is resting'
+          : block === 'lockout'
+            ? 'Wait to move again'
+            : 'Look at a road'
         : horn.ready
           ? horn.listening
-            ? 'Blow!'
+            ? `${verb}: blow!`
             : horn.micSilent
               ? 'No mic sound: hold it there'
-              : 'Hold it there'
-          : horn.listening
-            ? 'Raise it and blow'
-            : 'Raise it in front of you';
+              : `${verb}: hold it there`
+          : horn.inZone
+            ? 'Lower it, then raise it again'
+            : horn.listening
+              ? `${verb}: raise it and blow`
+              : `${verb}: raise it in front of you`;
     }
     // Just blown: the bar stays full and gold for a moment, so the player sees the blow was loud enough
     // (headset test: it vanished the instant it passed the line).
@@ -1676,8 +1678,8 @@ export class GameSystem extends createSystem({}) {
         this.noteNearHead();
         break;
       case 'eatRefill':
-        // What eating one goblin does (only the horn gains a meal), without a goblin.
-        this.feedHorn(false);
+        // What eating one goblin does (v3 2.5: heals the castle), without a goblin.
+        this.battle.heal(false);
         break;
       case 'showTools':
         for (const tool of this.tools) if (!tool.visible) tool.appear();

@@ -110,7 +110,18 @@ export interface Squad {
   pending: number;
   /** Broke (too few left): its last knights march home. */
   broken: boolean;
+  /** How many knights it was called with (a boost brings it back to this, v3 2.5). */
+  size: number;
+  /** A horn boost: its knights strike faster for this long yet (seconds, v3 2.5). */
+  boostLeft: number;
 }
+
+/**
+ * What the horn would do at a road spot (v3, docs/v3-plan.md 2.5): call a
+ * new squad (below the cap, costs a charge), boost the squad standing there
+ * (costs a charge), or move the nearest squad there (at the cap, free).
+ */
+export type HornPlan = { kind: 'new' } | { kind: 'boost'; squad: Squad } | { kind: 'move'; squad: Squad };
 
 export class Troop {
   readonly root = new Group();
@@ -140,6 +151,8 @@ export class Troop {
   shield = false;
   /** A field knight's squad, and its own spot at the junction (board, cm). Null for the garrison. */
   squad: Squad | null = null;
+  /** Its place in the squad (0 carries the banner), for a boost to find the empty places. */
+  slot = 0;
   readonly post = new Vector3();
   /** A field knight reached its squad's spot (after a fight it walks back to its own place there). */
   arrived = false;
@@ -489,6 +502,7 @@ export class Troops {
     this.answering = null;
     this.homeTimer = -1;
     this.lastCalled = null;
+    this.moveLock = 0;
     this.arrows.clear();
     this.onClear();
   }
@@ -541,7 +555,8 @@ export class Troops {
    */
   previewLegs(target: RoadPoint): Leg[] | null {
     const plan = this.plan(target);
-    if (!plan) return null;
+    // A boost has no walk (v3 2.5): the squad is already there.
+    if (!plan || plan.kind === 'boost') return null;
     const graph = this.network.graph;
     if (plan.kind === 'move') return legsToPoint(graph, this.lengths, plan.squad.anchor, target);
     const home = legsToWall(graph, this.lengths, target);
@@ -558,21 +573,38 @@ export class Troops {
     return this.squads.filter((s) => !s.broken);
   }
 
+  /** After a free horn move, the next move waits this long yet (seconds, KNIGHTS.moveLockout). */
+  moveLock = 0;
+
   /**
-   * What the horn would do for a road spot: send a new squad (under the
-   * limit), or move the squad nearest it (at the limit). Null when no squad
-   * can get there (every road to it is cut).
+   * What the horn would do for a road spot (v3, docs/v3-plan.md 2.5): boost
+   * the squad standing there (within KNIGHTS.boostRadius of its spot), call a
+   * new squad (below the cap), or move the squad nearest it (at the cap).
+   * Null when no squad can get there (every road to it is cut). Whether the
+   * horn can pay for it (a charge, the move lockout) is the horn's question.
    */
-  plan(target: RoadPoint): { kind: 'new' } | { kind: 'move'; squad: Squad } | null {
+  plan(target: RoadPoint): HornPlan | null {
     const graph = this.network.graph;
     const active = this.activeSquads;
+    this.network.roads[target.road].pointAt(target.along, 0, temp);
+    // Aimed at a squad: a boost.
+    let near: Squad | null = null;
+    let nearest = KNIGHTS.boostRadius * KNIGHTS.boostRadius;
+    for (const s of active) {
+      const dx = s.post.x - temp.x;
+      const dz = s.post.z - temp.z;
+      const d = dx * dx + dz * dz;
+      if (d < nearest) {
+        nearest = d;
+        near = s;
+      }
+    }
+    if (near) return { kind: 'boost', squad: near };
     if (active.length < KNIGHTS.maxSquads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField) {
       return legsToWall(graph, this.lengths, target) ? { kind: 'new' } : null;
     }
     let squad: Squad | null = null;
     let best = Infinity;
-    const p = this.network.roads[target.road];
-    p.pointAt(target.along, 0, temp);
     for (const s of active) {
       const d = s.post.distanceToSquared(temp);
       if (d < best && legsToPoint(graph, this.lengths, s.anchor, target)) {
@@ -584,31 +616,39 @@ export class Troops {
   }
 
   /**
-   * The horn sounds at a road spot (v2): under the squad limit a new squad of
-   * KNIGHTS.squadMin to squadMax (random) swordsmen and spearmen bursts out
-   * of the nearest wall entry and sprints there along the roads; at the
-   * limit the squad nearest the spot goes there instead. Returns false if
-   * nothing could go.
+   * The horn sounds at a road spot (v2, v3 2.5): a boost to the squad there;
+   * under the squad cap a new squad of KNIGHTS.squadMin to squadMax
+   * swordsmen and spearmen bursts out of the nearest wall entry and sprints
+   * there along the roads; at the cap the squad nearest the spot goes there
+   * instead (free, then KNIGHTS.moveLockout before the next move). Returns
+   * what it did, or null if nothing could go.
    */
-  command(target: RoadPoint): boolean {
+  command(target: RoadPoint): HornPlan['kind'] | null {
     if (!this.on) this.on = true;
     const plan = this.plan(target);
-    if (!plan) return false;
+    if (!plan) return null;
+    if (plan.kind === 'boost') {
+      this.boostSquad(plan.squad);
+      this.lastCalled = plan.squad;
+      return 'boost';
+    }
     if (plan.kind === 'move') {
       this.moveSquad(plan.squad, target);
       this.lastCalled = plan.squad;
-      return true;
+      this.moveLock = KNIGHTS.moveLockout;
+      return 'move';
     }
     const graph = this.network.graph;
     const home = legsToWall(graph, this.lengths, target);
-    if (!home) return false;
+    if (!home) return null;
     const legs = reverseLegs(home);
-    const squad: Squad = { crashed: false, anchor: { ...target }, post: new Vector3(), out: new Vector3(), members: [], pending: 0, broken: false };
+    const squad: Squad = { crashed: false, anchor: { ...target }, post: new Vector3(), out: new Vector3(), members: [], pending: 0, broken: false, size: 0, boostLeft: 0 };
     this.placeSquad(squad, target);
     const room = Math.max(0, KNIGHTS.maxField - this.fieldCount);
     // In the tutorial a full squad comes (so its first fight is won); otherwise squadMin to squadMax (v3: a fixed 5).
     const size = Math.min(room, this.fullSquads ? KNIGHTS.squadMax : KNIGHTS.squadMin + this.rng.int(KNIGHTS.squadMax - KNIGHTS.squadMin + 1));
-    if (size <= 0) return false;
+    if (size <= 0) return null;
+    squad.size = size;
     for (let i = 0; i < size; i++) this.waiting.push({ legs, squad, kind: this.pickFieldKind(), wait: i * KNIGHTS.leaveGap, slot: i });
     squad.pending = size;
     this.squads.push(squad);
@@ -619,8 +659,120 @@ export class Troops {
     this.board.localToWorld(temp);
     this.audio.play('swordClash', temp, 0.8);
     this.particles.burst(temp, TROOPS.poofColors, 10, 0.12);
-    return true;
+    return 'new';
   }
+
+  /**
+   * A horn boost (v3 2.5): instant, where a new squad takes seconds to march.
+   * The squad's fallen knights come back at once at their places (a poof
+   * each), the ones standing shake off their wounds, and the whole squad
+   * strikes faster for KNIGHTS.boostTime.
+   */
+  private boostSquad(squad: Squad): void {
+    squad.boostLeft = KNIGHTS.boostTime;
+    const used = new Set<number>();
+    let bearer = false;
+    for (const t of squad.members) {
+      if (t.mode === 'dead' || t.squad !== squad) continue;
+      t.hits = 0;
+      used.add(t.slot);
+      if (t.banner?.visible) bearer = true;
+    }
+    for (const w of this.waiting) if (w.squad === squad) used.add(w.slot);
+    for (let slot = 0; slot < squad.size; slot++) {
+      if (used.has(slot) || this.aliveCount >= TROOPS.max) continue;
+      const troop = this.obtain(this.pickFieldKind());
+      if (!troop) break;
+      this.prepare(troop);
+      troop.squad = squad;
+      troop.slot = slot;
+      squad.members.push(troop);
+      this.placePost(troop, squad, slot);
+      troop.root.position.copy(troop.post);
+      troop.legs = [];
+      troop.leg = 0;
+      troop.outward = true;
+      troop.arrived = true;
+      troop.offset = 0;
+      troop.speed = TROOPS.speed * TROOP_KINDS[troop.kind].speed;
+      troop.mode = 'holding';
+      troop.play('idle');
+      troop.face(squad.out.x, squad.out.z);
+      if (!bearer) {
+        this.showBanner(troop);
+        bearer = true;
+      }
+      this.particles.burst(this.board.localToWorld(temp.copy(troop.post)), KNIGHTS.boostColors, 6, 0.1);
+    }
+    mark('knight boost');
+    this.board.localToWorld(temp.copy(squad.post));
+    this.audio.play('swordClash', temp, 0.9);
+    this.particles.burst(temp, KNIGHTS.boostColors, 14, 0.18);
+  }
+
+  /** The way the squad stands (for the horn's ghosts): each of `count` places for a squad at a road spot (board cm), into `out`. */
+  postsAt(target: RoadPoint, count: number, out: Vector3[]): void {
+    const scratch = this.scratchSquad;
+    this.placeSquad(scratch, target);
+    for (let i = 0; i < count && i < out.length; i++) {
+      this.scratchTroop.post.set(0, 0, 0);
+      this.placePost(this.scratchTroop, scratch, i);
+      out[i].copy(this.scratchTroop.post);
+    }
+  }
+
+  /** The empty places of a squad (its fallen knights, for the boost's ghosts), into `out`. Returns how many. */
+  fallenPosts(squad: Squad, out: Vector3[]): number {
+    const used = new Set<number>();
+    for (const t of squad.members) if (t.mode !== 'dead' && t.squad === squad) used.add(t.slot);
+    for (const w of this.waiting) if (w.squad === squad) used.add(w.slot);
+    let n = 0;
+    for (let slot = 0; slot < squad.size && n < out.length; slot++) {
+      if (used.has(slot)) continue;
+      this.placePost(this.scratchTroop, squad, slot);
+      out[n++].copy(this.scratchTroop.post);
+    }
+    return n;
+  }
+
+  /**
+   * A see-through knight for the horn's preview (v3 2.5): the swordsman model,
+   * posed once in its idle stance (never animated again), every part drawn
+   * with `material`. Null before the models load.
+   */
+  makeGhost(material: MeshBasicMaterial): Object3D | null {
+    const template = this.templates.get('sword');
+    if (!template) return null;
+    const spec = TROOP_KINDS.sword;
+    const model = cloneSkinned(template);
+    model.scale.set(spec.width, spec.height, spec.width).multiplyScalar(TROOPS.height);
+    const clip = AnimationClip.findByName(template.animations, 'idle');
+    if (clip) {
+      const mixer = new AnimationMixer(model);
+      mixer.clipAction(clip).play();
+      mixer.update(0.3);
+    }
+    model.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) return;
+      mesh.material = material;
+      mesh.renderOrder = 2;
+      mesh.frustumCulled = false;
+    });
+    const root = new Group();
+    root.add(model);
+    root.visible = false;
+    return root;
+  }
+
+  /** The knights of a squad on the board now (for the move's outline). */
+  membersOf(squad: Squad): Troop[] {
+    return squad.members.filter((t) => t.mode !== 'dead' && t.squad === squad);
+  }
+
+  /** Scratch objects for the horn's ghost places (never on the board). */
+  private scratchSquad: Squad = { crashed: false, anchor: { road: 0, along: 0 }, post: new Vector3(), out: new Vector3(), members: [], pending: 0, broken: false, size: 0, boostLeft: 0 };
+  private scratchTroop = { post: new Vector3() } as Troop;
 
   /** The squad the horn called or moved last, while it is still in the field. */
   private get calledSquad(): Squad | null {
@@ -715,6 +867,7 @@ export class Troops {
       const from = walking ? { road: t.legs[t.leg].road, along: t.distance } : this.roadPointNear(t.root.position.x, t.root.position.z).point;
       const own = legsToPoint(this.network.graph, this.lengths, from, target) ?? legs;
       this.release(t);
+      t.slot = slot;
       this.placePost(t, squad, slot++);
       t.legs = own;
       t.leg = 0;
@@ -733,7 +886,7 @@ export class Troops {
   /** Debug "Send knights": what the horn does, aimed at the road spot nearest the point this far out at this board angle. */
   charge(frontAngle: number, radius = 130): boolean {
     const near = this.roadPointNear(polarX(radius, frontAngle), polarZ(radius, frontAngle));
-    return this.command(near.point);
+    return this.command(near.point) !== null;
   }
 
   /**
@@ -791,6 +944,9 @@ export class Troops {
   update(dt: number): void {
     this.frame++;
     this.time += dt;
+    // v3 2.5: the free move's lockout and each squad's boost run down.
+    if (this.moveLock > 0) this.moveLock = Math.max(0, this.moveLock - dt);
+    for (const squad of this.squads) if (squad.boostLeft > 0) squad.boostLeft = Math.max(0, squad.boostLeft - dt);
     for (let i = this.waiting.length - 1; i >= 0; i--) {
       const w = this.waiting[i];
       w.wait -= dt;
@@ -1006,6 +1162,7 @@ export class Troops {
       return true;
     }
     troop.squad = w.squad;
+    troop.slot = w.slot;
     w.squad.members.push(troop);
     troop.legs = w.legs;
     troop.leg = 0;
@@ -1478,7 +1635,9 @@ export class Troops {
     }
     t.strikeTimer -= dt;
     if (t.strikeTimer > 0) return;
-    t.strikeTimer = TROOPS.strikeEvery * this.rng.range(0.85, 1.15);
+    // A boosted squad (v3 2.5) strikes faster.
+    const boosted = !!t.squad && t.squad.boostLeft > 0;
+    t.strikeTimer = TROOPS.strikeEvery * (boosted ? KNIGHTS.boostStrikeScale : 1) * this.rng.range(0.85, 1.15);
     t.attackRight = !t.attackRight;
     t.play(t.attackRight ? 'attack-melee-right' : 'attack-melee-left', false);
     this.clash(p);

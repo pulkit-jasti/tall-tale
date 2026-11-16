@@ -58,6 +58,10 @@ export class Horn extends HandTool {
   onCall: (blown: boolean) => void = () => {};
   /** True while the aim has a road spot a squad can go to (src/ui/hornAim.ts). Only then can it blow. */
   aimValid: () => boolean = () => true;
+  /** What a blow would do now (v3 2.5): call, boost or move, or null (src/ui/hornAim.ts). */
+  aimKind: () => 'new' | 'boost' | 'move' | null = () => 'new';
+  /** After a free move it must leave the blow zone before it can blow again (no accidental boost on the same spot). */
+  private needsLeave = false;
   /** Held and not yet sounded: the head aims it. */
   aiming = false;
   /** The mouthpiece is in the blow zone in front of the mouth (HORN.zoneRadius). */
@@ -94,6 +98,20 @@ export class Horn extends HandTool {
     this.charge = 0;
   }
 
+  /**
+   * v3 2.5: the horn can be held while it recharges too: a move (at the
+   * squad cap) is free. A call or a boost still needs a charge (the aim
+   * shows why it cannot blow).
+   */
+  get grabbable(): boolean {
+    return !this.tiedDown && !this.quiet;
+  }
+
+  /** True while it holds a charge (ready): a call or a boost can be paid for. */
+  get charged(): boolean {
+    return this.usable && !this.recharging;
+  }
+
   /** The mic loudness now (smoothed RMS), read while the horn is held. 0 without the mic. */
   get loudness(): number {
     return this.level;
@@ -123,8 +141,12 @@ export class Horn extends HandTool {
       this.level = 0;
       this.silentFor = 0;
       this.micSilent = false;
+      this.needsLeave = false;
       this.fade(1);
     }
+    // The cost preview (v3 2.5): its ring shows the charge a call or a boost will spend; calm for a free move.
+    const kind = this.aiming ? this.aimKind() : null;
+    this.costPreview = kind === 'new' || kind === 'boost';
   }
 
   private wasAiming = false;
@@ -187,7 +209,16 @@ export class Horn extends HandTool {
     const inside = mouthWorld.distanceTo(zoneCenter) < HORN.zoneRadius + (this.inZone ? HORN.zoneExitMargin : 0);
     this.outTime = inside ? 0 : this.outTime + dt;
     if (!inside && (!this.inZone || this.outTime >= HORN.zoneGrace)) {
+      this.needsLeave = false;
       this.resetMotion();
+      return;
+    }
+    // Just moved a squad (free): lowered out of the zone first, then it can blow again.
+    if (this.needsLeave) {
+      this.inZone = true;
+      this.ready = false;
+      this.inZoneTime = 0;
+      this.charge = 0;
       return;
     }
     this.inZone = true;
@@ -225,6 +256,17 @@ export class Horn extends HandTool {
 
   /** It sounds: the war horn, a burst from the bell, and the knights charge. */
   private sound(blown: boolean): void {
+    // v3 2.5: a move is free: no charge spent, it stays in the hand (lowered first before the next blow).
+    if (this.aimKind() === 'move') {
+      mark('horn');
+      this.bodyToWorld(this.bellLocal, world);
+      this.audio.play('waveHorn', world, (blown ? HORN.blownVolume : HORN.heldVolume) * HORN.moveVolume);
+      this.particles.burst(world, HORN.waveColors, 8, 0.25);
+      this.onCall(blown);
+      this.resetMotion();
+      this.needsLeave = true;
+      return;
+    }
     if (!this.tryUse()) return;
     mark('horn');
     this.bodyToWorld(this.bellLocal, world);
