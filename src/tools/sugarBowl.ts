@@ -15,6 +15,7 @@
 //     cube are seasoned. It stays spicy through the pouch and the shot.
 import { BoxGeometry, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { SUGAR, TOOL_SPOTS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import type { HandState } from '../player/hands.js';
 import { landingHeight } from '../rules/boardMath.js';
 import { flatMaterial, sugarBowl } from '../world/shapes.js';
@@ -164,7 +165,7 @@ export class SugarBowl extends HandTool {
 
   private addLure(at: Vector3, mesh: Mesh, spicy = false): void {
     mesh.position.copy(at).setY(at.y + SUGAR.cubeSize / 2);
-    this.lures.push({ mesh, position: at.clone(), left: SUGAR.lureTime, feeds: SUGAR.feeds, pepper: 0, spicy });
+    this.lures.push({ mesh, position: at.clone(), left: SUGAR.lureTime * BOOST.sugar, feeds: SUGAR.feeds, pepper: 0, spicy });
     this.particles.burst(this.stage.boardSpin.localToWorld(world.copy(mesh.position)), SUGAR.crumbColors, 6, 0.08);
     this.audio.play('sugarLand', world, 1, 0.1);
     this.onUse(1);
@@ -216,7 +217,7 @@ export class SugarBowl extends HandTool {
         const dx = lure.position.x - p.x;
         const dz = lure.position.z - p.z;
         if (dx * dx + dz * dz > r2) continue;
-        this.goblins.pause(g, SUGAR.eatTime, 'idle');
+        this.goblins.pause(g, SUGAR.eatTime * BOOST.sugar, 'idle');
         this.goblins.credit(g, 'sugar');
         g.face(dx, dz);
         lure.feeds--;
@@ -226,7 +227,7 @@ export class SugarBowl extends HandTool {
       if (crumbs) this.particles.burst(this.stage.boardSpin.localToWorld(world.copy(lure.mesh.position)), SUGAR.crumbColors, 1, 0.04);
       // It shrinks as it is eaten.
       lure.mesh.scale.setScalar(Math.max(0.3, lure.feeds / SUGAR.feeds));
-      if (lure.left <= 0 || (lure.feeds <= 0 && lure.left < SUGAR.lureTime - SUGAR.eatTime)) {
+      if (lure.left <= 0 || (lure.feeds <= 0 && lure.left < (SUGAR.lureTime - SUGAR.eatTime) * BOOST.sugar)) {
         lure.mesh.removeFromParent();
         this.lures.splice(i, 1);
       }

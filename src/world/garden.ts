@@ -18,6 +18,7 @@
 import { Color, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3, type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { GARDEN } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import { groundAt } from '../rules/boardMath.js';
@@ -92,7 +93,7 @@ export class Garden {
   }
 
   /** New beds for a map: beside its roads, GARDEN.from to GARDEN.to cm out, clear of trap spots and each other. */
-  place(network: RoadNetwork, keepClear: { x: number; z: number }[], rng: Random): void {
+  place(network: RoadNetwork, keepClear: { x: number; z: number }[], rng: Random, count: number = GARDEN.beds): void {
     for (const bed of this.beds) bed.group.removeFromParent();
     this.beds.length = 0;
     this.clearShots();
@@ -110,7 +111,7 @@ export class Garden {
       }
     });
     const near = (p: Vector3, list: { x: number; z: number }[], gap: number) => list.some((q) => Math.hypot(p.x - q.x, p.z - q.z) < gap);
-    for (let k = 0; k < GARDEN.beds && candidates.length > 0; k++) {
+    for (let k = 0; k < count && candidates.length > 0; k++) {
       for (let tries = 0; tries < 40; tries++) {
         const i = rng.int(candidates.length);
         const c = candidates[i];
@@ -186,7 +187,7 @@ export class Garden {
       bed.life = Math.min(GARDEN.life, bed.life + (GARDEN.life * dt) / (GARDEN.healTime * slow));
       return;
     }
-    bed.grow = Math.min(1, bed.grow + dt / (GARDEN.growTime * slow));
+    bed.grow = Math.min(1, bed.grow + dt / (GARDEN.growTime * slow * BOOST.grow));
     bed.sprout.visible = true;
     bed.sprout.scale.set(1, 0.5 + bed.grow * 3, 1);
     if (bed.grow >= 1) this.growPlant(bed);
@@ -252,7 +253,8 @@ export class Garden {
         }
         continue;
       }
-      bed.life -= dt;
+      // Endless Tough Roots: plants wilt more slowly.
+      bed.life -= dt / BOOST.plantLife;
       if (bed.life <= 0) {
         this.wilt(bed);
         continue;

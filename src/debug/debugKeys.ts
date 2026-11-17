@@ -81,6 +81,9 @@ export type DebugCommand =
   | 'openMenu'
   | 'openCustom'
   | 'fightCustom'
+  | 'startEndless'
+  | 'endlessCards'
+  | 'endlessTools'
   | 'resetCustom'
   | 'resetSave'
   | 'unlockAll'
@@ -163,6 +166,9 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'unlockAll', group: 'menu', icon: '🔓', label: 'Unlock all tools', does: 'Flip the "Unlock all tools" setting (the drum can be put on the loadout stand)' },
   { id: 'openCustom', group: 'menu', icon: '🛠️', label: 'Open Custom Game', does: 'Go to the Custom Game page (the empty state, or the list of saved levels). A save writes the level summary as a debug note' },
   { id: 'fightCustom', group: 'menu', icon: '⚔️', label: 'Fight newest custom level', does: 'From the menu: load the newest saved Custom Game level\'s map and play its waves (a debug note says how long the map took)' },
+  { id: 'startEndless', group: 'menu', icon: '♾️', label: 'Start Endless', does: 'From the menu: a new Endless run on a fresh random map with the loadout as it is (a debug note gives its seed)' },
+  { id: 'endlessCards', group: 'menu', icon: '🃏', label: 'Endless: show cards', does: 'In an Endless run: show the boost card pick now (pick one, or wait 10 s)' },
+  { id: 'endlessTools', group: 'menu', icon: '🧰', label: 'Endless: show new tools', does: 'In an Endless run: show the new tool pick now (every tool not on the stand); a pick goes on a platform behind you' },
   { id: 'resetCustom', group: 'menu', icon: '🗑️', label: 'Forget custom levels', does: 'Delete every saved Custom Game level (the page shows the empty state again)' },
   { id: 'trophiesAll', group: 'menu', icon: '🏅', label: 'Earn all trophies', does: 'Mark all 16 achievements as earned (the 8 secret abilities and the 8 regular ones): the shelf lights every trophy and shows what each does' },
   { id: 'trophiesForget', group: 'menu', icon: '❓', label: 'Forget trophies', does: 'Forget every earned achievement (the shelf shows the riddles and goals again; they can be earned again in a real battle)' },

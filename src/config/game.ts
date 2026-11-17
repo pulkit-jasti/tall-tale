@@ -1302,6 +1302,101 @@ export const SCORE = {
 };
 
 /**
+ * Endless mode (docs/v3-plan.md Phase 5, "Endless mode"): one battle, waves
+ * until the castle falls. A fresh random map each run, one fixed ramp for
+ * everyone. The threat grows faster than the player's power. Start values,
+ * tune on the headset (an average run should end in about 8 to 12 minutes).
+ */
+export const ENDLESS = {
+  /** The map each run: these settings over the defaults, from a random seed. Fewer camps are tried when a map fails the checks. */
+  map: {
+    camps: 7,
+    campSpread: 'around' as const,
+    campDistance: [320, 440] as [number, number],
+    junctions: 6,
+    wiggle: 0.55,
+    forks: 2,
+    loops: 2,
+    crossings: 1,
+    triggersPerRoad: 1,
+    hay: 3,
+    bellTowers: 1,
+    bridges: 2,
+    potionCart: true,
+    seedBeds: 8,
+    foggyNight: true,
+  },
+  /** Fewest camps tried when the map keeps failing the checks. */
+  minCamps: 4,
+  /** Waves made for a run (a run that clears them all is won; nobody should get close). */
+  maxWaves: 99,
+  /** Camps up at the start; then one more rises every riseEvery waves until all are up. */
+  startCamps: 2,
+  riseEvery: 2,
+  /** Goblins in wave n (1 based): first x (1 + growth)^(n-1) + perWave x (n-1), capped by the unit budget. */
+  goblins: { first: 14, growth: 0.05, perWave: 2 },
+  /** Camps sending at once: first, one more every `every` waves, up to max. */
+  campsAtOnce: { first: 1, every: 3, max: 5 },
+  /** Runner share: from, rising this much a wave, up to. */
+  runners: { from: 0.15, perWave: 0.015, max: 0.35 },
+  /** Gear shares (helmets and shields rise each wave, up to their max; spears and swords stay). */
+  gear: { helmet: [0.1, 0.03, 0.7], shield: [0.1, 0.02, 0.5], spear: 0.35, sword: 0.2 } as {
+    helmet: [number, number, number];
+    shield: [number, number, number];
+    spear: number;
+    sword: number;
+  },
+  /** Balloons from this wave: 1, one more every `every` waves, up to max. */
+  balloons: { from: 3, every: 4, max: 4 },
+  /** New enemy types join one at a time: from wave `from`, 1 each wave, one more every `every` waves, up to max (archers count goblins, in groups of 3). */
+  specials: {
+    digger: { from: 4, every: 4, max: 3 },
+    shaman: { from: 6, every: 5, max: 2 },
+    bomber: { from: 8, every: 4, max: 3 },
+    archer: { from: 10, every: 4, max: 6, step: 3 },
+  },
+  /** Groups come out over this long (seconds): from, shorter each wave, never under min (faster spawns). */
+  spawnTime: { from: 55, perWave: 1.5, min: 32 },
+  /** The breather's pick: how long the cards wait before the wave starts without one (seconds), and how many cards. */
+  pickTime: 10,
+  /** A wave's banner hides itself after this long (seconds; its Next hides it sooner). */
+  bannerTime: 6,
+  cards: 3,
+  /** Share of the card draws that may be rare (a rare card in the pick). */
+  rareChance: 0.2,
+  /** After these waves the pick is a new tool (every tool not on the stand is shown) instead of a boost card. */
+  toolWaves: [10, 20, 30, 40],
+  /**
+   * The new tools' platforms, around the back (the developer's vision,
+   * 2026-11-16: Endless deep runs are full 360 degree play, seated on a
+   * swivel chair or standing; the first 4 stay in front). Same distance as
+   * LOADOUT_SPOTS, so they sit in the reach band.
+   */
+  extraSpots: [
+    { angleDeg: 128, radius: 33.5 },
+    { angleDeg: -128, radius: 33.5 },
+    { angleDeg: 162, radius: 33.5 },
+    { angleDeg: -162, radius: 33.5 },
+  ],
+  /** Score: the battle's score plus this many points for each wave survived. */
+  waveBonus: 25,
+  /**
+   * The breather's card panel (src/ui/boostPicker.ts), like the end panel:
+   * in front of the eyes over the front wall (cm). One column per card, its
+   * Kenney icon, name and line of text, a round tick button under it; a
+   * line along the bottom counts down to the next wave.
+   */
+  panel: {
+    radius: 41,
+    tiltDeg: 20,
+    columnWidth: 14,
+    height: 25,
+    buttonRadius: BUTTON_SIZE.large,
+    rareColor: '#7a3fb0',
+  },
+};
+
+/**
  * The menus after the tutorial, the home screen (docs/menus.md). All in
  * boardLift (cm, rises with the board and grows with the reach check, never
  * turns), every target inside the reach band (reachSpots in
@@ -1468,8 +1563,8 @@ export const MENU = {
  * src/config/levelSettings.ts.
  */
 export const LEVEL_GEN = {
-  /** Bumped whenever the generator changes what a seed gives (saved in each level's meta). */
-  version: 1,
+  /** Bumped whenever the generator changes what a seed gives (saved in each level's meta). 2: wave count, times of day, allowed tools, new traps and beds per level. */
+  version: 2,
   /** Seeds tried after the asked one when a check fails, before giving up. */
   tries: 24,
   /** Wall entries: one per wall stretch (like the tutorial map), at this distance. */
@@ -1524,9 +1619,10 @@ export const LEVEL_GEN = {
   unitBudget: 100,
   /** Of a wave's goblins, about this share is on the board at once (they come out over the wave and walk in). */
   atOnceShare: 0.75,
-  /** Rising camps: share of the camps up from the start, by difficulty (the rest rise in waves 2 to 4). */
+  /** Rising camps: share of the camps up from the start, by difficulty (the rest rise in the later waves). */
   startCamps: { easy: 0.34, normal: 0.5, hard: 0.67 },
-  waves: 4,
+  /** The potion cart's hidden spots when a level has the cart (the "Potion cart" setting). */
+  cartSpots: 3,
 };
 
 /**

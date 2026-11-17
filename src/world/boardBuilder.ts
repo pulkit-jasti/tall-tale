@@ -338,7 +338,7 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   // The triggers on the roads: flat ground under them and toward the castle (never hidden by a hill), and nothing built beside them.
   // v3 2.8: the blueprint's traps and their spare spots (where used ones come back), all with flat ground and kept clear.
   // v3 2.1: plus the new traps (haystacks, the bell tower, the bridge, the cart's spots), from their own stream.
-  const trapSpots = addSpareSpots(network, addExtraTraps(network, placeTriggers(network, blueprint.triggers), createRandom(seed + 14)), createRandom(seed + 13));
+  const trapSpots = addSpareSpots(network, addExtraTraps(network, placeTriggers(network, blueprint.triggers), createRandom(seed + 14), blueprint.extras), createRandom(seed + 13));
   const triggerSpots = triggerGround(trapSpots);
   const plan = planSettlements(roadField, campSpots, createRandom(seed + 6), triggerSpots.clear);
   // Then the terrain, flat under the camps, villages, fields and triggers: from here on groundAt() has its hills.

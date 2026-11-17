@@ -45,6 +45,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameAudio } from '../audio/sound.js';
 import { ARCHERS, CASTLE, DAY_NIGHT, GARRISON, GOBLIN_GEAR, GOBLIN_RULES, JUICE, KNIGHTS, TROOP_KINDS, TROOPS, type GearName, type TroopKind } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { note } from '../debug/notes.js';
 import { mark } from '../debug/perfMarks.js';
 import { addNightRim } from '../fx/nightRim.js';
@@ -616,7 +617,8 @@ export class Troops {
       }
     }
     if (near) return { kind: 'boost', squad: near };
-    if (active.length < KNIGHTS.maxSquads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField) {
+    // Endless War Chief: one more squad (TROOPS.max has room for it).
+    if (active.length < KNIGHTS.maxSquads + BOOST.squads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField + BOOST.squads * KNIGHTS.squadMax) {
       return legsToWall(graph, this.lengths, target) ? { kind: 'new' } : null;
     }
     let squad: Squad | null = null;
@@ -660,7 +662,7 @@ export class Troops {
     const legs = reverseLegs(home);
     const squad: Squad = { crashed: false, anchor: { ...target }, post: new Vector3(), out: new Vector3(), members: [], pending: 0, broken: false, size: 0, boostLeft: 0 };
     this.placeSquad(squad, target);
-    const room = Math.max(0, KNIGHTS.maxField - this.fieldCount);
+    const room = Math.max(0, KNIGHTS.maxField + BOOST.squads * KNIGHTS.squadMax - this.fieldCount);
     // In the tutorial a full squad comes (so its first fight is won); otherwise squadMin to squadMax (v3: a fixed 5).
     const size = Math.min(room, this.fullSquads ? KNIGHTS.squadMax : KNIGHTS.squadMin + this.rng.int(KNIGHTS.squadMax - KNIGHTS.squadMin + 1));
     if (size <= 0) return null;
@@ -1691,7 +1693,8 @@ export class Troops {
       return false;
     }
     // The shield is already counted above, so the base number of hits is left. Field knights are tougher (v3, KNIGHTS.hitsToDown).
-    if (++t.hits >= troopHitsToDown(t.squad ? KNIGHTS.hitsToDown : TROOPS.hitsToDown, false)) {
+    // Endless Iron Knights: field knights take more blows.
+    if (++t.hits >= troopHitsToDown(t.squad ? KNIGHTS.hitsToDown + BOOST.knightHits : TROOPS.hitsToDown, false)) {
       this.remove(t, true);
       return true;
     }

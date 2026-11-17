@@ -1,0 +1,754 @@
+{
+ "format": 1,
+ "map": {
+  "name": "Sun Garden",
+  "seed": 404,
+  "nodes": [
+   {
+    "id": "w0",
+    "kind": "wall",
+    "at": [
+     58,
+     0
+    ]
+   },
+   {
+    "id": "w60",
+    "kind": "wall",
+    "at": [
+     58,
+     60
+    ]
+   },
+   {
+    "id": "w120",
+    "kind": "wall",
+    "at": [
+     58,
+     120
+    ]
+   },
+   {
+    "id": "w180",
+    "kind": "wall",
+    "at": [
+     58,
+     180
+    ]
+   },
+   {
+    "id": "w240",
+    "kind": "wall",
+    "at": [
+     58,
+     -120
+    ]
+   },
+   {
+    "id": "w300",
+    "kind": "wall",
+    "at": [
+     58,
+     -60
+    ]
+   },
+   {
+    "id": "j1",
+    "kind": "junction",
+    "at": [
+     141.6,
+     160.7
+    ]
+   },
+   {
+    "id": "j2",
+    "kind": "junction",
+    "at": [
+     141.8,
+     -50.1
+    ]
+   },
+   {
+    "id": "j3",
+    "kind": "junction",
+    "at": [
+     134.1,
+     104.1
+    ]
+   },
+   {
+    "id": "j4",
+    "kind": "junction",
+    "at": [
+     142.1,
+     28.2
+    ]
+   },
+   {
+    "id": "k1",
+    "kind": "junction",
+    "at": [
+     95.9,
+     160.5
+    ]
+   },
+   {
+    "id": "k2",
+    "kind": "junction",
+    "at": [
+     87,
+     -51.2
+    ]
+   },
+   {
+    "id": "k3",
+    "kind": "junction",
+    "at": [
+     89.3,
+     106.8
+    ]
+   },
+   {
+    "id": "k4",
+    "kind": "junction",
+    "at": [
+     95.2,
+     28.6
+    ]
+   },
+   {
+    "id": "camp1",
+    "kind": "camp",
+    "at": [
+     380,
+     -171.5
+    ],
+    "size": 32,
+    "wave": 1
+   },
+   {
+    "id": "f1",
+    "kind": "junction",
+    "at": [
+     268.9,
+     175.1
+    ]
+   },
+   {
+    "id": "camp2",
+    "kind": "camp",
+    "at": [
+     374,
+     -12
+    ],
+    "size": 31,
+    "wave": 1
+   },
+   {
+    "id": "camp3",
+    "kind": "camp",
+    "at": [
+     361,
+     63.4
+    ],
+    "size": 32,
+    "wave": 2
+   }
+  ],
+  "roads": [
+   {
+    "from": "j1",
+    "to": "k1",
+    "via": [
+     [
+      118.8,
+      160.6
+     ]
+    ]
+   },
+   {
+    "from": "k1",
+    "to": "w180",
+    "via": [
+     [
+      79,
+      170.3
+     ]
+    ]
+   },
+   {
+    "from": "k1",
+    "to": "w120",
+    "via": [
+     [
+      79,
+      140.3
+     ]
+    ]
+   },
+   {
+    "from": "j2",
+    "to": "k2",
+    "via": [
+     [
+      114.4,
+      -50.6
+     ]
+    ]
+   },
+   {
+    "from": "k2",
+    "to": "w300",
+    "via": [
+     [
+      74.5,
+      -55.6
+     ]
+    ]
+   },
+   {
+    "from": "j3",
+    "to": "k3",
+    "via": [
+     [
+      111.7,
+      108.5
+     ]
+    ]
+   },
+   {
+    "from": "k3",
+    "to": "w120",
+    "via": [
+     [
+      75.7,
+      113.4
+     ]
+    ]
+   },
+   {
+    "from": "j4",
+    "to": "k4",
+    "via": [
+     [
+      118.7,
+      28.4
+     ]
+    ]
+   },
+   {
+    "from": "k4",
+    "to": "w0",
+    "via": [
+     [
+      78.6,
+      14.3
+     ]
+    ]
+   },
+   {
+    "from": "k4",
+    "to": "w60",
+    "via": [
+     [
+      78.6,
+      44.3
+     ]
+    ]
+   },
+   {
+    "from": "camp1",
+    "to": "f1",
+    "via": [
+     [
+      356.2,
+      -174.6
+     ],
+     [
+      332.3,
+      -178.2
+     ],
+     [
+      308.5,
+      178.5
+     ],
+     [
+      284.6,
+      176
+     ]
+    ]
+   },
+   {
+    "from": "f1",
+    "to": "j1",
+    "via": [
+     [
+      260.8,
+      174.6
+     ],
+     [
+      237,
+      173.4
+     ],
+     [
+      213.1,
+      171.5
+     ],
+     [
+      189.3,
+      168.3
+     ],
+     [
+      165.4,
+      164.2
+     ]
+    ]
+   },
+   {
+    "from": "f1",
+    "to": "j2",
+    "via": [
+     [
+      266.8,
+      -176.8
+     ],
+     [
+      264.5,
+      -169.4
+     ],
+     [
+      261.7,
+      -162.2
+     ],
+     [
+      258.3,
+      -154.8
+     ],
+     [
+      254.1,
+      -146.7
+     ],
+     [
+      249,
+      -137.8
+     ],
+     [
+      242.7,
+      -127.9
+     ],
+     [
+      235.4,
+      -117.5
+     ],
+     [
+      226.8,
+      -106.9
+     ],
+     [
+      217.2,
+      -96.7
+     ],
+     [
+      206.5,
+      -87.3
+     ],
+     [
+      194.8,
+      -79
+     ],
+     [
+      182.3,
+      -71.7
+     ],
+     [
+      169.2,
+      -64.8
+     ],
+     [
+      155.6,
+      -57.9
+     ]
+    ]
+   },
+   {
+    "from": "camp2",
+    "to": "j2",
+    "via": [
+     [
+      352.9,
+      -15.3
+     ],
+     [
+      331.8,
+      -18.2
+     ],
+     [
+      310.7,
+      -21.2
+     ],
+     [
+      289.6,
+      -24.7
+     ],
+     [
+      268.5,
+      -28.8
+     ],
+     [
+      247.3,
+      -33.3
+     ],
+     [
+      226.2,
+      -37.7
+     ],
+     [
+      205.1,
+      -41.5
+     ],
+     [
+      184,
+      -44.5
+     ],
+     [
+      162.9,
+      -47.1
+     ]
+    ]
+   },
+   {
+    "from": "camp3",
+    "to": "j3",
+    "via": [
+     [
+      340.4,
+      67
+     ],
+     [
+      319.7,
+      70.2
+     ],
+     [
+      299.1,
+      73.3
+     ],
+     [
+      278.5,
+      76.4
+     ],
+     [
+      257.9,
+      79.6
+     ],
+     [
+      237.2,
+      83.1
+     ],
+     [
+      216.6,
+      87
+     ],
+     [
+      196,
+      91.2
+     ],
+     [
+      175.4,
+      95.7
+     ],
+     [
+      154.7,
+      100.1
+     ]
+    ]
+   },
+   {
+    "from": "j4",
+    "to": "j3",
+    "via": [
+     [
+      144.8,
+      42
+     ],
+     [
+      146.4,
+      55.4
+     ],
+     [
+      146.1,
+      66.1
+     ],
+     [
+      143.7,
+      76.8
+     ],
+     [
+      139.4,
+      90.3
+     ]
+    ]
+   },
+   {
+    "from": "j1",
+    "to": "j2",
+    "via": [
+     [
+      144.1,
+      175.4
+     ],
+     [
+      146.3,
+      -170.1
+     ],
+     [
+      148.1,
+      -155.8
+     ],
+     [
+      149.3,
+      -141.3
+     ],
+     [
+      149.7,
+      -126.6
+     ],
+     [
+      149.3,
+      -111.5
+     ],
+     [
+      148.2,
+      -96.1
+     ],
+     [
+      146.5,
+      -80.6
+     ],
+     [
+      144.3,
+      -65.2
+     ]
+    ]
+   }
+  ],
+  "gate": {
+   "at": [
+    52,
+    180
+   ]
+  },
+  "triggers": [
+   {
+    "kind": "tree",
+    "wave": 1,
+    "at": [
+     283.7,
+     176
+    ]
+   },
+   {
+    "kind": "tree",
+    "wave": 1,
+    "at": [
+     250.5,
+     -32.5
+    ]
+   },
+   {
+    "kind": "tree",
+    "wave": 1,
+    "at": [
+     276.3,
+     76.7
+    ]
+   }
+  ],
+  "extras": {
+   "hay": 3,
+   "bellTower": 1,
+   "bridge": 1,
+   "cartSpots": 3,
+   "beds": 10
+  }
+ },
+ "waves": [
+  {
+   "camps": [
+    "camp2",
+    "camp1"
+   ],
+   "rising": [],
+   "counts": {
+    "grunt": 15,
+    "runner": 5,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 0,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.25,
+    "shieldShare": 0.3
+   },
+   "time": "morning"
+  },
+  {
+   "camps": [
+    "camp3",
+    "camp2"
+   ],
+   "rising": [
+    "camp3"
+   ],
+   "counts": {
+    "grunt": 18,
+    "runner": 6,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 1,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.25,
+    "shieldShare": 0.3
+   },
+   "time": "day"
+  },
+  {
+   "camps": [
+    "camp1",
+    "camp2"
+   ],
+   "rising": [],
+   "counts": {
+    "grunt": 22,
+    "runner": 7,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 1,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.25,
+    "shieldShare": 0.3
+   },
+   "time": "sunset"
+  },
+  {
+   "camps": [
+    "camp1",
+    "camp2"
+   ],
+   "rising": [],
+   "counts": {
+    "grunt": 26,
+    "runner": 9,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 1,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.25,
+    "shieldShare": 0.3
+   },
+   "time": "sunset"
+  }
+ ],
+ "rules": {
+  "archers": 4,
+  "guards": 2,
+  "refillEvery": 15,
+  "guardRefillEvery": 30,
+  "startHealth": 1,
+  "tools": [
+   "slingshot",
+   "horn",
+   "swatter",
+   "pepper",
+   "drum",
+   "magnet",
+   "glass",
+   "sugar"
+  ]
+ },
+ "meta": {
+  "seed": 404,
+  "askedSeed": 404,
+  "settings": {
+   "camps": 3,
+   "campSpread": "around",
+   "campDistance": [
+    330,
+    430
+   ],
+   "campSize": 30,
+   "junctions": 4,
+   "wiggle": 0.5,
+   "forks": 1,
+   "loops": 1,
+   "crossings": 0,
+   "triggersPerRoad": 1,
+   "kegs": true,
+   "boulders": true,
+   "trees": true,
+   "hay": 3,
+   "bellTowers": 1,
+   "bridges": 1,
+   "potionCart": true,
+   "seedBeds": 10,
+   "waves": 4,
+   "morning": true,
+   "day": true,
+   "sunset": true,
+   "night": false,
+   "difficulty": "normal",
+   "goblins": 20,
+   "growth": 0.2,
+   "runners": 0.25,
+   "balloons": 1,
+   "helmets": 0.25,
+   "shields": 0.3,
+   "spears": 0.4,
+   "swords": 0.25,
+   "waveLength": 50,
+   "campsAtOnce": 2,
+   "foggyNight": false,
+   "diggers": 0,
+   "shamans": 0,
+   "bombers": 0,
+   "goblinArchers": 0,
+   "archers": 4,
+   "guards": 2,
+   "refill": 15,
+   "castleHealth": 1,
+   "toolSlingshot": true,
+   "toolHorn": true,
+   "toolSwatter": true,
+   "toolPepper": true,
+   "toolDrum": true,
+   "toolMagnet": true,
+   "toolGlass": true,
+   "toolSugar": true
+  },
+  "generator": 2,
+  "skulls": 2,
+  "level": 4
+ }
+}

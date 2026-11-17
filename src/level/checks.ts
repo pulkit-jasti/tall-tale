@@ -3,7 +3,7 @@
 // seed when one fails. Each failed check is one short line (the command line
 // prints them). No Three.js here.
 import { BALLOONS, LEVEL_GEN } from '../config/game.js';
-import type { LevelSettings } from '../config/levelSettings.js';
+import { TOOL_SETTINGS, type LevelSettings } from '../config/levelSettings.js';
 import { TRIGGER_KINDS, TRIGGER_LIST } from '../config/registries.js';
 import { parseBlueprint, type Polar } from '../rules/blueprint.js';
 import { RoadGraph } from '../rules/roadGraph.js';
@@ -121,5 +121,8 @@ export function checkLevel(level: Level, settings: LevelSettings): string[] {
     if (atOnce > G.unitBudget + 1e-6) fail(`wave ${i + 1} may put ${Math.round(atOnce)} goblins on the board (budget ${G.unitBudget})`);
     if (w.camps.length === 0) fail(`wave ${i + 1} has no camp to send from`);
   });
+  // Allowed lists (docs/custom-mode.md section 4): at least one time of day and one tool stay on.
+  if (!settings.morning && !settings.day && !settings.sunset && !settings.night) fail('no time of day is allowed');
+  if (!Object.values(TOOL_SETTINGS).some((k) => settings[k])) fail('no tool is allowed');
   return problems;
 }

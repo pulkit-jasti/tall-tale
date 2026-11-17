@@ -7,6 +7,8 @@
 import { fixSettings, type LevelSettings } from '../config/levelSettings.js';
 import { parseBlueprint, type Blueprint } from '../rules/blueprint.js';
 import type { GearShares } from '../rules/gear.js';
+import type { PickTool } from '../rules/campaign.js';
+import type { TimeOfDay } from '../config/game.js';
 
 export const LEVEL_FORMAT = 1;
 
@@ -22,6 +24,8 @@ export interface LevelWave {
   balloons: number;
   /** Shares of the grunts with each piece of gear. */
   gear: GearShares;
+  /** The time of day it is fought at (from the allowed times). Missing (levels saved before): timeOfWave's default spread. */
+  time?: TimeOfDay;
 }
 
 export interface LevelRules {
@@ -32,6 +36,8 @@ export interface LevelRules {
   guardRefillEvery: number;
   /** The castle's starting health (share of the full). */
   startHealth: number;
+  /** The tools the loadout may take in this level. Missing (levels saved before): every tool. */
+  tools?: PickTool[];
 }
 
 export interface LevelMeta {

@@ -58,9 +58,9 @@ Each setting **describes itself**: its type (range, choice, on and off, number, 
 
 | Group | Settings |
 |---|---|
-| Map | camps (count), camp directions (spread out, opposite, one side), camp distance (range), camp size, junctions (count), road wiggle, crossings and loops, triggers per road (kegs, boulders, trees, and their share) |
-| Waves | goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once, foggy night (v3 2.7: fog in the night wave), diggers, shamans, bombers and goblin archers per wave from wave 2 (v3 Phase 3, 0 leaves a type out) |
-| Rules | garrison size and refill time, the castle's starting health |
+| Map | camps (count), camp directions (spread out, opposite, one side), camp distance (range), camp size, junctions (count), road wiggle, crossings and loops, triggers per road (kegs, boulders, trees, and their share), haystacks, bell towers, rope bridges, the potion cart and seed beds (counts, 0 leaves a kind out; built 2026-11-16) |
+| Waves | the wave count (2 to 6) and the allowed times of day (built 2026-11-16), goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once, foggy night (v3 2.7: fog in the night wave), diggers, shamans, bombers and goblin archers per wave from wave 2 (v3 Phase 3, 0 leaves a type out) |
+| Rules | garrison size and refill time, the castle's starting health, the allowed tools (built 2026-11-16) |
 | Difficulty | easy, normal, hard (moves the wave settings together; the skulls on the card) |
 
 - **Rising camps (section 7) have no setting in Custom Game:** the generator decides from the camp count and difficulty. Campaign presets may set them exactly in their level file.
@@ -75,6 +75,7 @@ Custom Game is a form over the generator's settings list (`LEVEL_SETTINGS`), so 
 - **Allowed goblins:** on or off for each type: grunts, runners, balloons, and the new enemies (digger, shaman, bomber, archers). A type's own sliders (runner share, balloon count, its gear shares) show only while it is on. **Built so far (v3 Phase 3, 2026-11-17):** the four new types are counts on the Waves tab (`diggers`, `shamans`, `bombers`, `goblinArchers` in `LEVEL_SETTINGS`, 0 by default), and a count of 0 is the type switched off; the switches, and hiding a type's sliders, are not built. Each count is per wave, from wave 2, on top of the wave's goblins (`LevelWave.counts.digger`, `shaman`, `bomber`, `archer`; levels saved before have none). The wave banner names shamans, bombers and archers, never diggers.
 - **Allowed traps:** on or off for each kind: keg, boulder, tree, bridge, hay, bell tower, potion cart. Works with the existing trigger settings (the count per road and the share), which then only pick among the allowed kinds.
 - **Checks** (section 5): at least one time, one tool and one goblin type must stay on, or the level is not valid and the page says why.
+- **Built (2026-11-16, docs/v3-plan.md "Phase 5 as built"):** the times of day and the tools are switches (Waves and Rules tabs); the new traps are counts on the Map tab (0 is a kind switched off), like the goblin counts. With all four times on, the waves keep the usual spread; otherwise each wave keeps its usual time if allowed, else the nearest allowed one before it, and the last wave takes the last allowed time. Hiding a type's sliders while it is off is still not built.
 
 ---
 
@@ -96,6 +97,7 @@ The generator checks its result and tries the next seed when a check fails, so i
 - The generator is **plain TypeScript with no browser code**, like the rules in `src/rules/` (pure math is fine, models, the DOM and WebGL are not). The board builder in the browser only draws its result.
 - A script calls it: for example `npm run gen -- --seed 42 --preset level3` writes the level file, and `--settings file.json` takes custom settings. It also runs the checks (section 5) and prints the summary. So level files are made by a command, never typed by hand (by the developer or a coding agent).
 - Running TypeScript from the command line needs a runner (newer Node runs `.ts` directly; else a small dev dependency like `tsx`, asked for first).
+- **One command for the whole campaign (2026-11-16):** `npm run gen -- --campaign` makes every campaign level from its preset (`src/level/presets.ts`: seed, settings, and the exact camp rise waves and times of day a preset may set) and writes `src/maps/levels/levelN.json`. `--preset N` prints one level (add `--out` to write it). `--endless --seed S --waves 20` prints an Endless run's map and ramp.
 
 ### Reuse what exists
 
@@ -231,7 +233,8 @@ Redone with the developer (2026-11-16, replaces the 2026-11-11 list). **Only lev
 | 15 | The Last Stand | "Every camp, every goblin, all at once." |
 
 - **Levels 1 to 5 are open from the start**; 6 to 15 show as locked.
-- **Open:** what levels 4 and 5 unlock.
+- **Built (2026-11-16):** levels 1 to 5 are level files made by `npm run gen -- --campaign` from `src/level/presets.ts`, played from their own maps; the cards in `src/config/levels.ts` match the tables above. Not tuned on the headset yet.
+- **Open:** what levels 4 and 5 unlock (start values: 4 the drum, 5 sugar cubes, so every tool can be earned).
 - The card text in `src/config/levels.ts` (name, flavor, enemies) is updated to match these tables when the levels are built.
 
 ---

@@ -24,6 +24,7 @@
 import { Color, Group, Matrix4, Mesh, MeshBasicMaterial, Quaternion, RingGeometry, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HOLD, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { popIn, shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
@@ -198,10 +199,11 @@ export abstract class HandTool {
 
   /** The use window (seconds) and the full recharge (seconds). */
   get useSeconds(): number {
-    return TOOLS.use[this.name];
+    // Endless boost cards (src/rules/boosts.ts) lengthen a window and shorten a recharge; 0 and 1 elsewhere.
+    return TOOLS.use[this.name] + BOOST.use[this.name];
   }
   get rechargeSeconds(): number {
-    return TOOLS.recharge[this.name];
+    return TOOLS.recharge[this.name] * BOOST.recharge[this.name];
   }
 
   /** v3: the use is counted in swings (useSeconds is then the swings per charge), not seconds. */

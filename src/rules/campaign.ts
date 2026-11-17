@@ -10,7 +10,7 @@ import { LEVELS, OPEN_FROM_START, TUTORIAL_ENEMIES, type EnemyIcon } from '../co
 /** v3 2.2: every tool is a pick now (4 free slots; the slingshot and the horn are no longer fixed). */
 export type PickTool = 'slingshot' | 'horn' | 'swatter' | 'pepper' | 'drum' | 'magnet' | 'glass' | 'sugar';
 export const PICK_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper', 'drum', 'magnet', 'glass', 'sugar'];
-/** Unlocked from the start: the tools the tutorial teaches (the drum is a campaign unlock; the magnet, glass and sugar are unlocked by "Unlock all tools" until their levels are decided). */
+/** Unlocked from the start: the tools the tutorial teaches. The others are campaign rewards (src/config/levels.ts: magnet, glass, drum, sugar) or "Unlock all tools". */
 export const STARTING_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper'];
 
 /** The number of loadout slots (v3 2.2). */
@@ -45,6 +45,8 @@ export interface Progress {
   toolsSeen: PickTool[];
   /** v3 2.6: the achievements earned (secret abilities and regular ones). */
   trophies: AchievementId[];
+  /** Endless mode's best run (the highest score, and the waves it survived), or null before the first run. */
+  endlessBest: { score: number; waves: number } | null;
 }
 
 /** True for an unlocked tool that was never grabbed on the shelf (it glows). */
@@ -66,7 +68,15 @@ export function createProgress(): Progress {
     unlockAll: false,
     toolsSeen: [],
     trophies: [],
+    endlessBest: null,
   };
+}
+
+/** An Endless run ended: kept when its score beats the best. Returns true for a new best. */
+export function recordEndless(p: Progress, score: number, waves: number): boolean {
+  if (p.endlessBest && p.endlessBest.score >= score) return false;
+  p.endlessBest = { score, waves };
+  return true;
 }
 
 /** v3 2.2: the drum replaced the bell, so an old save's 'bell' reads as 'drum'. */
@@ -94,6 +104,8 @@ export function parseProgress(raw: unknown): Progress {
   if (Array.isArray(r.tools)) p.tools = PICK_TOOLS.filter((t) => (r.tools as unknown[]).map(renamed).includes(t));
   if (Array.isArray(r.toolsSeen)) p.toolsSeen = PICK_TOOLS.filter((t) => (r.toolsSeen as unknown[]).map(renamed).includes(t));
   if (Array.isArray(r.trophies)) p.trophies = ACHIEVEMENT_IDS.filter((id) => (r.trophies as unknown[]).includes(id));
+  const best = r.endlessBest as { score?: unknown; waves?: unknown } | null | undefined;
+  if (best && typeof best.score === 'number' && typeof best.waves === 'number' && best.score >= 0) p.endlessBest = { score: Math.round(best.score), waves: Math.round(best.waves) };
   if (Array.isArray(r.met)) p.met = TUTORIAL_ENEMIES.filter((e) => (r.met as unknown[]).includes(e));
   if (Array.isArray(r.loadout)) {
     // A save from before v3 2.2 had 2 picks with the slingshot and the horn fixed: they go in front of them.

@@ -24,6 +24,7 @@ export type MenuChoice =
   | { kind: 'replay' }
   | { kind: 'fight'; level: number }
   | { kind: 'customFight'; id: string }
+  | { kind: 'endless' }
   | { kind: 'needTools' }
   | null;
 
@@ -141,6 +142,8 @@ export class Menu {
     if (this.page === 'main') {
       const choice = this.main.update(hands, dt);
       if (choice === 'campaign') this.showPage('campaign');
+      // Endless: like the campaign, empty tool slots first get the hint at the stand.
+      else if (choice === 'endless') return progress.loadout.includes(null) ? { kind: 'needTools' } : { kind: 'endless' };
       else if (choice === 'custom') this.showPage('customList');
       else if (choice === 'settings') return { kind: 'settings' };
       else if (choice === 'replay') return { kind: 'replay' };

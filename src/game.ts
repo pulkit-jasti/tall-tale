@@ -17,6 +17,7 @@ import {
   HORN,
   JUICE,
   KNIGHTS,
+  ENDLESS,
   MAPS,
   MENU,
   SCORE,
@@ -38,6 +39,7 @@ import { TUTORIAL_WAVES } from './director/tutorial.js';
 import tutorialMap from './maps/tutorial.json';
 import { parseBlueprint, type Blueprint } from './rules/blueprint.js';
 import type { Level } from './level/level.js';
+import { SEED } from './config/levelSettings.js';
 import type { RoadNetwork } from './world/roads.js';
 import { RisingCamps } from './world/risingCamps.js';
 import { Compass } from './ui/compass.js';
@@ -69,7 +71,10 @@ import { CompassCrank } from './player/crank.js';
 import { HeightRail } from './player/heightRail.js';
 import { HandTracker } from './player/hands.js';
 import { angleDelta, angleOf, degToRad } from './rules/boardMath.js';
-import { timeOfWave } from './rules/dayNight.js';
+import { campaignLevel } from './level/campaignLevels.js';
+import { makeEndlessLevel } from './level/endless.js';
+import { BOOST, drawCards, pickCard, type BoostCard } from './rules/boosts.js';
+import { BoostPicker } from './ui/boostPicker.js';
 import { createRandom, type Random } from './rules/random.js';
 import { checkReach } from './rules/reach.js';
 import { Drum } from './tools/drum.js';
@@ -109,7 +114,7 @@ import { SceneSwap } from './world/sceneSwap.js';
 import { loadTemplate } from './world/models.js';
 import { Menu } from './ui/menu/menu.js';
 import { progress, resetProgress, saveProgress } from './player/progress.js';
-import { battleTools, isOpen, recordTutorial, recordWin, starsFor, type PickTool } from './rules/campaign.js';
+import { battleTools, isOpen, LOADOUT_SLOTS, PICK_TOOLS, recordEndless, recordTutorial, recordWin, starsFor, toolUnlocked, type PickTool } from './rules/campaign.js';
 
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
@@ -277,6 +282,12 @@ export class GameSystem extends createSystem({}) {
   private camps!: RisingCamps;
   /** The Custom Game level being fought (its id), for its name and best stars on the win panel. */
   private customId: string | null = null;
+  /** The Endless run being played (its map's key, its card stacks and its card draws), or null. */
+  private endless: { key: string; stacks: Map<string, number>; rng: Random } | null = null;
+  /** The Endless breather's card panel, what it offers now, and whether this breather's pick was made. */
+  private boostPicker!: BoostPicker;
+  private offer: { kind: 'cards'; cards: BoostCard[] } | { kind: 'tools'; tools: PickTool[] } | null = null;
+  private breatherPicked = false;
   private compass!: Compass;
   /** The camps sending now, reused each frame for the compass. */
   private sending: number[] = [];
@@ -374,7 +385,7 @@ export class GameSystem extends createSystem({}) {
     // v3 2.2: the magnet, the magnifying glass (with the sun garden) and the sugar bowl.
     this.magnet = new Magnet(toolParts);
     this.magnifier = new Magnifier(toolParts);
-    this.magnifier.timeOfDay = () => this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves);
+    this.magnifier.timeOfDay = () => this.timeOverride ?? this.battle.timeOfDay;
     this.garden = new Garden(this.stage.boardSpin, this.goblins, this.audio, this.particles);
     this.magnifier.garden = this.garden;
     this.sugar = new SugarBowl(toolParts);
@@ -476,6 +487,7 @@ export class GameSystem extends createSystem({}) {
     this.sign = new HintSign(this.stage.boardLift, this.audio);
     // The welcome panel's Settings button opens the settings page on its own (there is no battle to pause).
     this.endPanel = new EndPanel(this.stage.boardLift, this.audio, this.particles);
+    this.boostPicker = new BoostPicker(this.stage.boardLift, this.audio);
     this.endPanel.onSettings = () => {
       this.endPanel.hide();
       this.titleSettings = true;
@@ -588,9 +600,23 @@ export class GameSystem extends createSystem({}) {
       },
       { trophy, platform },
       // Separate copies for the campaign card's reward (a small turning tool).
-      { swatter: this.swatter.displayModel().model, pepper: this.pepper.displayModel().model, drum: this.drum.displayModel().model },
+      {
+        swatter: this.swatter.displayModel().model,
+        pepper: this.pepper.displayModel().model,
+        drum: this.drum.displayModel().model,
+        magnet: this.magnet.displayModel().model,
+        glass: this.magnifier.displayModel().model,
+        sugar: this.sugar.displayModel().model,
+      },
       // And full-size copies to hold when a reward is grabbed off the card.
-      { swatter: this.swatter.displayModel(), pepper: this.pepper.displayModel(), drum: this.drum.displayModel() },
+      {
+        swatter: this.swatter.displayModel(),
+        pepper: this.pepper.displayModel(),
+        drum: this.drum.displayModel(),
+        magnet: this.magnet.displayModel(),
+        glass: this.magnifier.displayModel(),
+        sugar: this.sugar.displayModel(),
+      },
     );
     // Compile the home screen and upload its tags now, so the first grab or first look never hitches.
     this.menu.warm(this.renderer, this.scene, this.camera);
@@ -710,10 +736,19 @@ export class GameSystem extends createSystem({}) {
     this.pepperRing.onDiggerStopped = () => A.diggerStopped();
     // Real battles only: a level, Custom Game, a battle after Skip tutorial (never the tutorial's lessons).
     this.battle.onStarted = (teach) => {
+      // Endless: a restart is a fresh run on the same map (no cards picked yet).
+      this.endless?.stacks.clear();
+      this.endBreather();
       A.startBattle(teach ? null : ((this.battle.loadout ?? null) as PickTool[] | null), !teach);
       this.magnifier.resetSun();
       this.slingshot.clearExtras();
       this.toast.clear();
+    };
+    // Endless: each breather offers boost cards (or new tools after waves 10, 20, 30, 40).
+    this.battle.endlessBreather = {
+      start: (cleared) => this.startBreather(cleared),
+      done: () => this.breatherPicked,
+      end: () => this.endBreather(),
     };
     this.battle.onWaveStarted = () => A.waveStarted(this.livePlants());
     this.battle.onWaveCleared = () => A.waveCleared(this.livePlants());
@@ -845,8 +880,17 @@ export class GameSystem extends createSystem({}) {
     // Every win shows its stars (2026-11-12); v3 Phase 4: from the score's share of par.
     const score = this.battle.finalScore();
     const stars = starsFor(score.par > 0 ? score.total / score.par : 1, SCORE.stars.threeAt, SCORE.stars.twoAt);
+    // Endless: the score plus the waves survived; the best run is saved on the device.
+    if (this.battle.endless) {
+      const waves = this.battle.wavesSurvived;
+      const total = score.total + waves * ENDLESS.waveBonus;
+      const best = recordEndless(progress, total, waves);
+      saveProgress();
+      console.info(`[endless] run over: wave ${waves}, score ${total}${best ? ' (new best)' : ''}`);
+      return { menu: true, subtitle: `Endless: ${waves} ${waves === 1 ? 'wave' : 'waves'} survived`, endless: { score: total, best, bestScore: progress.endlessBest?.score ?? total } };
+    }
     // A Custom Game level: its name under the title, and its best stars kept with it.
-    if (this.battle.playingLevel) {
+    if (this.battle.playingLevel && this.battle.level === null) {
       const entry = customLevels.levels.find((l) => l.id === this.customId);
       const subtitle = entry?.name;
       if (!won || !entry) return { menu: true, subtitle, stars: won ? stars : undefined };
@@ -872,17 +916,34 @@ export class GameSystem extends createSystem({}) {
     return { stars, menu: true, best: before > 0 && stars > before, next, subtitle };
   }
 
-  /** The win panel's Next level: the next campaign level starts right away (the same map for now, so no swap). */
+  /**
+   * The win panel's Next level: the next campaign level starts right away.
+   * With its own level file its map is built first (the end panel stays
+   * until it is up); without one, the normal battle on the same map.
+   */
   private nextLevel(): void {
     const level = this.battle.level;
     if (level === null || !isOpen(progress, level + 1)) {
       this.goToMenu('campaign');
       return;
     }
-    this.battle.level = level + 1;
-    this.battle.loadout = this.pickedTools();
-    console.info(`[campaign] next: level ${level + 1}`);
-    this.battle.start(0, false);
+    const next = level + 1;
+    const file = campaignLevel(next);
+    console.info(`[campaign] next: level ${next}`);
+    if (!file) {
+      this.battle.useTutorialWaves();
+      this.battle.level = next;
+      this.battle.loadout = this.pickedTools();
+      if (this.mapKey === MAPS.tutorialKey) this.battle.start(0, false);
+      else this.withTutorialMap(() => this.battle.start(0, false));
+      return;
+    }
+    void this.loadMap(`campaign:${next}`, file.map).then((ok) => {
+      if (!ok) return;
+      this.battle.level = next;
+      this.battle.loadout = this.pickedTools(file.rules.tools);
+      this.battle.playLevel(file);
+    });
   }
 
   /**
@@ -934,8 +995,21 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** The loadout's 2 picked hand tools for a battle (the slingshot and the horn are always out). */
-  private pickedTools(): PickTool[] {
-    return battleTools(progress.loadout);
+  /**
+   * The loadout's tools for a battle. A level that allows only some tools
+   * (docs/custom-mode.md "Allowed lists") keeps those, then fills the free
+   * slots with its other allowed tools the player has unlocked, so a level
+   * never starts empty. It never adds a locked tool.
+   */
+  private pickedTools(allowed?: PickTool[]): PickTool[] {
+    const picked = battleTools(progress.loadout);
+    if (!allowed) return picked;
+    const kept = picked.filter((t) => allowed.includes(t));
+    for (const t of allowed) {
+      if (kept.length >= LOADOUT_SLOTS) break;
+      if (!kept.includes(t) && toolUnlocked(progress, t)) kept.push(t);
+    }
+    return kept;
   }
 
   // ---- Map loading (docs/custom-mode.md section 11, step 5) ----
@@ -1004,7 +1078,7 @@ export class GameSystem extends createSystem({}) {
       this.spawner.setRoadCount(built.network.graph.camps.length);
       this.triggers.place(built.network, built.trapSpots);
       this.triggers.hideAll();
-      this.garden.place(built.network, built.trapSpots, createRandom(blueprint.seed + 990));
+      this.garden.place(built.network, built.trapSpots, createRandom(blueprint.seed + 990), blueprint.extras?.beds);
       for (const target of this.triggers.targets) this.slingshot.addTarget(target);
       this.villagers.setVillages(built.villages);
       this.mapKey = key;
@@ -1038,11 +1112,98 @@ export class GameSystem extends createSystem({}) {
     if (!(await this.loadMap(`custom:${entry.id}:${entry.changed}`, level.map))) return;
     this.battle.level = null;
     this.customId = entry.id;
-    this.battle.loadout = this.pickedTools();
+    this.endless = null;
+    this.battle.loadout = this.pickedTools(level.rules.tools);
     this.battle.useLevel(level);
     this.battle.hideLaterCamps();
     console.info(`[custom] ${entry.name}: ${battleTools(progress.loadout).join(', ')}`);
     this.goToBattle(() => this.battle.playLevel(level));
+  }
+
+  /**
+   * Endless (docs/v3-plan.md Phase 5): a fresh random map every run (made
+   * by the generator from a new seed, built while the menu still shows),
+   * then the run's waves on the fixed ramp with the loadout's 4 tools.
+   * Restart and Try again play a fresh run on the same map.
+   */
+  private async startEndless(): Promise<void> {
+    if (this.loading) return;
+    // The run's seed (every pick after it goes through seeded random streams).
+    const seed = Math.floor(Math.random() * SEED.max);
+    let level: Level;
+    try {
+      level = makeEndlessLevel(seed);
+    } catch (error) {
+      console.error('[endless] no map', error);
+      note(`Endless: no map from seed ${seed}: ${String(error)}`);
+      return;
+    }
+    const key = `endless:${level.meta.seed}`;
+    if (!(await this.loadMap(key, level.map))) return;
+    this.battle.level = null;
+    this.customId = null;
+    this.endless = { key, stacks: new Map(), rng: createRandom(level.meta.seed * 31 + 7) };
+    this.battle.loadout = this.pickedTools();
+    this.battle.useLevel(level);
+    this.battle.hideLaterCamps();
+    console.info(`[endless] seed ${level.meta.seed}: ${this.battle.loadout.join(', ')}`);
+    note(`Endless run: seed ${level.meta.seed}, ${level.map.nodes.filter((n) => n.kind === 'camp').length} camps`);
+    this.goToBattle(() => this.battle.playEndless(level));
+  }
+
+  /** An Endless breather starts (after `cleared` waves): a new tool pick after the tool waves, else the boost cards. */
+  private startBreather(cleared: number): void {
+    const run = this.endless;
+    this.breatherPicked = false;
+    if (!run) {
+      this.breatherPicked = true;
+      return;
+    }
+    const stand = this.battle.stand;
+    if (ENDLESS.toolWaves.includes(cleared)) {
+      // Every tool not on the stand is shown (not 3 at random), so a bad draw never costs a build.
+      const tools = PICK_TOOLS.filter((t) => !stand.includes(t));
+      if (tools.length > 0) {
+        this.offer = { kind: 'tools', tools };
+        this.boostPicker.showTools(tools);
+        return;
+      }
+    }
+    const cards = drawCards(run.rng, stand, run.stacks, ENDLESS.cards, ENDLESS.rareChance);
+    if (cards.length === 0) {
+      this.breatherPicked = true;
+      return;
+    }
+    this.offer = { kind: 'cards', cards };
+    this.boostPicker.showCards(cards, run.stacks);
+  }
+
+  /** The breather ended (picked, or out of time): the panel goes. */
+  private endBreather(): void {
+    this.offer = null;
+    this.boostPicker.hide();
+  }
+
+  /** Every frame of a battle: the breather's panel, and what was picked on it. */
+  private updateBreather(dt: number): void {
+    const offer = this.offer;
+    if (!offer || this.paused) return;
+    const i = this.boostPicker.update(this.hands.hands, dt);
+    if (i === null) return;
+    if (offer.kind === 'tools') {
+      const tool = offer.tools[i];
+      if (tool) this.battle.addTool(tool);
+      console.info(`[endless] new tool: ${tool}`);
+    } else if (this.endless) {
+      const card = offer.cards[i];
+      const wallBefore = BOOST.wall;
+      const stacks = pickCard(card, this.endless.stacks);
+      if (BOOST.wall !== wallBefore) this.battle.growWall(BOOST.wall / wallBefore);
+      this.audio.play('lessonDone');
+      console.info(`[endless] card: ${card.name} (${stacks})`);
+    }
+    this.breatherPicked = true;
+    this.endBreather();
   }
 
   /** The menu sinks, the battle rises, then `start` starts the battle. */
@@ -1055,19 +1216,41 @@ export class GameSystem extends createSystem({}) {
     this.swap.toBattle(() => {}, start, instant);
   }
 
-  /** Fight on a campaign level: the normal battle without the tutorial, with the loadout (decided 2026-11-11 for run 2). */
+  /**
+   * Fight on a campaign level: its own frozen level file (made by `npm run
+   * gen -- --campaign`): its map, waves and rules, with the loadout (only
+   * the tools the level allows). A level with no file plays the normal
+   * battle on the tutorial map, as before.
+   */
   private fight(level: number): void {
-    this.withTutorialMap(() => {
+    const file = campaignLevel(level);
+    this.customId = null;
+    this.endless = null;
+    if (!file) {
+      this.withTutorialMap(() => {
+        this.battle.level = level;
+        this.battle.loadout = this.pickedTools();
+        this.battle.hideLaterCamps();
+        console.info(`[campaign] level ${level} (no level file): ${battleTools(progress.loadout).join(', ')}`);
+        this.goToBattle(() => this.battle.start(0, false));
+      });
+      return;
+    }
+    void this.loadMap(`campaign:${level}`, file.map).then((ok) => {
+      if (!ok) return;
       this.battle.level = level;
-      this.battle.loadout = this.pickedTools();
+      this.battle.loadout = this.pickedTools(file.rules.tools);
+      this.battle.useLevel(file);
       this.battle.hideLaterCamps();
-      console.info(`[campaign] level ${level}: ${battleTools(progress.loadout).join(', ')}`);
-      this.goToBattle(() => this.battle.start(0, false));
+      console.info(`[campaign] level ${level}: ${this.battle.loadout.join(', ')}`);
+      this.goToBattle(() => this.battle.playLevel(file));
     });
   }
 
   /** Replay tutorial (main menu): the whole tutorial again, every tool on its own spot. */
   private replayTutorial(): void {
+    this.endless = null;
+    this.customId = null;
     this.withTutorialMap(() => {
       this.battle.level = null;
       this.battle.loadout = null;
@@ -1144,6 +1327,7 @@ export class GameSystem extends createSystem({}) {
     } else if (choice.kind === 'replay') this.replayTutorial();
     else if (choice.kind === 'fight') this.fight(choice.level);
     else if (choice.kind === 'customFight') void this.fightCustom(choice.id);
+    else if (choice.kind === 'endless') void this.startEndless();
     else if (choice.kind === 'needTools') this.slotsHintLeft = MENU.shelves.emptySlotsHint.seconds;
   }
 
@@ -1383,6 +1567,7 @@ export class GameSystem extends createSystem({}) {
     this.handles.update(dt);
     this.spawner.update(dt);
     this.battle.update(dt, this.hands.hands, headPosition, headForward);
+    this.updateBreather(dt);
     // Hit stop (juice): on a big hit the units slow to a crawl for a moment. The board, view and hands never do.
     const unitDt = dt * this.juice.timeScale;
     this.goblins.update(unitDt);
@@ -1470,7 +1655,8 @@ export class GameSystem extends createSystem({}) {
     }
     const fighting = this.battle.fightingWave;
     const left = fighting ? this.waves.waiting(BALLOONS.riders) + this.goblins.aliveCount : null;
-    compass.end(dt, on, this.battle.waveNumber, this.battle.totalWaves, left);
+    // Endless has no last wave: no wave dots (the banner says the wave).
+    compass.end(dt, on, this.battle.waveNumber, this.battle.endless ? 0 : this.battle.totalWaves, left);
   }
 
   /**
@@ -1488,7 +1674,7 @@ export class GameSystem extends createSystem({}) {
     }
     // v3 2.7: a foggy level's night fog (it shows only at night, and changes only between waves).
     this.dayNight.foggy = this.fogOverride ?? this.battle.foggy;
-    this.dayNight.show(this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves), fresh);
+    this.dayNight.show(this.timeOverride ?? this.battle.timeOfDay, fresh);
     this.dayNight.update(dt, this.stage.boardScale);
     this.nightLights.update(dt, this.dayNight.lights);
   }
@@ -1739,6 +1925,15 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'openCustom':
         this.goToMenu('customList');
+        break;
+      case 'startEndless':
+        if (this.swap.shown !== 'menu') console.info('[debug] open the menu first');
+        else void this.startEndless();
+        break;
+      case 'endlessCards':
+      case 'endlessTools':
+        if (!this.battle.endless) console.info('[debug] start an Endless run first');
+        else this.startBreather(id === 'endlessTools' ? ENDLESS.toolWaves[0] : 1);
         break;
       case 'fightCustom': {
         // The newest saved Custom Game level (the list is newest first), with the loadout as it is.

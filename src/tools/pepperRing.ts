@@ -33,6 +33,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { PEPPER_RING } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import type { Particles } from '../fx/particles.js';
 import { angleOf, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import { createRandom } from '../rules/random.js';
@@ -138,7 +139,7 @@ export class PepperRing {
     if (s.amount > 0) {
       // Shaking a full segment again tops it up.
       s.amount = 1;
-      s.left = R.lastTime;
+      s.left = R.lastTime * BOOST.pepperLast;
       return;
     }
     s.fill = Math.min(1, s.fill + dt / R.fillTime);
@@ -183,7 +184,7 @@ export class PepperRing {
   private fillUp(s: Segment): void {
     s.fill = 0;
     s.amount = 1;
-    s.left = R.lastTime;
+    s.left = R.lastTime * BOOST.pepperLast;
     this.stage.boardSpin.localToWorld(this.centerOf(s, world));
     this.particles.burst(world, R.sparkleColors, 10, 0.12);
     this.audio.play('pepperRingFull', world, 1, 0.2);

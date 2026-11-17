@@ -45,7 +45,7 @@ export function levelWavePlans(level: Level): WavePlan[] {
       archer: w.counts.archer ?? 0,
     },
     // v3 2.7: a foggy night wave sends its groups out more spread, so the short warning does not snowball.
-    spawnTime: level.meta.settings.foggyNight && timeOfWave(i, total) === 'night' ? Math.round(w.spawnTime * NIGHT_FOG.spreadScale) : w.spawnTime,
+    spawnTime: level.meta.settings.foggyNight && (w.time ?? timeOfWave(i, total)) === 'night' ? Math.round(w.spawnTime * NIGHT_FOG.spreadScale) : w.spawnTime,
     balloons: w.balloons,
     rising: [...w.rising],
     gear: { ...w.gear },
@@ -70,6 +70,47 @@ export function risingByWave(waves: WavePlan[]): string[][] {
 /** The camps still under the ground when a battle starts at wave `from` (0 based): they rise at that wave or later. */
 export function hiddenAtStart(waves: WavePlan[], from: number): string[] {
   return risingByWave(waves).flatMap((ids, i) => (i >= from ? ids : []));
+}
+
+/** What an Endless breather does (the game wires it to the boost card picker). */
+export interface EndlessBreather {
+  /** The breather after `cleared` waves starts: the cards (or the new tools) show. */
+  start(cleared: number): void;
+  /** True once a card was picked. */
+  done(): boolean;
+  /** The breather ends (picked, or out of time: no card): the picker goes. */
+  end(): void;
+}
+
+/**
+ * Endless mode (docs/v3-plan.md Phase 5): per wave, its banner ("Wave N",
+ * it hides itself after bannerTime), fought until cleared, then the
+ * breather: the boost cards, until one is picked or pickTime runs out, and
+ * the next wave starts on its own. Same step ids as a level.
+ */
+export function buildEndlessSteps(waves: WavePlan[], breather: EndlessBreather, pickTime: number, bannerTime: number): TutorialStep[] {
+  const steps: TutorialStep[] = [];
+  waves.forEach((wave, i) => {
+    steps.push({
+      id: `wave-${i + 1}-start`,
+      hint: { kind: 'banner', header: `Wave ${i + 1}`, text: wave.intro, icon: 'warning', next: true },
+      start: (api: TutorialApi) => api.startWave(i),
+      done: () => false,
+      timeout: bannerTime,
+    });
+    steps.push({ id: `wave-${i + 1}-clear`, done: (api) => api.waveCleared(), timeout: Infinity });
+    steps.push({
+      id: `wave-${i + 1}-cleared`,
+      start: (api: TutorialApi) => {
+        api.clearWave();
+        if (i < waves.length - 1) breather.start(i + 1);
+      },
+      done: () => i === waves.length - 1 || breather.done(),
+      timeout: pickTime,
+      end: () => breather.end(),
+    });
+  });
+  return steps;
 }
 
 /**

@@ -62,6 +62,8 @@ export interface EndExtras {
   /** The level's name, under the title. */
   subtitle?: string;
   stats?: EndStats;
+  /** Endless: the run's score (with its wave bonus), and whether it is a new best (else the best so far). */
+  endless?: { score: number; best: boolean; bestScore: number };
 }
 
 const GOLD = '#b07a10';
@@ -308,6 +310,9 @@ export class EndPanel {
   /** The line under the stats. */
   private noteText(): { text: string; color: string } | null {
     const extras = this.extras;
+    // Endless always ends in a loss: the run's score, and the best.
+    const run = extras.endless;
+    if (this.kind === 'lost' && run) return { text: run.best ? `New best! Score ${run.score}` : `Score ${run.score} (best ${run.bestScore})`, color: GOLD };
     if (this.kind === 'lost') return { text: 'Eat climbers and call your knights. You can do it!', color: UI_COLORS.note };
     const stars = extras.stars;
     if (stars === undefined) return null;

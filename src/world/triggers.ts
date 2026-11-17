@@ -37,10 +37,11 @@ import {
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { GOBLIN_RULES, ROADS, TRIGGERS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import { applyAimGlow, applyTouchState } from '../player/feedback.js';
-import type { BlueprintTrigger, TriggerKind } from '../rules/blueprint.js';
+import type { BlueprintExtras, BlueprintTrigger, TriggerKind } from '../rules/blueprint.js';
 import { boardHeight, degToRad, groundAt, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
 import type { PickTool } from '../rules/campaign.js';
 import type { Random } from '../rules/random.js';
@@ -154,8 +155,10 @@ const EXTRA_KINDS: ReadonlySet<TriggerKind> = new Set<TriggerKind>(['hay', 'brid
  * every other trap spot, and `cartSpots` hidden spots for the rare potion
  * cart. Flat math only. Returns the given placements followed by the new ones.
  */
-export function addExtraTraps(network: RoadNetwork, placements: TriggerPlacement[], rng: Random): TriggerPlacement[] {
+export function addExtraTraps(network: RoadNetwork, placements: TriggerPlacement[], rng: Random, counts?: BlueprintExtras): TriggerPlacement[] {
   const E = TRIGGERS.extra;
+  // A level's own counts (its settings), else the config's.
+  const n = counts ?? { hay: E.hay.count, bellTower: E.bellTower.count, bridge: E.bridge.count, cartSpots: E.cartSpots, beds: 0 };
   const all = [...placements];
   const spotsFor = (from: number, to: number): { road: number; along: number; x: number; z: number }[] => {
     const list: { road: number; along: number; x: number; z: number }[] = [];
@@ -183,10 +186,10 @@ export function addExtraTraps(network: RoadNetwork, placements: TriggerPlacement
       }
     }
   };
-  add('bridge', E.bridge.count, E.bridge.from, E.bridge.to, false);
-  add('bellTower', E.bellTower.count, E.bellTower.from, E.bellTower.to, false);
-  add('hay', E.hay.count, E.hay.from, E.hay.to, false);
-  add('cart', E.cartSpots, E.cart.from, E.cart.to, true);
+  add('bridge', n.bridge, E.bridge.from, E.bridge.to, false);
+  add('bellTower', n.bellTower, E.bellTower.from, E.bellTower.to, false);
+  add('hay', n.hay, E.hay.from, E.hay.to, false);
+  add('cart', n.cartSpots, E.cart.from, E.cart.to, true);
   return all;
 }
 
@@ -611,7 +614,7 @@ class Keg extends Trigger {
   protected act(): void {
     this.root.visible = false;
     this.center(temp2);
-    this.owner.explode(temp2, TRIGGERS.keg.blastRadius, TRIGGERS.keg.chainRadius, this);
+    this.owner.explode(temp2, TRIGGERS.keg.blastRadius * BOOST.kegBlast, TRIGGERS.keg.chainRadius, this);
     this.owner.debris(temp2, TRIGGERS.keg.debris);
     this.phase = 'done';
   }
@@ -1591,12 +1594,13 @@ export class Triggers {
     // v3 2.1: the bridge rebuilds itself in place, the bell tower is once per battle, the cart is rare.
     if (trigger.kind === 'cart') this.rollCart(TRIGGERS.cart.againIn);
     if (NO_SPARES.has(trigger.kind)) return;
-    this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay });
+    // Endless Quick Rebuild: used traps come back sooner.
+    this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay * BOOST.trapDelay });
   }
 
   /** v3 2.6: a trap taken away without being set off (a keg the magnet pulled in) comes back on the usual timer. */
   comeBackLater(trigger: Trigger): void {
-    if (!NO_SPARES.has(trigger.kind)) this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay });
+    if (!NO_SPARES.has(trigger.kind)) this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay * BOOST.trapDelay });
   }
 
   /**
@@ -1639,7 +1643,7 @@ export class Triggers {
   /** v3 2.1: whether the potion cart shows (TRIGGERS.cart.chance) and when, within `window` seconds. Seeded. */
   private rollCart(window: [number, number]): void {
     const spots = this.list.filter((t) => t.kind === 'cart').length;
-    this.cartIn = spots > 0 && this.rng.next() < TRIGGERS.cart.chance ? this.rng.range(window[0], window[1]) : -1;
+    this.cartIn = spots > 0 && this.rng.next() < Math.min(1, TRIGGERS.cart.chance * BOOST.cart) ? this.rng.range(window[0], window[1]) : -1;
   }
 
   /** v3 2.1: the rare cart's timer: it shows at a free spot of its own (no goblins by it), and goes away unused. */

@@ -11,6 +11,7 @@
 // count too, not only fast swipes.
 import { Vector3 } from 'three';
 import { CASTLE, SWATTER, TOOL_SPOTS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { landingHeight } from '../rules/boardMath.js';
 import type { Balloons } from '../units/balloons.js';
 import type { Goblin } from '../units/goblins.js';
@@ -100,7 +101,7 @@ export class FlySwatter extends HandTool {
     // Every goblin near the head's path since the last frame.
     this.hits.length = 0;
     if (speed > SWATTER.minHitSpeed) {
-      const r2 = SWATTER.hitRadius * SWATTER.hitRadius;
+      const r2 = (SWATTER.hitRadius * BOOST.swatterRadius) ** 2;
       const lengthSq = length * length;
       for (const g of this.goblins.list) {
         if (!this.goblins.isHittable(g)) continue;
@@ -113,7 +114,7 @@ export class FlySwatter extends HandTool {
       }
     }
     // A balloon near the head (v3): pushed away, not popped.
-    const balloon = speed > SWATTER.minHitSpeed ? (this.balloons?.near(current, SWATTER.hitRadius) ?? null) : null;
+    const balloon = speed > SWATTER.minHitSpeed ? (this.balloons?.near(current, SWATTER.hitRadius * BOOST.swatterRadius) ?? null) : null;
     this.last.copy(current);
     const contact = groundSwat || this.hits.length > 0 || balloon !== null;
     // v3: a swing starts with a fast head or a swat, and ends when the head has been slow a moment.
@@ -172,7 +173,7 @@ export class FlySwatter extends HandTool {
     this.stage.boardLift.localToWorld(front.set(0, 0, -(CASTLE.wallOut + CASTLE.wallStandOff / 2)));
     this.stage.boardSpin.worldToLocal(front);
     this.hits.length = 0;
-    const r = SWATTER.hitRadius * 2;
+    const r = SWATTER.hitRadius * BOOST.swatterRadius * 2;
     for (const g of this.goblins.list) {
       if (!this.goblins.isHittable(g)) continue;
       if (Math.hypot(g.root.position.x - front.x, g.root.position.z - front.z) < r) this.hits.push(g);

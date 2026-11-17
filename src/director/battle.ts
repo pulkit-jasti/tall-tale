@@ -14,6 +14,7 @@ import {
   CHICKENS,
   DEBUG,
   END_PANEL,
+  ENDLESS,
   GHOST_HAND,
   GOBLIN_RULES,
   HINT_SIGN,
@@ -60,7 +61,10 @@ import type { RisingCamps } from '../world/risingCamps.js';
 import type { Compass } from '../ui/compass.js';
 import type { CompassCrank } from '../player/crank.js';
 import type { Level, LevelRules } from '../level/level.js';
-import { buildLevelSteps, hiddenAtStart, levelWavePlans, risingByWave } from './levelDirector.js';
+import { buildEndlessSteps, buildLevelSteps, hiddenAtStart, levelWavePlans, risingByWave, type EndlessBreather } from './levelDirector.js';
+import { BOOST, resetBoosts } from '../rules/boosts.js';
+import { timeOfWave } from '../rules/dayNight.js';
+import type { TimeOfDay } from '../config/game.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
@@ -201,6 +205,15 @@ export class Battle implements TutorialApi {
   private levelRules: LevelRules | null = null;
   /** v3 2.7: the level asks for night fog ("Foggy night"). */
   private foggyNight = false;
+  /** Each wave's time of day (a level's allowed times, or Endless's cycle), or null for the usual spread (timeOfWave). */
+  private times: TimeOfDay[] | null = null;
+  /** Endless mode (playEndless): its own breathers (boost cards) and no last wave to win. */
+  endless = false;
+  /** What an Endless breather does (the game wires it to the card picker). */
+  endlessBreather: EndlessBreather | null = null;
+  /** Endless: the extra tool platforms used so far (ENDLESS.extraSpots), and the tools on them. */
+  private extraUsed = 0;
+  private extraTools: (HandToolName | 'slingshot')[] = [];
   /** The camps that rise at each wave (0 based), for the waves above. */
   private rising: string[][] = risingByWave(TUTORIAL_WAVES);
   /** Each tool's own spot, from when it was built. */
@@ -451,7 +464,17 @@ export class Battle implements TutorialApi {
       if (!teach) for (const t of Object.values(this.parts.tools)) if (TUTORIAL_HAND_TOOLS.includes(t.name)) t.setVisible(true);
     }
     this.reach.stop();
-    const steps = this.levelRules ? buildLevelSteps(this.waves) : buildTutorialSteps(BUILT_TOOLS, this.waves, from, !this.reachKnown, teach);
+    // Endless boost cards only live for one run.
+    resetBoosts();
+    this.extraUsed = 0;
+    this.extraTools = [];
+    const breather = this.endlessBreather;
+    const steps =
+      this.endless && breather
+        ? buildEndlessSteps(this.waves, breather, ENDLESS.pickTime, ENDLESS.bannerTime)
+        : this.levelRules
+          ? buildLevelSteps(this.waves)
+          : buildTutorialSteps(BUILT_TOOLS, this.waves, from, !this.reachKnown, teach);
     const director = new Director<TutorialApi>(steps, this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
@@ -500,12 +523,74 @@ export class Battle implements TutorialApi {
     this.start(0, false);
   }
 
+  /**
+   * An Endless run (src/level/endless.ts): the run's level played like any
+   * level, but with Endless's breathers (a boost card or a new tool between
+   * waves) and no last wave. The game loads its map first.
+   */
+  playEndless(level: Level): void {
+    this.useLevel(level);
+    this.endless = true;
+    this.start(0, false);
+  }
+
+  /** Endless: waves survived (cleared) so far. */
+  get wavesSurvived(): number {
+    return this.state.wavesCleared;
+  }
+
+  /**
+   * Endless: a new tool from the breather's pick goes on the next free
+   * platform around the back (ENDLESS.extraSpots) and joins the loadout.
+   * The slingshot only stands on the right front, so a hand tool standing
+   * there moves to the new platform instead.
+   */
+  addTool(name: HandToolName | 'slingshot'): void {
+    if (!this.loadout || this.stand.includes(name)) return;
+    const spots = ENDLESS.extraSpots;
+    const spot = spots[Math.min(this.extraUsed++, spots.length - 1)];
+    if (name === 'slingshot') {
+      const front = LOADOUT_SPOTS[0];
+      for (const tool of Object.values(this.parts.tools)) {
+        if (tool.visible && tool.spotNow.angleDeg === front.angleDeg && tool.spotNow.radius === front.radius) tool.setSpot(spot);
+      }
+      this.parts.slingshot.setVisible(true);
+    } else {
+      const tool = this.parts.tools[name];
+      tool.setSpot(spot);
+      tool.setVisible(true);
+    }
+    this.extraTools.push(name);
+    this.parts.audio.play('lessonDone');
+  }
+
+  /** The tools on the board now: the loadout, plus Endless's new ones. */
+  get stand(): (HandToolName | 'slingshot')[] {
+    return [...(this.loadout ?? []), ...this.extraTools];
+  }
+
+  /** Endless Thick Walls: the castle's max health grows by `scale`, and so does its health (by what was added). */
+  growWall(scale: number): void {
+    const added = this.state.maxHealth * (scale - 1);
+    this.state.maxHealth += added;
+    this.state.health += added;
+  }
+
   /** A level's waves and rules from now on (playLevel starts it). */
   useLevel(level: Level): void {
+    this.endless = false;
     this.waves = levelWavePlans(level);
     this.rising = risingByWave(this.waves);
     this.levelRules = level.rules;
     this.foggyNight = level.meta.settings.foggyNight;
+    // Each wave's own time of day (allowed times), when the level has them.
+    this.times = level.waves.every((w) => w.time) ? level.waves.map((w) => w.time!) : null;
+  }
+
+  /** The time of day that shows now (decor only): the level's own time for that wave, or the usual spread. */
+  get timeOfDay(): TimeOfDay {
+    const i = this.timeWave;
+    return this.times?.[i] ?? timeOfWave(i, this.waves.length);
   }
 
   /** The camps that rise later go under the ground now (Fight poked: before the battle rises, so none pops away). */
@@ -519,6 +604,8 @@ export class Battle implements TutorialApi {
     this.rising = risingByWave(TUTORIAL_WAVES);
     this.levelRules = null;
     this.foggyNight = false;
+    this.times = null;
+    this.endless = false;
   }
 
   /** True while the waves are a level's (playLevel). */
@@ -730,7 +817,7 @@ export class Battle implements TutorialApi {
 
   /** Heals for one eaten goblin (also the debug "Eat heal" action). */
   heal(seasoned = false, scale = 1): void {
-    const gained = healCastle(this.state, CASTLE_HEALTH.eatHeal * scale * (seasoned ? CASTLE_HEALTH.seasonedHealScale : 1));
+    const gained = healCastle(this.state, CASTLE_HEALTH.eatHeal * scale * BOOST.heal * (seasoned ? CASTLE_HEALTH.seasonedHealScale : 1));
     if (gained <= 0) return;
     const at = this.parts.flags.clothWorld(healAt);
     this.parts.audio.play('castleHeal', at);
@@ -1222,6 +1309,8 @@ export class Battle implements TutorialApi {
     this.inWave = false;
     this.parts.troops.recall();
     clearWave(this.state, CASTLE_HEALTH);
+    // Endless Stone Masons: the wall repairs a share of what is missing after each wave.
+    if (BOOST.repair > 0 && this.state.phase === 'playing') this.state.health += (this.state.maxHealth - this.state.health) * BOOST.repair;
     if (this.state.phase === 'playing') this.parts.audio.play('cheer');
     // The soldiers on the field cheer, and confetti flutters down over the castle.
     this.parts.troops.cheerAll();

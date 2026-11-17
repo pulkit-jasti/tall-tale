@@ -16,6 +16,7 @@ import {
   TABS,
   MENU,
   END_PANEL,
+  ENDLESS,
   HANDLES,
   HINT_SIGN,
   HORN,
@@ -29,6 +30,7 @@ import {
   SLINGSHOT,
   SWATTER,
   TOOL_SPOTS,
+  UI_SPACING,
   UI_ZONE,
 } from '../config/game.js';
 
@@ -134,6 +136,12 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.
     { name: 'pause button', radius: PAUSE.button.at, y: PAUSE.button.y, rare: true },
     { name: 'end panel button', ...endButton },
+    // Endless: the new tools' platforms around the back (same distance as the loadout's), and the breather's tick buttons.
+    ...ENDLESS.extraSpots.map((s, i) => ({ name: `endless tool platform ${i + 1}`, radius: s.radius, y: top + 4 })),
+    {
+      name: 'endless card button',
+      ...onPanel(ENDLESS.panel.radius, uiCenterY(ENDLESS.panel.height, ENDLESS.panel.tiltDeg), ENDLESS.panel.tiltDeg, -(ENDLESS.panel.height / 2 - ENDLESS.panel.buttonRadius * POKE.rimScale - UI_SPACING.edge - 3)),
+    },
     // The win panel is taller (the stars and the stats): its big button and its Menu and Play again in the corners.
     {
       name: 'win panel big button',
@@ -235,6 +243,7 @@ export function checkReach(): void {
   // Every menu panel must fit between the highest and lowest spot UI may reach.
   const panels: [string, number, number][] = [
     ['end panel', END_PANEL.height, END_PANEL.tiltDeg],
+    ['endless card panel', ENDLESS.panel.height, ENDLESS.panel.tiltDeg],
     ['pause panel', PAUSE.panel.height, PAUSE.panel.tiltDeg],
     ['settings page', PAUSE.settings.height, PAUSE.panel.tiltDeg],
     ['main menu', MENU.main.height, MENU.main.tiltDeg],

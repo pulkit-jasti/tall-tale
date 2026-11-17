@@ -22,6 +22,7 @@
 //     lands by the pebble bowl (onKegPulled) and the use window ends.
 import { Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
 import { MAGNET, RENDER_ORDER, TOOL_SPOTS, TRIGGERS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import type { Goblin } from '../units/goblins.js';
 import type { Triggers } from '../world/triggers.js';
 import { horseshoeMagnet } from '../world/shapes.js';
@@ -121,7 +122,7 @@ export class Magnet extends HandTool {
   }
 
   private drawRing(): void {
-    const R = MAGNET.ringRadius;
+    const R = MAGNET.ringRadius * BOOST.magnetRadius;
     this.ring.visible = true;
     this.inner.visible = true;
     this.ring.position.set(this.aimAt.x, this.aimAt.y + 0.6, this.aimAt.z);
@@ -136,7 +137,7 @@ export class Magnet extends HandTool {
 
   /** Every goblin with gear inside the ring: its dwell grows; at holdTime the gear comes off. */
   private pull(dt: number): void {
-    const r2 = MAGNET.ringRadius * MAGNET.ringRadius;
+    const r2 = (MAGNET.ringRadius * BOOST.magnetRadius) ** 2;
     // Sparks from the tips toward the ring, now and then.
     this.arcTimer -= dt;
     if (this.arcTimer <= 0) {

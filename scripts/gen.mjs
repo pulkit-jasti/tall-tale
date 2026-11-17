@@ -6,6 +6,9 @@
 //   npm run gen -- --seed 42 --settings my.json --out src/maps/levels/level3.json
 //   npm run gen -- --seed 42 --svg map.svg        a top view of the map, to look at
 //   npm run gen -- --help                         every setting with its limits
+//   npm run gen -- --campaign                     every campaign level file at once (src/level/presets.ts)
+//   npm run gen -- --preset 3                     one campaign level, printed (add --out to write it)
+//   npm run gen -- --endless --seed 7 --waves 20  an Endless run's map and its first waves
 //
 // It loads the generator's TypeScript through Vite (already a dev dependency,
 // so no new runner), runs the checks, prints the summary, and writes the level
@@ -15,7 +18,7 @@ import { dirname, resolve } from 'node:path';
 import { createServer } from 'vite';
 
 function parseArgs(argv) {
-  const args = { seed: 1, set: [], settings: null, out: null, name: null, help: false };
+  const args = { seed: 1, set: [], settings: null, out: null, name: null, help: false, campaign: false, preset: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -26,6 +29,10 @@ function parseArgs(argv) {
     else if (a === '--name') args.name = next();
     else if (a === '--svg') args.svg = next();
     else if (a === '--help' || a === '-h') args.help = true;
+    else if (a === '--campaign') args.campaign = true;
+    else if (a === '--endless') args.endless = true;
+    else if (a === '--waves') args.waves = Number(next());
+    else if (a === '--preset') args.preset = Number(next());
     else throw new Error(`unknown argument ${a} (try --help)`);
   }
   return args;
@@ -91,6 +98,42 @@ try {
     for (const def of settingsModule.LEVEL_SETTINGS) {
       const limits = def.kind === 'choice' ? def.choices.map((c) => c.id).join(' | ') : def.kind === 'toggle' ? 'true | false' : `${def.min} to ${def.max}`;
       console.log(`  ${def.key.padEnd(16)} ${def.kind.padEnd(7)} ${limits.padEnd(28)} default ${JSON.stringify(def.default)}`);
+    }
+  } else if (args.endless) {
+    // An Endless run's map and its first waves, to check the ramp before the headset.
+    const endless = await server.ssrLoadModule('/src/level/endless.ts');
+    const level = endless.makeEndlessLevel(args.seed);
+    console.log(gen.summarize({ level: { ...level, waves: level.waves.slice(0, args.waves ?? 15) }, stats: { outer: 0, inner: 0, forks: 0, loops: 0, crossings: 0 }, tries: 1 }));
+    if (args.svg) writeFileSync(resolve(args.svg), mapSvg(level));
+  } else if (args.campaign || args.preset !== null) {
+    // Campaign levels: each made from its preset (its seed, settings and overrides), checked and written.
+    const presets = await server.ssrLoadModule('/src/level/presets.ts');
+    const list = presets.CAMPAIGN_PRESETS.filter((p) => args.campaign || p.level === args.preset);
+    if (list.length === 0) throw new Error(`no campaign preset ${args.preset}`);
+    for (const p of list) {
+      try {
+        const generated = gen.generateLevel(p.seed, presets.presetSettings(p), p.name, presets.presetOverrides(p));
+        console.log(`\n== Level ${p.level}: ${p.name}`);
+        console.log(gen.summarize(generated));
+        const target = args.campaign ? `src/maps/levels/level${p.level}.json` : args.out;
+        if (target) {
+          const out = resolve(target);
+          mkdirSync(dirname(out), { recursive: true });
+          writeFileSync(out, JSON.stringify(generated.level, null, 1) + '\n');
+          console.log(`written ${target}`);
+        }
+        if (args.svg) {
+          const svg = args.campaign ? args.svg.replace(/(\.svg)?$/, `-level${p.level}.svg`) : args.svg;
+          writeFileSync(resolve(svg), mapSvg(generated.level));
+          console.log(`map picture written ${svg}`);
+        }
+      } catch (error) {
+        if (error && Array.isArray(error.problems)) {
+          console.error(`level ${p.level}: no level: ${error.message}`);
+          for (const problem of error.problems) console.error(`  - ${problem}`);
+          code = 1;
+        } else throw error;
+      }
     }
   } else {
     const raw = args.settings ? JSON.parse(readFileSync(resolve(args.settings), 'utf8')) : {};

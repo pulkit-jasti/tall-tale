@@ -61,6 +61,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { AIM_ASSIST, BOARD, FIRE_PEBBLE, FLYING_KEG, GOBLIN_SHOT, HOLD, JUICE, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS, TRIGGERS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
@@ -1359,7 +1360,8 @@ export class Slingshot {
 
   private updatePebbles(dt: number): void {
     const g = SLINGSHOT.gravity;
-    const turnMax = degToRad(AIM_ASSIST.turnDegPerSec) * AIM_ASSIST.strength * dt;
+    // Endless Steady Aim: the pebbles turn toward their goblin a little more.
+    const turnMax = degToRad(AIM_ASSIST.turnDegPerSec) * AIM_ASSIST.strength * BOOST.aim * dt;
     const cone = degToRad(AIM_ASSIST.coneDeg);
     for (let i = 0; i < this.pebbles.length; i++) {
       const pebble = this.pebbles[i];
@@ -1561,7 +1563,7 @@ export class Slingshot {
 
   /** The blast radius of a flying keg (cm). */
   get kegBlastRadius(): number {
-    return TRIGGERS.keg.blastRadius * FLYING_KEG.blastScale;
+    return TRIGGERS.keg.blastRadius * FLYING_KEG.blastScale * BOOST.kegBlast;
   }
 
   /** 5. First target whose middle is within the hit area of the segment a to b (board space). v3 2.6: `fire` also hits lightable things. */
@@ -1617,6 +1619,8 @@ export class Slingshot {
     this.goblins.worldPosition(goblin, temp2);
     // A helmet or shield takes the hit: it flies off and the goblin is knocked back (a hit for the lessons all the same).
     if (this.goblins.armor(goblin)) {
+      // Endless Heavy Pebbles: the hit breaks more pieces.
+      for (let i = 0; i < BOOST.pebbleGear; i++) this.goblins.armor(goblin);
       this.onHit(goblin);
       return;
     }

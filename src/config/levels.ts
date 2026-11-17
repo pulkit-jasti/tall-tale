@@ -10,7 +10,7 @@
 export type EnemyIcon = 'grunt' | 'runner' | 'helmet' | 'shield' | 'spear' | 'sword' | 'balloon';
 
 /** A tool a level gives when won (the bell at level 3, decided 2026-11-11; more once the tools are final), or a "???" silhouette. */
-export type LevelReward = 'swatter' | 'pepper' | 'drum' | 'mystery' | null;
+export type LevelReward = 'swatter' | 'pepper' | 'drum' | 'magnet' | 'glass' | 'sugar' | 'mystery' | null;
 
 export interface LevelEntry {
   number: number;
@@ -40,20 +40,23 @@ export const ENEMY_NAMES: Record<EnemyIcon, string> = {
 /** What the tutorial shows (it counts as met once the tutorial is done, so it is never "New!" after it). */
 export const TUTORIAL_ENEMIES: EnemyIcon[] = ['grunt', 'runner', 'helmet', 'shield', 'spear', 'sword', 'balloon'];
 
+// docs/custom-mode.md section 10 (redone 2026-11-16): 1 to 5 are playable (their level files come from
+// src/level/presets.ts), 6 to 15 are locked teasers. Rewards: 2 the magnet and 3 the glass (decided);
+// 4 the drum and 5 sugar cubes (start values, open in the doc), so every tool can be earned.
 export const LEVELS: LevelEntry[] = [
-  { number: 1, name: 'First Watch', flavor: 'A quiet road and hungry goblins. Find your feet.', skulls: 1, enemies: ['grunt', 'runner'], reward: null },
-  { number: 2, name: "Runner's Road", flavor: 'Mostly runners. Small, fast and always in a hurry.', skulls: 1, enemies: ['runner', 'grunt'], reward: null },
-  { number: 3, name: 'The Shield Wall', flavor: 'Every goblin brought a shield. Time for some spice.', skulls: 2, enemies: ['grunt', 'shield', 'helmet'], reward: 'drum' },
-  { number: 4, name: 'Balloon Festival', flavor: 'The sky is full of balloons. Keep your slingshot busy.', skulls: 2, enemies: ['grunt', 'runner', 'balloon'], reward: null },
-  { number: 5, name: 'Two Fronts', flavor: 'Camps on both sides. Spin fast and call your knights.', skulls: 3, enemies: ['grunt', 'runner', 'shield', 'spear'], reward: null },
-  { number: 6, name: 'Spear Rush', flavor: 'Spears everywhere. Every hit on the wall counts twice.', skulls: 2, enemies: ['grunt', 'spear'], reward: null },
-  { number: 7, name: 'Powder Valley', flavor: 'Kegs and boulders on every road. One good shot does a lot.', skulls: 2, enemies: ['grunt', 'runner'], reward: null },
-  { number: 8, name: 'Thin Walls', flavor: 'Only two archers guard the wall, and help comes slowly.', skulls: 2, enemies: ['grunt', 'sword'], reward: 'mystery' },
-  { number: 9, name: 'Helmet Hill', flavor: 'Every goblin wears a helmet. They climb slowly, but they climb.', skulls: 2, enemies: ['grunt', 'helmet'], reward: null },
-  { number: 10, name: 'Shields and Spears', flavor: 'Shields in front, spears behind. Strip them, then swat them.', skulls: 3, enemies: ['grunt', 'shield', 'spear', 'helmet'], reward: null },
-  { number: 11, name: 'The Great Horde', flavor: 'One huge camp, one road, a lot of goblins.', skulls: 2, enemies: ['grunt', 'runner', 'spear'], reward: null },
-  { number: 12, name: 'Sky and Stone', flavor: 'Balloons above, boulders below. Look up, then look out.', skulls: 3, enemies: ['grunt', 'balloon', 'helmet'], reward: 'mystery' },
-  { number: 13, name: 'The Siege', flavor: 'The castle starts damaged. Hold it together.', skulls: 3, enemies: ['grunt', 'runner', 'shield', 'sword'], reward: null },
-  { number: 14, name: 'Runner Stampede', flavor: 'Runners from every camp at once. Keep that swatter close.', skulls: 3, enemies: ['runner', 'sword', 'balloon'], reward: null },
-  { number: 15, name: 'The Last Stand', flavor: 'Everything at once. Show them how big you are.', skulls: 3, enemies: ['grunt', 'runner', 'helmet', 'shield', 'spear', 'balloon'], reward: null },
+  { number: 1, name: 'First Watch', flavor: 'A quiet morning. One camp stirs, then another behind you.', skulls: 1, enemies: ['grunt', 'runner'], reward: null },
+  { number: 2, name: 'Sky Pirates', flavor: 'A fleet of balloons is drifting in. Bring them down.', skulls: 1, enemies: ['grunt', 'runner', 'balloon'], reward: 'magnet' },
+  { number: 3, name: 'Tin Hats', flavor: 'Someone sold the goblins helmets. Take them back.', skulls: 2, enemies: ['grunt', 'helmet', 'shield'], reward: 'glass' },
+  { number: 4, name: 'Sun Garden', flavor: 'A bright day and good soil. Make it bloom.', skulls: 2, enemies: ['grunt', 'runner', 'helmet'], reward: 'drum' },
+  { number: 5, name: 'Nightfall', flavor: 'The sun is setting. They fight better in the dark.', skulls: 2, enemies: ['grunt', 'runner', 'spear', 'sword'], reward: 'sugar' },
+  { number: 6, name: 'Molehill Meadow', flavor: 'The ground is moving. Something is digging toward you.', skulls: 2, enemies: ['grunt', 'runner'], reward: null },
+  { number: 7, name: 'Drums of the Shaman', flavor: 'Every time you strip them, someone hands them more.', skulls: 2, enemies: ['grunt', 'helmet', 'shield'], reward: null },
+  { number: 8, name: 'Powder Pass', flavor: 'Kegs on every road, and goblins carrying their own.', skulls: 2, enemies: ['grunt', 'runner'], reward: 'mystery' },
+  { number: 9, name: 'Arrow Rain', flavor: 'Archers on the hills. Keep your knights alive.', skulls: 3, enemies: ['grunt', 'sword'], reward: null },
+  { number: 10, name: 'Harvest Fire', flavor: 'Fields of hay as far as you can see. Bring a light.', skulls: 2, enemies: ['grunt', 'runner'], reward: null },
+  { number: 11, name: 'The Great Horde', flavor: 'One camp. One road. Too many goblins.', skulls: 3, enemies: ['grunt', 'runner', 'spear'], reward: null },
+  { number: 12, name: 'River Crossing', flavor: 'Wooden bridges over a wide river. Drop them at the right moment.', skulls: 3, enemies: ['grunt', 'runner', 'shield'], reward: 'mystery' },
+  { number: 13, name: 'Moonless', flavor: 'No moon, thick fog. Trust your compass.', skulls: 3, enemies: ['grunt', 'runner', 'balloon'], reward: null },
+  { number: 14, name: "The Alchemist's Road", flavor: 'A cart full of potions broke down nearby. Things are getting strange.', skulls: 3, enemies: ['grunt', 'runner', 'helmet'], reward: null },
+  { number: 15, name: 'The Last Stand', flavor: 'Every camp, every goblin, all at once.', skulls: 3, enemies: ['grunt', 'runner', 'helmet', 'shield', 'spear', 'balloon'], reward: null },
 ];
