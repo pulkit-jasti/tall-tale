@@ -712,7 +712,20 @@ export class Shelves {
     for (const texture of this.tagTextures.values()) renderer.initTexture(texture);
     const wasVisible = this.group.visible;
     this.tag.visible = true;
+    // Each tool's other look (locked grey or its own colors) too: flipping "Unlock all tools" swapped to a
+    // material never compiled, and that frame flickered (2026-11-17).
+    const swapped: [Mesh, Mesh['material']][] = [];
+    for (const item of this.tools.values()) {
+      item.model.traverse((o) => {
+        const mesh = o as Mesh;
+        const other = (item.locked ? mesh.userData.own : item.model.userData.silhouette) as MeshStandardMaterial | undefined;
+        if (!mesh.isMesh || !other) return;
+        swapped.push([mesh, mesh.material]);
+        mesh.material = other;
+      });
+    }
     renderer.compile(scene, camera);
+    for (const [mesh, material] of swapped) mesh.material = material;
     this.tag.visible = false;
     this.group.visible = wasVisible;
   }

@@ -39,8 +39,10 @@ export interface Progress {
   shelf: (PickTool | null)[];
   /** Enemy kinds already met (a card tags the others "New!"). */
   met: EnemyIcon[];
-  /** The settings' "Unlock all tools" switch, for judges: tools only, never levels. */
+  /** The settings' "Unlock all tools" switch, for judges: tools only, never levels. On by default since 2026-11-17. */
   unlockAll: boolean;
+  /** 2 once the switch's default became on: a save without it read the old default (off), so its value is ignored. */
+  unlockV: number;
   /** Tools grabbed once on the shelf (a newly unlocked tool glows until then). */
   toolsSeen: PickTool[];
   /** v3 2.6: the achievements earned (secret abilities and regular ones). */
@@ -65,7 +67,9 @@ export function createProgress(): Progress {
     loadout: ['slingshot', 'horn', null, null],
     shelf: [...PICK_TOOLS],
     met: [],
-    unlockAll: false,
+    // Every tool open from the start (the developer, 2026-11-17: judges should try them all).
+    unlockAll: true,
+    unlockV: 2,
     toolsSeen: [],
     trophies: [],
     endlessBest: null,
@@ -93,7 +97,8 @@ export function parseProgress(raw: unknown): Progress {
   if (!raw || typeof raw !== 'object') return p;
   const r = raw as Record<string, unknown>;
   if (typeof r.tutorialDone === 'boolean') p.tutorialDone = r.tutorialDone;
-  if (typeof r.unlockAll === 'boolean') p.unlockAll = r.unlockAll;
+  // Only a save made since the default became on keeps its switch (an older "off" was just the old default).
+  if (typeof r.unlockAll === 'boolean' && r.unlockV === 2) p.unlockAll = r.unlockAll;
   if (r.stars && typeof r.stars === 'object') {
     for (const [key, value] of Object.entries(r.stars as Record<string, unknown>)) {
       const n = Number(key);

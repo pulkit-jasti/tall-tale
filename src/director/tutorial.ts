@@ -496,8 +496,8 @@ function introLessons(): TutorialStep[] {
       () => 0,
       { tick: scouts, afterDone: PAUSE_AFTER.watch },
     ),
-    // Live: while they bash the wall, the red flag slides down.
-    infoStep('health-flag', banner('Each hit pulls your red flag down: your castle health.', 'warning', 'healthFlag', { header: 'Your castle' })),
+    // 2026-11-17: eating comes straight after the compass (the scouts are on the wall right then); the red
+    // flag is taught after the first meal, with what eating does for it.
     lessonStep(
       'learn-pinch',
       lesson('Pinch a goblin off your wall to pick it up.', 'pinch', 'lessonGoblin', {
@@ -529,6 +529,8 @@ function introLessons(): TutorialStep[] {
       // Thrown away instead of eaten: a new goblin comes to eat.
       { fallbacks: [(api) => api.lessonClimber(true)], tick: keepGoblin },
     ),
+    // After the first meal: the red flag, and that eating is how it rises again (v3 2.5).
+    infoStep('health-flag', banner('Each hit pulls your red flag down. Eating goblins raises it again.', 'warning', 'healthFlag', { header: 'Your castle' })),
     // Right after eating: goblins can also be thrown away. A new climber comes; the lesson waits for a throw.
     lessonStep(
       'learn-toss',
@@ -754,7 +756,7 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
       idle: 'Grab the horn with your left hand.',
       aim: 'Look around. The flag and your knights\' path go where you look.',
       lift: 'Now raise the horn in front of your face.',
-      blow: 'Blow into the horn!',
+      blow: 'Shout "Charge!" into the horn!',
       blowQuiet: 'Hold it there.',
     },
     doneText: 'Charge! Your knights guard that spot.',

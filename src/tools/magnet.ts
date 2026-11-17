@@ -20,7 +20,7 @@
 //   - Package Deal (2.6, a secret ability): the ring held on a standing keg
 //     MAGNET.kegPullTime pulls it in (it shakes and glints meanwhile): it
 //     lands by the pebble bowl (onKegPulled) and the use window ends.
-import { Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
+import { AdditiveBlending, DoubleSide, Group, Mesh, MeshBasicMaterial, Quaternion, RingGeometry, Vector3 } from 'three';
 import { MAGNET, RENDER_ORDER, TOOL_SPOTS, TRIGGERS } from '../config/game.js';
 import { BOOST } from '../rules/boosts.js';
 import type { Goblin } from '../units/goblins.js';
@@ -30,6 +30,9 @@ import { marchToGround, toBoard } from './groundAim.js';
 import { HandTool, type ToolParts } from './handTool.js';
 
 const tipsWorld = new Vector3();
+const waveTurn = new Quaternion();
+/** A ring geometry faces +z. */
+const FACE = new Vector3(0, 0, 1);
 const dirWorld = new Vector3();
 const origin = new Vector3();
 const dir = new Vector3();
@@ -38,6 +41,8 @@ const world = new Vector3();
 
 export class Magnet extends HandTool {
   private tipsLocal = new Vector3();
+  /** Set by the game: where pulled gear flies to (the gear debris's point, board cm); the magnet keeps it on its tips. */
+  gearTarget: Vector3 | null = null;
   private pointingLocal = new Vector3();
   /** The ring (board cm), smoothed, and if it is on the ground now. */
   private aimAt = new Vector3();
@@ -80,6 +85,42 @@ export class Magnet extends HandTool {
     this.ring.visible = false;
     this.inner.visible = false;
     this.stage.boardSpin.add(this.ring, this.inner);
+    // 2026-11-17: waves of force flowing into the tips while it is held, so it reads as pulling. Kept out of
+    // the body (its shelf copies clone the body) and moved with it each frame instead.
+    for (let i = 0; i < MAGNET.waveCount; i++) {
+      const material = new MeshBasicMaterial({ color: MAGNET.waveColor, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: DoubleSide });
+      const wave = new Mesh(new RingGeometry(0.82, 1, 28, 1), material);
+      wave.renderOrder = RENDER_ORDER.stunWave;
+      this.waves.add(wave);
+    }
+    this.waves.visible = false;
+    this.stage.boardLift.add(this.waves);
+  }
+
+  private waves = new Group();
+  private waveClock = 0;
+
+  update(dt: number): void {
+    super.update(dt);
+    const held = this.heldHand !== null;
+    this.waves.visible = held;
+    if (!held) return;
+    this.waveClock += dt;
+    this.waves.position.copy(this.body.position);
+    this.waves.quaternion.copy(this.body.quaternion);
+    this.waves.scale.copy(this.body.scale);
+    // Each ring faces along the tips' pointing, starts out in front of them, wide and faint, and is drawn
+    // in, shrinking and brightening, until it vanishes into the tips.
+    waveTurn.setFromUnitVectors(FACE, this.pointingLocal);
+    const n = this.waves.children.length;
+    this.waves.children.forEach((child, i) => {
+      const wave = child as Mesh;
+      const t = (this.waveClock * MAGNET.waveSpeed + i / n) % 1;
+      wave.quaternion.copy(waveTurn);
+      wave.position.copy(this.tipsLocal).addScaledVector(this.pointingLocal, MAGNET.waveFrom * (1 - t));
+      wave.scale.setScalar(MAGNET.waveFar + (MAGNET.waveNear - MAGNET.waveFar) * t);
+      (wave.material as MeshBasicMaterial).opacity = MAGNET.waveOpacity * Math.sin(Math.PI * t) * (this.aiming ? 1 : 0.5);
+    });
   }
 
   protected build(): void {
@@ -104,6 +145,8 @@ export class Magnet extends HandTool {
     if (dt <= 0) return;
     // The ray from the tips, the way they point, into the board's frame.
     this.bodyToWorld(this.tipsLocal, tipsWorld);
+    // Pulled gear flies here (src/fx/gearDebris.ts).
+    if (this.gearTarget) this.stage.boardSpin.worldToLocal(this.gearTarget.copy(tipsWorld));
     dirWorld.copy(this.pointingLocal).transformDirection(this.body.matrixWorld);
     toBoard(this.stage.boardSpin, tipsWorld, dirWorld, origin, dir);
     if (!marchToGround(origin, dir, MAGNET.maxRange, MAGNET.marchStep, hitPoint)) {

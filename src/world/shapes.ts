@@ -14,6 +14,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   Shape,
   SphereGeometry,
   TorusGeometry,
@@ -278,7 +279,7 @@ export function pebbleBowl(): Mesh {
  * holds) and a flat square head with a darker rim at the top. The head's
  * face looks along z. Returns the group and its materials.
  */
-export function flySwatter(): { group: Group; materials: MeshStandardMaterial[] } {
+export function flySwatter(): { group: Group; materials: MeshStandardMaterial[]; blade: Group } {
   const { handleLength, handleRadius, headWidth, headHeight, headThickness } = SWATTER;
   const handleMaterial = flatMaterial(SWATTER.handleColor);
   const headMaterial = flatMaterial(SWATTER.headColor);
@@ -286,15 +287,19 @@ export function flySwatter(): { group: Group; materials: MeshStandardMaterial[] 
   const group = new Group();
   const handle = new Mesh(new CylinderGeometry(handleRadius * 0.8, handleRadius, handleLength, 8), handleMaterial);
   handle.position.y = handleLength / 2;
+  // The blade (head and rim) on a pivot at the neck, so it can grow from there (Endless Wide Swatter).
+  const blade = new Group();
+  blade.position.y = handleLength;
   const head = new Mesh(new BoxGeometry(headWidth, headHeight, headThickness), headMaterial);
-  head.position.y = handleLength + headHeight / 2;
+  head.position.y = headHeight / 2;
   // A thin rim around the head, so the flat shape reads from any side.
   const rim = new Mesh(new BoxGeometry(headWidth + 0.6, headHeight + 0.6, headThickness * 0.6), frameMaterial);
   rim.position.copy(head.position);
+  blade.add(rim, head);
   const neck = new Mesh(new BoxGeometry(handleRadius * 2.4, 1.2, headThickness * 1.4), frameMaterial);
   neck.position.y = handleLength + 0.2;
-  group.add(handle, rim, head, neck);
-  return { group, materials: [handleMaterial, headMaterial, frameMaterial] };
+  group.add(handle, blade, neck);
+  return { group, materials: [handleMaterial, headMaterial, frameMaterial], blade };
 }
 
 /**
@@ -495,6 +500,177 @@ export function horseshoeMagnet(): { group: Group; materials: MeshStandardMateri
 }
 
 /**
+ * The rope bridge (2026-11-17 playtest: the Kenney bridge read as a box on flat ground). Along local +x
+ * (`length` cm, centered), `width` cm across, its deck arching `arch` cm in the middle: separate planks in
+ * two woods, each tipped to the arch with a little play, posts at the ends and quarters, two sagging rope
+ * rails a side, and stone footings on both banks. Its walking surface is local y = deck(x).
+ */
+export function ropeBridge(length: number, width: number, arch: number): { group: Group; deck: Group; materials: MeshStandardMaterial[] } {
+  const light = flatMaterial(0xa0703f);
+  const dark = flatMaterial(0x7a5230);
+  const rope = flatMaterial(0xc9a96e);
+  const stone = flatMaterial(0x8d8a84);
+  const group = new Group();
+  const deck = new Group();
+  const deckY = (x: number): number => arch * Math.sin(Math.PI * (x / length + 0.5));
+  const slope = (x: number): number => Math.atan((arch * Math.PI * Math.cos(Math.PI * (x / length + 0.5))) / length);
+  // Planks: about 1 cm each, no gaps, a little uneven.
+  const count = Math.round(length / 1.05);
+  const step = length / count;
+  const plank = new BoxGeometry(step * 0.96, 0.35, width);
+  for (let i = 0; i < count; i++) {
+    const x = -length / 2 + step * (i + 0.5);
+    const p = new Mesh(plank, i % 3 === 1 ? dark : light);
+    p.position.set(x, deckY(x) - 0.18, Math.sin(i * 2.3) * 0.12);
+    p.rotation.set(Math.sin(i * 1.7) * 0.04, Math.sin(i * 3.1) * 0.05, slope(x));
+    deck.add(p);
+  }
+  // Two beams under the planks along each side.
+  for (const z of [-1, 1]) {
+    for (let i = 0; i < 6; i++) {
+      const x0 = -length / 2 + (length / 6) * i;
+      const x1 = x0 + length / 6;
+      const xm = (x0 + x1) / 2;
+      const beam = new Mesh(new BoxGeometry(length / 6 + 0.1, 0.4, 0.45), dark);
+      beam.position.set(xm, deckY(xm) - 0.5, z * (width / 2 - 0.4));
+      beam.rotation.z = slope(xm);
+      deck.add(beam);
+    }
+  }
+  // Posts and rope rails.
+  const postX = [-length / 2 + 0.4, -length / 4, 0, length / 4, length / 2 - 0.4];
+  const postGeometry = new CylinderGeometry(0.2, 0.26, 3.2, 6).translate(0, 1.6, 0);
+  for (const z of [-1, 1]) {
+    const zz = z * (width / 2 + 0.05);
+    for (const x of postX) {
+      const post = new Mesh(postGeometry, dark);
+      post.position.set(x, deckY(x) - 0.2, zz);
+      deck.add(post);
+    }
+    for (const h of [2.7, 1.5]) {
+      // A rail sags between each pair of posts.
+      const points: Vector3[] = [];
+      for (let k = 0; k < postX.length - 1; k++) {
+        const a = postX[k];
+        const b = postX[k + 1];
+        for (let s = 0; s < 4; s++) {
+          const x = a + ((b - a) * s) / 4;
+          points.push(new Vector3(x, deckY(x) - 0.2 + h - Math.sin((Math.PI * s) / 4) * 0.45, zz));
+        }
+      }
+      const last = postX[postX.length - 1];
+      points.push(new Vector3(last, deckY(last) - 0.2 + h, zz));
+      deck.add(new Mesh(new TubeGeometry(new CatmullRomCurve3(points), 40, 0.09, 4), rope));
+    }
+  }
+  group.add(deck);
+  // Stone footings on both banks (they stay when the deck falls).
+  const rock = new IcosahedronGeometry(1, 0);
+  for (const end of [-1, 1]) {
+    for (let k = 0; k < 4; k++) {
+      const r = new Mesh(rock, stone);
+      const z = (k < 2 ? -1 : 1) * (width / 2 + 0.2) + (k % 2 === 0 ? 0.6 : -0.6);
+      r.position.set(end * (length / 2 - 0.6 - (k % 2) * 1.2), 0.1, z);
+      r.scale.set(1.1 + (k % 2) * 0.3, 0.7, 0.9);
+      r.rotation.set(k, k * 1.3, 0);
+      group.add(r);
+    }
+  }
+  return { group, deck, materials: [light, dark, rope, stone] };
+}
+
+/**
+ * Low-poly water for a ravine (2026-11-17): a faceted strip `length` cm along local z, `width` cm along x,
+ * its points nudged up and down a little so each face catches the light differently.
+ */
+export function ravineWater(length: number, width: number, color: number): Mesh {
+  const geometry = new PlaneGeometry(width, length, 6, 12).rotateX(-Math.PI / 2).toNonIndexed();
+  const position = geometry.getAttribute('position');
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const z = position.getZ(i);
+    position.setY(i, Math.sin(x * 1.7 + z * 0.9) * 0.12 + Math.sin(z * 2.3) * 0.08);
+  }
+  geometry.computeVertexNormals();
+  const material = new MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.1, flatShading: true, transparent: true, opacity: 0.92 });
+  return new Mesh(geometry, material);
+}
+
+/**
+ * The sunflower turret (2026-11-17 playtest: the Kenney flower read as a
+ * plain flower, facing up). No pack has a sunflower, so it is built here (say
+ * so in docs/placeholder-shapes.md): a curved stem with two leaves, and a
+ * head on a pivot that turns to its target: a brown face with two eyes and a
+ * short seed snout, ringed by two layers of pointed yellow petals. The head
+ * faces +z (yaw it toward a goblin), tipped a little down. `height` is its
+ * full height (cm). Returns the group, the head pivot, the snout's tip in the
+ * head's frame (where seeds leave) and its materials (for the wilt fade).
+ */
+export function sunflowerTurret(height: number): { group: Group; head: Group; muzzle: Vector3; materials: MeshStandardMaterial[] } {
+  const s = height / 9;
+  const stemMat = flatMaterial(0x4f9a3a);
+  const leafMat = flatMaterial(0x6cc04a);
+  const faceMat = flatMaterial(0x6b3d1f);
+  const petalMat = flatMaterial(0xffc928);
+  const petalDark = flatMaterial(0xf09a1a);
+  const eyeMat = flatMaterial(0x1b120c);
+  const group = new Group();
+  // The stem: two short segments with a slight bend.
+  const low = new Mesh(new CylinderGeometry(0.32 * s, 0.42 * s, 3.6 * s, 6), stemMat);
+  low.position.y = 1.8 * s;
+  const high = new Mesh(new CylinderGeometry(0.28 * s, 0.32 * s, 3 * s, 6), stemMat);
+  high.position.set(0, 5 * s, 0.25 * s);
+  high.rotation.x = 0.16;
+  group.add(low, high);
+  // Two leaves: flattened low-poly drops, pointing out and up.
+  for (const side of [-1, 1]) {
+    const leaf = new Mesh(new IcosahedronGeometry(1, 0), leafMat);
+    leaf.scale.set(1.5 * s, 0.22 * s, 0.7 * s);
+    leaf.position.set(side * 1.25 * s, 2.4 * s, 0);
+    leaf.rotation.z = side * 0.45;
+    group.add(leaf);
+  }
+  // The head pivot sits on top of the stem; the head is tipped 12 degrees down.
+  const head = new Group();
+  head.position.set(0, 6.6 * s, 0.45 * s);
+  const tilt = new Group();
+  tilt.rotation.x = 0.21;
+  head.add(tilt);
+  const face = new Mesh(new CylinderGeometry(1.15 * s, 1.25 * s, 0.7 * s, 10).rotateX(Math.PI / 2), faceMat);
+  tilt.add(face);
+  // Petals: two rings of flat pointed wedges, the back ring darker and offset, for a fuller low-poly head.
+  const petal = new CylinderGeometry(0, 0.55 * s, 1.5 * s, 4, 1).scale(1, 1, 0.3).translate(0, 0.75 * s, 0);
+  for (const [count, from, mat, z, offset] of [
+    [12, 1.05, petalMat, 0.05, 0],
+    [12, 0.95, petalDark, -0.2, Math.PI / 12],
+  ] as const) {
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + offset;
+      const p = new Mesh(petal, mat);
+      p.position.set(Math.sin(a) * from * s, Math.cos(a) * from * s, z * s);
+      p.rotation.z = -a;
+      tilt.add(p);
+    }
+  }
+  // A cartoon face: two eyes and a short snout that spits the seeds.
+  const eye = new SphereGeometry(0.2 * s, 6, 4);
+  for (const side of [-1, 1]) {
+    const e = new Mesh(eye, eyeMat);
+    e.position.set(side * 0.45 * s, 0.38 * s, 0.38 * s);
+    tilt.add(e);
+  }
+  const snout = new Mesh(new CylinderGeometry(0.3 * s, 0.38 * s, 0.9 * s, 8).rotateX(Math.PI / 2), faceMat);
+  snout.position.set(0, -0.25 * s, 0.7 * s);
+  const mouth = new Mesh(new CylinderGeometry(0.18 * s, 0.18 * s, 0.1 * s, 8).rotateX(Math.PI / 2), eyeMat);
+  mouth.position.set(0, -0.25 * s, 1.16 * s);
+  tilt.add(snout, mouth);
+  group.add(head);
+  // The snout's tip in the head's frame (the tilt applied).
+  const muzzle = new Vector3(0, -0.25 * s, 1.2 * s).applyEuler(tilt.rotation);
+  return { group, head, muzzle, materials: [stemMat, leafMat, faceMat, petalMat, petalDark, eyeMat] };
+}
+
+/**
  * The magnifying glass (v3 2.2): a wooden handle along +y from y = 0, a gold
  * rim with a clear pale blue lens on top, its face toward +z (the eyes when
  * raised). Returns the group, its materials (handle and rim; the lens keeps
@@ -524,27 +700,49 @@ export function magnifyingGlass(): { group: Group; materials: MeshStandardMateri
  */
 export function sugarBowl(): { group: Group; materials: MeshStandardMaterial[]; top: Vector3; cubes: Mesh[] } {
   const { bowlRadius: r, bowlHeight: h, cubeSize: c } = SUGAR;
+  // 2026-11-17: a faceted low-poly bowl (was a plain cylinder): a turned profile on 8 sides with a foot, a
+  // rounded belly and a lip, a gold band, a heap of sugar inside and tilted cubes on it. No pack has one.
   const blue = flatMaterial(SUGAR.bowlColor);
   const white = flatMaterial(SUGAR.cubeColor);
+  const gold = flatMaterial(SUGAR.bandColor);
+  const sugar = flatMaterial(SUGAR.heapColor);
   const group = new Group();
-  const bowl = new Mesh(new CylinderGeometry(r, r * 0.75, h, 10), blue);
-  bowl.position.y = h / 2;
-  group.add(bowl);
-  const cubes: Mesh[] = [];
-  const spots: [number, number, number][] = [
-    [-0.9, 0, -0.5],
-    [0.8, 0, -0.6],
-    [0, 0, 0.9],
-    [0, 1, 0],
+  const profile = [
+    new Vector2(r * 0.45, 0),
+    new Vector2(r * 0.5, h * 0.12),
+    new Vector2(r * 0.42, h * 0.2),
+    new Vector2(r * 0.78, h * 0.42),
+    new Vector2(r * 0.98, h * 0.72),
+    new Vector2(r, h),
+    new Vector2(r * 0.9, h * 1.04),
+    new Vector2(r * 0.86, h * 0.9),
   ];
-  for (const [x, up, z] of spots) {
-    const cube = new Mesh(new BoxGeometry(c, c, c), white);
-    cube.position.set(x, h + c / 2 + up * c * 0.9, z);
-    cube.rotation.y = x + z;
+  const bowl = new Mesh(new LatheGeometry(profile, 8), blue);
+  group.add(bowl);
+  const band = new Mesh(new TorusGeometry(r * 0.9, h * 0.07, 4, 8).rotateX(Math.PI / 2), gold);
+  band.position.y = h * 0.62;
+  group.add(band);
+  // The sugar heap filling the bowl, a squashed faceted dome.
+  const heap = new Mesh(new IcosahedronGeometry(r * 0.82, 0), sugar);
+  heap.scale.set(1, 0.38, 1);
+  heap.position.y = h * 0.9;
+  group.add(heap);
+  const cubes: Mesh[] = [];
+  const spots: [number, number, number, number][] = [
+    [-0.9, 0, -0.5, 0.2],
+    [0.8, 0, -0.6, -0.3],
+    [0, 0, 0.9, 0.15],
+    [0.05, 1, 0, -0.1],
+  ];
+  const cubeGeometry = new BoxGeometry(c, c, c);
+  for (const [x, up, z, tip] of spots) {
+    const cube = new Mesh(cubeGeometry, white);
+    cube.position.set(x, h * 1.05 + c / 2 + up * c * 0.85, z);
+    cube.rotation.set(tip, x + z, -tip * 0.7);
     group.add(cube);
     cubes.push(cube);
   }
-  return { group, materials: [blue, white], top: new Vector3(0, h + c * 1.5, 0), cubes };
+  return { group, materials: [blue, white, gold, sugar], top: new Vector3(0, h + c * 1.5, 0), cubes };
 }
 
 /**

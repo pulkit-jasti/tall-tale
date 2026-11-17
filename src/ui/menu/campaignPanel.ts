@@ -96,8 +96,10 @@ export class CampaignPanel {
     this.list.group.position.set((C.listLeft + C.listRight) / 2, listY, 0);
     this.list.onSelect = (i) => {
       if (i === this.selected) return;
+      const before = this.selected;
       this.selected = i;
-      this.list.redraw();
+      // Only the row left and the row picked are drawn again.
+      this.list.redrawRows([before, i]);
       this.showSelected();
     };
     this.panel.root.add(this.list.group);

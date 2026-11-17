@@ -10,9 +10,11 @@
 //      and HORN.zoneDown below them), from the lips out to a hand's length,
 //      so it need not come close to the headset and tracking holds. Near the face the horn
 //      fades to see-through (HORN.fade*), so the spot and path stay in view.
-//   3. Blow: with the mic, only a real blow in the zone sends them (the raw
-//      loudness of one frame over HORN.blowLevel is enough, shown live on a
-//      bar in front of the eyes, the glass sign, src/ui/kit/glassSign.ts).
+//   3. Speak: with the mic, a word said in the zone sends them ("Charge!"):
+//      the loudness must stay over HORN.speakLevel for HORN.speakTime in all
+//      (2026-11-17: one loud frame was enough before, so any small noise
+//      called knights on the wrong road). Shown live on a bar in front of the
+//      eyes, the glass sign (src/ui/kit/glassSign.ts).
 //      With the quiet horn setting or no mic, keeping it in the zone for
 //      HORN.holdTime sends them (voice is never required, hard rule). The
 //      knights go to the spot looked at a moment before the blow
@@ -40,9 +42,9 @@ export class Horn extends HandTool {
   private bellLocal = new Vector3();
   /** Time held in the blow zone with a spot (seconds), and the mic's raw loudness this frame. */
   private inZoneTime = 0;
-  /** Time out of the zone since it was last in (seconds), and how long the last loud frame still counts (seconds). */
+  /** Time out of the zone since it was last in (seconds), and the speech heard so far (seconds over HORN.speakLevel, draining in quiet). */
   private outTime = 0;
-  private loudLeft = 0;
+  private voice = 0;
   /** How long the mic has heard dead silence while held (seconds); past HORN.silentFallback it counts as broken. */
   private silentFor = 0;
   /** The mic hears nothing: the horn uses the quiet hold instead (the game shows why). */
@@ -91,6 +93,8 @@ export class Horn extends HandTool {
   }
 
   protected resetMotion(): void {
+    // The word that sounded it is used up (it never sends a second squad).
+    this.voice = 0;
     this.inZoneTime = 0;
     this.outTime = 0;
     this.inZone = false;
@@ -105,6 +109,17 @@ export class Horn extends HandTool {
    */
   get grabbable(): boolean {
     return !this.tiedDown && !this.quiet;
+  }
+
+  /** Set by the game: knights are out on the board (so a free move is possible). */
+  squadsOut: () => boolean = () => false;
+
+  /**
+   * Bright while resting too when it can move a squad (2026-11-17: it went
+   * grey after a call, so nobody thought to pick it up to move the knights).
+   */
+  protected get looksUsable(): boolean {
+    return this.usable || (this.grabbable && this.squadsOut());
   }
 
   /** True while it holds a charge (ready): a call or a boost can be paid for. */
@@ -195,8 +210,9 @@ export class Horn extends HandTool {
     // Near the face it fades to see-through.
     const t = Math.min(1, Math.max(0, (distance - HORN.fadeNear) / (HORN.fadeFar - HORN.fadeNear)));
     this.fade(HORN.fadeOpacity + (1 - HORN.fadeOpacity) * t);
-    // A loud frame is remembered a moment (HORN.blowMemory): a blow that starts just before the horn is in place still counts.
-    this.loudLeft = hears && this.level >= HORN.blowLevel ? HORN.blowMemory : Math.max(0, this.loudLeft - dt);
+    // Speech fills up while it is loud enough and drains in quiet (HORN.speakDecay): a word started just
+    // before the horn is in place still counts, a click or a bump (a frame or two) never fills it.
+    this.voice = hears && this.level >= HORN.speakLevel ? this.voice + dt : Math.max(0, this.voice - dt * HORN.speakDecay);
     // The blow zone: a ball in front of the mouth, measured from the eyes with the look kept level, so looking
     // down at the board never moves it into the chest (fixed 2026-11-12: a cone from the eyes left out the
     // mouth itself, which sits below the eyes, so raising it to blow kept failing).
@@ -240,9 +256,9 @@ export class Horn extends HandTool {
     // With the mic only a real blow sends them; the quiet horn (or no mic) sends them after a short hold.
     let blown = false;
     if (hears) {
-      // One frame over the line is a blow (headset test: holding it a while was too hard to hit), or one a moment ago.
-      blown = this.loudLeft > 0;
-      this.charge = Math.min(1, this.level / HORN.blowLevel);
+      // A short word at a normal speaking level is enough ("Charge!").
+      blown = this.voice >= HORN.speakTime;
+      this.charge = Math.min(1, this.voice / HORN.speakTime);
     } else this.charge = Math.min(1, this.inZoneTime / HORN.holdTime);
     if (this.charge > 0) {
       this.puffTimer -= dt;

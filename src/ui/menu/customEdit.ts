@@ -10,7 +10,7 @@
 // the right. Save checks the name, runs the generator (with its checks),
 // stores the level and tells the menu which one it was; when it cannot, a
 // status line along the panel's bottom says why.
-import type { Object3D } from 'three';
+import { Group, type Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
 import { CUSTOM_GAME, MENU, TABS } from '../../config/game.js';
 import {
@@ -134,7 +134,18 @@ export class CustomEditPage {
       this.settingRows.push({ def, row });
       this.rows.get(def.group)!.push(row);
     }
+    // Every tab's rows cut at the window and layered now, then kept in a hidden holder on the page while
+    // their tab is not shown, so the game's warm-up compiles them (audit 2026-11-17: the first visit to each
+    // tab built their cut shaders, a dropped frame). Showing a tab moves its rows into the scroll area.
+    for (const g of SETTING_GROUPS) this.area.setItems(this.rows.get(g.id)!);
+    for (const items of this.rows.values()) for (const item of items) this.parked.add(item.group);
+    this.parked.visible = false;
+    this.panel.root.add(this.parked);
+    layerPage(this.panel.root);
   }
+
+  /** The rows of the tabs not shown (hidden, still on the page so their shaders are compiled). */
+  private parked = new Group();
 
   get visible(): boolean {
     return this.panel.visible;
@@ -189,7 +200,10 @@ export class CustomEditPage {
   }
 
   private showTab(group: SettingGroup): void {
+    // The tab shown before goes back to the holder (kept on the page), the new one moves into the area.
+    for (const items of this.rows.values()) for (const item of items) if (!item.group.parent) this.parked.add(item.group);
     this.area.setItems(this.rows.get(group)!);
+    for (const items of this.rows.values()) for (const item of items) if (!item.group.parent) this.parked.add(item.group);
     // Drawn like the settings page: on top, in the page's own order (no flicker on taps). Again for the tab's rows.
     layerPage(this.panel.root);
     armControls(this.area.controls);

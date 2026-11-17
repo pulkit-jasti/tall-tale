@@ -13,7 +13,7 @@ import {
   RingGeometry,
   Vector3,
 } from 'three';
-import { BOARD, CAMP_LOOK, CASTLE, DECOR, NIGHT_LIGHTS, ROADS, SETTLEMENTS } from '../config/game.js';
+import { BOARD, CAMP_LOOK, CASTLE, DECOR, NIGHT_LIGHTS, ROADS, SETTLEMENTS, TRIGGERS } from '../config/game.js';
 import type { Blueprint } from '../rules/blueprint.js';
 import { RoadGraph, type GraphNode } from '../rules/roadGraph.js';
 import { boardHeight, degToRad, groundAt, polarX, polarZ, setBumps } from '../rules/boardMath.js';
@@ -24,7 +24,7 @@ import type { RoadTorch } from './nightLights.js';
 import { buildStorySpots, planStorySpots } from './storySpots.js';
 import { Meadow } from './grass.js';
 import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
-import { campDistance, RoadField, Terrain, type CampSpot } from './terrain.js';
+import { campDistance, RoadField, Terrain, type CampSpot, type Cut } from './terrain.js';
 import { addExtraTraps, addSpareSpots, placeTriggers, triggerGround, type TriggerPlacement } from './triggers.js';
 import { buildRoadside, planRoadside } from './roadside.js';
 import { flatMaterial } from './shapes.js';
@@ -342,7 +342,27 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   const triggerSpots = triggerGround(trapSpots);
   const plan = planSettlements(roadField, campSpots, createRandom(seed + 6), triggerSpots.clear);
   // Then the terrain, flat under the camps, villages, fields and triggers: from here on groundAt() has its hills.
-  const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan), ...triggerSpots.flats], createRandom(seed));
+  // 2026-11-17: a ravine under each rope bridge, so the bridge spans a gap you can see (it sat on flat ground).
+  const B = TRIGGERS.bridge;
+  const bridges = trapSpots.filter((s) => s.kind === 'bridge' && !s.spare);
+  const dir = new Vector3();
+  const cuts: Cut[] = bridges.map((s) => {
+    network.roads[s.road].directionAt(s.along, dir).setY(0).normalize();
+    return { x: s.x, z: s.z, ux: dir.x, uz: dir.z, halfIn: B.gapIn, halfOut: B.gapOut, lenIn: B.streamLength * 0.35, lenOut: B.streamLength / 2, depth: B.gapDepth };
+  });
+  const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan), ...triggerSpots.flats], createRandom(seed), cuts);
+  // The road crosses each ravine on the bridge's deck: at the banks' height, a little arched.
+  const end = new Vector3();
+  for (const s of bridges) {
+    const road = network.roads[s.road];
+    const from = Math.max(0, s.along - B.length / 2);
+    const to = Math.min(road.length, s.along + B.length / 2);
+    road.curve.getPointAt(from / road.length, end);
+    const atFrom = groundAt(end.x, end.z);
+    road.curve.getPointAt(to / road.length, end);
+    const level = Math.max(atFrom, groundAt(end.x, end.z));
+    road.addSpan(from, to, level, B.arch);
+  }
   placeLandmarks(plan, terrain, campSpots, createRandom(seed + 7), triggerSpots.clear);
   // The village squares are worn to dirt, like the camps.
   const plazas = plan.villages.map((v) => ({ ...v, size: v.size * 0.45 }));

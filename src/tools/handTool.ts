@@ -233,6 +233,11 @@ export abstract class HandTool {
     return !this.tiedDown && !this.quiet && chargeUsable(this.use);
   }
 
+  /** Shown bright (not dimmed). The horn stays bright while it rests if it can still move a squad. */
+  protected get looksUsable(): boolean {
+    return this.usable;
+  }
+
   /** True when closing a hand on it picks it up (usable; the horn also while recharging, for its free move, v3 2.5). */
   get grabbable(): boolean {
     return this.usable;
@@ -304,6 +309,11 @@ export abstract class HandTool {
     this.placeSpot();
     this.placeAtRest();
     this.stage.boardLift.add(this.root, this.body);
+  }
+
+  /** The platform and its post (the drum sinks it while its big drum stands in front). */
+  protected get platformGroup(): Group {
+    return this.platform;
   }
 
   /** Its platform group and the tool itself (the menu sinks them, src/world/sceneSwap.ts). */
@@ -598,7 +608,10 @@ export abstract class HandTool {
     this.phaseTime += dt;
     // The use window runs down (unless the tutorial holds it), the recharge fills only on the platform.
     const onPlatform = this.phase === 'resting' && this.returnLeft <= 0 && !this.holder;
-    if (tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold && !this.swingUse && this.useTicking(), onPlatform) === 'ended') this.startShrink();
+    const charge = tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold && !this.swingUse && this.useTicking(), onPlatform);
+    if (charge === 'ended') this.startShrink();
+    else if (charge === 'ready') this.announceReady();
+    this.readyFlash = Math.max(0, this.readyFlash - dt);
     switch (this.phase) {
       case 'held':
         this.updateHeld(dt);
@@ -721,7 +734,7 @@ export abstract class HandTool {
   /** Touch state, dimming, rope, beckon pulse and end-of-use blink. */
   private updateLook(dt: number): void {
     const usable = this.usable;
-    const dim = !usable;
+    const dim = !this.looksUsable;
     if (dim !== this.dimmed) {
       this.dimmed = dim;
       this.materials.forEach((m, i) => {
@@ -737,6 +750,8 @@ export abstract class HandTool {
     if (this.active && this.use.useLeft < TOOLS.warnTime && this.useSeconds > TOOLS.warnTime && Math.sin(this.time * 18) > 0) state = 'idle';
     // A new tool glows until grabbed. A hand near it shows Ready instead.
     if (this.beckon && state === 'idle' && Math.sin(this.time * 6) > 0) state = 'ready';
+    // Just recharged: a few quick glowing pulses.
+    if (this.readyFlash > 0 && state === 'idle' && Math.sin(this.time * 14) > 0) state = 'ready';
     // Quiet during another lesson: only held shows.
     if (this.quiet && !this.holder) state = 'idle';
     if (state !== this.touch) {
@@ -763,6 +778,23 @@ export abstract class HandTool {
   }
 
   /** A poof at a boardLift point (cm). */
+  /** Seconds left of the "ready again" glow pulse. */
+  private readyFlash = 0;
+
+  /**
+   * The recharge is done (2026-11-17: nothing said so): a chime and a glass ping from the tool, a burst of
+   * gold sparkles, a small hop, and a few glowing pulses, so the player knows at a glance and by ear.
+   */
+  private announceReady(): void {
+    if (!this.root.visible || this.quiet) return;
+    const at = this.stage.boardLift.localToWorld(temp.copy(this.body.position));
+    this.audio.play('toolReady', at, 1, 0.3);
+    this.audio.play('toolReadyPing', at, 1, 0.3);
+    this.particles.burst(at, TOOLS.readySparkle, 14, 0.12);
+    this.readyFlash = TOOLS.readyFlashTime;
+    this.wobble = Math.max(this.wobble, 0.25);
+  }
+
   private poof(at: Vector3, count: number): void {
     this.particles.burst(this.stage.boardLift.localToWorld(temp.copy(at)), POOF_COLORS, count, 0.18);
   }

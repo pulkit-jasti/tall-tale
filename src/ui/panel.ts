@@ -5,7 +5,7 @@
 // spins and never follows the head. Each user draws its own content on it
 // (paint) and can add things to `root` that tilt with it, like a poke button.
 // The canvas is redrawn only when a user paints, never every frame.
-import { Group, PlaneGeometry, type CanvasTexture, type Mesh, type MeshBasicMaterial, type Object3D } from 'three';
+import { Group, PlaneGeometry, type CanvasTexture, type Mesh, type MeshBasicMaterial, type Object3D, type Texture } from 'three';
 import { popIn } from '../fx/ease.js';
 import { degToRad } from '../rules/boardMath.js';
 import { uiCenterY } from '../rules/reach.js';
@@ -15,6 +15,12 @@ import { drawNineSlice } from './uiImages.js';
 
 /** Dark brown ink for text on the light panel. */
 export const PANEL_INK = '#4a3424';
+
+/**
+ * Textures made ahead of their first use but not on any mesh yet (a panel's other sizes, button icons):
+ * the game's warm-up sends them to the GPU too (src/game.ts warmGpu), so their first showing costs nothing.
+ */
+export const preparedTextures = new Set<Texture>();
 
 export interface PanelOptions {
   /** Size (cm). */
@@ -69,6 +75,13 @@ export class Panel {
     this.layoutHeight = this.canvas.height / canvasScale;
     this.texture = canvasTexture(this.canvas, options.anisotropy ?? 1);
     this.board = canvasPlane(this.texture, width, height);
+    this.sizes.set(`${width.toFixed(2)}x${height.toFixed(2)}`, {
+      canvas: this.canvas,
+      texture: this.texture,
+      geometry: this.board.geometry as PlaneGeometry,
+      layoutWidth: this.layoutWidth,
+      layoutHeight: this.layoutHeight,
+    });
     this.root.add(this.board);
     // Its face (+z) toward the player, tilted back like a lectern.
     this.root.position.set(0, options.centerY, -options.radius);
@@ -92,20 +105,43 @@ export class Panel {
    */
   resize(width: number, height: number): void {
     if (Math.abs(width - this.width) < 1e-3 && Math.abs(height - this.height) < 1e-3) return;
+    // Its own canvas, texture and board for each size, kept: a size used before (or prepared, prepareSize)
+    // swaps in with nothing made and nothing new sent to the GPU (audit 2026-11-17: the end panel made a
+    // new full-size texture and board the moment it appeared at a battle's end).
+    const size = this.sizeFor(width, height);
     this.width = width;
     this.height = height;
-    this.layoutWidth = Math.round(width * this.pxPerCm);
-    this.canvas.width = Math.round(this.layoutWidth * this.canvasScale);
-    this.canvas.height = Math.round(height * this.pxPerCm * this.canvasScale);
-    this.layoutHeight = this.canvas.height / this.canvasScale;
-    // A new canvas size needs a new texture (the old one keeps its size on the GPU).
-    const material = this.board.material as MeshBasicMaterial;
-    this.texture.dispose();
-    this.texture = canvasTexture(this.canvas, this.texture.anisotropy);
-    material.map = this.texture;
-    this.board.geometry.dispose();
-    this.board.geometry = new PlaneGeometry(width, height);
+    this.layoutWidth = size.layoutWidth;
+    this.layoutHeight = size.layoutHeight;
+    this.canvas = size.canvas;
+    this.texture = size.texture;
+    (this.board.material as MeshBasicMaterial).map = this.texture;
+    this.board.geometry = size.geometry;
     if (this.zoned) this.root.position.y = uiCenterY(height, this.tiltDeg);
+  }
+
+  /** Every size this panel has made (or prepared), by "width x height". */
+  private sizes = new Map<string, { canvas: HTMLCanvasElement; texture: CanvasTexture; geometry: PlaneGeometry; layoutWidth: number; layoutHeight: number }>();
+
+  private sizeFor(width: number, height: number) {
+    const key = `${width.toFixed(2)}x${height.toFixed(2)}`;
+    let size = this.sizes.get(key);
+    if (!size) {
+      const canvas = document.createElement('canvas');
+      const layoutWidth = Math.round(width * this.pxPerCm);
+      canvas.width = Math.round(layoutWidth * this.canvasScale);
+      canvas.height = Math.round(height * this.pxPerCm * this.canvasScale);
+      const texture = canvasTexture(canvas, this.texture.anisotropy);
+      preparedTextures.add(texture);
+      size = { canvas, texture, geometry: new PlaneGeometry(width, height), layoutWidth, layoutHeight: canvas.height / this.canvasScale };
+      this.sizes.set(key, size);
+    }
+    return size;
+  }
+
+  /** Makes a size's canvas, texture and board now (setup), so resizing to it later costs nothing. */
+  prepareSize(width: number, height: number): void {
+    this.sizeFor(width, height);
   }
 
   /**

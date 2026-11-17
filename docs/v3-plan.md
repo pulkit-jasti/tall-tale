@@ -948,6 +948,72 @@ Type check and build pass. Not tested on the headset or in the emulator. Not com
 
 ---
 
+## Bug fixes from a friend's playtest (2026-11-17)
+
+Type check and build pass. Not tested on the headset.
+
+- **Flicker in battles** (slingshot, swatter, knight fights): goblins and soldiers were built mid-battle as the pools grew, and hidden effects compiled their shaders the first time they showed. Each dropped a frame, and on the Quest a dropped frame shows as the sky and UI flickering. Now every goblin (up to the cap) and soldier is built hidden at setup (`Goblins.prebuild`, `Troops.prebuild`), and `warmGpu` in `src/game.ts` compiles every shader and uploads every texture at setup and after each map load.
+- **Endless start froze 1 to 2 s:** making and building a map blocks the page. The view now fades dark first (`src/ui/viewFade.ts`, `VIEW_FADE`), the map is made, built and warmed in the dark, then it fades back in. Every map load does this.
+- **Shields 2.2 times bigger** (`goblinShield`, `roundShield`, `rectShield` scales), so a swat that bounces off a shield reads.
+- **The magnifying glass did nothing:** its aim starts at the head, right over the hole the giant sits in, and the ground march stopped there on its first step. `marchToGround` now passes over the hole.
+- **The horn takes a spoken word, not a blow:** say "Charge!" at a normal level (`HORN.speakLevel` 0.03 held for `speakTime` 0.15 s, draining in quiet), with low rumble filtered out of the mic. One loud frame over 0.015 was enough before, so small noises sent knights to the wrong road. Texts say "Charge!".
+- **Compass:** 2 cm higher (`COMPASS.y` 6.5) and the whole dial 10% smaller. The crank lets go when the pinch opens (pinch only; a closed fist kept it held) and when the pinch rises 7 cm above the knob (`CRANK.releaseHold`, `liftRelease`).
+- **Moving knights:** while the horn rests, aiming at a road moves the nearest squad there for free (before, a move only happened at the squad cap). The horn stays bright while it rests if a squad is out, so it reads as something to pick up.
+
+- **Second round (2026-11-17):**
+  - **Wide Swatter** grew only the hit area. The swatter's head now grows to match with an elastic pop and sparkles (`SWATTER.growTime`, the blade on its own pivot in `flySwatter()`).
+  - **Boost cards:** the tick buttons sat over the names and text. The panel is 31 cm tall and the buttons sit under the text (`ENDLESS.panel.buttonFromTop`).
+  - **Glass and magnet grip:** their handles were shorter than the slingshot's, so the head sat in the fingers. Both are 7 cm now, held at the middle like the slingshot (`HOLD.poses` `at` 3.5).
+  - **White hands in front of the eyes:** IWSDK turns the hand model back on every frame while its input source is connected, and rebuilds it in its rest pose when the hand comes back, so hiding it was undone. A lost hand's model is now scaled to nothing (`hideLostHandModels`), which IWSDK never resets.
+
+- **Third round (2026-11-17):**
+  - **Crank:** the knob armed only while the whole hand was open, so a pinch with the other fingers curled did nothing. It now arms whenever the pinch is open.
+  - **Tutorial:** pinch and eat come right after the compass; the red flag comes after the first meal ("Eating goblins raises it again").
+  - **Horn went off by itself:** the mic heard the game's own sounds. Echo cancellation is on, `speakLevel` 0.04, `speakTime` 0.25, and the silent-mic fallback waits 4 s.
+  - **Flicker in fights:** each unit's bone texture is now made and uploaded at the warm-up too. Flipping "Unlock all tools" compiled the tools' other material mid-frame; the shelf warm-up compiles both now.
+  - **All tools unlocked by default** (`unlockAll` true; an old save's "off" is ignored, `unlockV`).
+  - **Goblins about 15% slower**, walk clips slowed to match.
+  - **Rampart:** goblins walk (they kept a "hunting" flag after a fight and slid along idle); a cornered garrison archer stops walking on the spot.
+  - **Drum:** grabbing the stick sinks the small drum and the compass, a big drum (`DRUM.bigScale`) rises on the compass's spot; one strike, the stick shrinks out of the hand and everything goes back.
+  - **Sugar:** a cube thrown by hand lands as a lure (it vanished over the hole the giant sits in). New faceted bowl.
+  - **Night sky:** the planet's rings blend band to band; the moon's glow is halved (`SKY.moonGlowStrength`).
+  - **Sunflower:** a new turret model whose head tracks its target; 4 times the fire rate, a quarter the damage per seed (`GARDEN.fireEvery` 0.5, `seedsToKnock` 8, `seedsPerArmor` 4); seeds pooled.
+  - **Glass:** the default 35 degree grip slant; a ring that fills while the beam works (grow, heal, light, burn); a beam with running bands, a glow and a hot spot (`src/fx/glassFx.ts`); a small aim assist to goblins (`GLASS.goblinAssistDeg`).
+  - **Torches:** a layered low-poly flame. **Bell tower:** Kenney base, windowed middle, arched belfry and high roof, a turned bell.
+  - **Magnet:** stripped gear hops off, then flies to the tips, speeding up, and is crushed there with a clank (`MAGNET.gear*`).
+
+- **Fourth round (2026-11-17):**
+  - **Drum:** the stick grows by `DRUM.bigScale` in the hand, and the drum's platform sinks with it.
+  - **Rampart:** a hunting goblin asks for its walk on every step (a strike swapped the clip and it slid on); a garrison archer backs away until the goblin is `GARRISON.backAwayEnd` away and never walks home toward a near goblin (it flip-flopped at `backAway`).
+  - **Endless:** no timer on the cards (`ENDLESS.pickTime` Infinity): the next wave waits for the pick.
+  - **Rope bridge:** a ravine is cut into the terrain under each bridge (`Terrain` cuts, `TRIGGERS.bridge.gap*`) with faceted water in it; the road crosses on the deck (`Road.addSpan`: units walk over it, no ribbon is drawn over the gap); a code-built bridge (planks, beams, posts, rope rails, stone footings). A bridge always stands as land; only its trap side waits for its wave.
+  - **Sugar:** lured goblins walk off the road to the cube, eat, walk back and carry on (`Goblins.lureTo`); goblins on the rampart go to a cube on the wall top.
+  - **Magnet:** rings of force flow into the tips while it is held (`MAGNET.wave*`).
+
+- **Fifth round (2026-11-17):** torch flames 2.3 times bigger; the planet's rings one straight two-color gradient; the moon's glow at a quarter; the drum stays 2 s after a strike (`DRUM.stayTime`); the fantasy village ambience on the home screen, end panels and pause (`MUSIC.menu`), the music in battle only; a recharged tool chimes, pings, sparkles and pulses (`toolReady`, `TOOLS.readyFlashTime`); the crank eases the board toward the hand (`CRANK.smoothing`); the glass 30% bigger; the eating gulp plays once and fades over 2.5 s (`fadeSeconds`); seeds and sunflowers built with their beds (no meshes mid-battle); the mushroom puffs when goblins come near (`GARDEN.puffCheck`), a lone goblin is dazed too.
+
+- **Sixth round (2026-11-17):**
+  - **Win panel:** farther (`END_PANEL.radius` 50, was 41) and 4 cm taller, so the buttons' words no longer sit on the note line.
+  - **Lost hands:** a lost hand's meshes go to a camera layer never drawn (`HANDS.hiddenLayer`); a hand shows only after `HANDS.showAfter` s of steady tracking.
+  - **Ambience:** an AAC copy (1.3 MB, was a 20 MB wav).
+  - **Flicker audit:**
+    - The warm-up compiled the plain shaders, but in VR three draws with stereo (multiview) ones. It now compiles against the XR target, and runs again once VR has started.
+    - The horn's ghost knights and icons are made at setup.
+    - The compass number redraws at most every 0.4 s.
+    - Mushrooms are built with their beds.
+    - The "+1" label no longer forces a shader lookup.
+    - `note()` is cheap.
+  - **The lower-risk ones, also fixed:**
+    - Panels keep a canvas, texture and board per size (`Panel.prepareSize`): the end, card and pause panels prepare theirs at setup.
+    - Button icons are one shared texture each (`prepareIcons`).
+    - Trophy toasts are drawn at setup; trophies save and the shelf redraws at the battle's end or on the menu (`Achievements.flush`).
+    - Every Custom Game tab's rows are cut and layered at build time and kept on the page while hidden; the page title keeps each title's plate.
+    - A campaign list tap redraws only the two rows that changed (`ScrollList.redrawRows`).
+    - Hand pebbles and the flying keg are pooled.
+  - **`preparedTextures`** (src/ui/panel.ts): textures made ahead are sent to the GPU by `warmGpu`.
+
+**Headset check:** a busy fight with slingshot, swatter and knights: no sky or UI flicker (FPS panel missed frames). Start Endless: a calm fade, no freeze. Shields read from the seat. Hold the glass and look at the board: the pillar and ring show. Say "Charge!" with the horn raised (tune `speakLevel` on the mic panel); tapping the headset or a cough does not send knights. The compass height and size; open the pinch or lift the hand off the knob and the board stops. Call a squad, then grab the resting horn and look at another road: "Move".
+
 ## To do later (the developer, 2026-11-16)
 
 - [ ] **A chicken model** for the potion cart (2.1): find a CC0 low poly chicken (Kenney or Quaternius) and replace the placeholder shape (docs/placeholder-shapes.md, "Chicken").

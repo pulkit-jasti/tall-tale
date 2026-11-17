@@ -294,8 +294,21 @@ export class Compass {
     this.tentOutlines.instanceMatrix.needsUpdate = true;
     this.tents.instanceMatrix.needsUpdate = true;
     if (this.tents.instanceColor) this.tents.instanceColor.needsUpdate = true;
-    this.text(wave, total, left);
+    // The number redraws its canvas (and uploads it) at most every COMPASS.textEvery seconds (audit 2026-11-17:
+    // it redrew on every spawn and knockout, many uploads a second in a big fight). A wave change shows at once.
+    this.textWait = Math.max(0, this.textWait - dt);
+    if (this.textWait <= 0 || wave !== this.shownWave) {
+      const before = this.shownText;
+      this.text(wave, total, left);
+      if (this.shownText !== before) {
+        this.textWait = C.textEvery;
+        this.shownWave = wave;
+      }
+    }
   }
+
+  private textWait = 0;
+  private shownWave = -1;
 
   /** Places wedge `i`: its tail at the lip, its tip toward the middle, standing `height` cm up, `scale` times as long and wide. */
   private placeWedge(i: number, height: number, scale: number): void {
@@ -381,9 +394,26 @@ export class Compass {
     return this.dish;
   }
 
-  /** True while it shows (a battle runs). */
+  /** True while it shows (a battle runs) and is not sunk away (the big drum stands there). */
   get shown(): boolean {
-    return this.group.visible;
+    return this.group.visible && this.sinkShare <= 0;
+  }
+
+  private sinkShare = 0;
+
+  /**
+   * Sinks the compass into the board (0 up, 1 gone), so the big drum can rise on its spot (2026-11-17,
+   * src/tools/drum.ts). Moves its parts, not its group: the menu swap owns the group's place.
+   */
+  sink(share: number): void {
+    if (share === this.sinkShare) return;
+    this.sinkShare = share;
+    const depth = (C.y + C.radius * 2) * share;
+    for (const child of this.group.children) {
+      if (child.userData.sinkBaseY === undefined) child.userData.sinkBaseY = child.position.y;
+      child.position.y = (child.userData.sinkBaseY as number) - depth;
+      child.visible = share < 1;
+    }
   }
 
   /** The dish's middle (world), for the tutorial's arrow. */

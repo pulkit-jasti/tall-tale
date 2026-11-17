@@ -9,7 +9,8 @@
 // Fast swings blur hand tracking, so hits are found along the whole path of
 // the head since the last frame, with a generous hit area, and slow slams
 // count too, not only fast swipes.
-import { Vector3 } from 'three';
+import { Vector3, type Group } from 'three';
+import { popIn } from '../fx/ease.js';
 import { CASTLE, SWATTER, TOOL_SPOTS } from '../config/game.js';
 import { BOOST } from '../rules/boosts.js';
 import { landingHeight } from '../rules/boardMath.js';
@@ -18,7 +19,7 @@ import type { Goblin } from '../units/goblins.js';
 import { flySwatter } from '../world/shapes.js';
 import { HandTool, type ToolParts } from './handTool.js';
 
-const HEAD_LOCAL = new Vector3(0, SWATTER.handleLength + SWATTER.headHeight / 2, 0);
+const headLocal = new Vector3();
 const current = new Vector3();
 const segment = new Vector3();
 const toGoblin = new Vector3();
@@ -54,9 +55,45 @@ export class FlySwatter extends HandTool {
   }
 
   protected build(): void {
-    const { group, materials } = flySwatter();
+    const { group, materials, blade } = flySwatter();
     this.body.add(group);
     this.materials = materials;
+    this.blade = blade;
+  }
+
+  /** The head and rim, grown by the Wide Swatter card (Endless). */
+  private blade: Group | null = null;
+  /** The blade's size shown now, the size it grows from, and the grow animation's time left (seconds). */
+  private bladeSize = 1;
+  private bladeFrom = 1;
+  private bladeGrow = 0;
+
+  update(dt: number): void {
+    super.update(dt);
+    // Wide Swatter (2026-11-17): the hit area grew but the swatter did not, so the card seemed to do nothing.
+    // The blade now grows to match, with a small elastic pop.
+    const want = BOOST.swatterRadius;
+    if (Math.abs(want - this.bladeSize) > 1e-4 && this.bladeGrow <= 0 && Math.abs(want - this.bladeFrom) > 1e-4) {
+      this.bladeFrom = this.bladeSize;
+      this.bladeGrow = SWATTER.growTime;
+      if (want > this.bladeSize) this.particles.burst(this.bodyToWorld(this.headLocal(), world), SWATTER.growSparkle, 12, 0.1);
+    }
+    if (this.bladeGrow > 0) {
+      this.bladeGrow = Math.max(0, this.bladeGrow - dt);
+      const t = 1 - this.bladeGrow / SWATTER.growTime;
+      this.bladeSize = this.bladeFrom + (want - this.bladeFrom) * popIn(t);
+      if (this.bladeGrow === 0) {
+        this.bladeSize = want;
+        this.bladeFrom = want;
+      }
+    }
+    // Wider and a little taller (the hit radius grows by the same share).
+    this.blade?.scale.set(this.bladeSize, Math.sqrt(this.bladeSize), 1);
+  }
+
+  /** The head's middle in the body's frame now (it moves up as the blade grows). */
+  private headLocal(): Vector3 {
+    return headLocal.set(0, SWATTER.handleLength + (SWATTER.headHeight * Math.sqrt(this.bladeSize)) / 2, 0);
   }
 
   protected resetMotion(): void {
@@ -75,7 +112,7 @@ export class FlySwatter extends HandTool {
   }
 
   protected heldUpdate(dt: number): void {
-    this.bodyToBoard(HEAD_LOCAL, current);
+    this.bodyToBoard(this.headLocal(), current);
     if (!this.hasLast || dt <= 0) {
       this.last.copy(current);
       this.hasLast = true;
@@ -85,7 +122,7 @@ export class FlySwatter extends HandTool {
     const length = segment.length();
     const speed = length / dt;
     if (speed > SWATTER.whooshSpeed) {
-      this.audio.play('swatWhoosh', this.bodyToWorld(HEAD_LOCAL, world), 1, SWATTER.whooshGap);
+      this.audio.play('swatWhoosh', this.bodyToWorld(this.headLocal(), world), 1, SWATTER.whooshGap);
     }
     // The head touching the ground (courtyard, wall top or field) on the way down is a swat.
     let groundSwat = false;
@@ -128,7 +165,7 @@ export class FlySwatter extends HandTool {
     }
     if (this.swinging) {
       if (balloon && this.balloons?.push(balloon)) this.onUse(1);
-      if (groundSwat || this.hits.length > 0) this.swat(this.bodyToWorld(HEAD_LOCAL, world));
+      if (groundSwat || this.hits.length > 0) this.swat(this.bodyToWorld(this.headLocal(), world));
       this.calmTime = speed < SWATTER.swingEndSpeed ? this.calmTime + dt : 0;
       if (this.calmTime >= SWATTER.swingEndTime) this.endSwing();
     }

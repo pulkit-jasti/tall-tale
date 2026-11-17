@@ -72,6 +72,7 @@ import { shrinkAway } from '../fx/ease.js';
 import { Goblin, type Goblins } from '../units/goblins.js';
 import { cloneStatic, InstancedPool, loadTemplate, type ModelTemplate } from '../world/models.js';
 import { flatMaterial, pebbleBowl, post, slingshotBand, slingshotFrame, slingshotPouch } from '../world/shapes.js';
+import { flameGeometry } from '../world/nightLights.js';
 import type { Stage } from '../world/stage.js';
 
 export type SlingEvent = 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot';
@@ -387,6 +388,14 @@ export class Slingshot {
     const stone = pebbleTemplate();
     this.stoneTemplate = stone;
     this.kegTemplate = keg;
+    // A few hand pebbles and the flying keg made now, hidden, so nothing is cloned mid-battle.
+    for (let i = 0; i < 4; i++) {
+      const mesh = cloneStatic(stone);
+      this.recycleStone(mesh);
+    }
+    this.kegMesh = cloneStatic(keg);
+    this.kegMesh.visible = false;
+    this.stage.boardLift.add(this.kegMesh);
     this.buildPlatform(platform);
     this.buildFrame();
     this.buildBowl(pile);
@@ -405,9 +414,12 @@ export class Slingshot {
     const a = degToRad(F.angleDeg);
     const stickHeight = F.flameY - F.flameSize * 0.5;
     const stick = new Mesh(new CylinderGeometry(0.3, 0.22, stickHeight, 6).translate(0, stickHeight / 2, 0), flatMaterial(F.stickColor));
+    // The layered low-poly flame of the castle torches (2026-11-17), sized to this torch.
     this.torchFlame = new Mesh(
-      new ConeGeometry(F.flameSize * 0.45, F.flameSize, 7).translate(0, F.flameSize / 2, 0),
-      new MeshBasicMaterial({ color: F.flameColors[1], fog: false, toneMapped: false }),
+      flameGeometry()
+        .scale(F.flameSize * 0.8, F.flameSize * 0.8, F.flameSize * 0.8)
+        .translate(0, F.flameSize * 0.45, 0),
+      new MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false }),
     );
     this.torchFlame.position.y = stickHeight;
     this.torch.add(stick, this.torchFlame);
@@ -432,10 +444,35 @@ export class Slingshot {
     this.root.add(this.kegStand);
   }
 
+  /**
+   * Pebbles carried by hand, made ahead and reused (audit 2026-11-17: each pinch at the bowl cloned a new
+   * one). Kept in boardLift, hidden when not in a hand, so the warm-up compiles them.
+   */
+  private stonePool: Object3D[] = [];
+
+  private takeStone(): Object3D {
+    const mesh = this.stonePool.pop() ?? cloneStatic(this.stoneTemplate!);
+    mesh.visible = true;
+    this.stage.boardLift.add(mesh);
+    return mesh;
+  }
+
+  private recycleStone(mesh: Object3D): void {
+    mesh.visible = false;
+    if (mesh.parent !== this.stage.boardLift) this.stage.boardLift.add(mesh);
+    this.stonePool.push(mesh);
+  }
+
+  /** The one flying keg, made once and reused (it was cloned for every keg the magnet pulled in). */
+  private kegMesh: Object3D | null = null;
+
   /** v3 2.6 Package Deal: a keg pulled in by the magnet lands on its stand by the bowl, with a poof. False if one already waits. */
   addKeg(): boolean {
     if (!this.kegTemplate || this.kegWaiting || this.pouchKeg || this.handPebbles.some((p) => p.keg) || this.kegFlying) return false;
-    const keg = cloneStatic(this.kegTemplate);
+    const keg = this.kegMesh ?? (this.kegMesh = cloneStatic(this.kegTemplate));
+    keg.visible = true;
+    keg.rotation.set(0, 0, 0);
+    keg.scale.setScalar(1);
     keg.position.copy(this.kegRest);
     this.stage.boardLift.add(keg);
     this.kegWaiting = keg;
@@ -658,8 +695,7 @@ export class Slingshot {
     }
     this.bowlCount--;
     this.updatePile();
-    const mesh = cloneStatic(this.stoneTemplate);
-    this.stage.boardLift.add(mesh);
+    const mesh = this.takeStone();
     this.handPebbles.push({ hand, mesh, velocity: new Vector3(), last: new Vector3(), hasLast: false, heat: 0, fire: 0, keg: false });
     this.onEvent('pebbleTaken');
     this.placeHandPebble(hand, mesh);
@@ -952,7 +988,7 @@ export class Slingshot {
           p.mesh.position.set(0, -FLYING_KEG.height / 2, SLINGSHOT.pouchSag - 1);
           p.mesh.rotation.set(Math.PI / 2, 0, 0);
         } else {
-          this.stage.boardLift.remove(p.mesh);
+          this.recycleStone(p.mesh);
           if (this.pouchPebble) this.pouchPebble.visible = true;
           this.pouchFire = p.fire;
         }
@@ -1044,7 +1080,7 @@ export class Slingshot {
       this.audio.play('drop', this.stage.boardLift.localToWorld(temp.copy(this.kegRest)), 0.6);
       return;
     }
-    this.stage.boardLift.remove(p.mesh);
+    this.recycleStone(p.mesh);
     const at = p.mesh.position;
     const dx = at.x - this.bowlCenter.x;
     const dz = at.z - this.bowlCenter.z;

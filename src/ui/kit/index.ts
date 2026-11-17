@@ -21,7 +21,7 @@
 //              the round buttons' menu icons (drawMenuIcon), Kenney icons and stars (drawIconCentered, drawStars, drawDivider)
 //   Rendering: canvasTexture, canvasPlane, drawOnTop (order of every layer: RENDER_ORDER in src/config/game.ts)
 export { Panel, PANEL_INK, centerAbove, type PanelOptions } from '../panel.js';
-export { PokeButton, type ButtonOptions } from '../pokeButton.js';
+export { PokeButton, prepareIcons, type ButtonOptions } from '../pokeButton.js';
 export { drawMenuIcon, type MenuIcon } from './menuIcons.js';
 export { ScrollList, type ScrollListOptions } from './scrollList.js';
 export { FightButton } from './fightButton.js';

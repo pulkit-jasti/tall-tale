@@ -21,6 +21,8 @@
 // One rule for chain reactions: explosions set off the triggers near them.
 // All motion is simple math, no physics engine. Board units (cm), in boardSpin.
 import {
+  LatheGeometry,
+  Vector2,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -49,6 +51,7 @@ import type { SlingHit, SlingTarget } from '../tools/slingshot.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate, type ModelTemplate } from './models.js';
 import type { Road, RoadNetwork } from './roads.js';
+import { ravineWater, ropeBridge } from './shapes.js';
 import type { Spot } from './settlements.js';
 import type { CampSpot } from './terrain.js';
 
@@ -1032,25 +1035,47 @@ class BellTower extends Trigger {
     const B = TRIGGERS.bellTower;
     this.road.pointAt(along, 0, this.drop);
     this.road.pointAt(along, B.side, this.base);
-    // The tower: the pieces stacked, the belfry on top leaning toward the road.
+    // The tower: the pieces stacked upright (base, middle, the arched belfry, the roof), one arch facing the
+    // road so the bell shows through it.
     let y = 0;
+    let archTop = 0;
+    let archHeight = 0;
     const toRoad = temp.subVectors(this.drop, this.base).setY(0).normalize();
-    const lean = new Vector3().crossVectors(UP, toRoad).normalize();
+    const facing = Math.atan2(toRoad.x, toRoad.z);
     pieces.forEach((piece, i) => {
       const part = cloneStatic(piece);
       part.position.y = y;
-      if (i === pieces.length - 1) part.quaternion.setFromAxisAngle(lean, degToRad(B.leanDeg));
+      part.rotation.y = facing;
       this.tower.add(part);
       y += piece.size.y;
+      if (i === pieces.length - 2) {
+        archTop = y;
+        archHeight = piece.size.y;
+      }
     });
     this.root.add(this.tower);
     this.materials = ownMaterials(this.tower);
     // The bell: a simple flared shape (docs/placeholder-shapes.md), hanging under the belfry's top on the road side.
     const bronze = new MeshStandardMaterial({ color: B.bellColor, roughness: 0.6, metalness: 0.4, flatShading: true });
-    this.bell = new Mesh(new CylinderGeometry(B.bellRadius * 0.45, B.bellRadius, B.bellHeight, 10).translate(0, -B.bellHeight / 2, 0), bronze);
+    // 2026-11-17: a real bell's turned profile (a flared lip, a waist, a rounded crown and a hanging loop), 10 sides.
+    const r = B.bellRadius;
+    const h = B.bellHeight;
+    const bellProfile = [
+      new Vector2(r * 0.9, -h),
+      new Vector2(r, -h * 0.94),
+      new Vector2(r * 0.92, -h * 0.82),
+      new Vector2(r * 0.66, -h * 0.55),
+      new Vector2(r * 0.55, -h * 0.25),
+      new Vector2(r * 0.42, -h * 0.08),
+      new Vector2(r * 0.18, 0),
+      new Vector2(r * 0.12, h * 0.14),
+      new Vector2(0, h * 0.16),
+    ];
+    this.bell = new Mesh(new LatheGeometry(bellProfile, 10), bronze);
     this.materials.push(bronze);
-    const top = pieces.length > 0 ? y - pieces[pieces.length - 1].size.y * 0.2 : 12;
-    this.hang.copy(this.base).addScaledVector(toRoad, Math.min(B.side * 0.6, B.width * 0.4 + Math.sin(degToRad(B.leanDeg)) * top));
+    // Hanging from the top of the arched belfry, in its road-side opening.
+    const top = pieces.length > 1 ? archTop - archHeight * 0.12 : 12;
+    this.hang.copy(this.base).addScaledVector(toRoad, Math.min(B.side * 0.6, B.width * 0.42));
     this.hang.y = this.base.y + top;
     owner.group.add(this.bell);
     this.bell.visible = false;
@@ -1244,17 +1269,26 @@ class Bridge extends Trigger {
     this.road.pointAt(this.clampAlong(along + B.length / 2), 0, this.b);
     const yaw = Math.atan2(-(this.b.z - this.a.z), this.b.x - this.a.x);
     this.yaw = yaw;
-    this.deck = cloneStatic(template);
-    this.materials = ownMaterials(this.deck);
-    this.root.add(this.deck);
-    // The stream: a flat blue strip across the road under the bridge.
-    const water = new MeshStandardMaterial({ color: B.streamColor, roughness: 0.3, metalness: 0.1, emissive: B.streamEdge, emissiveIntensity: 0.15 });
-    this.stream = new Mesh(new BoxGeometry(B.length * 0.7, 0.15, B.streamWidth), water);
-    this.stream.position.copy(this.mid).setY(this.mid.y + 0.1);
+    // 2026-11-17: a rope bridge built for it (planks, posts, rope rails, stone footings) over a real ravine
+    // (cut into the terrain when the map is built, boardBuilder), with low-poly water in it.
+    void template;
+    // The banks' height: the deck's ends (the road's span starts there, src/world/roads.ts).
+    this.level = Math.min(this.a.y, this.b.y) - ROADS.lift;
+    const built = ropeBridge(B.length, B.width, B.arch);
+    this.deck = built.deck;
+    this.materials = built.materials;
+    this.root.add(built.group);
+    this.stream = ravineWater(B.streamLength, B.gapOut * 2.4, B.streamColor);
+    this.stream.position.set(this.mid.x, this.level - B.gapDepth * 0.55, this.mid.z);
     this.stream.rotation.y = yaw;
-    this.stream.visible = false;
     owner.group.add(this.stream);
+    // Part of the land from the start (the road crosses its ravine on it).
+    this.place();
+    this.root.visible = true;
   }
+
+  /** The banks' height at the bridge (cm). */
+  private readonly level: number;
 
   center(out: Vector3): Vector3 {
     return out.copy(this.mid).setY(this.mid.y + 1.5);
@@ -1272,10 +1306,12 @@ class Bridge extends Trigger {
   private readonly yaw: number;
 
   protected place(): void {
-    this.root.position.copy(this.mid).setY(this.mid.y + 0.2);
+    // At the banks' height: the deck's own arch carries the road over the gap.
+    this.root.position.set(this.mid.x, this.level + ROADS.lift, this.mid.z);
     this.root.rotation.set(0, this.yaw, 0);
     this.deck.position.set(0, 0, 0);
     this.deck.rotation.set(0, 0, 0);
+    this.deck.visible = true;
     this.root.scale.setScalar(1);
     this.stream.visible = true;
   }
@@ -1294,11 +1330,12 @@ class Bridge extends Trigger {
     if (!this.down) {
       // The deck drops and tips into the stream.
       const t = Math.min(1, this.time / B.fallTime);
-      this.deck.position.y = -B.streamDepth * t * t;
+      this.deck.position.y = -B.gapDepth * 1.2 * t * t;
       this.deck.rotation.x = t * 0.5;
       if (t < 1) return;
       this.down = true;
-      this.root.visible = false;
+      // The deck is gone into the stream; the stone footings stay on the banks, so the gap reads.
+      this.deck.visible = false;
       this.owner.splash(this.mid);
       return;
     }
@@ -1316,7 +1353,20 @@ class Bridge extends Trigger {
 
   hide(): void {
     super.hide();
-    this.stream.visible = false;
+    // 2026-11-17: the ravine is always cut and the road always crosses it on the deck, so a bridge never
+    // vanishes: hidden (the tutorial, a wave it does not belong to yet) it stands as part of the land, it just
+    // cannot be set off.
+    this.place();
+    this.root.visible = true;
+  }
+
+  reset(wave: number): void {
+    super.reset(wave);
+    // Before its wave it still stands as land (see hide).
+    if (this.phase === 'hidden') {
+      this.place();
+      this.root.visible = true;
+    }
   }
 }
 
@@ -1374,22 +1424,25 @@ export class Triggers {
   /** Loads the models and puts the map's traps on it (the blueprint's and the spare spots, from buildBoard). */
   async load(spots: TriggerPlacement[]): Promise<void> {
     const W = TRIGGERS.bellTower.width;
-    const [keg, rock, tree, planks, wood, towerBase, towerMid, towerTop, cart, potion, bridge, ...hills] = await Promise.all([
+    const [keg, rock, tree, planks, wood, towerBase, towerMid, towerArch, towerTop, cart, potion, bridge, ...hills] = await Promise.all([
       loadTemplate('props/survival/barrel.glb', { height: TRIGGERS.keg.height }),
       loadTemplate('rocks/nature/rock_smallH.glb', { width: TRIGGERS.boulder.size }),
       loadTemplate('trees/fantasy-town/tree-crooked.glb', { height: TRIGGERS.tree.height }),
       loadTemplate('props/survival/resource-planks.glb', { width: TRIGGERS.debris.size }),
       loadTemplate('props/survival/resource-wood.glb', { width: TRIGGERS.debris.size }),
       // v3 2.1: the bell tower (castle kit pieces), the potion cart and its potions, the rope bridge.
-      loadTemplate('castle/castle-kit/tower-square-base.glb', { width: W }),
-      loadTemplate('castle/castle-kit/tower-square-mid.glb', { width: W }),
-      loadTemplate('castle/castle-kit/tower-square-mid-open.glb', { width: W }),
+      // 2026-11-17: a real bell tower (was a plain stack): a bordered base, a windowed middle, an open
+      // arched belfry (the bell hangs in it) and a high pointed roof.
+      loadTemplate('castle/castle-kit/tower-square-base-border.glb', { width: W }),
+      loadTemplate('castle/castle-kit/tower-square-mid-windows.glb', { width: W }),
+      loadTemplate('castle/castle-kit/tower-square-arch.glb', { width: W }),
+      loadTemplate('castle/castle-kit/tower-square-top-roof-high.glb', { width: W }),
       loadTemplate('town/fantasy-town/cart-high.glb', { width: 7 }),
       loadTemplate('props/mini-dungeon/potion.glb', { height: TRIGGERS.cart.potionHeight }),
       loadTemplate('props/nature/bridge_wood.glb', { width: TRIGGERS.bridge.length }),
       ...['A', 'B', 'C', 'D'].map((v) => loadTemplate(`rocks/nature/rock_large${v}.glb`, { width: TRIGGERS.boulder.hillWidth })),
     ]);
-    this.models = { keg, rock, tree, hills, tower: [towerBase, towerMid, towerTop], cart, potion, bridge };
+    this.models = { keg, rock, tree, hills, tower: [towerBase, towerMid, towerArch, towerTop], cart, potion, bridge };
     this.place(this.network, spots);
     for (let i = 0; i < TRIGGERS.debris.pool; i++) {
       const object = cloneStatic(i % 2 === 0 ? planks : wood);

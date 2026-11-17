@@ -257,7 +257,15 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
   const inner = r * SKY.planetRingInner;
   const step = (r * SKY.planetRingOuter - inner) / SKY.planetRingBands.length;
   const halves = { back: { at: [] as number[], colors: [] as number[] }, front: { at: [] as number[], colors: [] as number[] } };
-  SKY.planetRingBands.forEach((amount, k) => {
+  // 2026-11-17 (second look): the rings are one straight gradient of two colors, from one side of the ring to
+  // the other (not band by band, not round), with no light and dark facets. The gaps between bands stay. The
+  // ball stays faceted.
+  const ringBands = SKY.planetRingBands;
+  const ringA = shade(1, 0.95, SKY.planetRingWarmFrom).clone();
+  const ringB = shade(1, 0.95, SKY.planetRingWarmTo).clone();
+  const outer = r * SKY.planetRingOuter;
+  const edge = new Color();
+  ringBands.forEach((amount, k) => {
     if (!amount) return;
     const r0 = inner + k * step;
     const r1 = r0 + step;
@@ -266,8 +274,6 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
       const t1 = ((s + 1) / segments) * Math.PI * 2;
       // The far half is the side away from the player (before the tilt).
       const half = Math.sin((t0 + t1) / 2) < 0 ? halves.back : halves.front;
-      // A little lighter and darker in turn, so the facets read.
-      shade(amount, s % 2 === 0 ? 0.95 : 0.85, SKY.planetWarmRings[k] ?? 0);
       const corners: [number, number][] = [
         [r0, t0],
         [r1, t0],
@@ -277,8 +283,11 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
         [r0, t1],
       ];
       for (const [rr, t] of corners) {
-        half.at.push(Math.cos(t) * rr, 0, Math.sin(t) * rr);
-        half.colors.push(color.r, color.g, color.b);
+        const x = Math.cos(t) * rr;
+        half.at.push(x, 0, Math.sin(t) * rr);
+        // Straight across the ring: one color at its left end, the other at its right.
+        edge.copy(ringA).lerp(ringB, (x / outer + 1) / 2);
+        half.colors.push(edge.r, edge.g, edge.b);
       }
     }
   });
@@ -452,7 +461,8 @@ export class Sky {
       bakeFaces(new IcosahedronGeometry(r, 1), light, (facing) => color.copy(shade).lerp(pale, Math.min(1, Math.max(0, facing * 0.9 + 0.25)))),
       skyMaterial({ vertexColors: true }),
     );
-    this.moonGlow = skyMaterial({ color: new Color(SKY.moonGlowColor), map: this.glowMap, blending: AdditiveBlending, transparent: false });
+    // Additive, so a darker color is a weaker glow (SKY.moonGlowStrength: halved 2026-11-17, it was too bright).
+    this.moonGlow = skyMaterial({ color: new Color(SKY.moonGlowColor).multiplyScalar(SKY.moonGlowStrength), map: this.glowMap, blending: AdditiveBlending, transparent: false });
     const glow = new Mesh(new CircleGeometry(r * SKY.moonGlowShare, 32), this.moonGlow);
     glow.position.z = -r;
     glow.renderOrder = ORDER.moonGlow;

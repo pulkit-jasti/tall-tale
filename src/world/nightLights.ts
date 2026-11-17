@@ -11,12 +11,15 @@
 // flat pool of warm light on the ground (so goblins show up against it). 6
 // draw calls in all, and all hidden while the lights are off (by day the
 // torches are gone).
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   AdditiveBlending,
   BufferAttribute,
+  type BufferGeometry,
   Color,
-  ConeGeometry,
   CylinderGeometry,
+  LatheGeometry,
+  Vector2,
   InstancedMesh,
   Matrix4,
   MeshBasicMaterial,
@@ -35,6 +38,7 @@ const matrix = new Matrix4();
 const at = new Vector3();
 const size = new Vector3();
 const still = new Quaternion();
+const twist = new Quaternion();
 const UP = new Vector3(0, 1, 0);
 
 /** A glow that always faces the eye: a quad turned toward the view in its shader, its size from the instance's scale. */
@@ -204,7 +208,9 @@ export class NightLights {
     this.torches.forEach((p, i) => {
       const w = this.wobble(i);
       const flame = L.torchFlame * w * Math.min(1, level * 1.5);
-      this.flames.setMatrixAt(i, matrix.compose(p, still, size.set(flame, flame * (1 + 0.3 * (w - 1)), flame)));
+      // It twists slowly as it flickers, so the side tongues dance (each torch its own way).
+      twist.setFromAxisAngle(UP, this.time * 1.3 + i * 2.1 + (w - 1) * 3);
+      this.flames.setMatrixAt(i, matrix.compose(p, twist, size.set(flame, flame * (1 + 0.3 * (w - 1)), flame)));
       if (i < this.castleTorches) this.glows.setMatrixAt(i, matrix.compose(p, still, size.setScalar(L.torchGlowSize * (0.85 + 0.15 * w))));
     });
     this.flames.instanceMatrix.needsUpdate = true;
@@ -218,18 +224,43 @@ export class NightLights {
   }
 }
 
-/** A low-poly flame (1 cm across): a cone, orange at the base to pale yellow at the tip, its middle at the origin. */
-function flameGeometry(): ConeGeometry {
-  const geometry = new ConeGeometry(0.42, 1.2, 6);
-  const position = geometry.getAttribute('position') as BufferAttribute;
-  const colors = new Float32Array(position.count * 3);
-  const base = new Color(L.flameBase);
-  const tip = new Color(L.flameTip);
-  const color = new Color();
-  for (let i = 0; i < position.count; i++) {
-    color.copy(base).lerp(tip, position.getY(i) / 1.2 + 0.5);
-    colors.set([color.r, color.g, color.b], i * 3);
-  }
-  geometry.setAttribute('color', new BufferAttribute(colors, 3));
-  return geometry;
+/**
+ * A low-poly flame (about 1 cm across, its middle at the origin), vertex colored. 2026-11-17: was one plain
+ * cone. Now an outer teardrop (red-orange at its base to orange), a smaller yellow core inside and a little
+ * forward, and two short tongues leaning out to the sides, so it reads as fire from any side. Still one
+ * geometry, one instanced draw. Also the slingshot's torch (src/tools/slingshot.ts).
+ */
+export function flameGeometry(): BufferGeometry {
+  const teardrop = (radius: number, height: number, sides: number): BufferGeometry => {
+    const points = [
+      new Vector2(0, 0),
+      new Vector2(radius * 0.75, height * 0.08),
+      new Vector2(radius, height * 0.28),
+      new Vector2(radius * 0.7, height * 0.6),
+      new Vector2(radius * 0.25, height * 0.85),
+      new Vector2(0, height),
+    ];
+    return new LatheGeometry(points, sides).translate(0, -height * 0.45, 0);
+  };
+  const paint = (geometry: BufferGeometry, from: number, to: number, height: number): BufferGeometry => {
+    const g = geometry.index ? geometry.toNonIndexed() : geometry;
+    const position = g.getAttribute('position') as BufferAttribute;
+    const colors = new Float32Array(position.count * 3);
+    const base = new Color(from);
+    const tip = new Color(to);
+    const color = new Color();
+    for (let i = 0; i < position.count; i++) {
+      color.copy(base).lerp(tip, Math.min(1, Math.max(0, position.getY(i) / height + 0.45)));
+      colors.set([color.r, color.g, color.b], i * 3);
+    }
+    g.setAttribute('color', new BufferAttribute(colors, 3));
+    g.deleteAttribute('uv');
+    g.deleteAttribute('normal');
+    return g;
+  };
+  const outer = paint(teardrop(0.45, 1.3, 6), L.flameOuter, L.flameBase, 1.3);
+  const core = paint(teardrop(0.26, 0.85, 5).translate(0, -0.12, 0.08), L.flameBase, L.flameTip, 0.85);
+  const left = paint(teardrop(0.16, 0.6, 4).rotateZ(0.5).translate(-0.3, -0.15, 0), L.flameOuter, L.flameBase, 0.6);
+  const right = paint(teardrop(0.14, 0.5, 4).rotateZ(-0.55).translate(0.28, -0.2, -0.05), L.flameOuter, L.flameBase, 0.5);
+  return mergeGeometries([outer, core, left, right])!;
 }

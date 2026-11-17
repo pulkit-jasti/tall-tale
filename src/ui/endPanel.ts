@@ -29,6 +29,7 @@ import {
   Panel,
   panelMap,
   PokeButton,
+  prepareIcons,
   UI_COLORS,
   uiCenterY,
 } from './kit/index.js';
@@ -100,6 +101,11 @@ export class EndPanel {
     const { width, height, buttonRadius, settingsRadius, sideRadius, radius, tiltDeg } = END_PANEL;
     // Straight in front of the eyes, tilted back toward them, never too high or too low (UI_ZONE).
     this.panel = new Panel(parent, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: 512, canvasScale: 2 });
+    // The win and loss sizes made now, so the panel showing at a battle's end makes nothing new.
+    this.panel.prepareSize(END_PANEL.endWidth, END_PANEL.winHeight);
+    this.panel.prepareSize(END_PANEL.endWidth, END_PANEL.lostHeight);
+    // The icons its big button switches between, and the pickers' tick and dot.
+    prepareIcons(['play', 'next', 'restart', 'tick', 'dot']);
     this.button = new PokeButton(audio, { radius: buttonRadius, icon: 'play' });
     this.settings = new PokeButton(audio, { radius: settingsRadius, icon: 'settings' });
     this.skip = new PokeButton(audio, { radius: settingsRadius, icon: 'skip' });

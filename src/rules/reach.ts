@@ -128,6 +128,8 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
     { name: 'drum stick', radius: TOOL_SPOTS.leftMiddle.radius, y: top + DRUM.height + 0.2 + (DRUM.gripFrom + DRUM.gripTo) / 2 },
     { name: 'drum skin', radius: TOOL_SPOTS.leftMiddle.radius, y: top + DRUM.height },
+    // 2026-11-17: the big drum that rises on the compass's spot while the stick is held.
+    { name: 'big drum skin', radius: COMPASS.at, y: (DRUM.height + 0.05) * DRUM.bigScale },
     // v3 2.2: the pepper ring is shaken from above, so the shaker's spot about 10 cm over the band's middle counts.
     { name: 'pepper ring (shaker over it)', radius: (PEPPER_RING.inner + PEPPER_RING.outer) / 2, y: 10, rare: true },
     { name: 'horn grip', radius: TOOL_SPOTS.rightSide.radius, y: top + HORN.restLift + (HORN.gripFrom + HORN.gripTo) / 2 },

@@ -3,7 +3,7 @@
 // waves, flags, end panel), goblins, troops, triggers, grab and eat,
 // slingshot, food tools, food jar, effects, sky.
 import { createSystem, VisibilityState } from '@iwsdk/core';
-import { Box3, DirectionalLight, Fog, Group, Matrix4, Object3D, Quaternion, Sphere, Vector3, type BufferGeometry, type Mesh, type MeshBasicMaterial } from 'three';
+import { Box3, DirectionalLight, Fog, Group, Matrix4, Object3D, Quaternion, Sphere, Vector3, type BufferGeometry, type Mesh, type MeshBasicMaterial, type SkinnedMesh } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
 import {
@@ -30,9 +30,13 @@ import {
   LOADOUT_SPOTS,
   TOOL_SPOTS,
   TRIGGERS,
+  MAGNET,
+  HANDS,
   XR,
   type TimeOfDay,
 } from './config/game.js';
+import { ViewFade } from './ui/viewFade.js';
+import { preparedTextures } from './ui/panel.js';
 import type { DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -267,6 +271,10 @@ export class GameSystem extends createSystem({}) {
   /** The empty tool slots hint (Fight poked with an empty slot): time left (seconds), and its red arrow. */
   private slotsHintLeft = 0;
   private slotsArrow!: PointerArrow;
+  /** The dark view while a map is built (src/ui/viewFade.ts). */
+  private fade!: ViewFade;
+  /** A trophy was earned in battle: the shelf redraws when the home screen shows. */
+  private trophiesChanged = false;
   /**
    * The map (docs/custom-mode.md section 11, step 5): its group in the board
    * (ground, roads, camps, villages, decor), the night lights' group, its
@@ -297,7 +305,11 @@ export class GameSystem extends createSystem({}) {
   init(): void {
     // The page hidden (the headset off, the Quest browser in the background): pause on the next frame.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') this.blurSeen = true;
+      if (document.visibilityState === 'hidden') {
+        this.blurSeen = true;
+        // Trophies not saved yet are kept even if the page closes now.
+        this.achievements?.flush();
+      }
     });
     void this.setup().catch((error) => console.error('[game] setup failed', error));
   }
@@ -376,6 +388,8 @@ export class GameSystem extends createSystem({}) {
     // The drum is struck, the game stuns: every goblin dizzy, the shock ring across the board, the rampart goblins knocked down.
     this.drum = new Drum(toolParts);
     this.drum.stunning = () => this.stun.active;
+    // The big drum rises on the compass's spot while the stick is held (2026-11-17).
+    this.drum.sinkCompass = (share) => this.compass.sink(share);
     this.drum.onStrike = (where, seconds) => {
       const stunned = this.stun.stun(seconds, where);
       // v3 2.6: every goblin the drum touched counts it as a helper (Jack of All Trades).
@@ -416,6 +430,13 @@ export class GameSystem extends createSystem({}) {
     this.gearDebris = new GearDebris(this.stage.boardSpin, createRandom(seed + 960));
     this.goblins.debris = this.gearDebris;
     this.troops.debris = this.gearDebris;
+    // Gear pulled by the magnet flies to its tips and is crushed there with a clank and a puff (2026-11-17).
+    this.magnet.gearTarget = this.gearDebris.magnetAt;
+    this.gearDebris.onMagnet = (at) => {
+      const world = this.stage.boardSpin.localToWorld(at.clone());
+      this.audio.play('magnetClank', world, 0.9, 0.05);
+      this.particles.burst(world, MAGNET.clankColors, 8, 0.1);
+    };
     // Villagers going about their day in the village squares (decor, their own random stream).
     this.villagers = new Villagers(this.stage.boardSpin, built.villages, createRandom(seed + 970));
     await Promise.all([
@@ -548,6 +569,8 @@ export class GameSystem extends createSystem({}) {
     this.horn.aimValid = () => this.hornAim.valid;
     // v3 2.5: call, boost or move. A call or a boost costs a charge; a move is free after its lockout.
     this.horn.aimKind = () => this.hornAim.kind;
+    this.horn.squadsOut = () => this.troops.anySquad;
+    this.troops.canCall = () => this.horn.charged;
     this.hornAim.canPay = (plan) => (plan.kind === 'move' ? this.troops.moveLock <= 0 : this.horn.charged);
     this.hornAim.lockShare = () => this.troops.moveLock / KNIGHTS.moveLockout;
     this.horn.onCall = (blown) => {
@@ -563,8 +586,12 @@ export class GameSystem extends createSystem({}) {
       }
       // The path is marked first (the walk the knights will take), then they go.
       const kind = this.hornAim.kind;
+      // The charge is spent already: the kind the aim showed is what happens.
+      this.troops.callOverride = kind === 'new';
       this.hornAim.markCalled(target);
-      if (!this.troops.command(target)) this.hornAim.cancelCalled();
+      const done = this.troops.command(target);
+      this.troops.callOverride = null;
+      if (!done) this.hornAim.cancelCalled();
       // v3 2.6 Commander: call, boost and move in one battle.
       else if (kind) this.achievements.hornOrder(kind === 'new' ? 'call' : kind);
     };
@@ -620,6 +647,15 @@ export class GameSystem extends createSystem({}) {
     );
     // Compile the home screen and upload its tags now, so the first grab or first look never hitches.
     this.menu.warm(this.renderer, this.scene, this.camera);
+    this.fade = new ViewFade(this.camera);
+    // Every goblin and soldier built now, hidden, then every shader compiled: nothing is built or compiled mid-battle.
+    this.goblins.prebuild();
+    this.troops.prebuild();
+    // The horn's ghost knights and icons too (they were made on the first aim).
+    this.hornAim.prepare();
+    // Every trophy's toast drawn now (it was drawn the frame it was earned).
+    this.toast.prepare();
+    this.warmGpu();
     // The empty tool slots hint's red arrow (POINTER.threat's look, flying to the slot once it is in view).
     this.slotsArrow = new PointerArrow(root, { ...POINTER.threat, flies: true });
     // What sinks into the ground for the menu: the castle, the flags, the ring handle, the tools and their platforms.
@@ -692,7 +728,8 @@ export class GameSystem extends createSystem({}) {
     this.toast = new TrophyToast(root, this.audio, this.particles);
     A.onUnlock = (id) => {
       this.toast.show(id);
-      this.menu?.refreshTrophies();
+      // The shelf (hidden in battle) catches up when the home screen shows (audit 2026-11-17: no redraw mid-battle).
+      this.trophiesChanged = true;
     };
     this.goblins.onKnockOutBy = (g, cause, trap) => {
       A.knockedOut(g, cause);
@@ -773,12 +810,38 @@ export class GameSystem extends createSystem({}) {
    * moving the model, so a lost hand stays drawn at a stale spot in a broken pose. This runs after IWSDK's
    * input update and before the frame is drawn, so it wins.
    */
-  private hideLostHandModels(): void {
+  /** Seconds each hand has been tracked without a break (a hand is shown only after HANDS.showAfter). */
+  private handSteady = { left: 0, right: 0 };
+
+  /**
+   * IWSDK's see-through hands, drawn only while that hand is really tracked (headset tests 2026-11-13 to 17:
+   * white hands floated in front of the eyes with both hands out of view). Why the earlier fixes failed:
+   *   - `model.visible = false`: IWSDK sets the model's `visible` again every frame while the hand's input
+   *     source is connected, so it could be undone before the frame was drawn.
+   *   - Scaling the model to 0: a skinned hand is placed by its bones (joint poses written each frame),
+   *     not by its parent's scale, so the hand could still draw at its last or rest pose.
+   *   - A hand coming back is rebuilt in its rest pose (near the head) and drawn a frame or two before its
+   *     first pose arrives.
+   * Now every mesh inside the model goes to a camera layer that is never drawn (HANDS.hiddenLayer) while the
+   * hand is lost, and back only after it has been tracked steadily for HANDS.showAfter seconds. IWSDK never
+   * touches the meshes' layers, and a layer hides a mesh however its bones move. A rebuilt model is new, so
+   * it is hidden the first frame it is seen.
+   */
+  private hideLostHandModels(dt: number): void {
     const adapters = this.input.xr.visualAdapters.hand;
     for (const state of this.hands.hands) {
+      const tracked = state.tracked && state.lostTime <= 0;
+      const side = state.side as 'left' | 'right';
+      this.handSteady[side] = tracked ? this.handSteady[side] + dt : 0;
+      const show = this.handSteady[side] >= HANDS.showAfter;
       const model = adapters[state.side]?.visual?.model;
-      // Tracked this very frame (lostTime 0), not only within the tracker's short grace.
-      if (model && model.visible && (!state.tracked || state.lostTime > 0)) model.visible = false;
+      if (!model) continue;
+      if (model.userData.handShown === show) continue;
+      model.userData.handShown = show;
+      model.traverse((o) => {
+        if (show) o.layers.set(0);
+        else o.layers.set(HANDS.hiddenLayer);
+      });
     }
   }
 
@@ -870,6 +933,8 @@ export class GameSystem extends createSystem({}) {
   private battleOver(won: boolean, _share: number): 'menu' | EndExtras {
     // v3 2.6: Commander and Jack of All Trades are earned on a win.
     this.achievements.endBattle(won);
+    // Trophies earned during the battle are saved now (not the frame they were earned).
+    this.achievements.flush();
     if (this.battle.teaching) {
       if (!won) return { menu: false };
       recordTutorial(progress, true);
@@ -977,6 +1042,12 @@ export class GameSystem extends createSystem({}) {
     this.toast.clear();
     this.achievements.active = false;
     this.battle.stop();
+    // Trophies earned in the battle: saved and shown on the shelf now, not mid-battle.
+    this.achievements.flush();
+    if (this.trophiesChanged) {
+      this.trophiesChanged = false;
+      this.menu.refreshTrophies();
+    }
     this.menu.open(page);
     this.swap.toMenu(
       () => {
@@ -1043,10 +1114,68 @@ export class GameSystem extends createSystem({}) {
    * could not (already loading, or the build failed: the tutorial map is
    * built again then).
    */
+  /**
+   * Compiles every shader in the scene (hidden things too: three compiles
+   * every object, seen or not) and uploads every texture now. Lazily,
+   * the first knockout star, gear debris, banner or pop compiled mid-battle,
+   * and on the Quest that dropped frame shows as the sky and UI flickering
+   * (headset test 2026-11-17).
+   */
+  private warmGpu(): void {
+    const startedAt = performance.now();
+    mark('warm gpu');
+    // In VR the headset draws through a stereo (multiview) target, and three builds a different shader for it.
+    // A warm-up compiled outside VR (or with no target set) made the plain ones only, so in the headset every
+    // material still compiled its stereo version the first time it showed: the flicker that came back with
+    // hits, knockouts and fights (audit 2026-11-17). Setting the target to null while presenting selects the
+    // XR target, so the compile makes the versions the headset really draws with.
+    const presenting = this.renderer.xr.isPresenting;
+    const before = this.renderer.getRenderTarget();
+    if (presenting) this.renderer.setRenderTarget(null);
+    this.renderer.compile(this.scene, this.camera);
+    if (presenting) this.renderer.setRenderTarget(before);
+    const seen = new Set<unknown>();
+    this.scene.traverse((o) => {
+      // A skinned unit's bone texture is made and uploaded the first time it is drawn: for a pooled goblin or
+      // soldier that was mid-fight (2026-11-17: knights fighting and boulder knockouts still flickered).
+      const skinned = o as SkinnedMesh;
+      if (skinned.isSkinnedMesh && skinned.skeleton) {
+        if (!skinned.skeleton.boneTexture) skinned.skeleton.computeBoneTexture();
+        const bones = skinned.skeleton.boneTexture;
+        if (bones && !seen.has(bones)) {
+          seen.add(bones);
+          this.renderer.initTexture(bones);
+        }
+      }
+      const material = (o as Mesh).material as unknown;
+      if (!material) return;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        for (const value of Object.values(m as Record<string, unknown>)) {
+          const texture = value as { isTexture?: boolean; isRenderTargetTexture?: boolean; image?: unknown };
+          if (!texture || !texture.isTexture || texture.isRenderTargetTexture || !texture.image || seen.has(texture)) continue;
+          seen.add(texture);
+          this.renderer.initTexture(texture as Parameters<typeof this.renderer.initTexture>[0]);
+        }
+      }
+    });
+    // Textures made ahead but not on a mesh yet (a panel's other sizes, button icons).
+    for (const texture of preparedTextures) {
+      if (seen.has(texture)) continue;
+      seen.add(texture);
+      this.renderer.initTexture(texture);
+    }
+    note(`GPU warmed: ${seen.size} textures in ${(performance.now() - startedAt).toFixed(0)} ms`);
+  }
+
   private async loadMap(key: string, blueprint: Blueprint): Promise<boolean> {
-    if (key === this.mapKey) return true;
-    if (this.loading) return false;
+    if (key === this.mapKey || this.loading) {
+      // Nothing to build: never leave the view dark (Endless darkens it before calling).
+      this.fade.in();
+      return key === this.mapKey;
+    }
     this.loading = true;
+    // The view goes dark first: building a map blocks the page for a moment (Endless froze for 1 to 2 s).
+    await this.fade.out();
     const startedAt = performance.now();
     mark('map load');
     let ok = false;
@@ -1081,6 +1210,10 @@ export class GameSystem extends createSystem({}) {
       this.garden.place(built.network, built.trapSpots, createRandom(blueprint.seed + 990), blueprint.extras?.beds);
       for (const target of this.triggers.targets) this.slingshot.addTarget(target);
       this.villagers.setVillages(built.villages);
+      // The new map's shaders and textures, still in the dark (a unit cap change grows the pools here too).
+      this.goblins.prebuild();
+      this.troops.prebuild();
+      this.warmGpu();
       this.mapKey = key;
       ok = true;
       const ms = performance.now() - startedAt;
@@ -1095,6 +1228,7 @@ export class GameSystem extends createSystem({}) {
       this.loading = false;
     }
     if (!ok && key !== MAPS.tutorialKey) await this.loadMap(MAPS.tutorialKey, this.tutorialBlueprint);
+    this.fade.in();
     return ok;
   }
 
@@ -1130,12 +1264,15 @@ export class GameSystem extends createSystem({}) {
     if (this.loading) return;
     // The run's seed (every pick after it goes through seeded random streams).
     const seed = Math.floor(Math.random() * SEED.max);
+    // The generator runs in the dark too (it blocks the page while it plans the map).
+    await this.fade.out();
     let level: Level;
     try {
       level = makeEndlessLevel(seed);
     } catch (error) {
       console.error('[endless] no map', error);
       note(`Endless: no map from seed ${seed}: ${String(error)}`);
+      this.fade.in();
       return;
     }
     const key = `endless:${level.meta.seed}`;
@@ -1383,6 +1520,7 @@ export class GameSystem extends createSystem({}) {
 
   private tick(delta: number): void {
     if (!this.ready) return;
+    this.fade.update(delta);
     // Entering VR: place the board once the head pose has settled.
     const immersive = this.immersive;
     if (immersive && !this.wasImmersive) {
@@ -1465,7 +1603,7 @@ export class GameSystem extends createSystem({}) {
     const dt = Math.min(delta, 0.05);
     this.player.updateWorldMatrix(true, false);
     this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
-    this.hideLostHandModels();
+    this.hideLostHandModels(dt);
     this.readHead();
     // The Quest menu gesture (a pinch with the palm toward the eyes) pauses at once, whatever the browser reports.
     if (immersive && this.battle.canPause && !this.menuPaused && this.metaGesture(dt)) this.pause('menu gesture');
@@ -1544,7 +1682,12 @@ export class GameSystem extends createSystem({}) {
 
     if (this.placeTimer > 0) {
       this.placeTimer -= dt;
-      if (this.placeTimer <= 0) this.placeBoard();
+      if (this.placeTimer <= 0) {
+        this.placeBoard();
+        // Now in VR (its stereo target exists): every shader again in its stereo version, while the
+        // player is only just looking around, never mid-battle.
+        this.warmGpu();
+      }
     }
     // Once the board is in place (in VR, after the auto placement), the welcome
     // panel shows. Its Play button starts the battle (in the browser: the debug page's Restart game).
@@ -1690,7 +1833,7 @@ export class GameSystem extends createSystem({}) {
     let bar: GlassBar | null = null;
     if (horn.aiming && horn.ready && !horn.waiting) {
       bar = horn.listening
-        ? { share: horn.loudness / (HORN.blowLevel * GLASS_SIGN.hornBarMax), line: 1 / GLASS_SIGN.hornBarMax, over: horn.loudness > HORN.blowLevel }
+        ? { share: horn.loudness / (HORN.speakLevel * GLASS_SIGN.hornBarMax), line: 1 / GLASS_SIGN.hornBarMax, over: horn.loudness > HORN.speakLevel }
         : { share: horn.charge, line: null, over: false };
     }
     let text = this.battle.glassText;
@@ -1707,14 +1850,14 @@ export class GameSystem extends createSystem({}) {
             : 'Look at a road'
         : horn.ready
           ? horn.listening
-            ? `${verb}: blow!`
+            ? `${verb}: say "Charge!"`
             : horn.micSilent
               ? 'No mic sound: hold it there'
               : `${verb}: hold it there`
           : horn.inZone
             ? 'Lower it, then raise it again'
             : horn.listening
-              ? `${verb}: raise it and blow`
+              ? `${verb}: raise it, say "Charge!"`
               : `${verb}: raise it in front of you`;
     }
     // Just blown: the bar stays full and gold for a moment, so the player sees the blow was loud enough

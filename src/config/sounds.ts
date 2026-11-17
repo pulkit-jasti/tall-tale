@@ -16,6 +16,8 @@ export interface SoundDef {
    * happens (no restart, no second copy), and no other sound takes its voice.
    */
   once?: boolean;
+  /** Fades out over this many seconds at its end (replaces SOUND_MIX.fadeOut for this sound). */
+  fadeSeconds?: number;
 }
 
 export const SOUNDS = {
@@ -48,6 +50,9 @@ export const SOUNDS = {
   lessonDone: { files: ['interface/confirmation_002.ogg'], volume: 0.7, positional: false },
   toolPoof: { files: ['interface/maximize_008.ogg'], volume: 0.7, positional: true },
   toolReturn: { files: ['interface/minimize_008.ogg'], volume: 0.7, positional: true },
+  /** A tool's recharge is done (2026-11-17): the chime with a bright glass ping, from the tool. */
+  toolReady: { files: ['chime.mp3'], volume: 0.75, positional: true },
+  toolReadyPing: { files: ['interface/glass_002.ogg'], volume: 0.5, positional: true },
   foodAdded: { files: ['interface/confirmation_001.ogg', 'interface/confirmation_002.ogg'], volume: 0.5, positional: true },
   swatWhoosh: { files: ['rpg/knifeSlice.ogg', 'rpg/drawKnife1.ogg', 'rpg/drawKnife2.ogg'], volume: 0.6, positional: true },
   swatSplat: {
@@ -121,7 +126,9 @@ export const SOUNDS = {
   win: { files: ['voice/you_win.ogg', 'voice/winner.ogg'], volume: 0.8, positional: false },
   lose: { files: ['voice/you_lose.ogg', 'voice/game_over.ogg'], volume: 0.8, positional: false },
   // From Freesound (public/audio/README.md).
-  gulp: { files: ['646981__huw2k8__monster-eating-a-goblin.wav'], volume: 0.6, positional: false },
+  // 2026-11-17: it ended abruptly (cut by the next eat, or at its own end). Now it plays once to its end
+  // (a meal while it plays keeps the chomp only), cut at 4 s, and fades to nothing over its last 2.5 s.
+  gulp: { files: ['646981__huw2k8__monster-eating-a-goblin.wav'], volume: 0.6, positional: false, maxSeconds: 4, fadeSeconds: 2.5, once: true },
   squeal: { files: ['442817__qubodup__goblin-growl.wav'], volume: 0.6, positional: true },
   /** The goblin voice (not played yet: later the climber giggle). */
   goblinCackle: { files: ['202096__spookymodem__goblin-cackle.wav'], volume: 1, positional: true },
@@ -183,6 +190,8 @@ const GROUPS: Record<Exclude<SoundCategory, 'music'>, SoundName[]> = {
     'pebbleHit',
     'toolPoof',
     'toolReturn',
+    'toolReady',
+    'toolReadyPing',
     'foodAdded',
     'castleHeal',
     'hornHintCall',
@@ -242,7 +251,9 @@ export interface MusicTrack {
 export const MUSIC = {
   enabled: true,
   fade: 1.5,
-  menu: { file: '812170__giangallegos__ambient-music.mp3', volume: 0.35 } as MusicTrack,
+  // 2026-11-17: the fantasy village ambience on the home screen, the end panels and while paused; the music
+  // stays in battle only. An AAC copy of the 20 MB wav (1.3 MB, the full 116 s, made with macOS afconvert at 96 kbps).
+  menu: { file: '875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.m4a', volume: 0.45 } as MusicTrack,
   // The file's name says it loops at 32 s: the 4.7 s after that is its tail.
   battle: {
     file: '649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac',

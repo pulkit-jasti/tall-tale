@@ -12,6 +12,7 @@ import { RENDER_ORDER } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Particles } from '../fx/particles.js';
 import { canvasPlane, canvasTexture } from './kit/canvas.js';
+import { preparedTextures } from './panel.js';
 import { drawOnTop } from './kit/onTop.js';
 import { drawLine, UI_COLORS } from './kit/text.js';
 import { drawIconCentered, drawNineSlice } from './uiImages.js';
@@ -102,11 +103,44 @@ export class TrophyToast {
     this.holder.lookAt(flat.copy(head).setY(this.holder.position.y));
   }
 
+  /** Every trophy's toast, drawn once at setup (prepare), each its own texture. */
+  private ready = new Map<AchievementId, CanvasTexture>();
+
+  /**
+   * Draws every trophy's toast now (the game calls it at setup, once the images are in, before its
+   * warm-up): earning one mid-battle then only swaps in a texture already on the GPU (audit 2026-11-17:
+   * it drew and uploaded a 640 px canvas in that frame).
+   */
+  prepare(): void {
+    for (const a of ACHIEVEMENT_LIST) {
+      if (this.ready.has(a.id)) continue;
+      const canvas = document.createElement('canvas');
+      canvas.width = WIDTH;
+      canvas.height = HEIGHT;
+      this.paint(canvas, a.id);
+      const texture = canvasTexture(canvas, 4);
+      this.ready.set(a.id, texture);
+      preparedTextures.add(texture);
+    }
+  }
+
   private draw(id: AchievementId): void {
     mark('trophy toast');
+    const material = this.plane.material as MeshBasicMaterial;
+    const texture = this.ready.get(id);
+    if (texture) {
+      material.map = texture;
+      return;
+    }
+    material.map = this.texture;
+    this.paint(this.canvas, id);
+    this.texture.needsUpdate = true;
+  }
+
+  private paint(canvas: HTMLCanvasElement, id: AchievementId): void {
     const a = ACHIEVEMENT_LIST.find((x) => x.id === id);
     if (!a) return;
-    const c = this.canvas.getContext('2d')!;
+    const c = canvas.getContext('2d')!;
     const w = WIDTH;
     const h = HEIGHT;
     c.clearRect(0, 0, w, h);
@@ -123,7 +157,6 @@ export class TrophyToast {
     drawLine(c, a.name, x, h * 0.42, tw, h * 0.22, UI_COLORS.ink);
     drawLine(c, a.earned[0], x, h * 0.66, tw, h * 0.14, UI_COLORS.note);
     drawLine(c, a.earned[1], x, h * 0.83, tw, h * 0.14, UI_COLORS.note);
-    this.texture.needsUpdate = true;
   }
 
   /** The toast's material (for the game's shader warm-up). */

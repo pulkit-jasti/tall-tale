@@ -20,7 +20,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { BOMBER, CASTLE, DAY_NIGHT, DIGGER, GARDEN, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
+import { BOMBER, CASTLE, DAY_NIGHT, DIGGER, GARDEN, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, SUGAR, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
@@ -224,6 +224,11 @@ export class Goblin {
   /** v3 Phase 3: a bomber's fuse is lit: it blows up when the fuse runs out, or where it lands if tossed. */
   lit = false;
   fuseLeft = 0;
+  /**
+   * Lured by a sugar cube (2026-11-17): it leaves its road (or its spot on the rampart), walks to the cube,
+   * eats, walks back to `home` and carries on as before. Null when not lured.
+   */
+  lure: { at: Vector3; home: Vector3; phase: 'go' | 'eat' | 'back'; left: number; y: number } | null = null;
   /** v3 Phase 3: a timer the type's own behavior uses (fuse sparks, the shaman's cast, the digger's clods). */
   kindTimer = 0;
   /** v3 Phase 3: a digger's board angle under the ground, and where it stops (cm from the center). */
@@ -564,6 +569,11 @@ export class Goblins {
   }
 
   /** v3 2.2: true if it carries metal gear the magnet pulls (weapon, helmet or shield). */
+  /** Wears a helmet or a shield (what armorHit breaks first). */
+  hasArmor(goblin: Goblin): boolean {
+    return goblin.helmet || goblin.shield;
+  }
+
   hasGear(goblin: Goblin): boolean {
     return goblin.weapon !== 'none' || goblin.helmet || goblin.shield;
   }
@@ -574,10 +584,69 @@ export class Goblins {
    * clip), then carries on. Returns true if anything came off.
    */
   strip(goblin: Goblin, pause: number): boolean {
-    if (!this.isHittable(goblin) || !this.disarm(goblin)) return false;
+    // The gear flies to the magnet (2026-11-17: it popped off and fell, nothing looked pulled).
+    if (!this.isHittable(goblin) || !this.disarm(goblin, true)) return false;
     this.credit(goblin, 'magnet');
     this.pause(goblin, pause, 'emote-no');
     return true;
+  }
+
+  /**
+   * A sugar cube at `cube` (board cm) draws this goblin (2026-11-17): it walks off its road to the cube (on
+   * the ground; a goblin on the rampart to a cube on the wall top), eats for `seconds`, walks back and carries
+   * on. Returns false when it cannot go (busy, or the cube is on the other side of the wall).
+   */
+  lureTo(goblin: Goblin, cube: Vector3, seconds: number): boolean {
+    if (goblin.lure || goblin.standing) return false;
+    const onWall = goblin.mode === 'rampart';
+    if (!onWall && goblin.mode !== 'walking' && goblin.mode !== 'toWall' && goblin.mode !== 'atWall') return false;
+    const zone = zoneAt(Math.hypot(cube.x, cube.z));
+    if (onWall ? zone !== 'wallTop' : zone !== 'field') return false;
+    const p = goblin.root.position;
+    // It stops a little short of the cube, on its own side, so several crowd round it.
+    const dx = p.x - cube.x;
+    const dz = p.z - cube.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const at = new Vector3(cube.x + (dx / d) * SUGAR.eatDistance, 0, cube.z + (dz / d) * SUGAR.eatDistance);
+    goblin.lure = { at, home: p.clone(), phase: 'go', left: seconds, y: onWall ? CASTLE.wallHeight : 0 };
+    goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed);
+    return true;
+  }
+
+  private stepLure(g: Goblin, dt: number): void {
+    const lure = g.lure!;
+    // Grabbed, knocked off the wall, pulled into a fight...: the lure is over.
+    if (g.mode !== 'walking' && g.mode !== 'toWall' && g.mode !== 'atWall' && g.mode !== 'rampart') {
+      g.lure = null;
+      return;
+    }
+    const p = g.root.position;
+    const onWall = g.mode === 'rampart';
+    const ground = (): void => {
+      p.y = onWall ? lure.y : groundAt(p.x, p.z);
+    };
+    if (lure.phase === 'go') {
+      if (this.moveToward(g, lure.at, g.speed * SUGAR.walkShare, dt)) {
+        lure.phase = 'eat';
+        g.play('interact-right', true, 1.2);
+      }
+      ground();
+      return;
+    }
+    if (lure.phase === 'eat') {
+      lure.left -= dt;
+      if (lure.left > 0) return;
+      lure.phase = 'back';
+      g.play(g.stats.moveClip, true, g.stats.moveClipSpeed);
+      return;
+    }
+    if (this.moveToward(g, lure.home, g.speed * SUGAR.walkShare, dt)) {
+      p.copy(lure.home);
+      g.lure = null;
+      this.playModeClip(g);
+      return;
+    }
+    ground();
   }
 
   /** v3 2.2: it stops where it stands for `seconds` (no stars), playing `clip`. Only on the ground (walking, at the wall). */
@@ -596,12 +665,12 @@ export class Goblins {
   }
 
   /** Pepper (v2), the magnet (v3 2.2): weapon, helmet and shield all fly off. Returns true if anything came off. */
-  disarm(goblin: Goblin): boolean {
+  disarm(goblin: Goblin, toMagnet = false): boolean {
     const p = goblin.root.position;
     let any = false;
     if (goblin.weapon !== 'none') {
       temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
-      this.debris?.throw(goblin.weapon === 'spear' ? 'goblinSpear' : 'goblinSword', temp2, p.x, p.z);
+      this.debris?.throw(goblin.weapon === 'spear' ? 'goblinSpear' : 'goblinSword', temp2, p.x, p.z, toMagnet);
       goblin.dropWeapon();
       any = true;
     }
@@ -610,7 +679,7 @@ export class Goblins {
       goblin.lostHelmet = true;
       setGear(goblin.gear, 'goblinHelmet', false);
       temp2.set(p.x, p.y + goblin.stats.height * 0.95, p.z);
-      this.debris?.throw('goblinHelmet', temp2, -p.z, p.x);
+      this.debris?.throw('goblinHelmet', temp2, -p.z, p.x, toMagnet);
       any = true;
     }
     if (goblin.shield) {
@@ -618,7 +687,7 @@ export class Goblins {
       goblin.lostShield = true;
       setGear(goblin.gear, 'goblinShield', false);
       temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
-      this.debris?.throw('goblinShield', temp2, p.z, -p.x);
+      this.debris?.throw('goblinShield', temp2, p.z, -p.x, toMagnet);
       any = true;
     }
     if (any) this.particles?.burst(this.board.localToWorld(temp2), HELMET_SPARKS, 6, 0.2);
@@ -663,8 +732,28 @@ export class Goblins {
       case 'riding':
         g.play('idle');
         break;
+      case 'rampart':
+        // 2026-11-17: after a fight or a stun it went back to idle but kept "hunting", so it slid along the wall
+        // without walking. Clearing it makes the next hunt step start the walk again.
+        g.hunting = false;
+        g.play('idle');
+        break;
       default:
         g.play('idle');
+    }
+  }
+
+  /**
+   * Builds the whole pool up front, hidden (up to the unit cap). A goblin
+   * built mid-battle cost a dropped frame, and on the Quest a dropped frame
+   * shows as the sky and UI flickering (headset test 2026-11-17).
+   */
+  prebuild(): void {
+    if (!this.template) return;
+    while (this.list.length < this.cap) {
+      const goblin = new Goblin(this.template, this.template.animations, this.baseColor);
+      this.board.add(goblin.root);
+      this.list.push(goblin);
     }
   }
 
@@ -686,6 +775,7 @@ export class Goblins {
     goblin.touched.clear();
     goblin.paused = 0;
     goblin.confused = 0;
+    goblin.lure = null;
     goblin.standing = false;
     goblin.advanced = false;
     goblin.lostHelmet = false;
@@ -1084,6 +1174,7 @@ export class Goblins {
       this.applyLook(goblin);
     }
     goblin.mode = 'dead';
+    goblin.lure = null;
     goblin.root.visible = false;
     goblin.road = null;
     goblin.stunned = 0;
@@ -1414,6 +1505,11 @@ export class Goblins {
         return;
       }
     }
+    // Lured by a sugar cube: off to it, eating, then back (nothing else it does runs meanwhile).
+    if (g.lure) {
+      this.stepLure(g, dt);
+      return;
+    }
     // v3 2.2: paused (the magnet, a sugar cube) or turned by a mushroom: it stands where it is.
     if (g.paused > 0 || g.confused > 0) {
       const wasConfused = g.confused > 0;
@@ -1663,10 +1759,11 @@ export class Goblins {
       }
       return;
     }
-    if (!g.hunting) {
-      g.hunting = true;
-      g.play('sprint', true, 1.4);
-    }
+    // Its own walk at its own pace, asked for on every step it moves (2026-11-17, second test: a strike
+    // between steps swapped the clip and it was never started again, so it slid along the wall). play()
+    // does nothing when the walk already runs.
+    g.hunting = true;
+    g.play(g.stats.moveClip, true, g.stats.moveClipSpeed * GOBLIN_RULES.rampartRunShare);
     const step = ((g.speed * GOBLIN_RULES.rampartRunShare) / CASTLE.rampartRadius) * dt;
     const next = at + Math.sign(d) * Math.min(step, Math.abs(d) - arrive);
     p.set(polarX(CASTLE.rampartRadius, next), CASTLE.wallHeight, polarZ(CASTLE.rampartRadius, next));

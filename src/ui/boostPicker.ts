@@ -7,11 +7,11 @@
 // the canvas is redrawn only when the shown second changes.
 import type { Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { ENDLESS, POKE, UI_SPACING } from '../config/game.js';
+import { ENDLESS, UI_SPACING } from '../config/game.js';
 import type { HandState } from '../player/hands.js';
 import type { BoostCard } from '../rules/boosts.js';
 import type { PickTool } from '../rules/campaign.js';
-import { armControls, bottomRowY, drawIconCentered, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY, wrapText, type UiImageName } from './kit/index.js';
+import { armControls, drawIconCentered, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY, wrapText, type UiImageName } from './kit/index.js';
 
 const P = ENDLESS.panel;
 const MAX_OPTIONS = 4;
@@ -40,8 +40,6 @@ export class BoostPicker {
   private buttons: PokeButton[] = [];
   private options: Option[] = [];
   private title = '';
-  private left = 0;
-  private shownSecond = -1;
 
   constructor(parent: Object3D, audio: GameAudio) {
     const width = P.columnWidth * 3;
@@ -51,6 +49,8 @@ export class BoostPicker {
       this.panel.root.add(button.group);
       this.buttons.push(button);
     }
+    // Every width it can take (3 or 4 columns) made now: nothing new is made between waves.
+    for (let n = 3; n <= MAX_OPTIONS; n++) this.panel.prepareSize(P.columnWidth * n, P.height);
     this.panel.visible = false;
   }
 
@@ -85,12 +85,7 @@ export class BoostPicker {
   update(hands: HandState[], dt: number): number | null {
     if (!this.panel.visible) return null;
     this.panel.update(dt);
-    this.left = Math.max(0, this.left - dt);
-    const second = Math.ceil(this.left);
-    if (second !== this.shownSecond) {
-      this.shownSecond = second;
-      this.draw();
-    }
+    // No countdown (2026-11-17): the next wave waits for the pick, so nothing is redrawn while it shows.
     for (let i = 0; i < this.options.length; i++) if (this.buttons[i].update(hands, dt)) return i;
     return null;
   }
@@ -101,13 +96,12 @@ export class BoostPicker {
     const n = Math.max(1, this.options.length);
     const width = P.columnWidth * Math.max(3, n);
     this.panel.resize(width, P.height);
-    const y = bottomRowY(P.height, P.buttonRadius * POKE.rimScale, UI_SPACING.edge + 3);
+    // Under the text, never over it (the text block ends about 18.3 cm down; the countdown line is below the buttons).
+    const y = P.height / 2 - P.buttonFromTop;
     this.buttons.forEach((b, i) => {
       b.group.visible = i < this.options.length;
       b.group.position.set(this.columnX(i, width), y, 0);
     });
-    this.left = ENDLESS.pickTime;
-    this.shownSecond = Math.ceil(this.left);
     this.draw();
     this.panel.visible = true;
     this.panel.popIn(0.25);
@@ -140,7 +134,7 @@ export class BoostPicker {
           .forEach((line, k) => drawLine(c, line, x, top(14.6) + k * 20, column * 0.9, 16, UI_COLORS.note));
         if (o.rare) drawLine(c, 'Rare', x, top(5.6), column * 0.6, 15, P.rareColor);
       });
-      drawLine(c, `Next wave in ${this.shownSecond}`, w / 2, at.y(-height / 2 + 1.6), w * 0.6, 17, UI_COLORS.note);
+      drawLine(c, 'Pick one to start the next wave', w / 2, at.y(-height / 2 + 1.6), w * 0.7, 17, UI_COLORS.note);
     });
   }
 }

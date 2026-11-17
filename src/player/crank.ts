@@ -22,7 +22,7 @@
 import { CylinderGeometry, Group, Mesh, SphereGeometry, TorusGeometry, Vector3, type MeshStandardMaterial } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameAudio } from '../audio/sound.js';
-import { BOARD_TURN, COMPASS, CRANK, HANDLES } from '../config/game.js';
+import { BOARD_TURN, COMPASS, CRANK } from '../config/game.js';
 import { angleDelta, degToRad } from '../rules/boardMath.js';
 import type { Compass } from '../ui/compass.js';
 import type { Stage } from '../world/stage.js';
@@ -131,11 +131,13 @@ export class CompassCrank {
   update(dt: number): void {
     const holder = this.holder;
     if (holder) {
-      // Let go only when the hand is clearly open for a moment, so tracking flickers never drop it.
-      const closed = holder.hand.pinch.on || holder.hand.fist.on;
-      holder.openTime = closed ? 0 : holder.openTime + dt;
-      if (!holder.hand.tracked || holder.openTime >= HANDLES.releaseHold || !this.compass.shown) this.release();
-      else this.follow(holder);
+      // Pinch only (2026-11-17): a fist used to keep it held, so it let go only when every finger opened.
+      // Let go once the pinch is open for a moment (tracking flickers never drop it), or the hand is lifted away.
+      holder.openTime = holder.hand.pinch.on ? 0 : holder.openTime + dt;
+      if (!holder.hand.tracked || holder.openTime >= CRANK.releaseHold || !this.compass.shown || this.liftedAway(holder.hand)) {
+        this.release();
+        this.audio.play('crankClick', undefined, 0.6, 0.03);
+      } else this.follow(holder, dt);
     }
     if (!this.holder) this.shownSpin = this.stage.spin;
     // The knob turns with the board (like the compass wedges): a bigger spin moves things to the left.
@@ -148,14 +150,17 @@ export class CompassCrank {
     this.stage.height += heightCm;
   }
 
-  private follow(holder: Holder): void {
+  private follow(holder: Holder, dt: number): void {
     const angle = this.handAngle(holder.hand, holder.viaPinch);
     if (angle === null) return;
     if (holder.lastAngle !== null) holder.total += angleDelta(holder.lastAngle, angle);
     holder.lastAngle = angle;
     // The hand moving round to the right turns the board so its things come from the right, like dragging the knob.
     const free = holder.startSpin - holder.total;
-    this.shownSpin = free;
+    // 2026-11-17: hand tracking shakes a little every frame, and a 1:1 board shook with it. The board (and the
+    // knob) ease toward the hand's angle over CRANK.smoothing seconds: steady, and still quick to follow.
+    const k = dt > 0 ? 1 - Math.exp(-dt / CRANK.smoothing) : 1;
+    this.shownSpin += (free - this.shownSpin) * k;
     let notch: number;
     if (access.snapTurn) {
       const step = degToRad(BOARD_TURN.snapDeg);
@@ -163,7 +168,7 @@ export class CompassCrank {
       this.stage.spin = holder.startSpin - notch * step;
     } else {
       notch = Math.floor(holder.total / degToRad(CRANK.clickDeg));
-      this.stage.spin = free;
+      this.stage.spin = this.shownSpin;
     }
     if (notch !== holder.notch) {
       holder.notch = notch;
@@ -178,7 +183,12 @@ export class CompassCrank {
     return Math.atan2(local.x, -local.z);
   }
 
-  /** Distance (meters) from a world point to the wheel. */
+  /** The pinch has risen CRANK.liftRelease cm above the knob's ball (the arm lifted away while still pinching). */
+  private liftedAway(hand: HandState): boolean {
+    this.compass.dishFrame.worldToLocal(local.copy(hand.pinchPoint));
+    return local.y > this.wheelY + CRANK.knobHeight + CRANK.liftRelease;
+  }
+
   /** Distance (meters) from a world point to the knob's ball. */
   private distanceToKnob(world: Vector3): number {
     this.compass.dishFrame.worldToLocal(local.copy(world));

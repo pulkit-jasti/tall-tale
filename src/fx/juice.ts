@@ -282,8 +282,11 @@ export class Juice {
     const label = this.labels[this.nextLabel];
     this.nextLabel = (this.nextLabel + 1) % this.labels.length;
     const material = label.sprite.material as SpriteMaterial;
-    material.map = this.labelTextures.get(name) ?? null;
-    material.needsUpdate = true;
+    const map = this.labelTextures.get(name) ?? null;
+    // Only a change between "no texture" and "a texture" needs a new shader; swapping one texture for
+    // another does not (it forced a shader lookup on every eat, audit 2026-11-17).
+    if (!material.map !== !map) material.needsUpdate = true;
+    material.map = map;
     label.from.copy(at);
     label.age = 0;
     label.sprite.visible = true;

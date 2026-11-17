@@ -49,13 +49,24 @@ export class Achievements {
     return progress.trophies.length;
   }
 
-  /** Marks an achievement earned (once), saves, and tells the game. */
+  /** Marks an achievement earned (once) and tells the game. Saved later (flush), not mid-battle. */
   unlock(id: AchievementId): void {
     if (this.has(id)) return;
     progress.trophies.push(id);
-    saveProgress();
+    // Saving writes the whole progress to the browser's storage: done at the battle's end or the menu
+    // (flush), and when the page hides, not the frame it is earned (audit 2026-11-17).
+    this.unsaved = true;
     note(`[trophy] earned ${id}`);
     this.onUnlock(id);
+  }
+
+  private unsaved = false;
+
+  /** Saves the trophies earned since the last save, if any. */
+  flush(): void {
+    if (!this.unsaved) return;
+    this.unsaved = false;
+    saveProgress();
   }
 
   /** Debug: every achievement earned at once (no toasts). */

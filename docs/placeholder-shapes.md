@@ -109,3 +109,10 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Spicy sugar cube (v3 2.6) | The sugar cube box in a reddish orange (`SUGAR.spicyColor`). | 1.2 cm |
 | Trophy toast (v3 2.6) | A parchment canvas card above the look with the Kenney trophy icon (purple for a secret, gold for a regular one), "Secret found!" or "Trophy earned!", the name and what it does (`src/ui/trophyToast.ts`). | 26 x 9 cm |
 | Goblins (only as the performance fallback) | Code-made body parts (capsule body, sphere head, cylinder limbs), one InstancedMesh per part, animated in code. See [assets.md](assets.md#2-characters-troops-goblins-workers). | 3.5 cm tall |
+| Sunflower turret (2026-11-17) | No pack has a sunflower: a bent green stem, two flat faceted leaves, a head on a pivot that turns to its target: a brown face with two eyes and a seed snout, two rings of pointed yellow and orange petals (`sunflowerTurret` in `src/world/shapes.ts`). | 9 cm tall |
+| Sugar bowl (2026-11-17) | A faceted turned bowl on 8 sides (foot, belly, lip), a gold band, a heap of sugar and tilted cubes (`sugarBowl`). | 3.4 cm across |
+| Torch flames (2026-11-17) | Every torch flame: an outer red-orange teardrop, a yellow core and two side tongues, vertex colored, twisting as it flickers (`flameGeometry` in `src/world/nightLights.ts`). No pack has a flame. | about 1 cm (scaled) |
+| Tower bell (2026-11-17) | A turned bell profile in bronze (flared lip, waist, crown, loop) hanging in the Kenney arched belfry (`TRIGGERS.bellTower`). | 2.2 cm radius |
+| Rope bridge (2026-11-17) | Replaces the Kenney bridge (it read as a box): planks in two woods following a low arch, beams under them, posts, two sagging rope rails a side, stone footings on both banks (`ropeBridge`), over a ravine cut into the terrain with faceted water (`ravineWater`). | 28 cm long |
+| Magnet waves (2026-11-17) | Three thin additive rings in front of the tips, drawn in toward them while held (`MAGNET.wave*`). | 3 cm across |
+| Big drum (2026-11-17) | The drum's shapes 2.4 times bigger, rising on the compass's spot while the stick is held (`DRUM.bigScale`). | 7 cm radius |

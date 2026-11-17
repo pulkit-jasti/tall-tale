@@ -26,7 +26,7 @@ import type { Random } from '../rules/random.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate, type ModelTemplate } from './models.js';
 import type { RoadNetwork } from './roads.js';
-import { flatMaterial } from './shapes.js';
+import { flatMaterial, sunflowerTurret } from './shapes.js';
 
 export type PlantKind = 'sunflower' | 'mushroom';
 
@@ -46,6 +46,16 @@ export interface Bed {
   life: number;
   timer: number;
   touch: TouchState;
+  /** A sunflower's head pivot and its snout tip (head frame), the goblin it tracks, its turn now (radians) and its re-aim timer. */
+  head: Object3D | null;
+  muzzle: Vector3;
+  aim: Goblin | null;
+  yaw: number;
+  aimTimer: number;
+  /** A sunflower bed's turret, built with the bed and kept hidden until it grows. */
+  ready?: ReturnType<typeof sunflowerTurret>;
+  /** A mushroom bed's mushroom, built with the bed and kept hidden until it grows. */
+  readyMushroom?: { group: Object3D; materials: MeshStandardMaterial[] };
 }
 
 interface Seed {
@@ -70,9 +80,19 @@ export class Garden {
   readonly beds: Bed[] = [];
   private models: Record<PlantKind, ModelTemplate> | null = null;
   private seeds: Seed[] = [];
+  /** Seeds done flying, hidden, kept for the next shot (no new meshes while a sunflower fires fast). */
+  private freeSeeds: Mesh[] = [];
+  /** Seconds since start (the idle sway). */
+  private clock = 0;
+
+  private recycle(mesh: Mesh): void {
+    mesh.visible = false;
+    this.freeSeeds.push(mesh);
+  }
   private turned: Turned[] = [];
-  private seedHits = new Map<Goblin, { serial: number; n: number }>();
-  private seedGeometry = new SphereGeometry(0.45, 6, 4);
+  private seedHits = new Map<Goblin, { serial: number; n: number; armor: number }>();
+  // Smaller seeds, fired often (2026-11-17).
+  private seedGeometry = new SphereGeometry(0.32, 6, 4);
   private seedMaterial = flatMaterial(GARDEN.seedColor);
 
   constructor(
@@ -82,6 +102,14 @@ export class Garden {
     private particles: Particles,
   ) {
     parent.add(this.group);
+    // The seeds made up front, hidden (2026-11-17: new seed meshes mid-battle went with a flicker): a fast
+    // sunflower never makes one while it fires, and the warm-up compiles their material.
+    for (let i = 0; i < GARDEN.seedPool; i++) {
+      const mesh = new Mesh(this.seedGeometry, this.seedMaterial);
+      mesh.visible = false;
+      this.group.add(mesh);
+      this.freeSeeds.push(mesh);
+    }
   }
 
   async load(): Promise<void> {
@@ -144,7 +172,7 @@ export class Garden {
     group.add(disc);
     // A small copy of its plant on the bed's edge: what grows here, readable from far.
     if (this.models) {
-      const hint = cloneStatic(this.models[kind]);
+      const hint = kind === 'sunflower' ? sunflowerTurret(GARDEN.sunflowerHeight).group : cloneStatic(this.models[kind]);
       hint.scale.setScalar(0.3);
       hint.position.set(GARDEN.bedRadius * 0.6, 0.6, 0);
       group.add(hint);
@@ -154,7 +182,52 @@ export class Garden {
     sprout.visible = false;
     group.add(sprout);
     this.group.add(group);
-    this.beds.push({ kind, position: at.clone(), group, dirt, sprout, grow: 0, plant: null, plantMaterials: [], plantColors: [], life: 0, timer: 0, touch: 'idle' });
+    // A sunflower bed builds its turret now (hidden, a map load is in the dark), so growing it later costs nothing.
+    let ready: ReturnType<typeof sunflowerTurret> | undefined;
+    if (kind === 'sunflower') {
+      ready = sunflowerTurret(GARDEN.sunflowerHeight);
+      ready.group.visible = false;
+      ready.group.position.y = 0.6;
+      group.add(ready.group);
+    }
+    // A mushroom bed builds its mushroom now too (audit 2026-11-17: it was cloned mid-battle).
+    let readyMushroom: { group: Object3D; materials: MeshStandardMaterial[] } | undefined;
+    if (kind === 'mushroom' && this.models) {
+      const plant = cloneStatic(this.models.mushroom);
+      const materials: MeshStandardMaterial[] = [];
+      plant.traverse((o) => {
+        const mesh = o as Mesh;
+        if (!mesh.isMesh) return;
+        const own = (mesh.material as MeshStandardMaterial).clone();
+        mesh.material = own;
+        materials.push(own);
+      });
+      plant.visible = false;
+      plant.position.y = 0.6;
+      group.add(plant);
+      readyMushroom = { group: plant, materials };
+    }
+    this.beds.push({
+      kind,
+      position: at.clone(),
+      group,
+      dirt,
+      sprout,
+      grow: 0,
+      plant: null,
+      plantMaterials: [],
+      plantColors: [],
+      life: 0,
+      timer: 0,
+      touch: 'idle',
+      head: null,
+      muzzle: new Vector3(),
+      aim: null,
+      yaw: 0,
+      aimTimer: 0,
+      ready,
+      readyMushroom,
+    });
   }
 
   /** The bed nearest a board point within `radius` cm (flat), or null. */
@@ -197,21 +270,52 @@ export class Garden {
     if (!this.models) return;
     bed.grow = 0;
     bed.sprout.visible = false;
-    const plant = cloneStatic(this.models[bed.kind]);
+    let plant: Object3D;
     // Its own materials, so it can droop and fade alone.
-    const materials: MeshStandardMaterial[] = [];
-    plant.traverse((o) => {
-      const mesh = o as Mesh;
-      if (!mesh.isMesh) return;
-      const own = (mesh.material as MeshStandardMaterial).clone();
-      mesh.material = own;
-      materials.push(own);
-    });
+    let materials: MeshStandardMaterial[] = [];
+    bed.head = null;
+    bed.aim = null;
+    if (bed.kind === 'sunflower') {
+      // 2026-11-17: a sunflower turret whose head turns to the goblins it shoots. Built with its bed (hidden),
+      // so growing it makes no meshes mid-battle; only made here if the bed has none.
+      const built = bed.ready ?? sunflowerTurret(GARDEN.sunflowerHeight);
+      bed.ready = built;
+      built.group.visible = true;
+      built.group.scale.set(1, 1, 1);
+      built.group.rotation.set(0, 0, 0);
+      plant = built.group;
+      materials = built.materials;
+      bed.head = built.head;
+      bed.muzzle.copy(built.muzzle);
+      // It first looks out, away from the castle (where goblins come from).
+      bed.yaw = Math.atan2(bed.position.x, bed.position.z);
+      built.head.rotation.y = bed.yaw;
+    } else if (bed.readyMushroom) {
+      plant = bed.readyMushroom.group;
+      plant.visible = true;
+      plant.scale.set(1, 1, 1);
+      plant.rotation.set(0, 0, 0);
+      materials = bed.readyMushroom.materials;
+    } else {
+      plant = cloneStatic(this.models[bed.kind]);
+      plant.traverse((o) => {
+        const mesh = o as Mesh;
+        if (!mesh.isMesh) return;
+        const own = (mesh.material as MeshStandardMaterial).clone();
+        mesh.material = own;
+        materials.push(own);
+      });
+    }
     plant.position.y = 0.6;
     bed.group.add(plant);
     bed.plant = plant;
     bed.plantMaterials = materials;
-    bed.plantColors = materials.map((m) => m.color.getHex());
+    // Its first colors, kept on each material: a sunflower grown again starts fresh, not wilted.
+    bed.plantColors = materials.map((m) => {
+      if (m.userData.baseColor === undefined) m.userData.baseColor = m.color.getHex();
+      m.color.setHex(m.userData.baseColor as number);
+      return m.userData.baseColor as number;
+    });
     bed.life = GARDEN.life;
     bed.timer = bed.kind === 'sunflower' ? GARDEN.fireEvery : GARDEN.puffEvery;
     bed.touch = 'idle';
@@ -220,7 +324,9 @@ export class Garden {
   }
 
   private wilt(bed: Bed): void {
-    bed.plant?.removeFromParent();
+    // A sunflower built with its bed is kept (hidden) to grow again; others go.
+    if (bed.plant && (bed.plant === bed.ready?.group || bed.plant === bed.readyMushroom?.group)) bed.plant.visible = false;
+    else bed.plant?.removeFromParent();
     bed.plant = null;
     bed.plantMaterials = [];
     bed.touch = 'idle';
@@ -238,12 +344,15 @@ export class Garden {
   }
 
   private clearShots(): void {
-    for (const s of this.seeds) s.mesh.removeFromParent();
+    for (const s of this.seeds) this.recycle(s.mesh);
     this.seeds = [];
     this.turned = [];
   }
 
   update(dt: number): void {
+    this.clock += dt;
+    // A fired sunflower's head kicks back to its size.
+    for (const bed of this.beds) if (bed.head && bed.head.scale.x !== 1) bed.head.scale.setScalar(Math.max(1, bed.head.scale.x - dt * 0.8));
     for (const bed of this.beds) {
       if (!bed.plant) {
         // A part grown bed slowly loses its sprout when the beam leaves it.
@@ -264,15 +373,20 @@ export class Garden {
       bed.plant.scale.set(1, 0.6 + 0.4 * share, 1);
       bed.plant.rotation.z = (1 - share) * 0.35;
       bed.plantMaterials.forEach((m, i) => m.color.setHex(bed.plantColors[i]).lerp(wiltColor, (1 - share) * 0.6));
-      bed.timer -= dt;
-      if (bed.timer > 0) continue;
       if (bed.kind === 'sunflower') {
+        this.track(bed, dt);
+        bed.timer -= dt;
+        if (bed.timer > 0) continue;
         bed.timer = GARDEN.fireEvery;
         this.fire(bed);
-      } else {
-        bed.timer = GARDEN.puffEvery;
-        this.puff(bed);
+        continue;
       }
+      // The mushroom (2026-11-17: on a blind 10 s timer a group often walked past between two puffs, so it
+      // seemed to do nothing): once rested, it waits for goblins to come near, then puffs at once.
+      bed.timer -= dt;
+      if (bed.timer > 0) continue;
+      if (this.puff(bed)) bed.timer = GARDEN.puffEvery;
+      else bed.timer = GARDEN.puffCheck;
     }
     this.updateSeeds(dt);
     this.updateTurned(dt);
@@ -282,25 +396,55 @@ export class Garden {
     return this.goblins.isHittable(g) && (g.mode === 'walking' || g.mode === 'toWall' || g.mode === 'atWall' || g.mode === 'fighting');
   }
 
-  /** The sunflower spits a seed at the nearest goblin in range. */
-  private fire(bed: Bed): void {
-    let best: Goblin | null = null;
-    let bestD = GARDEN.range;
-    for (const g of this.goblins.list) {
-      if (!this.onGround(g)) continue;
-      const p = g.root.position;
-      const d = Math.hypot(p.x - bed.position.x, p.z - bed.position.z);
-      if (d < bestD) {
-        bestD = d;
-        best = g;
+  /**
+   * The sunflower picks the nearest goblin in range now and then, and its head turns to it smoothly
+   * (2026-11-17: so the player sees it noticed the goblins). Idle, it sways slowly.
+   */
+  private track(bed: Bed, dt: number): void {
+    bed.aimTimer -= dt;
+    if (bed.aim && (!this.onGround(bed.aim) || bed.aim.root.position.distanceTo(bed.position) > GARDEN.range * 1.1)) bed.aim = null;
+    if (bed.aimTimer <= 0) {
+      bed.aimTimer = GARDEN.retargetEvery;
+      let best: Goblin | null = null;
+      let bestD = GARDEN.range;
+      for (const g of this.goblins.list) {
+        if (!this.onGround(g)) continue;
+        const p = g.root.position;
+        const d = Math.hypot(p.x - bed.position.x, p.z - bed.position.z);
+        if (d < bestD) {
+          bestD = d;
+          best = g;
+        }
       }
+      bed.aim = best;
     }
-    if (!best) return;
-    const mesh = new Mesh(this.seedGeometry, this.seedMaterial);
-    mesh.position.copy(bed.position).setY(bed.position.y + GARDEN.sunflowerHeight * 0.8);
-    this.group.add(mesh);
-    this.seeds.push({ mesh, target: best, serial: best.serial });
-    this.audio.play('seedSpit', bed.group.localToWorld(world.set(0, GARDEN.sunflowerHeight, 0)), 0.8, 0.1);
+    if (!bed.head) return;
+    const want = bed.aim
+      ? Math.atan2(bed.aim.root.position.x - bed.position.x, bed.aim.root.position.z - bed.position.z)
+      : bed.yaw + Math.sin(this.clock * 0.7 + bed.position.x) * 0.004;
+    let d = want - bed.yaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    bed.yaw += d * (1 - Math.exp(-dt / GARDEN.turnSmoothing));
+    bed.head.rotation.y = bed.yaw;
+  }
+
+  /** The sunflower spits a seed at the goblin it tracks, once its head is turned to it. */
+  private fire(bed: Bed): void {
+    const target = bed.aim;
+    if (!target || !bed.head) return;
+    const want = Math.atan2(target.root.position.x - bed.position.x, target.root.position.z - bed.position.z);
+    const off = Math.atan2(Math.sin(want - bed.yaw), Math.cos(want - bed.yaw));
+    if (Math.abs(off) > GARDEN.fireCone) return;
+    // From the snout (pooled seeds: it fires often now).
+    const mesh = this.freeSeeds.pop() ?? new Mesh(this.seedGeometry, this.seedMaterial);
+    bed.head.updateWorldMatrix(true, false);
+    this.group.worldToLocal(bed.head.localToWorld(mesh.position.copy(bed.muzzle)));
+    mesh.visible = true;
+    if (!mesh.parent) this.group.add(mesh);
+    this.seeds.push({ mesh, target, serial: target.serial });
+    // A little kick of the head on each shot.
+    bed.head.scale.setScalar(1.12);
+    this.audio.play('seedSpit', bed.head.localToWorld(world.copy(bed.muzzle)), 0.55, 0.1);
   }
 
   private updateSeeds(dt: number): void {
@@ -308,7 +452,7 @@ export class Garden {
       const s = this.seeds[i];
       const g = s.target;
       if (g.serial !== s.serial || !this.goblins.isHittable(g)) {
-        s.mesh.removeFromParent();
+        this.recycle(s.mesh);
         this.seeds.splice(i, 1);
         continue;
       }
@@ -321,7 +465,7 @@ export class Garden {
         s.mesh.position.addScaledVector(to, step / d);
         continue;
       }
-      s.mesh.removeFromParent();
+      this.recycle(s.mesh);
       this.seeds.splice(i, 1);
       this.seedHit(g);
     }
@@ -329,10 +473,22 @@ export class Garden {
 
   /** A seed hits: armor takes it (a piece breaks), else it counts; enough seeds knock it out. */
   private seedHit(g: Goblin): void {
-    if (this.goblins.armor(g)) return;
     const hits = this.seedHits.get(g);
-    const n = hits && hits.serial === g.serial ? hits.n + 1 : 1;
-    this.seedHits.set(g, { serial: g.serial, n });
+    const fresh = !hits || hits.serial !== g.serial;
+    const record = fresh ? { serial: g.serial, n: 0, armor: 0 } : hits;
+    this.seedHits.set(g, record);
+    // Smaller seeds, fired 4 times as often (2026-11-17): armor takes GARDEN.seedsPerArmor of them per piece.
+    if (this.goblins.hasArmor(g)) {
+      record.armor++;
+      this.goblins.flash(g);
+      if (record.armor >= GARDEN.seedsPerArmor) {
+        record.armor = 0;
+        this.goblins.armor(g);
+      }
+      return;
+    }
+    record.n++;
+    const n = record.n;
     this.goblins.flash(g);
     if (n < GARDEN.seedsToKnock) return;
     this.seedHits.delete(g);
@@ -345,16 +501,22 @@ export class Garden {
   }
 
   /** The mushroom puffs: about half of the goblins near it turn on each other; a third of them go down. */
-  private puff(bed: Bed): void {
+  /** Puffs if goblins are near (returns true), else waits (no puff, false). */
+  private puff(bed: Bed): boolean {
     const near: Goblin[] = [];
     for (const g of this.goblins.list) {
       if (!this.onGround(g) || g.confused > 0) continue;
       const p = g.root.position;
       if (Math.hypot(p.x - bed.position.x, p.z - bed.position.z) < GARDEN.puffRadius) near.push(g);
     }
-    this.particles.burst(bed.group.localToWorld(world.set(0, GARDEN.mushroomHeight, 0)), GARDEN.puffColors, 14, 0.12);
+    if (near.length === 0) return false;
+    this.particles.burst(bed.group.localToWorld(world.set(0, GARDEN.mushroomHeight, 0)), GARDEN.puffColors, 18, 0.14);
     this.audio.play('mushroomPuff', world, 1, 0.2);
-    if (near.length < 2) return;
+    // Alone, it just stands there swinging at nothing for a while; in a group they fight each other.
+    if (near.length === 1) {
+      this.goblins.confuse(near[0], GARDEN.confuseTime);
+      return true;
+    }
     const turnCount = Math.max(2, Math.round(near.length * GARDEN.confuseShare));
     const down = Math.max(0, near.length - Math.ceil(near.length * GARDEN.keepShare));
     for (let k = 0; k < turnCount && k < near.length; k++) {
@@ -363,6 +525,7 @@ export class Garden {
       // The first `down` of them are knocked out by their friends somewhere in the middle of the fight.
       this.turned.push({ goblin: g, serial: g.serial, knockIn: k < down ? GARDEN.confuseTime * (0.35 + 0.15 * k) : -1 });
     }
+    return true;
   }
 
   private updateTurned(dt: number): void {

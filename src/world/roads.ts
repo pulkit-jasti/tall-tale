@@ -32,6 +32,26 @@ export class Road {
   }
 
   /**
+   * Bridges (2026-11-17): stretches of the road (distance `from` to `to`) carried over a ravine at the banks'
+   * height `level`, arched `arch` cm in the middle. Units walk over the deck; no ribbon is drawn there.
+   */
+  private readonly spans: { from: number; to: number; level: number; arch: number }[] = [];
+
+  /** Adds a bridge span (before the mesh is built). */
+  addSpan(from: number, to: number, level: number, arch: number): void {
+    this.spans.push({ from, to, level, arch });
+  }
+
+  /** The deck's height at a distance along the road, or -Infinity off every span. */
+  spanY(distance: number): number {
+    for (const s of this.spans) {
+      if (distance < s.from || distance > s.to) continue;
+      return s.level + s.arch * Math.sin(Math.PI * ((distance - s.from) / (s.to - s.from)));
+    }
+    return -Infinity;
+  }
+
+  /**
    * Point on the road at a distance along it (cm), moved sideways by
    * `offset` (cm), resting on the board.
    */
@@ -45,6 +65,8 @@ export class Road {
     }
     // On the ground over the hills, on top of the road ribbon when on the road.
     out.y = groundAt(out.x, out.z) + (Math.abs(offset) <= ROADS.width / 2 ? ROADS.lift : 0);
+    // Over a bridge: on its deck.
+    if (this.spans.length > 0) out.y = Math.max(out.y, this.spanY(distance) + ROADS.lift);
     return out;
   }
 
@@ -115,15 +137,18 @@ export class Road {
       surface.cz[i] = center.z;
       surface.sx[i] = side.x;
       surface.sz[i] = side.z;
+      const deck = this.spanY(u * this.length) + ROADS.lift;
       for (const s of [-1, 1]) {
         const x = center.x + side.x * half * s;
         const z = center.z + side.z * half * s;
-        const y = groundAt(x, z) + ROADS.lift;
+        const y = Math.max(groundAt(x, z) + ROADS.lift, deck);
         positions.push(x, y, z);
         if (s < 0) surface.yl[i] = y;
         else surface.yr[i] = y;
       }
-      if (i < segments) {
+      // No ribbon over a bridge's gap: the deck is the road there, and with the bridge down the gap shows.
+      const mid = ((i + 0.5) / segments) * this.length;
+      if (i < segments && this.spanY(mid) === -Infinity) {
         const a = i * 2;
         indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
       }

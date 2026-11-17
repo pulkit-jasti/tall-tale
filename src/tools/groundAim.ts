@@ -2,7 +2,7 @@
 // magnifying glass's gaze). Board cm (boardSpin), marched in small steps
 // against the ground (the courtyard, the wall top, the field with its bumps).
 import { Matrix4, Vector3, type Object3D } from 'three';
-import { landingHeight } from '../rules/boardMath.js';
+import { landingHeight, zoneAt } from '../rules/boardMath.js';
 
 const inverse = new Matrix4();
 const p = new Vector3();
@@ -17,6 +17,10 @@ export function marchToGround(origin: Vector3, dir: Vector3, range: number, step
   p.copy(origin);
   for (let d = 0; d < range; d += step) {
     p.addScaledVector(dir, step);
+    // The hole the giant sits in is passed over, not the end of the ray: the
+    // magnifying glass aims from the head, right above it, and stopped there
+    // on its first step, so it never showed anything (headset test 2026-11-17).
+    if (zoneAt(Math.hypot(p.x, p.z)) === 'hole') continue;
     const ground = landingHeight(p.x, p.z);
     if (ground === null) return false;
     if (p.y <= ground) {

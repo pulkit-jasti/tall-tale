@@ -22,7 +22,8 @@
 //     sun in the sky for GLASS.sunHold gives the next use GLASS.sunBonus more
 //     seconds of beam, once per wave (a sparkle and a chime, no hint).
 import { AdditiveBlending, CylinderGeometry, Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
-import { GLASS, RENDER_ORDER, TOOL_SPOTS, type TimeOfDay } from '../config/game.js';
+import { glassBeam, progressRing } from '../fx/glassFx.js';
+import { GARDEN, GLASS, RENDER_ORDER, TOOL_SPOTS, type TimeOfDay } from '../config/game.js';
 import type { Goblin } from '../units/goblins.js';
 import type { Bed, Garden } from '../world/garden.js';
 import { magnifyingGlass } from '../world/shapes.js';
@@ -61,7 +62,12 @@ export class Magnifier extends HandTool {
   private sun: Mesh;
   private beam: Mesh;
   private sunMaterial: MeshBasicMaterial;
-  private beamMaterial: MeshBasicMaterial;
+  private beamGlow: Mesh;
+  private beamSpot: Mesh;
+  private setBeam: (hex: number, opacity: number, time: number) => void;
+  /** Fills while the beam works on a bed, plant, keg or goblin: how long to hold still. */
+  private progress: Mesh;
+  private setProgress: (share: number, hex: number) => void;
   private smokeTimer = 0;
   /** v3 2.6 Sun charge: set by the game: the way to the sun from the head (world, false when it is not up), and the wave now. */
   sunDirection: (out: Vector3) => boolean = () => false;
@@ -86,9 +92,16 @@ export class Magnifier extends HandTool {
     this.pillar = new Mesh(new CylinderGeometry(0.5, 0.9, 1, 8, 1, true).translate(0, 0.5, 0), new MeshBasicMaterial({ color: GLASS.pillarColor, opacity: 0.35, blending: AdditiveBlending, ...onTop }));
     this.sunMaterial = new MeshBasicMaterial({ color: GLASS.sunColor, opacity: 0.9, ...onTop });
     this.sun = new Mesh(new RingGeometry(0.75, 1, 24, 1).rotateX(-Math.PI / 2), this.sunMaterial);
-    this.beamMaterial = new MeshBasicMaterial({ color: GLASS.dayColor, opacity: 0.8, blending: AdditiveBlending, ...onTop });
-    this.beam = new Mesh(new CylinderGeometry(1, 1, 1, 8, 1, true).translate(0, 0.5, 0), this.beamMaterial);
-    for (const m of [this.pillar, this.sun, this.beam]) {
+    // 2026-11-17: a livelier beam (bands running down it, a glow, a hot spot) and a ring that fills while it works.
+    const fx = glassBeam();
+    this.beam = fx.core;
+    this.beamGlow = fx.glow;
+    this.beamSpot = fx.spot;
+    this.setBeam = fx.set;
+    const ring = progressRing();
+    this.progress = ring.mesh;
+    this.setProgress = ring.set;
+    for (const m of [this.pillar, this.sun, this.beam, this.beamGlow, this.beamSpot, this.progress]) {
       m.renderOrder = RENDER_ORDER.hornAim;
       m.visible = false;
       this.stage.boardSpin.add(m);
@@ -113,7 +126,7 @@ export class Magnifier extends HandTool {
     this.burnOn = null;
     this.pillar.visible = false;
     this.sun.visible = false;
-    this.beam.visible = false;
+    this.hideBeam();
     this.garden?.setTouch(null, 'idle');
   }
 
@@ -142,7 +155,7 @@ export class Magnifier extends HandTool {
     this.drawAim();
     if (this.raised) this.shine(dt);
     else {
-      this.beam.visible = false;
+      this.hideBeam();
       this.burn = 0;
       this.burnOn = null;
     }
@@ -182,10 +195,28 @@ export class Magnifier extends HandTool {
     this.sunHold = 0;
   }
 
+  /** Beam seconds this use (its bands run with it). */
+  private beamTime = 0;
+
+  private hideBeam(): void {
+    this.beam.visible = false;
+    this.beamGlow.visible = false;
+    this.beamSpot.visible = false;
+    this.progress.visible = false;
+  }
+
+  /** The progress ring round the aim point, filled to `share` (0 to 1). */
+  private showProgress(share: number, hex: number): void {
+    this.progress.visible = true;
+    this.progress.position.set(this.aimAt.x, this.aimAt.y + 0.6, this.aimAt.z);
+    this.progress.scale.setScalar(GLASS.progressRadius);
+    this.setProgress(Math.min(1, Math.max(0, share)), hex);
+  }
+
   private hideAim(): void {
     this.pillar.visible = false;
     this.sun.visible = false;
-    this.beam.visible = false;
+    this.hideBeam();
     this.aimed = { kind: 'ground' };
     this.garden?.setTouch(null, 'idle');
   }
@@ -214,10 +245,25 @@ export class Magnifier extends HandTool {
       }
     }
     this.aimAt.copy(ground);
+    // A small aim assist to goblins (2026-11-17): the goblin nearest the look within a narrow cone, a little
+    // wider for the one already burning, so the beam follows it as it walks. Still needs a steady look.
+    const cosNew = Math.cos((GLASS.goblinAssistDeg * Math.PI) / 180);
+    const cosKeep = Math.cos((GLASS.goblinKeepDeg * Math.PI) / 180);
+    let best: Goblin | null = null;
+    let bestDot = -1;
     for (const g of this.goblins.list) {
       if (!this.goblins.isHittable(g) || g.mode === 'riding') continue;
       const p = g.root.position;
-      if (Math.hypot(p.x - ground.x, p.z - ground.z) < GLASS.goblinRadius) return { kind: 'goblin', goblin: g };
+      toTarget.set(p.x - headBoard.x, p.y + GLASS.goblinAimUp - headBoard.y, p.z - headBoard.z).normalize();
+      const dot = toTarget.dot(lookBoard);
+      if (dot > (g === this.burnOn ? cosKeep : cosNew) && dot > bestDot) {
+        bestDot = dot;
+        best = g;
+      }
+    }
+    if (best) {
+      this.aimAt.copy(best.root.position);
+      return { kind: 'goblin', goblin: best };
     }
     return { kind: 'ground' };
   }
@@ -241,9 +287,10 @@ export class Magnifier extends HandTool {
   /** The beam is on: it spends the use window and works on what it hits. */
   private shine(dt: number): void {
     if (!this.tryUse()) {
-      this.beam.visible = false;
+      this.hideBeam();
       return;
     }
+    this.beamTime += dt;
     // v3 2.6: a sun charge earned before this use lengthens it now.
     if (this.sunBonus && this.active) {
       this.sunBonus = false;
@@ -254,14 +301,22 @@ export class Magnifier extends HandTool {
     this.stage.boardSpin.worldToLocal(beamFrom.copy(lensWorld));
     beamTo.set(this.aimAt.x, this.aimAt.y + 0.3, this.aimAt.z);
     const length = beamFrom.distanceTo(beamTo);
-    this.beam.visible = true;
-    this.beam.position.copy(beamFrom);
-    this.beam.quaternion.setFromUnitVectors(UP, toTarget.subVectors(beamTo, beamFrom).normalize());
     const thin = this.aimed.kind === 'ground' ? 0.6 : 1;
-    this.beam.scale.set(GLASS.beamRadius * thin, length, GLASS.beamRadius * thin);
+    toTarget.subVectors(beamTo, beamFrom).normalize();
+    for (const [mesh, width] of [
+      [this.beam, GLASS.beamRadius * thin],
+      [this.beamGlow, GLASS.beamRadius * GLASS.glowScale * thin],
+    ] as const) {
+      mesh.visible = true;
+      mesh.position.copy(beamFrom);
+      mesh.quaternion.setFromUnitVectors(UP, toTarget);
+      mesh.scale.set(width, length, width);
+    }
+    this.beamSpot.visible = true;
+    this.beamSpot.position.set(this.aimAt.x, this.aimAt.y + 0.4, this.aimAt.z);
+    this.beamSpot.scale.setScalar(GLASS.spotRadius * thin);
     const t = this.timeOfDay();
-    this.beamMaterial.color.setHex(t === 'night' ? GLASS.nightColor : t === 'sunset' ? GLASS.sunsetColor : GLASS.dayColor);
-    this.beamMaterial.opacity = this.aimed.kind === 'ground' ? 0.45 : 0.8;
+    this.setBeam(t === 'night' ? GLASS.nightColor : t === 'sunset' ? GLASS.sunsetColor : GLASS.dayColor, this.aimed.kind === 'ground' ? 0.45 : 0.9, this.beamTime);
     this.audio.play('glassHum', this.stage.boardSpin.localToWorld(world.copy(beamTo)), 0.5, 0.5);
     this.smokeTimer -= dt;
     if (this.smokeTimer <= 0) {
@@ -272,6 +327,9 @@ export class Magnifier extends HandTool {
     if (a.kind === 'bed') {
       this.garden?.shine(a.bed, dt, slow);
       this.audio.play('glassSizzle', world, 0.6, 0.6);
+      // How far along: a bed growing, or a plant healing back to full.
+      const share = a.bed.plant ? a.bed.life / GARDEN.life : a.bed.grow;
+      this.showProgress(share, GLASS.growRingColor);
       this.onUse(0);
       return;
     }
@@ -280,8 +338,13 @@ export class Magnifier extends HandTool {
       this.burnOn = on;
       this.burn = 0;
     }
-    if (!on) return;
+    // A helmet stops the burn: no ring, so it reads at once that nothing happens.
+    if (!on || (a.kind === 'goblin' && a.goblin.helmet)) {
+      this.progress.visible = false;
+      return;
+    }
     this.burn += dt / slow;
+    this.showProgress(this.burn / (a.kind === 'keg' ? GLASS.lightTime : GLASS.burnTime), GLASS.burnRingColor);
     this.audio.play('glassSizzle', world, 0.8, 0.4);
     if (a.kind === 'keg' && this.burn >= GLASS.lightTime) {
       a.keg.setOff('glass');

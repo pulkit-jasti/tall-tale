@@ -266,7 +266,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     group: 'performance',
     icon: '🎙️',
     label: 'Mic panel on/off',
-    does: 'Live loudness panel on or off (right of front): the mic level now, the loudest in the last 3 s and since opened, and the horn blow line (HORN.blowLevel). Or add ?mic to the URL',
+    does: 'Live loudness panel on or off (right of front): the mic level now, the loudest in the last 3 s and since opened, and the horn speak line (HORN.speakLevel). Or add ?mic to the URL',
   },
   { id: 'resetRun', group: 'performance', icon: '⏱️', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },
   { id: 'stress', group: 'performance', icon: '🏋️', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },

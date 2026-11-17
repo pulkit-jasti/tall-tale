@@ -6,6 +6,7 @@
 export type PerfMark =
   | 'goblin built'
   | 'goblin spawn'
+  | 'warm gpu'
   | 'sound'
   | 'panel redraw'
   | 'hint sign'

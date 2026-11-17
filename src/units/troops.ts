@@ -200,6 +200,11 @@ export class Troop {
     if (this.shieldName) setGear(this.gear, this.shieldName, true);
   }
 
+  /** True when `name` is the clip playing now. */
+  playing(name: string): boolean {
+    return this.current !== null && this.current === this.actions.get(name);
+  }
+
   play(name: string, loop = true, timeScale = 1): void {
     let action = this.actions.get(name);
     if (!action) {
@@ -585,6 +590,12 @@ export class Troops {
     return this.network.roads[point.road].pointAt(point.along, 0, out);
   }
 
+  /** True while any squad is out and not broken (no garbage: read every frame). */
+  get anySquad(): boolean {
+    for (const s of this.squads) if (!s.broken) return true;
+    return false;
+  }
+
   /** Squads that still count against KNIGHTS.maxSquads (not broken). */
   private get activeSquads(): Squad[] {
     return this.squads.filter((s) => !s.broken);
@@ -600,6 +611,11 @@ export class Troops {
    * Null when no squad can get there (every road to it is cut). Whether the
    * horn can pay for it (a charge, the move lockout) is the horn's question.
    */
+  /** Set by the game: the horn holds a charge, so a new squad can be called. */
+  canCall: () => boolean = () => true;
+  /** Set by the game while a blow is carried out: the kind the aim showed wins (the charge is already spent then). */
+  callOverride: boolean | null = null;
+
   plan(target: RoadPoint): HornPlan | null {
     const graph = this.network.graph;
     const active = this.activeSquads;
@@ -617,8 +633,12 @@ export class Troops {
       }
     }
     if (near) return { kind: 'boost', squad: near };
+    // A new squad only when the horn can pay for one (or none is out yet, so "resting" shows); while it
+    // rests, aiming at a road moves the nearest squad there for free (2026-11-17: before, a move only
+    // happened at the squad cap, so after one call the knights could not be moved at all).
+    const canCall = this.callOverride ?? (this.canCall() || active.length === 0);
     // Endless War Chief: one more squad (TROOPS.max has room for it).
-    if (active.length < KNIGHTS.maxSquads + BOOST.squads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField + BOOST.squads * KNIGHTS.squadMax) {
+    if (canCall && active.length < KNIGHTS.maxSquads + BOOST.squads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField + BOOST.squads * KNIGHTS.squadMax) {
       return legsToWall(graph, this.lengths, target) ? { kind: 'new' } : null;
     }
     let squad: Squad | null = null;
@@ -1133,6 +1153,35 @@ export class Troops {
     }
     return best;
   }
+
+  /**
+   * Builds every soldier the board can hold, hidden, per kind (any field
+   * kind can be picked, so each kind gets room for all knights plus the
+   * garrison), and one hidden banner so its shader is compiled too. Built
+   * mid-battle they dropped frames: the sky and UI flickered (2026-11-17).
+   */
+  prebuild(): void {
+    const perKind = KNIGHTS.maxField + KNIGHTS.squadMax + GARRISON.archers + GARRISON.guards;
+    for (const kind of KINDS) {
+      const template = this.templates.get(kind);
+      if (!template) continue;
+      let have = 0;
+      for (const t of this.list) if (t.kind === kind) have++;
+      for (; have < perKind; have++) {
+        const troop = new Troop(kind, template, template.animations);
+        this.board.add(troop.root);
+        this.list.push(troop);
+      }
+    }
+    if (!this.warmBanner) {
+      this.warmBanner = knightBanner();
+      this.warmBanner.visible = false;
+      this.board.add(this.warmBanner);
+    }
+  }
+
+  /** A hidden banner, only so its shader compiles with the rest (prebuild). */
+  private warmBanner: Object3D | null = null;
 
   private obtain(kind: TroopKind): Troop | null {
     let troop = this.list.find((t) => t.mode === 'dead' && t.kind === kind) ?? null;

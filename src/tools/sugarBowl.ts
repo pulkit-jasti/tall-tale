@@ -17,7 +17,7 @@ import { BoxGeometry, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { SUGAR, TOOL_SPOTS } from '../config/game.js';
 import { BOOST } from '../rules/boosts.js';
 import type { HandState } from '../player/hands.js';
-import { landingHeight } from '../rules/boardMath.js';
+import { landingHeight, zoneAt } from '../rules/boardMath.js';
 import { flatMaterial, sugarBowl } from '../world/shapes.js';
 import { HandTool, type ToolParts } from './handTool.js';
 import type { Slingshot } from './slingshot.js';
@@ -183,13 +183,16 @@ export class SugarBowl extends HandTool {
       f.position.addScaledVector(f.velocity, dt);
       f.mesh.position.copy(f.position);
       f.mesh.rotation.x += dt * 8;
-      const ground = landingHeight(f.position.x, f.position.z);
-      if (ground === null || f.position.y < -50) {
+      // Over the hole the giant sits in it flies on (2026-11-17: a cube tossed by hand starts right above it,
+      // read as "off the board" and vanished at once, so only the slingshot ever made a lure).
+      const overHole = zoneAt(Math.hypot(f.position.x, f.position.z)) === 'hole';
+      const ground = overHole ? null : landingHeight(f.position.x, f.position.z);
+      if ((ground === null && !overHole) || f.position.y < -50) {
         f.mesh.removeFromParent();
         this.flying.splice(i, 1);
         continue;
       }
-      if (f.position.y <= ground) {
+      if (ground !== null && f.position.y <= ground) {
         f.position.y = ground;
         f.mesh.rotation.set(0, f.mesh.rotation.y, 0);
         this.flying.splice(i, 1);
@@ -211,15 +214,14 @@ export class SugarBowl extends HandTool {
       lure.left -= dt;
       for (const g of this.goblins.list) {
         if (lure.feeds <= 0) break;
-        if (g.paused > 0 || g.stunned > 0 || !this.goblins.isHittable(g)) continue;
-        if (g.mode !== 'walking' && g.mode !== 'toWall' && g.mode !== 'atWall') continue;
+        if (g.lure || g.paused > 0 || g.stunned > 0 || !this.goblins.isHittable(g)) continue;
         const p = g.root.position;
         const dx = lure.position.x - p.x;
         const dz = lure.position.z - p.z;
         if (dx * dx + dz * dz > r2) continue;
-        this.goblins.pause(g, SUGAR.eatTime * BOOST.sugar, 'idle');
+        // 2026-11-17: it walks right up to the cube (off its road), eats, and goes back; on the rampart too.
+        if (!this.goblins.lureTo(g, lure.position, SUGAR.eatTime * BOOST.sugar)) continue;
         this.goblins.credit(g, 'sugar');
-        g.face(dx, dz);
         lure.feeds--;
         // v3 2.6 Spicy sugar: a spicy cube seasons the goblins that eat it.
         if (lure.spicy && this.goblins.pepper(g)) this.onSpicyEaten();

@@ -181,7 +181,9 @@ export class GrabEat {
         target?.kind === 'ring' ? HANDLES.readyTime : target?.kind === 'tool' ? TOOLS.readyTime : SLINGSHOT.readyTime;
       const wasArmed = slot.openTime >= readyTime;
       if (!grabbed) slot.openTime = 0;
-      else if (!hand.pinch.on && !hand.fist.on) slot.openTime += dt;
+      // The crank's knob is pinch only: the other fingers may be curled (2026-11-17: with them closed the hand
+      // read as a fist, never "open", so the knob never armed and the pinch did nothing).
+      else if (!hand.pinch.on && (target?.kind === 'ring' || !hand.fist.on)) slot.openTime += dt;
       const armed = grabbed && slot.openTime >= readyTime;
       if (armed && !wasArmed) this.audio.play('readyTick', undefined, 1, 0.05);
       const closing = hand.fist.started || hand.pinch.started;

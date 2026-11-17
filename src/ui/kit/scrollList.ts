@@ -18,7 +18,7 @@ import type { GameAudio } from '../../audio/sound.js';
 import { SCROLL_LIST } from '../../config/game.js';
 import { mark } from '../../debug/perfMarks.js';
 import type { HandState } from '../../player/hands.js';
-import type { Control } from './controls.js';
+import { afterDrag, type Control } from './controls.js';
 
 export interface ScrollListOptions {
   /** The window's size (cm). */
@@ -100,8 +100,40 @@ export class ScrollList implements Control {
     this.place();
   }
 
+  /**
+   * Draws only some rows again (a new selection: the old row and the new one), not the whole list
+   * (audit 2026-11-17: every tap drew every level). Waits while something is dragged, like every redraw.
+   */
+  redrawRows(rows: number[]): void {
+    // Its own key, so a waiting full redraw is never replaced by a partial one.
+    afterDrag(this.rowsKey, () => {
+      mark('panel redraw');
+      const c = this.canvas.getContext('2d')!;
+      const px = SCROLL_LIST.pxPerCm;
+      const w = this.canvas.width;
+      const h = Math.round(this.options.rowHeight * px);
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      for (const i of rows) {
+        if (i < 0 || i >= this.options.count) continue;
+        const top = Math.round(i * this.pitch * px);
+        c.clearRect(0, top, w, h);
+        c.save();
+        c.translate(0, top);
+        this.options.drawRow(c, i, w, h);
+        c.restore();
+      }
+      this.texture.needsUpdate = true;
+    });
+  }
+
+  private rowsKey = {};
+
   /** Draws every row again into the canvas (a new selection, new stars). Never while scrolling. */
   redraw(): void {
+    afterDrag(this, () => this.redrawNow());
+  }
+
+  private redrawNow(): void {
     mark('panel redraw');
     const c = this.canvas.getContext('2d')!;
     const px = SCROLL_LIST.pxPerCm;

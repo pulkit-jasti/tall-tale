@@ -621,6 +621,12 @@ export const HANDLES = {
 };
 
 export const HANDS = {
+  /**
+   * IWSDK's see-through hands (src/game.ts hideLostHandModels, 2026-11-17): a lost hand's meshes go to this
+   * camera layer (never drawn), and a hand shows again only after being tracked this long without a break (seconds).
+   */
+  hiddenLayer: 31,
+  showAfter: 0.15,
   /** Pinch starts below this thumb to index distance (meters). */
   pinchStart: 0.018,
   /** Pinch ends above this distance (meters). Higher than start, so no flicker. */
@@ -680,17 +686,18 @@ export const GOBLINS: Record<GoblinType, GoblinStats> = {
   // Heights raised about 11% (from 3.5, 3 and 3.5) after a headset test, so they read better on the hills.
   // v2: faster (grunts 6 to 7.5, runners 13 to 15), so waves do not drag now that the camps are far out.
   // v3 (docs/v3-plan.md 1.1): faster again (grunts 7.5 to 12, about 25 s to the wall; runners 15 to 22), the board stays big.
-  grunt: { height: 3.9, speed: 12, climbSpeed: 2, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.55 },
-  runner: { height: 3.35, speed: 22, climbSpeed: 4, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.55 },
+  // 2026-11-17: about 15% slower for every type (playtest: everyone felt too fast), walk clips slowed to match.
+  grunt: { height: 3.9, speed: 10.2, climbSpeed: 2, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.32 },
+  runner: { height: 3.35, speed: 18.7, climbSpeed: 4, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.32 },
   // v3 Phase 3: told apart by shape first (shovel, lantern staff, keg on the back, bow), tint second.
   /** Dirt brown, a shovel over the shoulder. `speed` is its tunneling speed (DIGGER). */
-  digger: { height: 3.6, speed: 14, climbSpeed: 2.5, tint: [0.95, 0.72, 0.5], moveClip: 'walk', moveClipSpeed: 1.6 },
+  digger: { height: 3.6, speed: 12, climbSpeed: 2.5, tint: [0.95, 0.72, 0.5], moveClip: 'walk', moveClipSpeed: 1.36 },
   /** Purple, a little taller, a lantern staff held up. Slower, so it stays at the back of its group. */
-  shaman: { height: 4.2, speed: 9, climbSpeed: 1.8, tint: [0.95, 0.62, 1.25], moveClip: 'walk', moveClipSpeed: 1.2 },
+  shaman: { height: 4.2, speed: 7.7, climbSpeed: 1.8, tint: [0.95, 0.62, 1.25], moveClip: 'walk', moveClipSpeed: 1.02 },
   /** Reddish, a keg on its back, a slow heavy walk. */
-  bomber: { height: 3.9, speed: 10, climbSpeed: 0, tint: [1.3, 0.78, 0.62], moveClip: 'walk', moveClipSpeed: 1.25 },
+  bomber: { height: 3.9, speed: 8.5, climbSpeed: 0, tint: [1.3, 0.78, 0.62], moveClip: 'walk', moveClipSpeed: 1.06 },
   /** Dark green, a bow and a quiver. */
-  archer: { height: 3.75, speed: 12, climbSpeed: 2, tint: [0.62, 0.85, 0.62], moveClip: 'walk', moveClipSpeed: 1.55 },
+  archer: { height: 3.75, speed: 10.2, climbSpeed: 2, tint: [0.62, 0.85, 0.62], moveClip: 'walk', moveClipSpeed: 1.32 },
 };
 
 /**
@@ -975,6 +982,8 @@ export const RISING_CAMPS = {
  * Only looked at, never touched. In boardLift (cm): it rises with the board, never turns.
  */
 export const COMPASS = {
+  /** The goblins-left number redraws at most this often (seconds): each redraw uploads its canvas. */
+  textEvery: 0.4,
   /**
    * Straight in front, this far out and this high (cm: the dish's floor),
    * tipped this much toward the player (degrees). Was 31.5 out, 2 up and
@@ -986,11 +995,12 @@ export const COMPASS = {
   // covered the view in front, so it sits low now (4.5 up), a little farther out (33) for the bigger crank wheel
   // (CRANK.wheelOut). Being lower puts the wheel about 54 to 58 cm from the eyes (the reach band's edge, the
   // developer's choice: the view in front matters more). Its far side stays under the line of sight to the wall.
+  // Headset test 2026-11-17: a little higher (4.5 up was low) and the whole dial 10% smaller (dish and wheel).
   at: 33,
-  y: 4.5,
+  y: 6.5,
   /** Tipped toward the eyes (was 8, nearly flat: hard to read from the seat, headset test 2026-11-12; 35, then 25 so the low, wide wheel stays clear of the ground). */
   tiltDeg: 25,
-  radius: 5.5,
+  radius: 4.95,
   /** The dish: its wall height and how far its lip stands out over the face (cm). */
   dishDepth: 0.9,
   lipWidth: 0.55,
@@ -1081,7 +1091,7 @@ export const CRANK = {
    * The wheel: this far outside the dish's lip (headset test 2026-11-13: was 0.45, too small; a wider circle
    * turns more precisely and less jumpy), this thick (tube radius), joined to the dish by `spokes` spokes.
    */
-  wheelOut: 3.5,
+  wheelOut: 3.15,
   wheelTube: 0.4,
   spokes: 8,
   spokeRadius: 0.18,
@@ -1099,6 +1109,18 @@ export const CRANK = {
   clickDeg: 30,
   /** The knob at board spin 0 (degrees round the dish: 0 the far side, 180 the near side toward the player). */
   knobStartDeg: 180,
+  /**
+   * Let go once the pinch opens for this long (seconds). Pinch only: a fist
+   * kept it held before, so it only let go when all fingers opened (2026-11-17).
+   */
+  releaseHold: 0.15,
+  /** The board eases toward the hand's angle over this long (seconds), so tracking shake never shakes the board. */
+  smoothing: 0.08,
+  /**
+   * Let go when the pinch rises this far above the knob's ball (cm, along
+   * the dish's up), so a hand lifted away never keeps spinning the board.
+   */
+  liftRelease: 7,
 };
 
 /** Board turning (v3, docs/v3-plan.md 1.7): the snap turning setting's step (degrees). Height stays smooth. */
@@ -1194,8 +1216,11 @@ export const UI_ZONE = {
 };
 
 export const END_PANEL = {
-  /** Panel spot, fixed in front of the player (cm, its height from UI_ZONE): over the front wall, the button within reach. */
-  radius: 41,
+  /**
+   * Panel spot, fixed in front of the player (cm, its height from UI_ZONE): over the front wall, the button
+   * within reach. 50 since 2026-11-17 (41 was too close to the face); the buttons stay inside the reach band's edge.
+   */
+  radius: 50,
   /** Tilted back a little, toward the eyes (degrees). */
   tiltDeg: 20,
   /** Only a title and a word over each button now (was 24 tall with a subtitle and long labels), with room around them (UI_SPACING). */
@@ -1219,7 +1244,8 @@ export const END_PANEL = {
    */
   endWidth: 38,
   /** v3 Phase 4: 10.4 taller (was 32) for the score and its breakdown table. */
-  winHeight: 42.4,
+  // 46.4 since 2026-11-17: at 42.4 the buttons' words ("Next level") sat on the note line ("A perfect defense!").
+  winHeight: 46.4,
   lostHeight: 27,
   /** The small buttons beside the big one (Menu, Play again). */
   sideRadius: BUTTON_SIZE.large,
@@ -1357,8 +1383,11 @@ export const ENDLESS = {
   },
   /** Groups come out over this long (seconds): from, shorter each wave, never under min (faster spawns). */
   spawnTime: { from: 55, perWave: 1.5, min: 32 },
-  /** The breather's pick: how long the cards wait before the wave starts without one (seconds), and how many cards. */
-  pickTime: 10,
+  /**
+   * The breather's pick: how long the cards wait before the wave starts without one (seconds), and how many
+   * cards. Infinity since 2026-11-17: the next wave waits for the pick (it started before the player chose).
+   */
+  pickTime: Infinity,
   /** A wave's banner hides itself after this long (seconds; its Next hides it sooner). */
   bannerTime: 6,
   cards: 3,
@@ -1390,7 +1419,10 @@ export const ENDLESS = {
     radius: 41,
     tiltDeg: 20,
     columnWidth: 14,
-    height: 25,
+    // Taller, with the tick buttons under the text (2026-11-17: at 25 cm the buttons sat over the cards' names and text).
+    height: 31,
+    /** The tick buttons' middle, cm from the panel's top: under the card text (it ends about 18.3 down), above the countdown line. */
+    buttonFromTop: 23.4,
     buttonRadius: BUTTON_SIZE.large,
     rareColor: '#7a3fb0',
   },
@@ -1803,6 +1835,22 @@ export const CUSTOM_GAME = {
  * ring, the pointer arrows, then the pause panel above all. Used with
  * drawOnTop (src/ui/kit/onTop.ts).
  */
+/**
+ * The view fade while a map is built (src/ui/viewFade.ts): a dark sphere
+ * round the head, over everything. Building a map blocks the page for a
+ * moment; a dark view hides the freeze (headset test 2026-11-17).
+ */
+export const VIEW_FADE = {
+  color: 0x0b0e16,
+  /** Seconds to go dark, and to come back. */
+  outTime: 0.3,
+  inTime: 0.6,
+  /** Sphere radius round the head (meters). */
+  radius: 0.25,
+  /** Drawn after everything else (RENDER_ORDER tops out at 40). */
+  renderOrder: 1000,
+};
+
 export const RENDER_ORDER = {
   /** Menu pages drawn on top in their own order (layerPage, src/ui/kit/onTop.ts), all between this and the next whole number. */
   menu: 3,
@@ -2511,7 +2559,8 @@ export const FIRE_PEBBLE = {
   flameY: 21,
   stickColor: 0x6b4a2b,
   flameColors: [0xff6a1a, 0xffb02a, 0xffe08a],
-  flameSize: 1.6,
+  // 2.3 times bigger, like the castle torches (2026-11-17).
+  flameSize: 3.6,
   /** A pinched pebble within this of the flame (meters at the default board) heats up. */
   lightRadius: 0.045,
   lightTime: 1,
@@ -2543,6 +2592,9 @@ export const FLYING_KEG = {
  * The slingshot has neither. Tune in playtests.
  */
 export const TOOLS = {
+  /** Recharged (2026-11-17): gold sparkles from the tool and this long of glowing pulses (seconds). */
+  readySparkle: [0xffd23f, 0xffffff, 0xfff1b8],
+  readyFlashTime: 1.2,
   /**
    * How long one use lasts (seconds), from the first swat, shake or ring.
    * The bell and the horn are one use each (one stun, one call): their
@@ -2655,8 +2707,11 @@ export const HOLD = {
     // The drum stick like the swatter: past the thumb, leaning forward so the ball comes down on the skin without bending the wrist.
     drum: { at: 2.5, face: 'back', tiltDeg: 45 },
     // v3 2.2: the magnet's tips point the way the knuckles point (like a flashlight); the glass's lens faces the eyes when raised.
-    magnet: { at: 2.5, face: 'back', tiltDeg: 10 },
-    glass: { at: 2.5, face: 'back', tiltDeg: 10 },
+    // Held at the middle of a 7 cm handle, like the slingshot (2026-11-17: was 2.5 on a shorter handle, the head sat in the fingers).
+    // Second test: the glass still sat off the palm. Its 10 degree slant ran the handle almost straight along the
+    // knuckle line; the slingshot and the drum stick lie across the palm at 35 and 45. Now the shared 35, like the slingshot.
+    magnet: { at: 3.5, face: 'back' },
+    glass: { at: 4.55, face: 'back' },
     sugar: { at: 0, face: 'palm' },
   } as Record<'swatter' | 'pepper' | 'slingshot' | 'horn' | 'drum' | 'magnet' | 'glass' | 'sugar', { at: number; face: 'palm' | 'back'; tiltDeg?: number }>,
 };
@@ -2689,6 +2744,9 @@ export const SWATTER = {
   headWidth: 10,
   headHeight: 9,
   headThickness: 0.5,
+  /** Endless Wide Swatter: the head grows to the new hit size over this long (seconds), with sparkles. */
+  growTime: 0.6,
+  growSparkle: [0xffffff, 0xffd23f, 0xd23c28],
   handleColor: 0xf2c14e,
   headColor: 0xd23c28,
   frameColor: 0x8a1f14,
@@ -2844,8 +2902,12 @@ export const HORN = {
   zoneRadius: 0.2,
   zoneExitMargin: 0.05,
   zoneGrace: 0.3,
-  /** A loud frame still counts as a blow this long after it (seconds), so one just before the horn is in place is not lost. */
-  blowMemory: 0.25,
+  /**
+   * Speech fills while over speakLevel and drains this many times faster
+   * than it filled in quiet, so a word started just before the horn is in
+   * place still counts, but sounds spread out never add up.
+   */
+  speakDecay: 1.5,
   /**
    * A live mic always hears a little room noise (about 0.001 and up). Under
    * silentLevel for silentFallback seconds while held, it counts as broken:
@@ -2853,7 +2915,8 @@ export const HORN = {
    * debug note says so with the mic's state.
    */
   silentLevel: 0.00002,
-  silentFallback: 1,
+  // 4 s (was 1): a short quiet spell must never switch to the hold, which sounds it with no word said (2026-11-17).
+  silentFallback: 4,
   /**
    * Near the face it fades: fully solid farther than fadeFar, down to
    * fadeOpacity at fadeNear (meters from the mouthpiece to the head).
@@ -2868,12 +2931,16 @@ export const HORN = {
    */
   holdTime: 1.2,
   /**
-   * Mic loudness (raw RMS of one frame, 0 to 1) that counts as a blow: one
-   * frame over it is enough, no smoothing and no holding it (headset test).
-   * Set from the live loudness panel (MIC_PANEL, debug page "Mic panel").
-   * Earlier smoothed values, held for 0.25 to 0.35 s, ran from 0.025 to 0.1.
+   * v3 (2026-11-17): a spoken word sends the knights ("Charge!"), not a blow.
+   * Mic loudness (raw RMS, 0 to 1) of normal speech; the loudness must stay
+   * over it for speakTime seconds in all. One frame over 0.015 used to be
+   * enough, and small noises called knights on the wrong road. Tune from the
+   * live loudness panel (MIC_PANEL, debug page "Mic panel").
    */
-  blowLevel: 0.015,
+  // 0.04 and 0.25 s (2026-11-17, second test: it still went off with no word said).
+  speakLevel: 0.04,
+  /** Seconds of speech over speakLevel that send them (a short word is about 0.3 s, a click or bump under 0.05). */
+  speakTime: 0.25,
   /** The horn sound's volume when held to blow, and when blown into the mic (louder). */
   heldVolume: 0.8,
   blownVolume: 1,
@@ -2937,6 +3004,14 @@ export const DRUM = {
   /** The drum on the platform (cm): a short 10-sided cylinder. */
   radius: 3,
   height: 3.2,
+  /**
+   * The big drum (2026-11-17): grabbing the stick sinks this drum and the compass, and one bigScale times
+   * as big rises on the compass's spot over stageTime seconds; one strike and it all goes back.
+   */
+  bigScale: 2.4,
+  stageTime: 0.55,
+  /** After the strike, the stick stays in the hand and the big drum stays up this long (seconds). */
+  stayTime: 2,
   sides: 10,
   bodyColor: 0xb8322a,
   rimColor: 0xd9a63a,
@@ -2994,8 +3069,12 @@ export const LOADOUT_SPOTS = [
  * stayed on them `holdTime`.
  */
 export const MAGNET = {
-  /** The model (cm): a grip along +y from the fist, the horseshoe on top, its two tips pointing forward (+z of the tool). */
-  gripLength: 4.5,
+  /**
+   * The model (cm): a grip along +y from the fist, the horseshoe on top, its two tips pointing forward (+z of the tool).
+   * The grip is as long as the slingshot's handle (7) and held at its middle (HOLD.poses.magnet), so the horseshoe
+   * sits clear above the fist (2026-11-17: at 4.5 it sat down in the fingers).
+   */
+  gripLength: 7,
   gripRadius: 0.8,
   shoeRadius: 2.6,
   shoeTube: 0.85,
@@ -3004,7 +3083,7 @@ export const MAGNET = {
   tipColor: 0xd8dde2,
   gripColor: 0x4a3426,
   gripFrom: 0,
-  gripTo: 4.5,
+  gripTo: 7,
   grabRadius: 0.06,
   restLeanDeg: 15,
   /** The aim: a ray from the tips along their pointing direction, marched to the ground; up to `maxRange` cm, smoothed over `smoothing` seconds. */
@@ -3021,6 +3100,29 @@ export const MAGNET = {
   holdTime: 1,
   /** A stripped goblin stops this long, looking at its empty hands (seconds). */
   stripPause: 1.5,
+  /**
+   * Waves of force while held (2026-11-17): waveCount rings in front of the tips, each starting waveFrom cm
+   * out at waveFar cm across and drawn into the tips at waveNear, waveSpeed cycles a second; half as strong
+   * while not aimed at the ground.
+   */
+  waveCount: 3,
+  waveColor: 0xc8e6ff,
+  waveOpacity: 0.7,
+  waveFrom: 7,
+  waveFar: 3.2,
+  waveNear: 0.7,
+  waveSpeed: 1.1,
+  /**
+   * Pulled gear (2026-11-17): it hops off the goblin (gearHop cm/s up), then flies to the tips, starting at
+   * gearSpeed and speeding up by gearAccel each second to gearSpeedMax (cm/s), turning toward them over
+   * gearSteer seconds; within gearArrive cm it is crushed.
+   */
+  gearHop: 30,
+  gearSpeed: 20,
+  gearAccel: 170,
+  gearSpeedMax: 240,
+  gearSteer: 0.12,
+  gearArrive: 2.5,
   /** Gear rattles while pulled: this much (cm) and this fast (Hz). */
   rattle: 0.35,
   rattleHz: 18,
@@ -3047,6 +3149,9 @@ export const SUGAR = {
   bowlRadius: 3.4,
   bowlHeight: 2.2,
   bowlColor: 0x8fb8d8,
+  /** The bowl's gold band and the sugar heap inside it. */
+  bandColor: 0xd9a63a,
+  heapColor: 0xf3ecdf,
   cubeSize: 1.2,
   cubeColor: 0xfaf6ee,
   /** Pinch zone around the bowl's top to take a cube (meters). */
@@ -3055,11 +3160,17 @@ export const SUGAR = {
   gravity: 980,
   /** Speed kept from the hand when tossed (a toss feels lighter than the hand). */
   tossKeep: 1,
-  /** A lure lasts this long (seconds), drawing goblins within `radius` cm on the ground. */
-  lureTime: 6,
+  /** A lure lasts this long (seconds), drawing goblins within `radius` cm on the ground (10, was 6: they walk to it now). */
+  lureTime: 10,
   radius: 22,
   /** A lured goblin stops to eat for this long (seconds). */
   eatTime: 4,
+  /**
+   * 2026-11-17: lured goblins leave the road and walk to the cube at walkShare of their speed, stopping
+   * eatDistance cm from it; on the rampart the same along the wall top. Then they walk back.
+   */
+  walkShare: 0.9,
+  eatDistance: 1.8,
   /** How many goblins one cube feeds before it is gone. */
   feeds: 5,
   /** Crumbs while it is eaten. */
@@ -3082,16 +3193,21 @@ export const SUGAR = {
  * goblins without a helmet. Slower at sunset and at night.
  */
 export const GLASS = {
-  /** The model (cm): a handle along +y, a ring rim with a clear lens on top, facing forward (+z of the tool). */
-  handleLength: 5,
-  handleRadius: 0.7,
-  lensRadius: 2.6,
-  rimTube: 0.35,
+  /**
+   * The model (cm): a handle along +y, a ring rim with a clear lens on top, facing forward (+z of the tool).
+   * The handle is as long as the slingshot's (7) and held at its middle (HOLD.poses.glass), so the lens sits
+   * clear above the fist (2026-11-17: at 5 the rim sat down in the fingers).
+   */
+  // 30% bigger (2026-11-17): handle 7 to 9.1, lens 2.6 to 3.4 (held at the handle's middle, HOLD.poses.glass).
+  handleLength: 9.1,
+  handleRadius: 0.9,
+  lensRadius: 3.4,
+  rimTube: 0.45,
   handleColor: 0x6b4a2e,
   rimColor: 0xd9a63a,
   lensColor: 0xcfe8ff,
   gripFrom: 0,
-  gripTo: 5,
+  gripTo: 9.1,
   grabRadius: 0.06,
   restLeanDeg: 15,
   /** Raised: the lens is this far in front of the eyes (meters, from, to) and within `coneDeg` of the look. */
@@ -3104,6 +3220,21 @@ export const GLASS = {
   assistDeg: 4,
   /** A goblin under the gaze within this (cm, flat) can be burned (no assist to goblins). */
   goblinRadius: 3,
+  /**
+   * Aim assist to goblins (2026-11-17): the goblin nearest the look within goblinAssistDeg (aimed at
+   * goblinAimUp cm above its feet), and the one already burning kept out to goblinKeepDeg, so the beam
+   * follows it as it walks. Small: a steady look is still the skill.
+   */
+  goblinAssistDeg: 2.5,
+  goblinKeepDeg: 4,
+  goblinAimUp: 2,
+  /** The progress ring round the aim point (cm) and its colors: growing or healing a plant, lighting a keg or a goblin. */
+  progressRadius: 3.2,
+  growRingColor: 0x7ddc5a,
+  burnRingColor: 0xff8a2a,
+  /** The beam's soft glow (times beamRadius) and the hot spot where it lands (cm). */
+  glowScale: 3,
+  spotRadius: 2.2,
   /** Beam seconds: a keg lights after `lightTime`, a bare goblin burns after `burnTime` (by day). */
   lightTime: 1,
   burnTime: 1,
@@ -3155,15 +3286,27 @@ export const GARDEN = {
   /** A full plant lasts this long (seconds), then the bed is empty again. */
   life: 60,
   /** Sunflower: a turret that spits seeds at the nearest goblin within range (cm), every `fireEvery` s; `seedsToKnock` knock out a grunt. */
+  // 2026-11-17: 4 times the fire rate, each seed a quarter as strong (same damage, feels more powerful).
   sunflowerHeight: 9,
   range: 70,
-  fireEvery: 2,
-  seedsToKnock: 2,
-  seedSpeed: 90,
+  fireEvery: 0.5,
+  seedsToKnock: 8,
+  /** Seeds on a helmet or a shield break one piece per this many. */
+  seedsPerArmor: 4,
+  /** The head picks the nearest goblin this often (s), turns to it over turnSmoothing (s), and fires once within fireCone (radians). */
+  retargetEvery: 0.3,
+  turnSmoothing: 0.12,
+  fireCone: 0.35,
+  seedSpeed: 110,
   seedColor: 0x3a2a1a,
+  /** Seeds made up front (no new meshes mid-battle). */
+  seedPool: 40,
   /** Mushroom: every `puffEvery` s, about half of the goblins within `puffRadius` turn on each other for `confuseTime` s, until a third of them is down. */
   mushroomHeight: 6,
-  puffEvery: 10,
+  // 2026-11-17: after a puff it rests puffEvery (was 10, a blind timer), then checks every puffCheck s and
+  // puffs the moment goblins are within puffRadius.
+  puffEvery: 7,
+  puffCheck: 0.25,
   puffRadius: 26,
   confuseTime: 4,
   confuseShare: 0.5,
@@ -3342,6 +3485,16 @@ export const TRIGGERS = {
   bridge: {
     length: 28,
     width: 5,
+    /**
+     * The ravine under it (2026-11-17: the bridge sat on flat ground with a blue strip): cut into the
+     * terrain gapDepth cm deep, full depth gapIn cm either side of the bridge's middle (along the road),
+     * its banks out to gapOut; the stream runs streamLength cm across the road. The deck arches `arch` cm.
+     */
+    gapIn: 5,
+    gapOut: 11,
+    gapDepth: 7,
+    streamLength: 60,
+    arch: 1.4,
     streamWidth: 34,
     streamDepth: 12,
     streamColor: 0x3a7ab8,
@@ -3754,7 +3907,7 @@ export const GLASS_SIGN = {
     overColor: 0xffc23a,
     lineColor: 0xffffff,
   },
-  /** The horn's blow bar is full at this many times HORN.blowLevel (its line sits at 1 / hornBarMax). */
+  /** The horn's loudness bar is full at this many times HORN.speakLevel (its line sits at 1 / hornBarMax). */
   hornBarMax: 1.6,
   /** After the horn sounds, the bar stays full and gold this long (seconds), so the player sees the blow counted. */
   blownHold: 1.5,
@@ -3876,7 +4029,8 @@ export const GEAR = {
       dir: L_OUT,
       axis2: [0, 1, 0],
       dir2: L_UP,
-      scale: 0.62,
+      // 2.2 times bigger (2026-11-17): at 0.62 a shield was too small to see, so a swat that bounced off read as a bug.
+      scale: 1.36,
     },
     roundShield: {
       model: 'props/mini-dungeon/shield-round.glb',
@@ -3888,7 +4042,7 @@ export const GEAR = {
       dir: L_OUT,
       axis2: [0, 1, 0],
       dir2: L_UP,
-      scale: 0.72,
+      scale: 1.58,
     },
     rectShield: {
       model: 'props/mini-dungeon/shield-rectangle.glb',
@@ -3899,7 +4053,7 @@ export const GEAR = {
       dir: L_OUT,
       axis2: [0, 1, 0],
       dir2: L_UP,
-      scale: 0.8,
+      scale: 1.76,
     },
     bow: {
       shape: 'bow',
@@ -4214,6 +4368,8 @@ export const GARRISON = {
   volleyStagger: 0.07,
   /** Archers back away from a goblin on the rampart this close (cm along the wall). */
   backAway: 9,
+  /** Once backing away, it keeps going until the goblin is this far (cm), so it never flip-flops at backAway. */
+  backAwayEnd: 14,
   /** Guards walk to a goblin on their stretch, and fight it this close (cm along the wall). */
   guardReach: 3,
   /** A goblin on the rampart attacks a garrison soldier this close (cm along the wall). */
@@ -4487,6 +4643,8 @@ export const SKY = {
   moonEdgeColor: 0xa9b8e0,
   moonGlowColor: 0x9fb8ff,
   moonGlowShare: 4,
+  /** The glow's strength (1 = moonGlowColor in full). 0.5, then 0.25 (2026-11-17: the moon was too bright, twice). */
+  moonGlowStrength: 0.25,
   /** Stars: one mesh of points on the upper sky (count, size in screen pixels, lowest height above the horizon in degrees). */
   starCount: 360,
   starSize: 5,
@@ -4555,6 +4713,9 @@ export const SKY = {
   planetWarm: 0xe0704a,
   planetWarmBands: [0, 0.55, 0.15, 0.75, 0, 0.6, 0.25, 0.45],
   planetWarmRings: [0.2, 0.65, 0, 0.4, 0.8, 0.3],
+  /** The rings' two-color gradient, straight across (2026-11-17): how warm it is at one end and at the other (0 lavender, 1 the warm color). */
+  planetRingWarmFrom: 0.05,
+  planetRingWarmTo: 0.85,
   planetSkyBlend: 0.55,
 };
 
@@ -4804,9 +4965,12 @@ export const NIGHT_LIGHTS = {
   torchRadius: 44.2,
   torchHeight: 8.4,
   torchStick: 3,
-  torchFlame: 1.4,
+  // 2.3 times bigger (2026-11-17: the new layered flame read well but too small).
+  torchFlame: 3.2,
   torchStickColor: 0x6b4a2b,
   /** The flame from its base to its tip. */
+  /** The flame (2026-11-17, layered): a deep red-orange outer shell, orange, and a pale yellow core tip. */
+  flameOuter: 0xd8280c,
   flameBase: 0xff5a14,
   flameTip: 0xfff0a0,
   /** Flicker: how much a flame's size wobbles (share) and how fast. */

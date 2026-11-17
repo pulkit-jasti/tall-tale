@@ -53,8 +53,8 @@ Check each file's license on its Freesound page (the number in the name is the s
 Downloaded but not used yet:
 
 - `276874__lucabia__sword-hits.wav`: 10 s of many hits. Cut into single hits for `swordClash`.
-- Music (`MUSIC` in `src/config/sounds.ts`): `812170__giangallegos__ambient-music.mp3` on the menus and the pause panel, `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac` in battle (looped at 32 s).
-- `875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.wav`: ambience idea. 20 MB, needs a shorter loop as `.ogg`.
+- Music (`MUSIC` in `src/config/sounds.ts`): since 2026-11-17 `875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.m4a` (village ambience, an AAC copy of the 20 MB `.wav`: 1.3 MB, the full 116 s, `afconvert -f m4af -d aac -b 96000`) on the home screen, the end panels and the pause panel, `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac` in battle (looped at 32 s). The `.wav` is no longer loaded. `812170__giangallegos__ambient-music.mp3` is no longer used.
+- `toolReady` (a tool recharged): `chime.mp3` with `interface/glass_002.ogg`.
 
 ## Still missing
 

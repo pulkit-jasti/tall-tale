@@ -273,6 +273,17 @@ export class HornAim {
     this.clock = sprite('clock', 0xd0d0d0);
   }
 
+  /**
+   * Builds the ghost knights and the icon sprites now, hidden (the game calls it at setup, before its
+   * warm-up): made on the first aim, their models, materials and textures went with a flicker (audit
+   * 2026-11-17). The icons only if their images are in (otherwise they stay made on first use).
+   */
+  prepare(): void {
+    this.ensureGhosts();
+    if (iconTextureSource('chevron')) this.ensureIcons();
+    this.hidePreviews();
+  }
+
   /** The ghost knights, made the first time (the knight models load at start). */
   private ensureGhosts(): boolean {
     if (this.ghosts.length > 0) return true;

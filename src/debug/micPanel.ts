@@ -1,7 +1,7 @@
 // A small live loudness panel (debug), like the FPS panel and on the other
 // side of front: the mic level right now, the loudest in the last few
 // seconds, the loudest since the panel was opened, and the horn's blow line
-// (HORN.blowLevel), so the line can be set from real numbers instead of
+// (HORN.speakLevel), so the line can be set from real numbers instead of
 // guesses. The level is the horn's own measure: the mic's raw RMS of each
 // frame (one frame over the line is a blow). Hidden by default: the debug page's "Mic
 // panel on/off" button, or ?mic in the URL. Redrawn only a few times a
@@ -73,7 +73,7 @@ export class MicPanel {
     let recent = 0;
     for (const r of this.recent) recent = Math.max(recent, r.level);
     const f = (v: number): string => v.toFixed(3);
-    const key = [mic.state, f(this.level), f(recent), f(this.highest), f(HORN.blowLevel)].join('|');
+    const key = [mic.state, f(this.level), f(recent), f(this.highest), f(HORN.speakLevel)].join('|');
     if (key === this.lastDrawn) return;
     this.lastDrawn = key;
     mark('panel redraw');
@@ -86,7 +86,7 @@ export class MicPanel {
     c.fill();
     c.textBaseline = 'middle';
     // Now, big: green once it passes the blow line.
-    c.fillStyle = this.level >= HORN.blowLevel ? GOOD : TEXT;
+    c.fillStyle = this.level >= HORN.speakLevel ? GOOD : TEXT;
     c.font = 'bold 50px sans-serif';
     c.fillText(f(this.level), 16, 40);
     c.fillStyle = DIM;
@@ -97,7 +97,7 @@ export class MicPanel {
     c.fillText(`last ${MIC_PANEL.recentSeconds} s  ${f(recent)}`, 16, 96);
     c.fillText(`loudest  ${f(this.highest)}`, 16, 132);
     c.fillStyle = '#f2c14e';
-    c.fillText(`blow line  ${f(HORN.blowLevel)}`, 16, 168);
+    c.fillText(`speak line  ${f(HORN.speakLevel)}`, 16, 168);
     this.texture.needsUpdate = true;
   }
 }

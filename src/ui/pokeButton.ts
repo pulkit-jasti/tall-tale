@@ -25,6 +25,7 @@ import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { flatMaterial } from '../world/shapes.js';
 import { canvasTexture } from './kit/canvas.js';
+import { preparedTextures } from './panel.js';
 import { changeTouch, type Control } from './kit/controls.js';
 import { buttonIconCanvas, type ButtonIcon } from './uiImages.js';
 
@@ -194,9 +195,10 @@ export class PokeButton implements Control {
   setIcon(icon: ButtonIcon): void {
     if (icon === this.icon || this.half) return;
     this.icon = icon;
-    this.faceMaterial.map?.dispose();
+    // A shared texture (never disposed here); one texture for another needs no new shader.
+    const had = !!this.faceMaterial.map;
     this.faceMaterial.map = iconTexture(icon);
-    this.faceMaterial.needsUpdate = true;
+    if (!had) this.faceMaterial.needsUpdate = true;
   }
 
   /**
@@ -320,8 +322,24 @@ export class PokeButton implements Control {
  * the icon are black, and without it their color bleeds in as a thin dark
  * edge when the texture is smoothed.
  */
+/**
+ * One texture per icon, shared by every button (audit 2026-11-17: setIcon drew a new canvas and made a new
+ * texture each time: every end panel, every picker tap). Made once, sent to the GPU by the warm-up.
+ */
+const iconCache = new Map<ButtonIcon, CanvasTexture>();
+
 function iconTexture(icon: ButtonIcon): CanvasTexture {
-  const texture = canvasTexture(buttonIconCanvas(icon), 4);
-  texture.premultiplyAlpha = true;
+  let texture = iconCache.get(icon);
+  if (!texture) {
+    texture = canvasTexture(buttonIconCanvas(icon), 4);
+    texture.premultiplyAlpha = true;
+    iconCache.set(icon, texture);
+    preparedTextures.add(texture);
+  }
   return texture;
+}
+
+/** Makes these icons' textures now (setup), for buttons that switch to them later (the end panel, the pickers). */
+export function prepareIcons(icons: ButtonIcon[]): void {
+  for (const icon of icons) iconTexture(icon);
 }

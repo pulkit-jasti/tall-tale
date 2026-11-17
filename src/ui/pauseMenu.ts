@@ -139,6 +139,11 @@ export class PauseMenu {
     this.follow = new LazyFollow(this.holder, { ...PAUSE.follow, recenter: 0.12 });
     // Right in front of the eyes, never too high or too low (UI_ZONE).
     this.panel = new Panel(this.holder, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: Math.round(width * 15), canvasScale: 2 });
+    // Both widths it takes (the tutorial's buttons and a battle's) made now, so the first pause makes nothing new.
+    for (const teaching of [true, false]) {
+      const count = BUTTONS.filter((b) => b.when === 'always' || (b.when === 'teaching') === teaching).length;
+      this.panel.prepareSize(rowPanelWidth(count, PAUSE.panel.buttonGap, buttonRadius * POKE.rimScale, buttonMargin, PAUSE.panel.minWidth), height);
+    }
     const rim = buttonRadius * POKE.rimScale;
     const buttonY = bottomRowY(height, rim, buttonMargin);
     for (const b of BUTTONS) {
@@ -416,7 +421,7 @@ export class PauseMenu {
       return;
     }
     name('hand', 'Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
-    name('audioOff', 'Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
+    name('audioOff', 'Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no talking' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
     name('rotate', 'Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
     name('unlocked', 'Unlock all tools', S.firstRowY - 3 * S.accessRowGap, 'Tools only, not levels', UI_COLORS.note);
     name('next', 'Snap turning', S.firstRowY - 4 * S.accessRowGap, `Turn in ${BOARD_TURN.snapDeg} degree steps`, UI_COLORS.note);
