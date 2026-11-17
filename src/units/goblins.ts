@@ -383,8 +383,10 @@ export class Goblins {
    * falls and the like.
    */
   cause: PickTool | null = null;
-  /** v3 2.6: a goblin was knocked out (kill with scatter), and by which tool (achievements). */
-  onKnockOutBy: (goblin: Goblin, cause: PickTool | null) => void = () => {};
+  /** v3 Phase 4: the next knockout is a trap's (set by Triggers right before kill(goblin, true), cleared by it), for the score's combos. */
+  trapHit = false;
+  /** v3 2.6: a goblin was knocked out (kill with scatter), and by which tool (achievements); `trap`: a trap did it (score). */
+  onKnockOutBy: (goblin: Goblin, cause: PickTool | null, trap: boolean) => void = () => {};
   /**
    * v3 Phase 3: a bomber was knocked out (or a lit one landed): its keg
    * blows up where it is (src/units/goblinKinds.ts), `cause` the tool that did it.
@@ -1065,11 +1067,13 @@ export class Goblins {
   /** Out of the game at once. Goblins keep their poof of particles (made by the caller), no shrink. `scatter`: its gear flies off. */
   kill(goblin: Goblin, scatter = false): void {
     const cause = this.cause;
+    const trap = this.trapHit;
     this.cause = null;
+    this.trapHit = false;
     if (scatter && goblin.root.visible) {
       this.scatterGear(goblin);
       this.onKnockOut(goblin, this.centerWorld(goblin, temp3));
-      this.onKnockOutBy(goblin, cause);
+      this.onKnockOutBy(goblin, cause, trap);
       // v3 Phase 3: a bomber knocked out on the road blows up among its own group.
       if (goblin.type === 'bomber') this.onBomberBlast(goblin, cause);
     }

@@ -1218,7 +1218,8 @@ export const END_PANEL = {
    * again (right) when the middle one is Next. The welcome panel keeps width x height.
    */
   endWidth: 38,
-  winHeight: 32,
+  /** v3 Phase 4: 10.4 taller (was 32) for the score and its breakdown table. */
+  winHeight: 42.4,
   lostHeight: 27,
   /** The small buttons beside the big one (Menu, Play again). */
   sideRadius: BUTTON_SIZE.large,
@@ -1229,6 +1230,11 @@ export const END_PANEL = {
   subtitleFromTop: 6.6,
   statsFromTop: 15.2,
   noteFromTop: 18.2,
+  /** v3 Phase 4: the score line, its breakdown table under it (3 rows, this far apart), and the note line below them (cm down from the top). */
+  scoreFromTop: 19.9,
+  breakdownFromTop: 22.3,
+  breakdownRowGap: 2,
+  scoreNoteFromTop: 28.6,
   /** Lost: no stars, so the stats sit higher. */
   lostStatsFromTop: 10.4,
   /** The 3D stars (src/ui/winStars.ts). Sizes in cm (a star's outer radius), times in seconds. */
@@ -1265,6 +1271,34 @@ export const END_PANEL = {
     sparkles: 14,
     sparkleColors: [0xffffff, 0xffe9a8, 0xf2c230],
   },
+};
+
+/**
+ * v3 Phase 4: the battle score and its stars (docs/v3-plan.md "The score and
+ * the stars"). One number per battle, rewarding a giant who stops goblins far
+ * out, protects the castle and eats the leaks. Par = the level's goblins x
+ * perGoblin x 2: the kills are one half, the castle's health the other. The
+ * distance and multi-kill bonuses go on top. Board distances in cm from the
+ * castle's middle (the wall is at 46 to 52).
+ */
+export const SCORE = {
+  /** Every goblin defeated, any way (eaten too, and one shot from the slingshot). */
+  perGoblin: 10,
+  /** Knocked out this far out or more: far (cm). */
+  farFrom: 200,
+  /** Knocked out this far out or more (but not far): middle (cm). Nearer, or eaten: no bonus. */
+  middleFrom: 100,
+  farBonus: 10,
+  middleBonus: 5,
+  /**
+   * Multi-kill: knockouts by the same player tool within this long of the
+   * first one count as one action (seconds). From the 3rd on, each adds multiBonus.
+   */
+  multiWindow: 0.3,
+  multiFrom: 3,
+  multiBonus: 5,
+  /** Stars: any win is 1, 2 at twoAt of par or more, 3 at threeAt of par or more. */
+  stars: { twoAt: 0.6, threeAt: 0.85 },
 };
 
 /**
@@ -1344,8 +1378,6 @@ export const MENU = {
     lockedColor: 0x8a847a,
     selectedColor: '#e6b54a',
   },
-  /** Stars from the red flag at the end (docs/menus.md "Stars"): 3 at threeAt or more, 2 at twoAt or more, else 1. */
-  stars: { threeAt: 0.7, twoAt: 0.35 },
   /** The battleground sinks and the menu rises (docs/menus.md section 2): transforms only (seconds, cm). */
   swap: {
     sinkTime: 1.1,

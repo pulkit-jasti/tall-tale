@@ -1826,6 +1826,7 @@ export class Triggers {
       this.particles.burst(world, POOF_COLORS, 6, 0.15);
       this.audio.play('poof', world, 0.8, 0.04);
       this.goblins.cause = this.cause;
+      this.goblins.trapHit = true;
       this.goblins.kill(g, true);
     }
   }
@@ -1885,6 +1886,7 @@ export class Triggers {
       this.particles.burst(world, POOF_COLORS, 6, 0.15);
       this.audio.play('poof', world, 0.8, 0.04);
       this.goblins.cause = this.cause;
+      this.goblins.trapHit = true;
       this.goblins.kill(g, true);
     }
   }

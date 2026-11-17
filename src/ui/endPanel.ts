@@ -15,7 +15,8 @@
 // (reach check), so its buttons stay in reach.
 import { type Object3D, type Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { END_PANEL, MENU, POKE, UI_SPACING } from '../config/game.js';
+import { END_PANEL, POKE, SCORE, UI_SPACING } from '../config/game.js';
+import { SOURCE_NAMES, type ScoreParts } from '../rules/score.js';
 import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
 import {
@@ -44,6 +45,8 @@ export interface EndStats {
   eaten: number;
   /** How long the battle took (seconds). */
   seconds: number;
+  /** v3 Phase 4: the score and its parts (a won real battle only). */
+  score?: ScoreParts;
 }
 
 /** How an end panel shows after a battle. */
@@ -248,10 +251,16 @@ export class EndPanel {
         drawLine(c, item.word, x, y + 36, column * 0.9, 16, UI_COLORS.note);
       });
     }
+    // v3 Phase 4: the score, and what earned it, so players learn what counts.
+    const score = won ? stats?.score : undefined;
+    if (score) {
+      drawLine(c, `Score ${score.total}`, w / 2, top(END_PANEL.scoreFromTop), w * 0.6, 30, GOLD);
+      this.drawBreakdown(c, w, score, (row) => top(END_PANEL.breakdownFromTop + row * END_PANEL.breakdownRowGap));
+    }
     // The line under the stats: a new best, a perfect battle, what the next star needs, or a word of hope.
     const note = this.noteText();
     if (note) {
-      const y = top(won ? END_PANEL.noteFromTop : END_PANEL.lostStatsFromTop + 7.6);
+      const y = top(won ? (score ? END_PANEL.scoreNoteFromTop : END_PANEL.noteFromTop) : END_PANEL.lostStatsFromTop + 7.6);
       drawLine(c, note.text, w / 2, y, w * 0.8, 22, note.color);
       // A new best wears the crown (Kenney Board Game Icons), just left of its words.
       if (won && extras.best) {
@@ -266,6 +275,36 @@ export class EndPanel {
     if (this.againButton.group.visible) label('Play again', this.againButton, END_PANEL.sideRadius, 20, 120);
   }
 
+  /**
+   * v3 Phase 4: what earned the score, in two columns of 3 rows, a name on
+   * the left of each cell and its points on the right. Left: goblins, far
+   * out, castle. Right: combos, the biggest combo, combo points by tool.
+   */
+  private drawBreakdown(c: CanvasRenderingContext2D, w: number, s: ScoreParts, rowY: (row: number) => number): void {
+    const size = 17;
+    const cell = w * 0.41;
+    const lefts = [w * 0.06, w * 0.53];
+    const row = (column: number, index: number, name: string, points?: number): void => {
+      const x = lefts[column];
+      const y = rowY(index);
+      const pointsText = points === undefined ? '' : `+${points}`;
+      c.font = `bold ${size}px sans-serif`;
+      const pointsWidth = pointsText ? c.measureText(pointsText).width + 8 : 0;
+      drawLine(c, name, x, y, cell - pointsWidth, size, UI_COLORS.note, 'left');
+      if (pointsText) drawLine(c, pointsText, x + cell, y, pointsWidth, size, UI_COLORS.ink, 'right');
+    };
+    row(0, 0, `Goblins ×${s.goblins}`, s.defeated);
+    row(0, 1, `Far out: ${s.far} far, ${s.middle} mid`, s.distance);
+    row(0, 2, `Castle ${Math.round(s.health * 100)}%`, s.castle);
+    row(1, 0, `Combos ×${s.combos}`, s.multi);
+    row(1, 1, s.best ? `Best: ${SOURCE_NAMES[s.best.source]} ×${s.best.count}` : 'Best: none yet');
+    const byTool = s.bySource
+      .slice(0, 3)
+      .map((p) => `${SOURCE_NAMES[p.source]} +${p.points}`)
+      .join(' · ');
+    row(1, 2, byTool || `Hit ${SCORE.multiFrom} at once for a combo`);
+  }
+
   /** The line under the stats. */
   private noteText(): { text: string; color: string } | null {
     const extras = this.extras;
@@ -274,8 +313,10 @@ export class EndPanel {
     if (stars === undefined) return null;
     if (extras.best && stars > 0) return { text: stars === 3 ? 'New best! A perfect defense!' : 'New best!', color: GOLD };
     if (stars >= 3) return { text: 'A perfect defense!', color: GOLD };
-    // What the next star needs.
-    const need = stars <= 1 ? MENU.stars.twoAt : MENU.stars.threeAt;
-    return { text: `Keep ${Math.round(need * 100)}% castle health for ${stars + 1} stars`, color: UI_COLORS.note };
+    // What the next star needs (v3 Phase 4: a score).
+    const score = extras.stats?.score;
+    if (!score) return null;
+    const need = Math.ceil(score.par * (stars <= 1 ? SCORE.stars.twoAt : SCORE.stars.threeAt));
+    return { text: `Score ${need} for ${stars + 1} stars`, color: UI_COLORS.note };
   }
 }

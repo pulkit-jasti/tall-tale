@@ -19,6 +19,7 @@ import {
   KNIGHTS,
   MAPS,
   MENU,
+  SCORE,
   PAUSE,
   POINTER,
   SKY,
@@ -393,7 +394,11 @@ export class GameSystem extends createSystem({}) {
     // v3 2.1: the magnet pulls bell tower bells; the potion cart turns goblins into chickens.
     this.magnet.triggers = this.triggers;
     this.chickens = new Chickens(this.stage.boardSpin, this.audio, this.particles, createRandom(seed + 995));
-    this.triggers.onChickens = (points) => this.chickens.spawn(points);
+    this.triggers.onChickens = (points) => {
+      this.chickens.spawn(points);
+      // v3 Phase 4: goblins turned into chickens count as a trap's knockouts.
+      for (const p of points) this.battle.noteTrapped(p);
+    };
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
     // v3: the swatter pushes balloons away instead of popping them.
     this.swatter.balloons = this.balloons;
@@ -663,7 +668,10 @@ export class GameSystem extends createSystem({}) {
       this.toast.show(id);
       this.menu?.refreshTrophies();
     };
-    this.goblins.onKnockOutBy = (g, cause) => A.knockedOut(g, cause);
+    this.goblins.onKnockOutBy = (g, cause, trap) => {
+      A.knockedOut(g, cause);
+      this.battle.noteKnockOut(g, trap ? 'traps' : cause);
+    };
     // Eating heals (v3 2.5); a seasoned goblin is Acquired Taste, a chicken Change of Menu.
     this.grabEat.onEat = (goblin) => {
       this.battle.noteEaten(goblin.seasoned);
@@ -674,7 +682,10 @@ export class GameSystem extends createSystem({}) {
       this.battle.noteChickenEaten();
       A.chickenEaten();
     };
-    this.slingshot.onGoblinShot = () => A.goblinShot();
+    this.slingshot.onGoblinShot = () => {
+      A.goblinShot();
+      this.battle.noteGoblinShot();
+    };
     this.slingshot.onFireLit = () => A.fireLit();
     // Package Deal: the magnet pulls a keg to its stand by the bowl; shot, it blows up where it lands.
     this.magnet.onKegPulled = () => this.slingshot.addKeg();
@@ -821,7 +832,7 @@ export class GameSystem extends createSystem({}) {
    * its stars and opens the next level; its end panel shows the stars and a
    * Menu button.
    */
-  private battleOver(won: boolean, share: number): 'menu' | EndExtras {
+  private battleOver(won: boolean, _share: number): 'menu' | EndExtras {
     // v3 2.6: Commander and Jack of All Trades are earned on a win.
     this.achievements.endBattle(won);
     if (this.battle.teaching) {
@@ -831,8 +842,9 @@ export class GameSystem extends createSystem({}) {
       this.goToMenu('main');
       return 'menu';
     }
-    // Every win shows its stars now (2026-11-12, the revamped win panel), from the red flag's share left.
-    const stars = starsFor(share, MENU.stars.threeAt, MENU.stars.twoAt);
+    // Every win shows its stars (2026-11-12); v3 Phase 4: from the score's share of par.
+    const score = this.battle.finalScore();
+    const stars = starsFor(score.par > 0 ? score.total / score.par : 1, SCORE.stars.threeAt, SCORE.stars.twoAt);
     // A Custom Game level: its name under the title, and its best stars kept with it.
     if (this.battle.playingLevel) {
       const entry = customLevels.levels.find((l) => l.id === this.customId);

@@ -75,13 +75,14 @@ The health flag shows how much damage, not where. Direction is shown in other wa
 
 ## 4. End of battle screens (MVP)
 
-- **Win (revamped 2026-11-12, `src/ui/endPanel.ts`, `END_PANEL`):** the battle stops, confetti and fireworks, the fanfare, then a taller panel (38 x 32 cm):
+- **Win (revamped 2026-11-12, `src/ui/endPanel.ts`, `END_PANEL`):** the battle stops, confetti and fireworks, the fanfare, then a taller panel (38 x 42.4 cm since the score, v3 Phase 4):
   - A "Victory!" banner, the level's name under it ("Level 3: The Shield Wall", or the Custom Game level's name).
   - **Three real 3D stars** floating in front of the panel (`src/ui/winStars.ts`, `END_PANEL.stars`): gold for the stars won, dull stone for the ones missed, the middle one bigger and higher. They pop in one at a time, a won one spins once with a chime that climbs with each star and a burst of sparkles; then they bob and a glint runs across the gold ones. A perfect or best result gets an extra chime.
   - **Stats** with Kenney Board Game icons (`public/ui/board/`, tinted: heart, skull, hourglass): castle health left, goblins eaten, the battle's time (pauses not counted). The level's name has a Fantasy UI Borders divider on each side, and "New best!" wears a crown.
-  - **A line under them:** "New best!" (only when it beats an earlier win), "A perfect defense!", or what the next star needs ("Keep 70% castle health for 3 stars", from `MENU.stars`).
+  - **The score (v3 Phase 4, 2026-11-16):** "Score N" in gold, then a breakdown table: goblins, far out, castle health, combos, the best combo and combo points by tool (Traps count as their own source). Rules and numbers: docs/v3-plan.md ("The score as built"), `SCORE` in config, `src/rules/score.ts`.
+  - **A line under them:** "New best!" (only when it beats an earlier win), "A perfect defense!", or what the next star needs ("Score 240 for 3 stars").
   - **Buttons:** Menu (left), the big one (Next level when the next campaign level is open, else Play again), and Play again (right) beside Next. Next level starts it right away (the same map for now).
-- **Stars for every win:** from the red flag's share left (3 at 70%, 2 at 35%, else 1). Campaign levels keep their best stars (the menu card shows them); Custom Game levels keep theirs too (`best` in `tallTale.customLevels`, cleared when the level is edited); debug battles show them and save nothing.
+- **Stars for every win (v3 Phase 4):** from the score's share of par (3 at 85%, 2 at 60%, else 1; `SCORE.stars`). Before 2026-11-16 they came from the red flag's share left. Campaign levels keep their best stars (the menu card shows them); Custom Game levels keep theirs too (`best` in `tallTale.customLevels`, cleared when the level is edited); debug battles show them and save nothing. The best score itself is not saved.
 - **Lose:** "The castle has fallen", the level's name, the same stats, a word of hope, Try again (big) and Menu.
 - Debug page: "Win battle" and "Lose castle" show them at once.
 
@@ -91,10 +92,7 @@ The health flag shows how much damage, not where. Direction is shown in other wa
 
 ### Star rating
 
-- **3 stars:** health flag stays high (above the top notch).
-- **2 stars:** health flag ends between the notches.
-- **1 star:** health flag ends low but the castle survives.
-- Gives a reason to replay a level for a perfect result.
+- Built, from the score instead of the health flag (section 4 and docs/v3-plan.md "The score as built"). No notches on the pole.
 
 ### Losing should feel generous
 

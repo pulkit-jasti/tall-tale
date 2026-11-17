@@ -32,6 +32,7 @@ import { ReachCheck } from '../player/reachCheck.js';
 import { clearWave, createBattle, damageCastle, healCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
 import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { wallHitDamage } from '../rules/gear.js';
+import { BattleScore, type ScoreParts, type ScoreSource } from '../rules/score.js';
 import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
 import type { HandToolName, HandTool, ToolSpot } from '../tools/handTool.js';
@@ -233,6 +234,9 @@ export class Battle implements TutorialApi {
   private progressTimer = 0;
   private lastClosest = Infinity;
 
+  /** v3 Phase 4: the battle's score (src/rules/score.ts). */
+  readonly score = new BattleScore();
+
   // What the player did in this battle, for the lessons.
   private eatenCount = 0;
   private pepperedEatenCount = 0;
@@ -402,6 +406,7 @@ export class Battle implements TutorialApi {
     this.endTimer = -1;
     this.eatenCount = this.pepperedEatenCount = this.pickedCount = this.tossedCount = this.slingHits = this.spun = this.moved = 0;
     this.fightTime = 0;
+    this.score.reset();
     this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
@@ -691,8 +696,30 @@ export class Battle implements TutorialApi {
    */
   noteEaten(seasoned = false): void {
     this.eatenCount++;
+    this.score.eaten();
     if (seasoned) this.pepperedEatenCount++;
     this.heal(seasoned);
+  }
+
+  /** v3 Phase 4: a goblin knocked out (score: how far out, and by which tool or a trap for combos). */
+  noteKnockOut(goblin: Goblin, source: ScoreSource | null): void {
+    const p = goblin.root.position;
+    this.score.knockOut(Math.hypot(p.x, p.z), source, this.fightTime);
+  }
+
+  /** v3 Phase 4: a goblin turned into a chicken by the potions, at this board point: a trap's knockout. */
+  noteTrapped(at: Vector3): void {
+    this.score.knockOut(Math.hypot(at.x, at.z), 'traps', this.fightTime);
+  }
+
+  /** v3 Phase 4: a goblin spent as a slingshot shot counts as defeated, like one eaten. */
+  noteGoblinShot(): void {
+    this.score.eaten();
+  }
+
+  /** v3 Phase 4: the score now, with the castle's health left. */
+  finalScore(): ScoreParts {
+    return this.score.final(healthShare(this.state));
   }
 
   /** v3 2.6 Chicken dinner: an eaten chicken heals CHICKENS.healScale times a goblin. */
@@ -780,7 +807,9 @@ export class Battle implements TutorialApi {
         const won = this.state.phase === 'won';
         const next = this.onEnd(won, healthShare(this.state));
         // The stats row (2026-11-12): the castle's health left, goblins eaten, how long it took.
-        const stats = { health: healthShare(this.state), eaten: this.eatenCount, seconds: this.fightTime };
+        // v3 Phase 4: a won real battle shows its score breakdown too.
+        const score = won && !this.teach ? this.finalScore() : undefined;
+        const stats = { health: healthShare(this.state), eaten: this.eatenCount, seconds: this.fightTime, score };
         if (next !== 'menu') panel.show(won ? 'won' : 'lost', { ...next, stats });
       }
     }
@@ -1140,6 +1169,10 @@ export class Battle implements TutorialApi {
     // Balloons are taught in the slingshot wave now, so a wave's own balloons never wait for a banner.
     this.parts.spawner.balloonsHeld = false;
     this.parts.spawner.start(plan);
+    // v3 Phase 4: par comes from the goblins the waves send (balloon riders too).
+    let sent = (plan.balloons ?? 0) * BALLOONS.riders;
+    for (const n of Object.values(plan.counts)) sent += n ?? 0;
+    this.score.addPlanned(sent);
     // The army marches out toward the attacking camps, and the triggers of this wave stand ready.
     this.parts.troops.deploy(plan.camps);
     this.parts.triggers.setWave(index + 1);

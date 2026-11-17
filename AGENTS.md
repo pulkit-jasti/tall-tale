@@ -21,6 +21,7 @@ Many docs are records of older plans. Read only what the task needs, from the "C
 | Home screen, campaign panel, tool shelf and loadout, achievements shelf | docs/v3-plan.md ("2.2 as built") and the code in `src/ui/menu/` |
 | UI library rules, reach band, the board and handles, grab and eat, pause and settings, accessibility, interaction feedback | docs/controls-and-ui.md (mostly current: "bell" there means the drum) |
 | Win and lose, the red flag and the compass, end of battle screens | docs/castle-rules.md |
+| The score and the stars (rules, numbers, the win panel's breakdown) | docs/v3-plan.md ("The score as built") and `src/rules/score.ts` |
 | The tools as built (use windows, recharge, how tools hit) | docs/v3-plan.md (the "as built" sections) and `src/tools/` |
 | Goblins as built (climbing, gear, roster, the Phase 3 digger, shaman, bomber and archers) | docs/v3-plan.md (Phase 1 and "Phase 3 as built"), `src/units/goblins.ts` and `src/units/goblinKinds.ts` |
 | Blueprints, the road graph, triggers, decor (sections 1 to 7; section 8 is replaced by custom-mode.md) | docs/map.md |

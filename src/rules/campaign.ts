@@ -110,10 +110,10 @@ export function parseProgress(raw: unknown): Progress {
   return p;
 }
 
-/** Stars for a won battle from the red flag's share left (1 = full): 3 at threeAt or more, 2 at twoAt or more, else 1. */
-export function starsFor(healthShare: number, threeAt: number, twoAt: number): 1 | 2 | 3 {
-  if (healthShare >= threeAt) return 3;
-  if (healthShare >= twoAt) return 2;
+/** Stars for a won battle from the score's share of par (v3 Phase 4, 1 = par): 3 at threeAt or more, 2 at twoAt or more, else 1. */
+export function starsFor(share: number, threeAt: number, twoAt: number): 1 | 2 | 3 {
+  if (share >= threeAt) return 3;
+  if (share >= twoAt) return 2;
   return 1;
 }
 

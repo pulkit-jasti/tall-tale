@@ -1,6 +1,6 @@
 # v3 Plan: Faster, Clearer, Deeper
 
-Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. Phases 4 and 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **2.7 Night fog is built (2026-11-16, "2.7 as built").** **2.6 Secret achievements is built (2026-11-17, "2.6 as built"): all 16 achievements, the 8 secret abilities, the shelf and the toast.** **The game runs again** (2026-11-17): three bugs froze it at start (a black board, no castle, nothing moving) and three more hid in the tools; all found by running it in the IWSDK emulator and with the type check, all fixed (see "2.6 as built", "Fixed on the way"). **Phase 2 is fully built; 2.0, 2.4 and 2.5 are tested, the rest is not.** **Phase 3 is done (2026-11-17): the digger, shaman, bomber and goblin archers, each with its own look** (see "Phase 3 as built"; type check and build pass, not tested on the headset; the brute and the catapult crew stay on hold). **Next: the developer tests Phase 2 and Phase 3 on the headset.** Every step: after each major change `npm run typecheck` (no new errors) and `npm run build` (no errors), not after minor ones, no tests (decided 2026-11-17); update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
+Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. Phases 4 and 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **2.7 Night fog is built (2026-11-16, "2.7 as built").** **2.6 Secret achievements is built (2026-11-17, "2.6 as built"): all 16 achievements, the 8 secret abilities, the shelf and the toast.** **The game runs again** (2026-11-17): three bugs froze it at start (a black board, no castle, nothing moving) and three more hid in the tools; all found by running it in the IWSDK emulator and with the type check, all fixed (see "2.6 as built", "Fixed on the way"). **Phase 2 is fully built; 2.0, 2.4 and 2.5 are tested, the rest is not.** **Phase 3 is done (2026-11-17): the digger, shaman, bomber and goblin archers, each with its own look** (see "Phase 3 as built"; type check and build pass, not tested on the headset; the brute and the catapult crew stay on hold). **Phase 4's score and stars are built (2026-11-16, "The score as built"); chains are on hold.** **Next: the developer tests Phases 2, 3 and the score on the headset.** Every step: after each major change `npm run typecheck` (no new errors) and `npm run build` (no errors), not after minor ones, no tests (decided 2026-11-17); update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
 
 Where this file disagrees with [v2-plan.md](v2-plan.md), [custom-mode.md](custom-mode.md), [giant-tools.md](giant-tools.md), [enemies.md](enemies.md) or [modes-and-progression.md](modes-and-progression.md), **this file wins**.
 
@@ -759,9 +759,11 @@ Earlier designs dropped: phases that each need certain tools (a missing tool cou
 
 ---
 
-## Phase 4: chains and score (direction only, not final)
+## Phase 4: chains and score [DONE: the score and stars; chains on hold]
 
-Decided later, once the Phase 2 objects work on their own. What is agreed so far:
+**Chains are on hold** (the developer, 2026-11-16): too much logic and testing. Kept as a record below. The score and the stars are built ("The score as built").
+
+What was agreed for chains:
 
 - **Chains:** an object's result sets off a nearby object (a keg blast drops a bridge, a falling tree sets off a keg). The inputs and outputs are already in each registry entry (Phase 2); Phase 4 passes them on, through a neighbor list made once at load time.
 - **Short and local:** 2 to 4 links per group of objects, never 100; groups far enough apart that one cannot set off another; the generator checks it.
@@ -787,6 +789,22 @@ One score number per battle; the stars come from which of 3 ranges it falls in. 
 - **The win screen shows the breakdown** (each part and its points), so players learn what earns points and drift toward the intended play.
 - **No live score in battle** for now; floating "+15" numbers may come later as juice.
 - Numbers live in config, so tuning needs no code.
+
+### The score as built (2026-11-16) [DONE]
+
+**Not built, on purpose:** a live score in battle (floating "+15" may come later as juice), saving the best score (only the best stars are saved), a score on the loss panel or in the tutorial.
+
+Type check and build pass. Not tested on the headset. Not committed. Numbers in `SCORE` (`src/config/game.ts`), rules in `src/rules/score.ts` (`BattleScore`), owned by the battle (`battle.score`).
+
+- **Defeated, 10 each:** every knockout (`Goblins.onKnockOutBy`), every goblin eaten, and a goblin spent as a slingshot shot.
+- **Distance:** the knockout's distance from the castle's middle: far from 200 cm (+10), middle from 100 cm (+5), nearer or eaten 0.
+- **Combos (multi-kill):** knockouts by the same source within 0.3 s of the first count as one action; the 3rd and each after it +5. A source is a player tool or **Traps** (kegs, boulders, trees, bridges, the potions and bomber blasts, whoever set them off: `Goblins.trapHit`, set by `Triggers`). Goblins the potions turn into chickens count as trap knockouts. Soldiers, garrison and falls never count. The horn's knights count as "Knights".
+- **Castle:** half of par times the share of health left.
+- **Par:** the goblins the waves send (from each wave's plan at its start, balloon riders too) x 10 x 2. A battle started at a later wave ("Start at wave N") only counts the waves played.
+- **Stars:** any win 1, 2 at 60% of par, 3 at 85% (`SCORE.stars`). Replaces the red flag's share (the old `MENU.stars`). Campaign and Custom Game keep their best stars as before.
+- **Win panel:** "Score N" in gold under the stats, then a breakdown table (2 columns, 3 rows, a name on the left of each cell and its points on the right): left "Goblins ×34 +340", "Far out: 6 far, 5 mid +85", "Castle 75% +150"; right "Combos ×4 +30", "Best: Swatter ×5", and the combo points by source (top 3, "Swatter +20 · Traps +10", or a tip when there were none). Then the note ("Score N for 3 stars", or New best). The win panel is 10.4 cm taller (`END_PANEL.winHeight` 42.4). The loss panel and the tutorial show no score.
+
+**Headset check:** win a level (or "Skip tutorial" and win): the score and the table read clearly from the seat and fit the panel (the panel is taller: not too high or low, the buttons still in reach); swat a crowd, and blow a keg into a group: Combos, Best and the by-source row (Swatter, Traps) go up, and Far out for far kills; the stars match the score (3 stars needs a mostly full castle plus far kills).
 
 ---
 
@@ -914,5 +932,5 @@ On hold until the new tools and enemies exist, since how difficulty rises and wh
 - The Phase 3 goblins' start numbers (`DIGGER`, `SHAMAN`, `BOMBER`, `GOBLIN_ARCHERS`): the digger's speed and mound time, the shaman's stop and cast time, the bomber's fuse and wall damage, the archers' stop and hit chance; and how the props sit on each goblin.
 - The snap step (30 degrees to start, 1.7).
 - Which tutorial steps go (1.9).
-- The chain rules, the score values and the star thresholds (Phase 4).
+- The score values and the star thresholds (`SCORE`, Phase 4; tune on the headset). Chains are on hold.
 - Which campaign level introduces each new enemy and tool.
