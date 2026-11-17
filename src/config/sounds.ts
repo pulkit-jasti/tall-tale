@@ -16,6 +16,8 @@ export interface SoundDef {
    * happens (no restart, no second copy), and no other sound takes its voice.
    */
   once?: boolean;
+  /** Fades out over this many seconds at its end (replaces SOUND_MIX.fadeOut for this sound). */
+  fadeSeconds?: number;
 }
 
 export const SOUNDS = {
@@ -48,6 +50,9 @@ export const SOUNDS = {
   lessonDone: { files: ['interface/confirmation_002.ogg'], volume: 0.7, positional: false },
   toolPoof: { files: ['interface/maximize_008.ogg'], volume: 0.7, positional: true },
   toolReturn: { files: ['interface/minimize_008.ogg'], volume: 0.7, positional: true },
+  /** A tool's recharge is done (2026-11-17): the chime with a bright glass ping, from the tool. */
+  toolReady: { files: ['chime.mp3'], volume: 0.75, positional: true },
+  toolReadyPing: { files: ['interface/glass_002.ogg'], volume: 0.5, positional: true },
   foodAdded: { files: ['interface/confirmation_001.ogg', 'interface/confirmation_002.ogg'], volume: 0.5, positional: true },
   swatWhoosh: { files: ['rpg/knifeSlice.ogg', 'rpg/drawKnife1.ogg', 'rpg/drawKnife2.ogg'], volume: 0.6, positional: true },
   swatSplat: {
@@ -61,13 +66,51 @@ export const SOUNDS = {
    * 10 s ring plays, once: shaking on while it rings adds nothing (was cut
    * at 4 s and rung again on every stroke).
    */
+  // No tool rings it since the drum replaced the hand bell (v3 2.2); kept for the bell tower (2.1).
   bell: { files: ['144497__wuola__medieval-bell-a3.wav'], volume: 0.8, positional: true, once: true },
+  /**
+   * The drum (v3 2.2): a deep boom with a crash on top, clearly not the
+   * camps' war drums. Kenney stand-ins until the developer picks the files.
+   */
+  drumBoom: { files: ['impact/impactSoft_heavy_000.ogg', 'impact/impactSoft_heavy_001.ogg', 'impact/impactSoft_heavy_002.ogg'], volume: 1, positional: true },
+  /** The pepper ring (v3 2.2): a ding when a segment fills, a sizzle when one runs out (missing: the chime until a sizzle is found). */
+  pepperRingFull: { files: ['interface/confirmation_001.ogg'], volume: 0.5, positional: true },
+  pepperRingGone: { files: [CHIME], volume: 0.4, positional: true },
+  /** v3 2.2 new tools: Kenney stand-ins until the developer picks the files (the hum and sizzle use the chime, missing). */
+  magnetClank: { files: ['impact/impactMetal_medium_000.ogg', 'impact/impactTin_medium_000.ogg'], volume: 0.8, positional: true },
+  magnetHum: { files: [CHIME], volume: 0.15, positional: true },
+  sugarLand: { files: ['impact/impactSoft_medium_000.ogg', 'impact/impactSoft_medium_001.ogg'], volume: 0.6, positional: true },
+  glassHum: { files: [CHIME], volume: 0.12, positional: true },
+  glassSizzle: { files: [CHIME], volume: 0.2, positional: true },
+  plantPop: { files: ['372182__supersound23__pop.mp3'], volume: 0.6, positional: true },
+  seedSpit: { files: ['interface/pluck_001.ogg', 'interface/pluck_002.ogg'], volume: 0.5, positional: true },
+  mushroomPuff: { files: ['impact/impactSoft_medium_002.ogg'], volume: 0.6, positional: true },
+  /** v3 2.1 traps: the chime until real files are found (the bell tower uses the old hand bell, `bell`). */
+  hayBurn: { files: [CHIME], volume: 0.4, positional: true },
+  potionFizz: { files: [CHIME], volume: 0.5, positional: true },
+  bridgeSplash: { files: ['impact/impactSoft_heavy_001.ogg'], volume: 0.7, positional: true },
+  chickenCluck: { files: [CHIME], volume: 0.25, positional: true },
+  drumCrash: { files: ['impact/impactBell_heavy_000.ogg', 'impact/impactBell_heavy_001.ogg'], volume: 0.6, positional: true },
   stunned: { files: ['interface/glass_001.ogg', 'interface/glass_002.ogg'], volume: 0.7, positional: false },
   swordClash: {
     files: ['impact/impactMetal_light_000.ogg', 'impact/impactMetal_light_001.ogg', 'impact/impactMetal_medium_000.ogg'],
     volume: 0.35,
     positional: true,
   },
+  /** v3 (docs/v3-plan.md 1.4): the swatter bounces off a helmet or shield. */
+  swatClonk: { files: ['impact/impactTin_medium_000.ogg', 'rpg/metalPot1.ogg'], volume: 0.9, positional: true },
+  /** v3 (docs/v3-plan.md 2.5): eating heals the castle (the red flag rises a notch). */
+  castleHeal: { files: ['interface/confirmation_001.ogg', 'interface/confirmation_002.ogg'], volume: 0.5, positional: true },
+  /**
+   * v3 2.5: the horn's aim settles on a kind (from the spot): a call (a rising
+   * hint), a boost (a deep tap) or a move (light and airy). Kenney sounds
+   * standing in until the developer picks the horn hint, drum roll and whistle.
+   */
+  hornHintCall: { files: ['interface/maximize_008.ogg'], volume: 0.45, positional: true },
+  hornHintBoost: { files: ['impact/impactSoft_heavy_000.ogg', 'impact/impactSoft_heavy_001.ogg'], volume: 0.6, positional: true },
+  hornHintMove: { files: ['interface/glass_001.ogg', 'interface/glass_002.ogg'], volume: 0.5, positional: true },
+  /** v3 (docs/v3-plan.md 1.7): the compass crank, every notch of turn. */
+  crankClick: { files: ['interface/click_001.ogg', 'interface/click_002.ogg'], volume: 0.45, positional: false },
   debris: {
     files: ['impact/impactPlank_medium_000.ogg', 'impact/impactWood_heavy_000.ogg', 'impact/impactWood_heavy_001.ogg'],
     volume: 0.8,
@@ -83,7 +126,9 @@ export const SOUNDS = {
   win: { files: ['voice/you_win.ogg', 'voice/winner.ogg'], volume: 0.8, positional: false },
   lose: { files: ['voice/you_lose.ogg', 'voice/game_over.ogg'], volume: 0.8, positional: false },
   // From Freesound (public/audio/README.md).
-  gulp: { files: ['646981__huw2k8__monster-eating-a-goblin.wav'], volume: 0.6, positional: false },
+  // 2026-11-17: it ended abruptly (cut by the next eat, or at its own end). Now it plays once to its end
+  // (a meal while it plays keeps the chomp only), cut at 4 s, and fades to nothing over its last 2.5 s.
+  gulp: { files: ['646981__huw2k8__monster-eating-a-goblin.wav'], volume: 0.6, positional: false, maxSeconds: 4, fadeSeconds: 2.5, once: true },
   squeal: { files: ['442817__qubodup__goblin-growl.wav'], volume: 0.6, positional: true },
   /** The goblin voice (not played yet: later the climber giggle). */
   goblinCackle: { files: ['202096__spookymodem__goblin-cackle.wav'], volume: 1, positional: true },
@@ -98,7 +143,18 @@ export const SOUNDS = {
   balloonPop: { files: ['372182__supersound23__pop.mp3'], volume: 0.7, positional: true },
   waveHorn: { files: ['539956__adharca__war-horn.wav'], volume: 0.5, positional: false },
   winFanfare: { files: ['99961__cgeffex__medieval-fanfare_neonaeon_tweaked-by-cgeffex.wav'], volume: 0.6, positional: false },
+  // v3 Phase 3: the new goblins (Kenney stand-ins until real files are picked).
+  /** A digger breaks out of the ground. */
+  diggerSurface: { files: ['impact/impactMining_000.ogg', 'impact/impactMining_001.ogg', 'impact/impactMining_002.ogg'], volume: 0.9, positional: true },
+  /** The dirt mound racing toward the wall (soft, repeated). */
+  diggerDig: { files: ['impact/impactMining_000.ogg', 'impact/impactMining_002.ogg'], volume: 0.35, positional: true },
+  /** A bomber's fuse is lit at the wall (a hiss: a knife draw stands in). */
+  bomberFuse: { files: ['rpg/drawKnife1.ogg', 'rpg/drawKnife2.ogg'], volume: 0.8, positional: true },
+  /** A goblin archer looses an arrow. */
+  goblinBowShot: { files: ['interface/pluck_001.ogg', 'interface/pluck_002.ogg'], volume: 0.5, positional: true },
   // Still missing (placeholder chime).
+  /** The shaman puts gear back on a goblin. */
+  shamanCast: { files: [CHIME], volume: 0.55, positional: true },
   cheer: { files: [CHIME], volume: 0.5, positional: false },
   kegBoom: { files: [CHIME], volume: 0.7, positional: true },
   /** A group of goblins walks right past a trigger: "now!" (from its direction). */
@@ -134,11 +190,35 @@ const GROUPS: Record<Exclude<SoundCategory, 'music'>, SoundName[]> = {
     'pebbleHit',
     'toolPoof',
     'toolReturn',
+    'toolReady',
+    'toolReadyPing',
     'foodAdded',
+    'castleHeal',
+    'hornHintCall',
+    'hornHintBoost',
+    'hornHintMove',
     'swatWhoosh',
     'swatSplat',
+    'swatClonk',
+    'crankClick',
     'pepperShake',
     'bell',
+    'drumBoom',
+    'drumCrash',
+    'pepperRingFull',
+    'pepperRingGone',
+    'magnetClank',
+    'magnetHum',
+    'sugarLand',
+    'glassHum',
+    'glassSizzle',
+    'plantPop',
+    'seedSpit',
+    'mushroomPuff',
+    'hayBurn',
+    'potionFizz',
+    'bridgeSplash',
+    'chickenCluck',
     'balloonPop',
     'stunned',
   ],
@@ -171,7 +251,9 @@ export interface MusicTrack {
 export const MUSIC = {
   enabled: true,
   fade: 1.5,
-  menu: { file: '812170__giangallegos__ambient-music.mp3', volume: 0.35 } as MusicTrack,
+  // 2026-11-17: the fantasy village ambience on the home screen, the end panels and while paused; the music
+  // stays in battle only. An AAC copy of the 20 MB wav (1.3 MB, the full 116 s, made with macOS afconvert at 96 kbps).
+  menu: { file: '875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.m4a', volume: 0.45 } as MusicTrack,
   // The file's name says it loops at 32 s: the 4.7 s after that is its tail.
   battle: {
     file: '649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac',

@@ -3,15 +3,19 @@
 // unlocked, and the loadout (the slingshot and the horn fixed, 2 picked).
 // Plain data in, plain data out, no storage and no Three.js here: the save
 // lives in src/player/progress.ts.
+import { ACHIEVEMENT_IDS, type AchievementId } from '../config/achievements.js';
 import { LEVELS, OPEN_FROM_START, TUTORIAL_ENEMIES, type EnemyIcon } from '../config/levels.js';
 
 /** The tools the player picks for the 2 free loadout slots (new tools join this list). */
-export type PickTool = 'swatter' | 'pepper' | 'bell';
-export const PICK_TOOLS: PickTool[] = ['swatter', 'pepper', 'bell'];
-/** Unlocked from the start: the tools the tutorial teaches (the bell left it, docs/v2-plan.md 2.4). */
-export const STARTING_TOOLS: PickTool[] = ['swatter', 'pepper'];
+/** v3 2.2: every tool is a pick now (4 free slots; the slingshot and the horn are no longer fixed). */
+export type PickTool = 'slingshot' | 'horn' | 'swatter' | 'pepper' | 'drum' | 'magnet' | 'glass' | 'sugar';
+export const PICK_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper', 'drum', 'magnet', 'glass', 'sugar'];
+/** Unlocked from the start: the tools the tutorial teaches. The others are campaign rewards (src/config/levels.ts: magnet, glass, drum, sugar) or "Unlock all tools". */
+export const STARTING_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper'];
 
-export type Loadout = [PickTool | null, PickTool | null];
+/** The number of loadout slots (v3 2.2). */
+export const LOADOUT_SLOTS = 4;
+export type Loadout = (PickTool | null)[];
 /** Spots on the tool shelf: one per pick tool, so every tool always has room. */
 export const SHELF_SPOTS = PICK_TOOLS.length;
 /** A place a pick tool can stand: one of the stand's 2 free slots, or a shelf spot. */
@@ -35,10 +39,16 @@ export interface Progress {
   shelf: (PickTool | null)[];
   /** Enemy kinds already met (a card tags the others "New!"). */
   met: EnemyIcon[];
-  /** The settings' "Unlock all tools" switch, for judges: tools only, never levels. */
+  /** The settings' "Unlock all tools" switch, for judges: tools only, never levels. On by default since 2026-11-17. */
   unlockAll: boolean;
+  /** 2 once the switch's default became on: a save without it read the old default (off), so its value is ignored. */
+  unlockV: number;
   /** Tools grabbed once on the shelf (a newly unlocked tool glows until then). */
   toolsSeen: PickTool[];
+  /** v3 2.6: the achievements earned (secret abilities and regular ones). */
+  trophies: AchievementId[];
+  /** Endless mode's best run (the highest score, and the waves it survived), or null before the first run. */
+  endlessBest: { score: number; waves: number } | null;
 }
 
 /** True for an unlocked tool that was never grabbed on the shelf (it glows). */
@@ -53,15 +63,28 @@ export function createProgress(): Progress {
     stars: {},
     open: LEVELS.filter((l) => l.number <= OPEN_FROM_START).map((l) => l.number),
     tools: [],
-    // Both pick slots start empty: the player puts the tools on the stand (the developer's choice after the first look).
-    loadout: [null, null],
+    // v3 2.2: new players start with the slingshot and the horn in two slots; the other two start empty.
+    loadout: ['slingshot', 'horn', null, null],
     shelf: [...PICK_TOOLS],
     met: [],
-    unlockAll: false,
+    // Every tool open from the start (the developer, 2026-11-17: judges should try them all).
+    unlockAll: true,
+    unlockV: 2,
     toolsSeen: [],
+    trophies: [],
+    endlessBest: null,
   };
 }
 
+/** An Endless run ended: kept when its score beats the best. Returns true for a new best. */
+export function recordEndless(p: Progress, score: number, waves: number): boolean {
+  if (p.endlessBest && p.endlessBest.score >= score) return false;
+  p.endlessBest = { score, waves };
+  return true;
+}
+
+/** v3 2.2: the drum replaced the bell, so an old save's 'bell' reads as 'drum'. */
+const renamed = (v: unknown): unknown => (v === 'bell' ? 'drum' : v);
 const isPick = (v: unknown): v is PickTool => typeof v === 'string' && (PICK_TOOLS as string[]).includes(v);
 
 /**
@@ -74,7 +97,8 @@ export function parseProgress(raw: unknown): Progress {
   if (!raw || typeof raw !== 'object') return p;
   const r = raw as Record<string, unknown>;
   if (typeof r.tutorialDone === 'boolean') p.tutorialDone = r.tutorialDone;
-  if (typeof r.unlockAll === 'boolean') p.unlockAll = r.unlockAll;
+  // Only a save made since the default became on keeps its switch (an older "off" was just the old default).
+  if (typeof r.unlockAll === 'boolean' && r.unlockV === 2) p.unlockAll = r.unlockAll;
   if (r.stars && typeof r.stars === 'object') {
     for (const [key, value] of Object.entries(r.stars as Record<string, unknown>)) {
       const n = Number(key);
@@ -82,23 +106,31 @@ export function parseProgress(raw: unknown): Progress {
     }
   }
   if (Array.isArray(r.open)) for (const n of r.open) if (typeof n === 'number' && LEVELS.some((l) => l.number === n) && !p.open.includes(n)) p.open.push(n);
-  if (Array.isArray(r.tools)) p.tools = PICK_TOOLS.filter((t) => (r.tools as unknown[]).includes(t));
-  if (Array.isArray(r.toolsSeen)) p.toolsSeen = PICK_TOOLS.filter((t) => (r.toolsSeen as unknown[]).includes(t));
+  if (Array.isArray(r.tools)) p.tools = PICK_TOOLS.filter((t) => (r.tools as unknown[]).map(renamed).includes(t));
+  if (Array.isArray(r.toolsSeen)) p.toolsSeen = PICK_TOOLS.filter((t) => (r.toolsSeen as unknown[]).map(renamed).includes(t));
+  if (Array.isArray(r.trophies)) p.trophies = ACHIEVEMENT_IDS.filter((id) => (r.trophies as unknown[]).includes(id));
+  const best = r.endlessBest as { score?: unknown; waves?: unknown } | null | undefined;
+  if (best && typeof best.score === 'number' && typeof best.waves === 'number' && best.score >= 0) p.endlessBest = { score: Math.round(best.score), waves: Math.round(best.waves) };
   if (Array.isArray(r.met)) p.met = TUTORIAL_ENEMIES.filter((e) => (r.met as unknown[]).includes(e));
-  if (Array.isArray(r.loadout) && r.loadout.length === 2) {
-    const [a, b] = r.loadout as unknown[];
-    p.loadout = [isPick(a) ? a : null, isPick(b) && b !== a ? b : null];
+  if (Array.isArray(r.loadout)) {
+    // A save from before v3 2.2 had 2 picks with the slingshot and the horn fixed: they go in front of them.
+    const raw = (r.loadout as unknown[]).map(renamed);
+    const list = raw.length === 2 ? ['slingshot', 'horn', ...raw] : raw;
+    p.loadout = Array.from({ length: LOADOUT_SLOTS }, (_, i) => {
+      const t = list[i];
+      return isPick(t) && list.indexOf(t) === i ? t : null;
+    });
   }
-  if (Array.isArray(r.shelf)) p.shelf = (r.shelf as unknown[]).slice(0, SHELF_SPOTS).map((t) => (isPick(t) ? t : null));
+  if (Array.isArray(r.shelf)) p.shelf = (r.shelf as unknown[]).slice(0, SHELF_SPOTS).map(renamed).map((t) => (isPick(t) ? t : null));
   p.open.sort((a, b) => a - b);
   fixPlaces(p);
   return p;
 }
 
-/** Stars for a won battle from the red flag's share left (1 = full): 3 at threeAt or more, 2 at twoAt or more, else 1. */
-export function starsFor(healthShare: number, threeAt: number, twoAt: number): 1 | 2 | 3 {
-  if (healthShare >= threeAt) return 3;
-  if (healthShare >= twoAt) return 2;
+/** Stars for a won battle from the score's share of par (v3 Phase 4, 1 = par): 3 at threeAt or more, 2 at twoAt or more, else 1. */
+export function starsFor(share: number, threeAt: number, twoAt: number): 1 | 2 | 3 {
+  if (share >= threeAt) return 3;
+  if (share >= twoAt) return 2;
   return 1;
 }
 
@@ -142,17 +174,17 @@ export function unlockedTools(p: Progress): PickTool[] {
 /** A loadout made valid: no locked tool and no tool twice. Empty slots stay empty (the player fills them). */
 export function fixLoadout(p: Progress): Loadout {
   const open = unlockedTools(p);
-  const out: Loadout = [null, null];
-  for (let i = 0; i < 2; i++) {
+  const out: Loadout = Array.from({ length: LOADOUT_SLOTS }, () => null);
+  for (let i = 0; i < LOADOUT_SLOTS; i++) {
     const t = p.loadout[i];
     if (t && open.includes(t) && !out.includes(t)) out[i] = t;
   }
   return out;
 }
 
-/** True when both pick slots hold a tool (Fight stays locked until then). */
+/** True when every slot holds a tool, or every unlocked tool is on the stand (Fight stays locked until then). */
 export function loadoutFull(p: Progress): boolean {
-  return !p.loadout.includes(null);
+  return !p.loadout.includes(null) || unlockedTools(p).every((t) => p.loadout.includes(t));
 }
 
 /**
@@ -219,7 +251,7 @@ export function moveTool(p: Progress, tool: PickTool, place: Place): boolean {
   return true;
 }
 
-/** The battle's 4 tools from the loadout: the 2 picks (null slots left out), then the slingshot and the horn. */
-export function battleTools(loadout: Loadout): (PickTool | 'slingshot' | 'horn')[] {
-  return [...loadout.filter((t): t is PickTool => t !== null), 'slingshot', 'horn'];
+/** The battle's tools from the loadout, in slot order (empty slots left out). */
+export function battleTools(loadout: Loadout): PickTool[] {
+  return loadout.filter((t): t is PickTool => t !== null);
 }

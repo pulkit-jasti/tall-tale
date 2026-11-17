@@ -11,8 +11,10 @@
 // planned from this map by the planners that already exist
 // (src/world/settlements.ts, storySpots.ts, triggers.ts, terrain.ts), when
 // the map is loaded. Every random pick goes through the one seeded random.
-import { LEVEL_GEN, BALLOONS } from '../config/game.js';
-import { DIFFICULTY, SEED, type LevelSettings } from '../config/levelSettings.js';
+import { LEVEL_GEN, BALLOONS, TIMES_OF_DAY, type TimeOfDay } from '../config/game.js';
+import { DIFFICULTY, SEED, TIME_SETTINGS, TOOL_SETTINGS, type LevelSettings } from '../config/levelSettings.js';
+import type { PickTool } from '../rules/campaign.js';
+import { timeOfWave } from '../rules/dayNight.js';
 import { TRIGGER_KINDS, TRIGGER_LIST, type TriggerKind } from '../config/registries.js';
 import { degToRad } from '../rules/boardMath.js';
 import type { Blueprint, BlueprintNode, BlueprintRoad, BlueprintTrigger, Polar } from '../rules/blueprint.js';
@@ -52,28 +54,78 @@ export class LevelGenError extends Error {
 export const wrapSeed = (seed: number): number => (((Math.round(seed) % (SEED.max + 1)) + SEED.max + 1) % (SEED.max + 1));
 
 /**
+ * What a campaign preset may set exactly, past the settings (the Custom Game
+ * menu never sets these): which wave each camp rises in, and each wave's
+ * time of day.
+ */
+export interface LevelOverrides {
+  /** The wave each camp rises in (1 based, camp 1 first). Missing: from the camp count and difficulty. */
+  campWaves?: number[];
+  /** Each wave's time of day. Missing: spread over the allowed times (waveTimes). */
+  times?: TimeOfDay[];
+  /** The campaign level number, saved in the meta. */
+  level?: number;
+}
+
+/**
  * Makes a level. Throws LevelGenError when no seed from `seed` on passes the
  * checks (settings that cannot work, for example too many camps one side).
  */
-export function generateLevel(seed: number, settings: LevelSettings, name = 'custom'): Generated {
+export function generateLevel(seed: number, settings: LevelSettings, name = 'custom', overrides: LevelOverrides = {}): Generated {
   const asked = wrapSeed(seed);
   let problems: string[] = [];
   for (let t = 0; t < G.tries; t++) {
     const used = wrapSeed(asked + t);
     const rng = createRandom(used * 2654435761 + 97);
-    const { map, stats } = layout(rng, settings, name, used);
-    const waves = planWaves(rng, settings, map);
+    const { map, stats } = layout(rng, settings, name, used, overrides.campWaves);
+    const waves = planWaves(rng, settings, map, overrides.times);
     const level: Level = {
       format: LEVEL_FORMAT,
       map,
       waves,
       rules: planRules(settings),
-      meta: { seed: used, askedSeed: asked, settings: structuredClone(settings), generator: G.version, skulls: DIFFICULTY[settings.difficulty].skulls },
+      meta: {
+        seed: used,
+        askedSeed: asked,
+        settings: structuredClone(settings),
+        generator: G.version,
+        skulls: DIFFICULTY[settings.difficulty].skulls,
+        ...(overrides.level ? { level: overrides.level } : {}),
+      },
     };
     problems = checkLevel(level, settings);
     if (problems.length === 0) return { level, stats, tries: t + 1 };
   }
   throw new LevelGenError(`no level passed the checks in ${G.tries} seeds from ${asked}`, problems);
+}
+
+/** The allowed times of day, in order (all four when none is on, so a level always has one). */
+export function allowedTimes(s: LevelSettings): TimeOfDay[] {
+  const on = TIME_SETTINGS.filter((k) => s[k]);
+  return on.length > 0 ? [...on] : [...TIMES_OF_DAY];
+}
+
+/**
+ * Each wave's time of day, from the allowed times (docs/custom-mode.md
+ * "Allowed lists"): the last wave gets the last allowed time; every other
+ * wave keeps its usual time (timeOfWave) if allowed, else the nearest
+ * allowed one before it, else the first allowed. All four allowed: the usual
+ * spread. Day and night only: waves 1 to 3 by day, the last at night.
+ */
+export function waveTimes(s: LevelSettings, count: number): TimeOfDay[] {
+  const allowed = allowedTimes(s);
+  return Array.from({ length: count }, (_, i) => {
+    if (i === count - 1) return allowed[allowed.length - 1];
+    const usual = TIMES_OF_DAY.indexOf(timeOfWave(i, count));
+    const before = allowed.filter((t) => TIMES_OF_DAY.indexOf(t) <= usual);
+    return before.length > 0 ? before[before.length - 1] : allowed[0];
+  });
+}
+
+/** The tools the loadout may take (all when none is on, so a level always has one). */
+export function allowedTools(s: LevelSettings): PickTool[] {
+  const on = (Object.keys(TOOL_SETTINGS) as PickTool[]).filter((t) => s[TOOL_SETTINGS[t]]);
+  return on.length > 0 ? on : (Object.keys(TOOL_SETTINGS) as PickTool[]);
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +138,7 @@ interface Junction {
   inner: string;
 }
 
-function layout(rng: Random, s: LevelSettings, name: string, seed: number): { map: Blueprint; stats: LayoutStats } {
+function layout(rng: Random, s: LevelSettings, name: string, seed: number, campWaves?: number[]): { map: Blueprint; stats: LayoutStats } {
   const nodes: BlueprintNode[] = [];
   const roads: BlueprintRoad[] = [];
   const stats: LayoutStats = { outer: 0, inner: 0, forks: 0, loops: 0, crossings: 0 };
@@ -203,15 +255,23 @@ function layout(rng: Random, s: LevelSettings, name: string, seed: number): { ma
     });
   }
 
-  // Rising camps: some are there from the start, the rest rise as waves 2 to 4 start.
+  // Rising camps: some are there from the start, the rest rise as the later waves start (a preset may say exactly).
   const start = Math.max(1, Math.round(camps.length * G.startCamps[s.difficulty]));
   const rest = camps.length - start;
   camps.forEach((camp, i) => {
     const node = nodes.find((n) => n.id === camp.id)!;
-    node.wave = i < start ? 1 : Math.min(G.waves, 2 + Math.floor(((i - start) * (G.waves - 1)) / Math.max(1, rest)));
+    const asked = campWaves?.[i];
+    node.wave =
+      asked !== undefined
+        ? Math.max(1, Math.min(s.waves, Math.round(asked)))
+        : i < start
+          ? 1
+          : Math.min(s.waves, 2 + Math.floor(((i - start) * (s.waves - 1)) / Math.max(1, rest)));
   });
 
-  const map: Blueprint = { name, seed, nodes, roads, gate: { at: G.gate }, triggers };
+  // v3 2.1 and 2.2: how many of the new traps and seed beds the board builder adds.
+  const extras = { hay: s.hay, bellTower: s.bellTowers, bridge: s.bridges, cartSpots: s.potionCart ? G.cartSpots : 0, beds: s.seedBeds };
+  const map: Blueprint = { name, seed, nodes, roads, gate: { at: G.gate }, triggers, extras };
   return { map, stats };
 }
 
@@ -345,14 +405,15 @@ function shuffle<T>(rng: Random, items: T[]): T[] {
 /** Most goblins one wave may send, so its estimate on the board at once stays in the unit budget. */
 export const maxWaveGoblins = (balloons: number): number => Math.floor((G.unitBudget - balloons * BALLOONS.riders) / G.atOnceShare);
 
-function planWaves(rng: Random, s: LevelSettings, map: Blueprint): LevelWave[] {
+function planWaves(rng: Random, s: LevelSettings, map: Blueprint, times?: TimeOfDay[]): LevelWave[] {
   const D = DIFFICULTY[s.difficulty];
   const camps = map.nodes.filter((n) => n.kind === 'camp');
   // Spears and swords share the grunts' hands: scaled down together if they ask for more than all of them.
   const hands = Math.max(1, s.spears + s.swords);
   const gear = { spearShare: s.spears / hands, swordShare: s.swords / hands, helmetShare: s.helmets, shieldShare: s.shields };
+  const spread = waveTimes(s, s.waves);
   const waves: LevelWave[] = [];
-  for (let w = 1; w <= G.waves; w++) {
+  for (let w = 1; w <= s.waves; w++) {
     const up = camps.filter((c) => (c.wave ?? 1) <= w).map((c) => c.id);
     const rising = w === 1 ? [] : camps.filter((c) => c.wave === w).map((c) => c.id);
     // A camp that just rose always sends; the others in a seeded order, up to campsAtOnce.
@@ -361,27 +422,54 @@ function planWaves(rng: Random, s: LevelSettings, map: Blueprint): LevelWave[] {
       up.filter((id) => !rising.includes(id)),
     );
     const sending = [...rising, ...others].slice(0, Math.max(rising.length, Math.min(s.campsAtOnce, up.length)));
-    const balloons = w === 1 ? 0 : s.balloons;
+    // Wave 1 gets half (rounded down): a level of 1 balloon still keeps wave 1 plain, a balloon level (Sky
+    // Pirates) has them from the start (2026-11-17: its first wave had none at all).
+    const balloons = w === 1 ? Math.floor(s.balloons / 2) : s.balloons;
     const total = Math.min(maxWaveGoblins(balloons), Math.round(s.goblins * Math.pow(1 + s.growth, w - 1) * D.goblins));
     const runner = Math.round(total * s.runners);
+    // v3 Phase 3: the new goblins from wave 2 (wave 1 stays the plain walls), on top of the total.
+    const extra = w === 1 ? 0 : 1;
     waves.push({
       camps: sending,
       rising,
-      counts: { grunt: total - runner, runner },
+      counts: {
+        grunt: total - runner,
+        runner,
+        digger: s.diggers * extra,
+        shaman: s.shamans * extra,
+        bomber: s.bombers * extra,
+        archer: s.goblinArchers * extra,
+      },
       spawnTime: Math.round(s.waveLength * D.waveLength),
       balloons,
       gear,
+      time: times?.[w - 1] ?? spread[w - 1],
     });
   }
   return waves;
 }
 
 function planRules(s: LevelSettings): LevelRules {
-  return { archers: s.archers, guards: s.guards, refillEvery: s.refill, guardRefillEvery: s.refill * 2, startHealth: s.castleHealth };
+  return { archers: s.archers, guards: s.guards, refillEvery: s.refill, guardRefillEvery: s.refill * 2, startHealth: s.castleHealth, tools: allowedTools(s) };
 }
 
 // ---------------------------------------------------------------------------
 // The summary (printed by the command line, a debug note in the game)
+
+/** v3 Phase 3: ", 2 diggers, 1 shaman" for a wave's new goblins (empty with none). */
+function specialsText(w: LevelWave): string {
+  const c = w.counts;
+  const parts = [
+    [c.digger ?? 0, 'digger'],
+    [c.shaman ?? 0, 'shaman'],
+    [c.bomber ?? 0, 'bomber'],
+    [c.archer ?? 0, 'goblin archer'],
+  ] as [number, string][];
+  return parts
+    .filter(([n]) => n > 0)
+    .map(([n, name]) => `, ${n} ${name}${n === 1 ? '' : 's'}`)
+    .join('');
+}
 
 export function summarize(g: Generated): string {
   const { level, stats } = g;
@@ -397,9 +485,13 @@ export function summarize(g: Generated): string {
     `camps ${camps.length}: ${camps.map((c) => `${c.id} ${Math.round(c.at[0])} cm ${Math.round(c.at[1])} deg, wave ${c.wave}`).join('; ')}`,
     `junctions ${stats.outer} outer + ${stats.inner} inner + ${stats.forks} forks; roads ${m.roads.length}, ${Math.round(length)} cm; ring roads ${stats.loops}, crossings ${stats.crossings}`,
     `triggers ${m.triggers.length}: ${byKind}`,
+    m.extras
+      ? `new traps: ${m.extras.hay} hay, ${m.extras.bellTower} bell tower, ${m.extras.bridge} bridge, ${m.extras.cartSpots ? 'potion cart' : 'no cart'}; ${m.extras.beds} seed beds`
+      : 'new traps: config counts',
+    `tools: ${level.rules.tools?.join(', ') ?? 'all'}`,
     ...level.waves.map(
       (w, i) =>
-        `wave ${i + 1}: ${w.counts.grunt + w.counts.runner} goblins (${w.counts.grunt} grunts, ${w.counts.runner} runners), ${w.balloons} balloons, over ${w.spawnTime} s, from ${w.camps.join(', ')}${w.rising.length ? `; rises: ${w.rising.join(', ')}` : ''}`,
+        `wave ${i + 1}${w.time ? ` (${w.time})` : ''}: ${w.counts.grunt + w.counts.runner} goblins (${w.counts.grunt} grunts, ${w.counts.runner} runners${specialsText(w)}), ${w.balloons} balloons, over ${w.spawnTime} s, from ${w.camps.join(', ')}${w.rising.length ? `; rises: ${w.rising.join(', ')}` : ''}`,
     ),
     `rules: ${level.rules.archers} archers, ${level.rules.guards} guards, help every ${level.rules.refillEvery} s, castle ${Math.round(level.rules.startHealth * 100)}%`,
   ];

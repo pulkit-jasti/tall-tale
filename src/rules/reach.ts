@@ -4,26 +4,33 @@
 // is placed. No Three.js here.
 import {
   BALLOONS,
-  BELL,
   BOARD,
+  DRUM,
+  PEPPER_RING,
   BUTTON_SIZE,
   HEADER,
   CASTLE,
+  COMPASS,
+  CRANK,
   CUSTOM_GAME,
   TABS,
   MENU,
   END_PANEL,
+  ENDLESS,
   HANDLES,
   HINT_SIGN,
   HORN,
   PAUSE,
   PEBBLE_BOWL,
+  FIRE_PEBBLE,
+  FLYING_KEG,
   PEPPER,
   POKE,
   REACH,
   SLINGSHOT,
   SWATTER,
   TOOL_SPOTS,
+  UI_SPACING,
   UI_ZONE,
 } from '../config/game.js';
 
@@ -103,19 +110,40 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
   const backButton = onPanel(P.radius, settingsCenter, P.tiltDeg, sby, sbx);
   const [stx, sty] = tabsAt(S.width, S.height);
   const tabRow = onPanel(P.radius, settingsCenter, P.tiltDeg, sty, stx);
+  // v3: the compass crank (its wheel round the tipped dish) replaced the ring in battles; its near and far side.
+  // Marked rare: since 2026-11-13 it sits low (the developer's choice, so it never covers the view), at the band's edge.
+  const wheel = COMPASS.radius + CRANK.wheelOut;
+  const tilt = (COMPASS.tiltDeg * Math.PI) / 180;
+  const wheelY = COMPASS.y + COMPASS.dishDepth * Math.cos(tilt);
   return [
-    { name: 'ring handle', radius: HANDLES.radius, y: HANDLES.ringY },
+    { name: 'compass crank, near side', radius: COMPASS.at - wheel * Math.cos(tilt), y: wheelY - wheel * Math.sin(tilt), rare: true },
+    { name: 'compass crank, far side', radius: COMPASS.at + wheel * Math.cos(tilt), y: wheelY + wheel * Math.sin(tilt), rare: true },
+    { name: 'height rail (pause, home screen)', radius: HANDLES.radius, y: HANDLES.ringY, rare: true },
     { name: 'slingshot handle', radius: TOOL_SPOTS.slingshot.radius, y: top + SLINGSHOT.handleHeight / 2 },
     { name: 'pebble bowl', radius: PEBBLE_BOWL.radius, y: PEBBLE_BOWL.rimY },
+    // v3 2.6: the fire pebble's torch flame and the flying keg's stand, both by the bowl.
+    { name: 'fire pebble torch', radius: FIRE_PEBBLE.radius, y: FIRE_PEBBLE.flameY },
+    { name: 'flying keg stand', radius: FLYING_KEG.radius, y: FLYING_KEG.topY + FLYING_KEG.height / 2 },
     { name: 'swatter grip', radius: TOOL_SPOTS.leftSide.radius, y: top + (SWATTER.gripFrom + SWATTER.gripTo) / 2 },
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
-    { name: 'bell handle', radius: TOOL_SPOTS.leftMiddle.radius, y: top + BELL.bellHeight + (BELL.gripFrom + BELL.gripTo) / 2 },
+    { name: 'drum stick', radius: TOOL_SPOTS.leftMiddle.radius, y: top + DRUM.height + 0.2 + (DRUM.gripFrom + DRUM.gripTo) / 2 },
+    { name: 'drum skin', radius: TOOL_SPOTS.leftMiddle.radius, y: top + DRUM.height },
+    // 2026-11-17: the big drum that rises on the compass's spot while the stick is held.
+    { name: 'big drum skin', radius: COMPASS.at, y: (DRUM.height + 0.05) * DRUM.bigScale },
+    // v3 2.2: the pepper ring is shaken from above, so the shaker's spot about 10 cm over the band's middle counts.
+    { name: 'pepper ring (shaker over it)', radius: (PEPPER_RING.inner + PEPPER_RING.outer) / 2, y: 10, rare: true },
     { name: 'horn grip', radius: TOOL_SPOTS.rightSide.radius, y: top + HORN.restLift + (HORN.gripFrom + HORN.gripTo) / 2 },
     // At the pause button's height, so like it a little past the sweet spot.
     { name: 'hint Next button', radius: HINT_SIGN.nextAt, y: HINT_SIGN.nextY, rare: true },
     // Lower than Next so it does not block the view: a little past the sweet spot, fine for a button poked now and then.
     { name: 'pause button', radius: PAUSE.button.at, y: PAUSE.button.y, rare: true },
     { name: 'end panel button', ...endButton },
+    // Endless: the new tools' platforms around the back (same distance as the loadout's), and the breather's tick buttons.
+    ...ENDLESS.extraSpots.map((s, i) => ({ name: `endless tool platform ${i + 1}`, radius: s.radius, y: top + 4 })),
+    {
+      name: 'endless card button',
+      ...onPanel(ENDLESS.panel.radius, uiCenterY(ENDLESS.panel.height, ENDLESS.panel.tiltDeg), ENDLESS.panel.tiltDeg, -(ENDLESS.panel.height / 2 - ENDLESS.panel.buttonRadius * POKE.rimScale - UI_SPACING.edge - 3)),
+    },
     // The win panel is taller (the stars and the stats): its big button and its Menu and Play again in the corners.
     {
       name: 'win panel big button',
@@ -199,6 +227,7 @@ function menuSpots(onPanel: OnPanel): { name: string; radius: number; y: number;
     { name: 'custom game lowest row (left end)', ...onPanel(M.radius, editY, M.tiltDeg, CG.edit.windowBottom + 2, CG.edit.windowLeft + 4), rare: true },
     { name: 'custom game scrollbar', ...onPanel(M.radius, editY, M.tiltDeg, CG.edit.windowTop - 2, CG.edit.scrollbarX), rare: true },
     { name: 'tool shelf things', ...flat(S.tools.radius, S.tools.y) },
+    { name: 'tool shelf things, upper row', ...flat(S.tools.radius + S.tools.rowBack, S.tools.y + S.tools.rowUp) },
     { name: 'trophies, low row', ...flat(S.trophies.lowRadius, S.trophies.lowY) },
     { name: 'trophies, high row', ...flat(S.trophies.highRadius, S.trophies.highY) },
     { name: 'loadout stand slots', ...flat(MENU.stand.radius, MENU.stand.y) },
@@ -216,6 +245,7 @@ export function checkReach(): void {
   // Every menu panel must fit between the highest and lowest spot UI may reach.
   const panels: [string, number, number][] = [
     ['end panel', END_PANEL.height, END_PANEL.tiltDeg],
+    ['endless card panel', ENDLESS.panel.height, ENDLESS.panel.tiltDeg],
     ['pause panel', PAUSE.panel.height, PAUSE.panel.tiltDeg],
     ['settings page', PAUSE.settings.height, PAUSE.panel.tiltDeg],
     ['main menu', MENU.main.height, MENU.main.tiltDeg],

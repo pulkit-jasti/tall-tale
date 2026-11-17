@@ -235,7 +235,7 @@ function blendPose(a: HandPose, b: HandPose, s: number): HandPose {
   }));
 }
 
-/** Where a demo's anchors are right now (world, meters), or null if one is missing. `arcDeg`: ring only. */
+/** Where a demo's anchors are right now (world, meters), or null if one is missing. `arcDeg`: the crank only. */
 export type AnchorLookup = (anchor: GhostAnchor, out: Vector3, arcDeg?: number) => Vector3 | null;
 
 /** Directions in world space for the demo frames. */
@@ -267,7 +267,7 @@ const TOOL_HANDLES: Partial<Record<GhostAnchor, HoldName>> = {
   slingHandle: 'slingshot',
   swatterHandle: 'swatter',
   pepperHandle: 'pepper',
-  bellHandle: 'bell',
+  drumHandle: 'drum',
   hornHandle: 'horn',
 };
 

@@ -53,7 +53,7 @@ import {
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { DAY_NIGHT, SKY, TIMES_OF_DAY, type DayLook, type TimeOfDay } from '../config/game.js';
+import { DAY_NIGHT, NIGHT_FOG, SKY, TIMES_OF_DAY, type DayLook, type TimeOfDay } from '../config/game.js';
 import type { Random } from '../rules/random.js';
 import { groundHeight } from './hills.js';
 
@@ -257,7 +257,15 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
   const inner = r * SKY.planetRingInner;
   const step = (r * SKY.planetRingOuter - inner) / SKY.planetRingBands.length;
   const halves = { back: { at: [] as number[], colors: [] as number[] }, front: { at: [] as number[], colors: [] as number[] } };
-  SKY.planetRingBands.forEach((amount, k) => {
+  // 2026-11-17 (second look): the rings are one straight gradient of two colors, from one side of the ring to
+  // the other (not band by band, not round), with no light and dark facets. The gaps between bands stay. The
+  // ball stays faceted.
+  const ringBands = SKY.planetRingBands;
+  const ringA = shade(1, 0.95, SKY.planetRingWarmFrom).clone();
+  const ringB = shade(1, 0.95, SKY.planetRingWarmTo).clone();
+  const outer = r * SKY.planetRingOuter;
+  const edge = new Color();
+  ringBands.forEach((amount, k) => {
     if (!amount) return;
     const r0 = inner + k * step;
     const r1 = r0 + step;
@@ -266,8 +274,6 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
       const t1 = ((s + 1) / segments) * Math.PI * 2;
       // The far half is the side away from the player (before the tilt).
       const half = Math.sin((t0 + t1) / 2) < 0 ? halves.back : halves.front;
-      // A little lighter and darker in turn, so the facets read.
-      shade(amount, s % 2 === 0 ? 0.95 : 0.85, SKY.planetWarmRings[k] ?? 0);
       const corners: [number, number][] = [
         [r0, t0],
         [r1, t0],
@@ -277,8 +283,11 @@ function planetGeometry(): { ball: BufferGeometry; back: BufferGeometry; front: 
         [r0, t1],
       ];
       for (const [rr, t] of corners) {
-        half.at.push(Math.cos(t) * rr, 0, Math.sin(t) * rr);
-        half.colors.push(color.r, color.g, color.b);
+        const x = Math.cos(t) * rr;
+        half.at.push(x, 0, Math.sin(t) * rr);
+        // Straight across the ring: one color at its left end, the other at its right.
+        edge.copy(ringA).lerp(ringB, (x / outer + 1) / 2);
+        half.colors.push(edge.r, edge.g, edge.b);
       }
     }
   });
@@ -302,8 +311,8 @@ function starGeometry(rng: Random): BufferGeometry {
   const n = SKY.starCount;
   const positions = new Float32Array(n * 3);
   const colors = new Float32Array(n * 3);
-  /** Each star's twinkle: where in its pulse it starts, and how fast it pulses. */
-  const twinkle = new Float32Array(n * 2);
+  /** Each star's twinkle: where in its pulse it starts, how fast it pulses, and 1 for a hero star (v3 2.0). */
+  const twinkle = new Float32Array(n * 3);
   const r = SKY.domeRadius * 0.95;
   const lowest = Math.sin(SKY.starMinElevationDeg * DEG);
   for (let i = 0; i < n; i++) {
@@ -312,14 +321,16 @@ function starGeometry(rng: Random): BufferGeometry {
     const flat = Math.sqrt(1 - y * y);
     const az = rng.range(0, Math.PI * 2);
     positions.set([Math.sin(az) * flat * r, y * r, -Math.cos(az) * flat * r], i * 3);
-    const shine = rng.range(0.45, 1);
+    // The first few are the hero stars: bigger, at full shine, twinkling the most.
+    const hero = i < SKY.starHeroCount ? 1 : 0;
+    const shine = hero ? 1 : rng.range(...SKY.starShine);
     colors.set([shine, shine, shine], i * 3);
-    twinkle.set([rng.range(0, Math.PI * 2), rng.range(...SKY.starTwinkleSpeed)], i * 2);
+    twinkle.set([rng.range(0, Math.PI * 2), rng.range(...SKY.starTwinkleSpeed), hero], i * 3);
   }
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(positions, 3));
   geometry.setAttribute('color', new BufferAttribute(colors, 3));
-  geometry.setAttribute('twinkle', new BufferAttribute(twinkle, 2));
+  geometry.setAttribute('twinkle', new BufferAttribute(twinkle, 3));
   return geometry;
 }
 
@@ -336,6 +347,7 @@ export class Sky {
   /** The dome's point colors now, and worked out for each time of day. */
   private domeColor: BufferAttribute;
   private domeLooks = {} as Record<TimeOfDay, Float32Array>;
+  private domeHaze!: Float32Array;
   private sun = new Group();
   private sunBall = skyMaterial({ vertexColors: true });
   private sunRays = skyMaterial({ vertexColors: true });
@@ -360,6 +372,13 @@ export class Sky {
     const position = domeGeometry.getAttribute('position') as BufferAttribute;
     for (const time of TIMES_OF_DAY) this.domeLooks[time] = domeColors(position, DAY_NIGHT.looks[time]);
     this.domeColor = new BufferAttribute(this.domeLooks.morning.slice(), 3);
+    // v3 2.7: how much each dome point takes the night fog's color (full at and below the horizon).
+    this.domeHaze = new Float32Array(position.count);
+    for (let i = 0; i < position.count; i++) {
+      const y = a.fromBufferAttribute(position, i).normalize().y;
+      const up = Math.min(1, Math.max(0, y) / NIGHT_FOG.domeHeight);
+      this.domeHaze[i] = NIGHT_FOG.domeHaze + (NIGHT_FOG.domeTop - NIGHT_FOG.domeHaze) * up;
+    }
     domeGeometry.setAttribute('color', this.domeColor);
     const dome = new Mesh(domeGeometry, skyMaterial({ vertexColors: true, side: BackSide }));
     dome.renderOrder = ORDER.dome;
@@ -442,7 +461,8 @@ export class Sky {
       bakeFaces(new IcosahedronGeometry(r, 1), light, (facing) => color.copy(shade).lerp(pale, Math.min(1, Math.max(0, facing * 0.9 + 0.25)))),
       skyMaterial({ vertexColors: true }),
     );
-    this.moonGlow = skyMaterial({ color: new Color(SKY.moonGlowColor), map: this.glowMap, blending: AdditiveBlending, transparent: false });
+    // Additive, so a darker color is a weaker glow (SKY.moonGlowStrength: halved 2026-11-17, it was too bright).
+    this.moonGlow = skyMaterial({ color: new Color(SKY.moonGlowColor).multiplyScalar(SKY.moonGlowStrength), map: this.glowMap, blending: AdditiveBlending, transparent: false });
     const glow = new Mesh(new CircleGeometry(r * SKY.moonGlowShare, 32), this.moonGlow);
     glow.position.z = -r;
     glow.renderOrder = ORDER.moonGlow;
@@ -479,24 +499,31 @@ export class Sky {
       depthWrite: false,
       blending: AdditiveBlending,
     });
-    // Twinkle: now and then a star quickly dims and shrinks, from one shared clock. Nothing to update per star.
-    // Two waves multiplied (one slow) and raised to a power, so the dips are short and uneven, not a steady pulse.
+    // Twinkle: a star dims and shrinks, and now and then flashes brighter and bigger, from one shared clock.
+    // Nothing to update per star. Two waves multiplied (one slow) and raised to a power, so the dips are
+    // uneven, not a steady pulse (v3 2.0: a lower power, so many more twinkle at once). The flash is a
+    // third wave raised to a high power: short and rare. Hero stars (twinkle.z = 1) are bigger and twinkle more.
     const time = this.starTime;
+    const f = (v: number): string => v.toFixed(3);
     this.starMaterial.onBeforeCompile = (shader) => {
       shader.uniforms.starTime = time;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec2 twinkle;\nuniform float starTime;')
+        .replace('#include <common>', '#include <common>\nattribute vec3 twinkle;\nuniform float starTime;')
         .replace(
           '#include <color_vertex>',
           [
             '#include <color_vertex>',
+            `float heroBoost = mix(1.0, ${f(SKY.starHeroBoost)}, twinkle.z);`,
             'float twinkleWave = 0.5 + 0.5 * sin(starTime * twinkle.y + twinkle.x);',
             'float twinkleGate = 0.5 + 0.5 * sin(starTime * twinkle.y * 0.27 + twinkle.x * 2.3);',
-            'float twinkleDip = pow(twinkleWave * twinkleGate, 3.0);',
-            `vColor.rgb *= 1.0 - ${SKY.starTwinkle.toFixed(3)} * twinkleDip;`,
+            `float twinkleDip = min(1.0, pow(twinkleWave * twinkleGate, ${f(SKY.starTwinklePower)}) * heroBoost);`,
+            'float sparkleWave = 0.5 + 0.5 * sin(starTime * twinkle.y * 0.43 + twinkle.x * 1.7);',
+            `float sparkle = pow(sparkleWave, ${f(SKY.starSparklePower)}) * heroBoost * (1.0 - twinkleDip);`,
+            `vColor.rgb *= (1.0 - ${f(SKY.starTwinkle)} * twinkleDip) * (1.0 + ${f(SKY.starSparkle)} * sparkle);`,
+            `float starScale = mix(1.0, ${f(SKY.starHeroSize)}, twinkle.z) * (1.0 - ${f(SKY.starTwinkleShrink)} * twinkleDip) * (1.0 + ${f(SKY.starSparkleGrow)} * sparkle);`,
           ].join('\n'),
         )
-        .replace('gl_PointSize = size;', `gl_PointSize = size * (1.0 - ${SKY.starTwinkleShrink.toFixed(3)} * twinkleDip);`);
+        .replace('gl_PointSize = size;', 'gl_PointSize = size * starScale;');
     };
     this.stars = new Points(starGeometry(rng), this.starMaterial);
     this.stars.renderOrder = ORDER.stars;
@@ -506,6 +533,13 @@ export class Sky {
   }
 
   /** Puts the sun or the moon at a compass angle and height, facing the player, at a size (0 hides it). */
+  /** v3 2.6 Sun charge: where the sun is (world), or false while it is down or hidden. */
+  sunWorld(out: Vector3): boolean {
+    if (!this.sun.visible || this.sun.position.y <= 0) return false;
+    this.sun.getWorldPosition(out);
+    return true;
+  }
+
   private placeBody(body: Group, angleDeg: number, elevationDeg: number, size: number): void {
     skyDirection(angleDeg, elevationDeg, body.position).multiplyScalar(SKY.sunDistance);
     // Its +z faces the player.
@@ -520,13 +554,25 @@ export class Sky {
    * colors, where the sun and the moon are and how big, the sun's tint, the
    * stars and the cloud tint. Only called while the time changes.
    */
-  apply(from: TimeOfDay, to: TimeOfDay, t: number): void {
+  apply(from: TimeOfDay, to: TimeOfDay, t: number, haze = 0): void {
     const a0 = DAY_NIGHT.looks[from];
     const a1 = DAY_NIGHT.looks[to];
     const colors = this.domeColor.array as Float32Array;
     const c0 = this.domeLooks[from];
     const c1 = this.domeLooks[to];
     for (let i = 0; i < colors.length; i++) colors[i] = c0[i] + (c1[i] - c0[i]) * t;
+    // v3 2.7: night fog takes the dome toward its color, most at the horizon, so the fogged hills meet the sky.
+    if (haze > 0) {
+      const fog = color.setHex(NIGHT_FOG.color);
+      const w = this.domeHaze;
+      for (let v = 0; v < w.length; v++) {
+        const k = w[v] * haze;
+        const i = v * 3;
+        colors[i] += (fog.r - colors[i]) * k;
+        colors[i + 1] += (fog.g - colors[i + 1]) * k;
+        colors[i + 2] += (fog.b - colors[i + 2]) * k;
+      }
+    }
     this.domeColor.needsUpdate = true;
     this.placeBody(this.sun, lerp(a0.sunAt[0], a1.sunAt[0], t), lerp(a0.sunAt[1], a1.sunAt[1], t), lerp(a0.sunShow, a1.sunShow, t));
     this.placeBody(this.moon, lerp(a0.moonAt[0], a1.moonAt[0], t), lerp(a0.moonAt[1], a1.moonAt[1], t), lerp(a0.moonShow, a1.moonShow, t));
@@ -540,10 +586,12 @@ export class Sky {
     matrix.lookAt(FACE_AT, this.planet.position, UP);
     this.planet.quaternion.setFromRotationMatrix(matrix);
     this.planet.visible = rise > -20;
-    const stars = lerp(a0.stars, a1.stars, t);
+    const stars = lerp(a0.stars, a1.stars, t) * (1 - haze * NIGHT_FOG.starDim);
     this.starMaterial.color.setScalar(stars);
     this.stars.visible = stars > 0.01;
     mixHex(a0.cloudTint, a1.cloudTint, t, this.puffMaterial.color);
+    // v3 2.7: clouds sink into the fog like the high dome (they are never fogged by the scene fog).
+    if (haze > 0) this.puffMaterial.color.lerp(color.setHex(NIGHT_FOG.color), haze * NIGHT_FOG.domeTop);
   }
 
   /** A low cloud around the board, never over the battlefield. Small near, bigger far. */

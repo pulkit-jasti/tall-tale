@@ -14,7 +14,7 @@
 import { Group, type Object3D, type Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mic } from '../audio/mic.js';
-import { BOARD, MENU, PAUSE, POKE, SLIDER, SWITCH, TABS, UI_SPACING } from '../config/game.js';
+import { BOARD, BOARD_TURN, MENU, PAUSE, POKE, SLIDER, SWITCH, TABS, UI_SPACING } from '../config/game.js';
 import { SOUND_CATEGORIES, SOUND_SETTINGS, type SoundCategory } from '../config/sounds.js';
 import { mark } from '../debug/perfMarks.js';
 import { access, hornHearsMic } from '../player/accessSettings.js';
@@ -44,6 +44,7 @@ import {
   type ButtonIcon,
   type UiImageName,
 } from './kit/index.js';
+import { uiImage } from './uiImages.js';
 
 /** The Kenney icon beside each sound row's name, and their tint. */
 const SOUND_ICONS: Record<SoundCategory, UiImageName> = {
@@ -121,6 +122,8 @@ export class PauseMenu {
   private bellSwitch: Switch;
   /** "Unlock all tools" (Access tab, v2 run 2). */
   private unlockSwitch: Switch;
+  /** "Snap turning" (Access tab, v3). */
+  private snapSwitch: Switch;
   /** The "Unlock all tools" switch was flipped (the game saves it and the shelves show it). */
   onUnlockAll: (on: boolean) => void = () => {};
   /** Follows the head lazily while open, like the Quest's own menus. */
@@ -137,6 +140,11 @@ export class PauseMenu {
     this.follow = new LazyFollow(this.holder, { ...PAUSE.follow, recenter: 0.12 });
     // Right in front of the eyes, never too high or too low (UI_ZONE).
     this.panel = new Panel(this.holder, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: Math.round(width * 15), canvasScale: 2 });
+    // Both widths it takes (the tutorial's buttons and a battle's) made now, so the first pause makes nothing new.
+    for (const teaching of [true, false]) {
+      const count = BUTTONS.filter((b) => b.when === 'always' || (b.when === 'teaching') === teaching).length;
+      this.panel.prepareSize(rowPanelWidth(count, PAUSE.panel.buttonGap, buttonRadius * POKE.rimScale, buttonMargin, PAUSE.panel.minWidth), height);
+    }
     const rim = buttonRadius * POKE.rimScale;
     const buttonY = bottomRowY(height, rim, buttonMargin);
     for (const b of BUTTONS) {
@@ -194,6 +202,13 @@ export class PauseMenu {
       this.onUnlockAll(on);
       this.repaintSettings();
     };
+    // Snap turning (v3, docs/v3-plan.md 1.7): the board turns in steps instead of smoothly (comfort). Off by default.
+    this.snapSwitch = new Switch(audio, { on: access.snapTurn });
+    add(this.snapSwitch.group, controlLeft + SWITCH.width / 2, S.firstRowY - 4 * S.accessRowGap, this.tabGroups.access);
+    this.snapSwitch.onChange = (on) => {
+      access.setSnapTurn(on);
+      this.repaintSettings();
+    };
     SOUND_CATEGORIES.forEach((c, i) => {
       const y = S.firstRowY - i * S.rowGap;
       // Just a slider per group: all the way down is off.
@@ -206,6 +221,11 @@ export class PauseMenu {
       };
       this.rows.push({ category: c.id, label: c.label, slider, y });
     });
+    // Both tabs drawn now, so the first switch to either draws nothing.
+    const shown = this.tab;
+    this.tab = shown === 'sound' ? 'access' : 'sound';
+    this.repaintSettings();
+    this.tab = shown;
     this.repaintSettings();
     // Nothing ever hides the pause panel (it went through the towers): it draws on top, the board first, then each button's parts.
     drawOnTop(this.holder, PAUSE.panel.renderOrder);
@@ -215,6 +235,14 @@ export class PauseMenu {
 
   get isOpen(): boolean {
     return this.open;
+  }
+
+  /** The way the panel faces out from the player (world, flat), as it follows the head: the pause height rail turns with it. */
+  facing(out: Vector3): Vector3 {
+    this.holder.updateWorldMatrix(true, false);
+    out.set(0, 0, -1).transformDirection(this.holder.matrixWorld);
+    out.y = 0;
+    return out.lengthSq() > 1e-8 ? out.normalize() : out.set(0, 0, -1);
   }
 
   /** Where the pause button is, while it shows (for the tutorial). */
@@ -305,18 +333,27 @@ export class PauseMenu {
     this.bellSwitch.set(!hornHearsMic());
     this.bellSwitch.setLocked(!mic.on);
     this.unlockSwitch.set(progress.unlockAll);
+    this.snapSwitch.set(access.snapTurn);
     armControls([this.back, this.tabs, ...this.tabControls()]);
     this.repaintSettings();
   }
 
   /** The controls of the tab that shows. */
   private tabControls(): Control[] {
-    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table, this.unlockSwitch];
+    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table, this.unlockSwitch, this.snapSwitch];
   }
 
   private repaintSettings(): void {
     mark('panel redraw');
-    this.settings.paint((c, w, h) => this.drawSettings(c, w, h));
+    // One image per tab, drawn again only when what it shows changed (2026-11-17: a tab switch redrew and
+    // uploaded the whole page, a flicker). Sound: each group's level. Access: whether a mic is on.
+    // Whether the icons are in yet too, so a page drawn before they loaded is drawn again once they are.
+    const icons = uiImage('panel') ? 'icons' : 'no icons';
+    const key =
+      this.tab === 'sound'
+        ? `${icons} ${this.rows.map((r) => Math.round(this.audio.settings.level(r.category) * 100)).join(',')}`
+        : `${icons} mic ${mic.on}`;
+    this.settings.paintVariant(this.tab, key, (c, w, h) => this.drawSettings(c, w, h));
   }
 
   /** The pause button while the battle runs (`enabled`: a battle is on and the Next button is not out). True on the frame it is poked. */
@@ -367,6 +404,7 @@ export class PauseMenu {
     if (this.table.update(hands, dt)) return 'resetTable';
     this.bellSwitch.update(hands, dt);
     this.unlockSwitch.update(hands, dt);
+    this.snapSwitch.update(hands, dt);
     return null;
   }
 
@@ -397,9 +435,10 @@ export class PauseMenu {
       return;
     }
     name('hand', 'Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);
-    name('audioOff', 'Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no blowing' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
+    name('audioOff', 'Quiet horn', S.firstRowY - S.accessRowGap, mic.on ? 'Hold it, no talking' : 'No mic: always quiet', mic.on ? UI_COLORS.note : UI_COLORS.warn);
     name('rotate', 'Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
     name('unlocked', 'Unlock all tools', S.firstRowY - 3 * S.accessRowGap, 'Tools only, not levels', UI_COLORS.note);
+    name('next', 'Snap turning', S.firstRowY - 4 * S.accessRowGap, `Turn in ${BOARD_TURN.snapDeg} degree steps`, UI_COLORS.note);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {

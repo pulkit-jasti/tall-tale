@@ -257,8 +257,8 @@ export class GameAudio {
     // Short cues keep their sharp ends, they are meant to catch the ear.
     const F = SOUND_MIX.fadeOut;
     const length = Math.min(def.maxSeconds ?? Infinity, buffer.duration) / rate;
-    if (length >= F.longFrom) {
-      const fade = Math.min(F.seconds, length * F.maxShare);
+    if (def.fadeSeconds !== undefined || length >= F.longFrom) {
+      const fade = def.fadeSeconds !== undefined ? Math.min(def.fadeSeconds, length) : Math.min(F.seconds, length * F.maxShare);
       gain.setValueAtTime(level, now + length - fade);
       gain.linearRampToValueAtTime(0, now + length);
     }

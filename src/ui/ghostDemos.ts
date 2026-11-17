@@ -22,12 +22,13 @@
 // toward its own side while looking at it is hard; a small twist of the body
 // and the other hand is easy). The slingshot (right) is held in the left hand,
 // so the pebble, the load and the pull are the right hand's.
-import { SWATTER } from '../config/game.js';
+import { DRUM, SWATTER } from '../config/game.js';
 
 export type GhostPose = 'open' | 'pinch' | 'fist';
 
 export type GhostAnchor =
-  | 'ring'
+  /** The compass crank's knob, moved `arcDeg` round the wheel from where it is now (v3, replaced the ring). */
+  | 'crank'
   | 'lessonGoblin'
   | 'mouth'
   | 'reach'
@@ -37,7 +38,7 @@ export type GhostAnchor =
   | 'swatterHandle'
   | 'pepperHandle'
   | 'hornHandle'
-  | 'bellHandle';
+  | 'drumHandle';
 
 export type Dir = [number, number, number];
 
@@ -51,7 +52,7 @@ export interface GhostKey {
   rod?: Dir;
   fingers?: Dir;
   palm: Dir;
-  /** Ring only: degrees along the ring from the front (positive to the right). */
+  /** Crank only: degrees round the wheel from the knob (positive: clockwise seen from above). */
   arcDeg?: number;
 }
 
@@ -67,11 +68,9 @@ export interface GhostDemo {
 }
 
 // Grips used by the demos.
-/** Right hand over the ring from above: knuckles along the rail, thumb to the left, palm down and a little forward. */
-const RING_GRIP = { rod: [-1, 0, 0] as Dir, palm: [0, -1, 0.25] as Dir };
 /**
  * Right hand reaching across to an upright handle on the left (the pepper
- * front left, the bell): thumb up, palm facing in (left) and a bit forward.
+ * front left): thumb up, palm facing in (left) and a bit forward.
  */
 const HANDLE_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.35] as Dir };
 /**
@@ -96,8 +95,12 @@ const SWATTER_GRIP = {
  * mouthpiece toward the face. The palm never faces the headset (Quest menu).
  */
 const BLOW_GRIP = { rod: [0, 1, 0] as Dir, palm: [1, 0, 0] as Dir };
-/** Right hand around the upright bell handle on the left platform: thumb up, palm facing in (left) and a little forward. */
-const BELL_GRIP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0.2] as Dir };
+/** Right hand around the drum stick on the left platform, which leans back like the swatter (by DRUM.restLeanDeg): thumb up along it, palm facing in. */
+const drumLean = (DRUM.restLeanDeg * Math.PI) / 180;
+const DRUM_GRIP = {
+  rod: [-Math.sin(drumLean), Math.cos(drumLean), 0] as Dir,
+  palm: [-Math.cos(drumLean), -Math.sin(drumLean), 0] as Dir,
+};
 /** Pinch from above: fingers down and forward, palm down and toward the player. */
 const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Dir };
 /** Throwing a pinched goblin: fingers forward and a little up, palm down and a little forward (never toward the headset). */
@@ -135,30 +138,22 @@ export const GHOST_DEMOS = {
       key(3.6, 'reach', [-3, -8, -32], 'open', REACH_GRIP),
     ],
   },
-  /** Come down onto the ring from above, close the fist, follow the ring to the left, let go, lift off. */
-  spin: {
+  /**
+   * v3 (docs/v3-plan.md 1.7): the compass crank. Come down onto the knob
+   * from above, pinch it (a pinch only, never a fist), circle once with it
+   * round the wheel (a key every 45 degrees, so the hand stays on the rim's
+   * curve; the anchor is the knob's ball moved round from where it is), let
+   * go, lift off. A full circle is a full turn of the board.
+   */
+  crank: {
     hand: 'right',
     keys: [
-      key(0, 'ring', [0, 7, -3], 'open', RING_GRIP, 12),
-      key(0.7, 'ring', [0, 0, 0], 'open', RING_GRIP, 12),
-      key(1.0, 'ring', [0, 0, 0], 'fist', RING_GRIP, 12),
-      // 50 degrees along the ring, most of the lesson's spin goal in one pull.
-      key(2.3, 'ring', [0, 0, 0], 'fist', RING_GRIP, -38),
-      key(2.6, 'ring', [0, 0, 0], 'open', RING_GRIP, -38),
-      key(3.1, 'ring', [0, 7, -3], 'open', RING_GRIP, -38),
-    ],
-  },
-  /** Close the fist on the ring, move it up, then down, let go. */
-  height: {
-    hand: 'right',
-    keys: [
-      key(0, 'ring', [0, 7, -3], 'open', RING_GRIP, 6),
-      key(0.7, 'ring', [0, 0, 0], 'open', RING_GRIP, 6),
-      key(1.0, 'ring', [0, 0, 0], 'fist', RING_GRIP, 6),
-      key(1.8, 'ring', [0, 7, 0], 'fist', RING_GRIP, 6),
-      key(2.8, 'ring', [0, -3, 0], 'fist', RING_GRIP, 6),
-      key(3.1, 'ring', [0, -3, 0], 'open', RING_GRIP, 6),
-      key(3.6, 'ring', [0, 5, -3], 'open', RING_GRIP, 6),
+      key(0, 'crank', [0, 6, -2], 'open', PINCH_DOWN, 0),
+      key(0.7, 'crank', [0, 0, 0], 'open', PINCH_DOWN, 0),
+      key(1.0, 'crank', [0, 0, 0], 'pinch', PINCH_DOWN, 0),
+      ...[45, 90, 135, 180, 225, 270, 315, 360].map((deg, i) => key(1.0 + (i + 1) * 0.35, 'crank', [0, 0, 0], 'pinch', PINCH_DOWN, deg)),
+      key(4.1, 'crank', [0, 0, 0], 'open', PINCH_DOWN, 360),
+      key(4.6, 'crank', [0, 6, -2], 'open', PINCH_DOWN, 360),
     ],
   },
   /** Come down over the goblin, pinch it, lift it. */
@@ -229,14 +224,14 @@ export const GHOST_DEMOS = {
       key(2.0, 'pepperHandle', [0, 6, -4], 'fist', HANDLE_GRIP),
     ],
   },
-  /** The bell is on the left: the right hand from the player's side, a little high (clear of the bell below), closes the fist, lifts it. */
-  bellGrab: {
+  /** The drum is on the left: the right hand from the player's side, a little high (clear of the drum below), closes the fist on the stick, lifts it. */
+  drumGrab: {
     hand: 'right',
     keys: [
-      key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
-      key(0.8, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
-      key(1.1, 'bellHandle', [0, 0, 0], 'fist', BELL_GRIP),
-      key(2.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
+      key(0, 'drumHandle', [0, 3, -8], 'open', DRUM_GRIP),
+      key(0.8, 'drumHandle', [0, 0, 0], 'open', DRUM_GRIP),
+      key(1.1, 'drumHandle', [0, 0, 0], 'fist', DRUM_GRIP),
+      key(2.0, 'drumHandle', [0, 6, -4], 'fist', DRUM_GRIP),
     ],
   },
   /** The horn is on the right: the left hand from its side and behind, a little high, closes the fist around the upright grip, lifts it. */
@@ -268,20 +263,22 @@ export const GHOST_DEMOS = {
       key(4.8, 'mouth', [-4, -13, 16], 'fist', BLOW_GRIP),
     ],
   },
-  /** Grab the bell with the right hand (it is on the left), lift it, ring it with a hard swing side to side. */
-  bellRing: {
+  /**
+   * Grab the stick with the right hand (the drum is on the left), lift it,
+   * then strike down onto the skin twice, like a swat. The strike offsets are
+   * a first guess: check in the headset that the ball lands on the skin.
+   */
+  drumStrike: {
     hand: 'right',
     keys: [
-      key(0, 'bellHandle', [0, 3, -8], 'open', BELL_GRIP),
-      key(0.6, 'bellHandle', [0, 0, 0], 'open', BELL_GRIP),
-      key(0.9, 'bellHandle', [0, 0, 0], 'fist', BELL_GRIP),
-      key(1.5, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
-      key(1.7, 'bellHandle', [-3, 6, -4], 'fist', BELL_GRIP),
-      key(1.9, 'bellHandle', [3, 6, -4], 'fist', BELL_GRIP),
-      key(2.1, 'bellHandle', [-3, 6, -4], 'fist', BELL_GRIP),
-      key(2.3, 'bellHandle', [3, 6, -4], 'fist', BELL_GRIP),
-      key(2.5, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
-      key(3.0, 'bellHandle', [0, 6, -4], 'fist', BELL_GRIP),
+      key(0, 'drumHandle', [0, 3, -8], 'open', DRUM_GRIP),
+      key(0.6, 'drumHandle', [0, 0, 0], 'open', DRUM_GRIP),
+      key(0.9, 'drumHandle', [0, 0, 0], 'fist', DRUM_GRIP),
+      key(1.5, 'drumHandle', [0, 8, -5], 'fist', DRUM_GRIP),
+      key(1.7, 'drumHandle', [0, 2, -3], 'fist', DRUM_GRIP),
+      key(2.1, 'drumHandle', [0, 8, -5], 'fist', DRUM_GRIP),
+      key(2.3, 'drumHandle', [0, 2, -3], 'fist', DRUM_GRIP),
+      key(2.8, 'drumHandle', [0, 8, -5], 'fist', DRUM_GRIP),
     ],
   },
   /** The right hand (the left holds the slingshot) comes down into the bowl and pinches a pebble off the top of the pile. */

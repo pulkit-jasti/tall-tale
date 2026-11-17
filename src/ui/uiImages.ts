@@ -20,6 +20,8 @@ const FILES = {
   check: 'icons/checkmark.png',
   info: 'icons/information.png',
   trophy: 'icons/trophy.png',
+  // v3 2.6: an unfound secret achievement on the shelf.
+  question: 'icons/question.png',
   warning: 'icons/warning.png',
   target: 'icons/target.png',
   returnArrow: 'icons/return.png',
@@ -38,6 +40,10 @@ const FILES = {
   sword: 'board/sword.png',
   hand: 'board/hand.png',
   rotate: 'board/arrow_rotate.png',
+  // v3 2.5, the horn's previews: no charge (an empty clock), a boost (chevrons), a move's spot (an arrow down).
+  clock: 'board/timer_0.png',
+  chevron: 'icons/up.png',
+  arrowDown: 'icons/arrowDown.png',
   // Game Icons (white, 100 px).
   starIcon: 'icons/star.png',
   locked: 'icons/locked.png',

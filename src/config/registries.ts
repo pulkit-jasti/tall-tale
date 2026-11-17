@@ -17,6 +17,11 @@ export const ENEMY_KINDS = {
   grunt: { label: 'Grunts', walker: true },
   runner: { label: 'Runners', walker: true },
   balloon: { label: 'Balloons', walker: false },
+  // v3 Phase 3 (src/units/goblinKinds.ts). The digger tunnels instead of walking the roads.
+  digger: { label: 'Diggers', walker: false },
+  shaman: { label: 'Shamans', walker: true },
+  bomber: { label: 'Bombers', walker: true },
+  archer: { label: 'Goblin archers', walker: true },
 } satisfies Record<string, { label: string; walker: boolean }>;
 
 /** Goblin gear and the setting that sets its share (rules in src/rules/gear.ts). */
@@ -27,5 +32,19 @@ export const GEAR_KINDS = {
   sword: { label: 'Swords', setting: 'swords' },
 } satisfies Record<string, { label: string; setting: SettingKey }>;
 
-export type TriggerKind = keyof typeof TRIGGER_KINDS;
-export const TRIGGER_LIST = Object.keys(TRIGGER_KINDS) as TriggerKind[];
+/**
+ * v3 2.1: traps added to every map when it is built (src/world/triggers.ts,
+ * addExtraTraps), not by the generator's settings (yet): haystacks, the bell
+ * tower, the potion cart and the rope bridge.
+ */
+export const EXTRA_TRAPS = {
+  hay: { label: 'Haystack' },
+  bellTower: { label: 'Bell tower' },
+  cart: { label: 'Potion cart' },
+  bridge: { label: 'Rope bridge' },
+};
+export type ExtraTrap = keyof typeof EXTRA_TRAPS;
+
+/** Every trap kind on the roads. The generator only places the TRIGGER_LIST ones. */
+export type TriggerKind = keyof typeof TRIGGER_KINDS | ExtraTrap;
+export const TRIGGER_LIST = Object.keys(TRIGGER_KINDS) as (keyof typeof TRIGGER_KINDS)[];

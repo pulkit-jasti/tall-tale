@@ -18,7 +18,7 @@ import type { GameAudio } from '../../audio/sound.js';
 import { SCROLL_LIST } from '../../config/game.js';
 import { mark } from '../../debug/perfMarks.js';
 import type { HandState } from '../../player/hands.js';
-import type { Control } from './controls.js';
+import { afterDrag, type Control } from './controls.js';
 
 export interface ScrollListOptions {
   /** The window's size (cm). */
@@ -95,13 +95,52 @@ export class ScrollList implements Control {
     this.hover.position.z = 0.08;
     this.hover.renderOrder = 2;
     this.hover.visible = false;
-    this.group.add(list, this.hover);
+    // The selected row: a see-through gold band with an edge over it, moved on a tap, never drawn into the
+    // list's canvas (2026-11-17: a tap redrew and uploaded the whole tall list canvas, a flicker).
+    this.selectMaterial = new MeshBasicMaterial({ color: L.selectColor, transparent: true, opacity: L.selectOpacity, depthWrite: false, fog: false, toneMapped: false });
+    this.selectBand = new Mesh(new PlaneGeometry(options.width, 1), this.selectMaterial);
+    this.selectBand.position.z = 0.06;
+    this.selectBand.renderOrder = 2;
+    this.selectBand.visible = false;
+    this.group.add(list, this.selectBand, this.hover);
     this.redraw();
     this.place();
   }
 
+  /**
+   * Draws only some rows again (a new selection: the old row and the new one), not the whole list
+   * (audit 2026-11-17: every tap drew every level). Waits while something is dragged, like every redraw.
+   */
+  redrawRows(rows: number[]): void {
+    // Its own key, so a waiting full redraw is never replaced by a partial one.
+    afterDrag(this.rowsKey, () => {
+      mark('panel redraw');
+      const c = this.canvas.getContext('2d')!;
+      const px = SCROLL_LIST.pxPerCm;
+      const w = this.canvas.width;
+      const h = Math.round(this.options.rowHeight * px);
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      for (const i of rows) {
+        if (i < 0 || i >= this.options.count) continue;
+        const top = Math.round(i * this.pitch * px);
+        c.clearRect(0, top, w, h);
+        c.save();
+        c.translate(0, top);
+        this.options.drawRow(c, i, w, h);
+        c.restore();
+      }
+      this.texture.needsUpdate = true;
+    });
+  }
+
+  private rowsKey = {};
+
   /** Draws every row again into the canvas (a new selection, new stars). Never while scrolling. */
   redraw(): void {
+    afterDrag(this, () => this.redrawNow());
+  }
+
+  private redrawNow(): void {
     mark('panel redraw');
     const c = this.canvas.getContext('2d')!;
     const px = SCROLL_LIST.pxPerCm;
@@ -288,10 +327,32 @@ export class ScrollList implements Control {
     this.hoverMaterial.opacity = pressed ? L.pressOpacity : L.hoverOpacity;
   }
 
+  private selectBand: Mesh;
+  private selectMaterial: MeshBasicMaterial;
+  private selectedRow = -1;
+
+  /** Marks a row as selected with the gold band (nothing is drawn). -1: none. */
+  setSelected(row: number): void {
+    this.selectedRow = row;
+    this.place();
+  }
+
+  /** A band over a row, cut to the window (false when the row is out of view). */
+  private band(mesh: Mesh, row: number): void {
+    const { height, rowHeight } = this.options;
+    const top = Math.max(0, row * this.pitch - this.scroll);
+    const bottom = Math.min(height, row * this.pitch - this.scroll + rowHeight);
+    mesh.visible = row >= 0 && bottom > top;
+    if (!mesh.visible) return;
+    mesh.scale.y = bottom - top;
+    mesh.position.y = height / 2 - (top + bottom) / 2;
+  }
+
   /** The window over the canvas, and the hover band over its row (cut to the window). */
   private place(): void {
     const { height, rowHeight } = this.options;
     this.texture.offset.y = (this.content - height - this.scroll) / this.content;
+    this.band(this.selectBand, this.selectedRow);
     if (this.hoverRow < 0) return;
     const top = Math.max(0, this.hoverRow * this.pitch - this.scroll);
     const bottom = Math.min(height, this.hoverRow * this.pitch - this.scroll + rowHeight);

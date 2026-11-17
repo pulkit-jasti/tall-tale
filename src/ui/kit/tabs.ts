@@ -8,16 +8,17 @@
 import { Group, type CanvasTexture } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
 import { TABS } from '../../config/game.js';
-import { mark } from '../../debug/perfMarks.js';
 import type { HandState } from '../../player/hands.js';
+import { preparedTextures } from '../panel.js';
 import { PokeButton } from '../pokeButton.js';
 import { canvasTexture } from './canvas.js';
 import type { Control } from './controls.js';
 
 interface Tab {
   button: PokeButton;
-  canvas: HTMLCanvasElement;
-  texture: CanvasTexture;
+  /** Its face chosen and not chosen, both drawn once. */
+  onTexture: CanvasTexture;
+  offTexture: CanvasTexture;
   label: string;
 }
 
@@ -32,14 +33,23 @@ export class Tabs implements Control {
     const T = TABS;
     const total = labels.length * T.width + (labels.length - 1) * T.gap;
     labels.forEach((label, i) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(T.width * 40);
-      canvas.height = Math.round(T.height * 40);
-      const texture = canvasTexture(canvas, 4);
-      const button = new PokeButton(audio, { radius: T.height / 2, icon: 'dot', box: { width: T.width, height: T.height, face: texture } });
+      // Both looks drawn once (chosen and not), each its own texture: a tab switch only swaps them
+      // (2026-11-17: every switch redrew and uploaded every tab's canvas, a flicker on the headset).
+      const look = (on: boolean): CanvasTexture => {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(T.width * 40);
+        canvas.height = Math.round(T.height * 40);
+        drawTab(canvas, label, on);
+        const texture = canvasTexture(canvas, 4);
+        preparedTextures.add(texture);
+        return texture;
+      };
+      const offTexture = look(false);
+      const onTexture = look(true);
+      const button = new PokeButton(audio, { radius: T.height / 2, icon: 'dot', box: { width: T.width, height: T.height, face: offTexture } });
       button.group.position.x = -total / 2 + T.width / 2 + i * (T.width + T.gap);
       this.group.add(button.group);
-      this.tabs.push({ button, canvas, texture, label });
+      this.tabs.push({ button, onTexture, offTexture, label });
     });
     this.paint();
   }
@@ -76,23 +86,26 @@ export class Tabs implements Control {
     for (const tab of this.tabs) tab.button.lock(seconds);
   }
 
+  /** The chosen tab's look: its cap's color and its ready-made face (nothing drawn). */
   private paint(): void {
-    mark('panel redraw');
     for (const [i, tab] of this.tabs.entries()) {
       const on = i === this.chosen;
       tab.button.setColor(on ? TABS.onColor : TABS.offColor);
-      const c = tab.canvas.getContext('2d')!;
-      const w = tab.canvas.width;
-      const h = tab.canvas.height;
-      c.clearRect(0, 0, w, h);
-      // The same bold word on every tab: only the cap's color says which is chosen.
-      c.font = `bold ${Math.round(h * 0.44)}px sans-serif`;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillStyle = on ? TABS.onInk : TABS.offInk;
-      // No underline (headset test: the green cap and the bold word are enough).
-      c.fillText(tab.label, w / 2, h / 2 + 2);
-      tab.texture.needsUpdate = true;
+      tab.button.setFace(on ? tab.onTexture : tab.offTexture);
     }
   }
+}
+
+/** A tab's word on its face: the same bold word on every tab; only the cap's color says which is chosen. */
+function drawTab(canvas: HTMLCanvasElement, label: string, on: boolean): void {
+  const c = canvas.getContext('2d')!;
+  const w = canvas.width;
+  const h = canvas.height;
+  c.clearRect(0, 0, w, h);
+  c.font = `bold ${Math.round(h * 0.44)}px sans-serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillStyle = on ? TABS.onInk : TABS.offInk;
+  // No underline (headset test: the green cap and the bold word are enough).
+  c.fillText(label, w / 2, h / 2 + 2);
 }

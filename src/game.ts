@@ -3,39 +3,47 @@
 // waves, flags, end panel), goblins, troops, triggers, grab and eat,
 // slingshot, food tools, food jar, effects, sky.
 import { createSystem, VisibilityState } from '@iwsdk/core';
-import { DirectionalLight, Fog, Group, Object3D, Quaternion, Vector3, type BufferGeometry, type Mesh } from 'three';
+import { Box3, DirectionalLight, Fog, Group, Matrix4, Object3D, Quaternion, Sphere, Vector3, WebGLRenderTarget, type BufferGeometry, type Mesh, type MeshBasicMaterial, type SkinnedMesh } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
 import {
   BALLOONS,
+  BOARD,
+  CASTLE,
   DEBUG,
   FPS,
   GLASS_SIGN,
   GOBLIN_RULES,
   HORN,
-  COMPASS,
   JUICE,
+  KNIGHTS,
+  ENDLESS,
   MAPS,
   MENU,
+  SCORE,
   PAUSE,
   POINTER,
   SKY,
   STAGE,
   STRESS_TEST,
   TIMES_OF_DAY,
+  LOADOUT_SPOTS,
   TOOL_SPOTS,
-  TOOLS,
   TRIGGERS,
+  MAGNET,
+  HANDS,
   XR,
   type TimeOfDay,
 } from './config/game.js';
-import { eatShare } from './rules/recharge.js';
+import { ViewFade } from './ui/viewFade.js';
+import { preparedTextures, setTextureUploader } from './ui/panel.js';
 import type { DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
 import tutorialMap from './maps/tutorial.json';
 import { parseBlueprint, type Blueprint } from './rules/blueprint.js';
 import type { Level } from './level/level.js';
+import { SEED } from './config/levelSettings.js';
 import type { RoadNetwork } from './world/roads.js';
 import { RisingCamps } from './world/risingCamps.js';
 import { Compass } from './ui/compass.js';
@@ -61,21 +69,34 @@ import { StressTest } from './debug/stressTest.js';
 import { ToySpawner } from './director/toySpawner.js';
 import { Particles } from './fx/particles.js';
 import { GrabEat } from './player/grabEat.js';
-import { BoardHandles } from './player/handles.js';
+import { Achievements } from './player/achievements.js';
+import { TrophyToast } from './ui/trophyToast.js';
+import { CompassCrank } from './player/crank.js';
+import { HeightRail } from './player/heightRail.js';
 import { HandTracker } from './player/hands.js';
-import { angleOf, degToRad } from './rules/boardMath.js';
-import { timeOfWave } from './rules/dayNight.js';
+import { angleDelta, angleOf, degToRad } from './rules/boardMath.js';
+import { campaignLevel } from './level/campaignLevels.js';
+import { makeEndlessLevel } from './level/endless.js';
+import { BOOST, drawCards, pickCard, type BoostCard } from './rules/boosts.js';
+import { BoostPicker } from './ui/boostPicker.js';
 import { createRandom, type Random } from './rules/random.js';
 import { checkReach } from './rules/reach.js';
-import { Bell } from './tools/bell.js';
+import { Drum } from './tools/drum.js';
 import { FlySwatter } from './tools/flySwatter.js';
 import type { HandTool } from './tools/handTool.js';
 import { Horn } from './tools/horn.js';
 import { HornAim } from './ui/hornAim.js';
 import { PepperShaker } from './tools/pepperShaker.js';
 import { Slingshot } from './tools/slingshot.js';
+import { Magnet } from './tools/magnet.js';
+import { Magnifier } from './tools/magnifier.js';
+import { PepperRing } from './tools/pepperRing.js';
+import { SugarBowl } from './tools/sugarBowl.js';
+import { Garden } from './world/garden.js';
+import { Chickens } from './units/chickens.js';
 import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
+import { GoblinKinds } from './units/goblinKinds.js';
 import { Troops } from './units/troops.js';
 import { Garrison } from './units/garrison.js';
 import { Villagers } from './units/villagers.js';
@@ -91,12 +112,13 @@ import { Triggers } from './world/triggers.js';
 import { buildBoard, buildCastle } from './world/boardBuilder.js';
 import { buildSeatFloor, GiantBody } from './world/giant.js';
 import { Windmill } from './world/settlements.js';
+import { updateRoadside } from './world/roadside.js';
 import { Stage } from './world/stage.js';
 import { SceneSwap } from './world/sceneSwap.js';
 import { loadTemplate } from './world/models.js';
 import { Menu } from './ui/menu/menu.js';
 import { progress, resetProgress, saveProgress } from './player/progress.js';
-import { battleTools, isOpen, recordTutorial, recordWin, starsFor } from './rules/campaign.js';
+import { battleTools, isOpen, LOADOUT_SLOTS, PICK_TOOLS, recordEndless, recordTutorial, recordWin, starsFor, toolUnlocked, type PickTool } from './rules/campaign.js';
 
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
@@ -108,8 +130,10 @@ const slotAt = new Vector3();
 const menuFront = new Vector3();
 /** Session storage key for the debug "Start at wave" choice. */
 const PLAY_FROM_KEY = 'tallTale.playFromWave';
-/** Where the threat arrow points at a camp that just rose, and a camp's spot for the compass. */
-const campArrowAt = new Vector3();
+/** The pause height rail's facing (reused, no garbage). */
+const railFacing = new Vector3();
+const railInverse = new Matrix4();
+/** A camp's spot for the compass. */
 const compassAt = new Vector3();
 
 /**
@@ -140,8 +164,12 @@ export class GameSystem extends createSystem({}) {
   private stage!: Stage;
   private audio!: GameAudio;
   private hands = new HandTracker();
-  private handles!: BoardHandles;
+  /** The compass crank (v3): spins the board in battles. */
+  private handles!: CompassCrank;
+  /** The height rail while paused (v3: the ring is gone from battles, so height moved to pause and the home screen). */
+  private pauseRail!: HeightRail;
   private goblins!: Goblins;
+  private kinds!: GoblinKinds;
   private grabEat!: GrabEat;
   private slingshot!: Slingshot;
   private swatter!: FlySwatter;
@@ -153,8 +181,18 @@ export class GameSystem extends createSystem({}) {
   /** After a horn call: the full bar stays up this long yet (seconds), and if it was blown into the mic. */
   private blowShown = 0;
   private blownByMic = false;
-  private bell!: Bell;
+  private drum!: Drum;
   private stun!: StunWave;
+  private pepperRing!: PepperRing;
+  private magnet!: Magnet;
+  /** The magnifying glass (its own name: it shared `glass` with the glass sign, which overwrote it). */
+  private magnifier!: Magnifier;
+  private garden!: Garden;
+  private chickens!: Chickens;
+  /** v3 2.6: the achievements tracker and the toast that pops up when one is earned. */
+  private achievements!: Achievements;
+  private toast!: TrophyToast;
+  private sugar!: SugarBowl;
   private tools: HandTool[] = [];
   private troops!: Troops;
   private garrison!: Garrison;
@@ -169,6 +207,8 @@ export class GameSystem extends createSystem({}) {
   private nightLights!: NightLights;
   /** A time of day picked on the debug page, until the next battle starts. */
   private timeOverride: TimeOfDay | null = null;
+  /** The debug page's "Night fog on/off" (v3 2.7), held until the next battle starts. */
+  private fogOverride: boolean | null = null;
   /** Battle starts seen so far: a new battle jumps straight to its time of day. */
   private battleStarts = -1;
   private particles!: Particles;
@@ -226,9 +266,15 @@ export class GameSystem extends createSystem({}) {
   /** The settings page is open from the main menu, and the reach check was started from it. */
   private menuSettings = false;
   private menuMeasure = false;
+  /** v3 (1.10): the reach check runs because the tutorial was skipped on a first visit; the home screen follows it. */
+  private measureThenMenu = false;
   /** The empty tool slots hint (Fight poked with an empty slot): time left (seconds), and its red arrow. */
   private slotsHintLeft = 0;
   private slotsArrow!: PointerArrow;
+  /** The dark view while a map is built (src/ui/viewFade.ts). */
+  private fade!: ViewFade;
+  /** A trophy was earned in battle: the shelf redraws when the home screen shows. */
+  private trophiesChanged = false;
   /**
    * The map (docs/custom-mode.md section 11, step 5): its group in the board
    * (ground, roads, camps, villages, decor), the night lights' group, its
@@ -241,9 +287,17 @@ export class GameSystem extends createSystem({}) {
   private mapKey: string = MAPS.tutorialKey;
   /** A map is being built: no battle starts, the menu takes no choice. */
   private loading = false;
+  /** How long the menu has waited on a map load (seconds; the safety in tickMenu). */
+  private loadingFor = 0;
   private camps!: RisingCamps;
   /** The Custom Game level being fought (its id), for its name and best stars on the win panel. */
   private customId: string | null = null;
+  /** The Endless run being played (its map's key, its card stacks and its card draws), or null. */
+  private endless: { key: string; stacks: Map<string, number>; rng: Random } | null = null;
+  /** The Endless breather's card panel, what it offers now, and whether this breather's pick was made. */
+  private boostPicker!: BoostPicker;
+  private offer: { kind: 'cards'; cards: BoostCard[] } | { kind: 'tools'; tools: PickTool[] } | null = null;
+  private breatherPicked = false;
   private compass!: Compass;
   /** The camps sending now, reused each frame for the compass. */
   private sending: number[] = [];
@@ -253,7 +307,11 @@ export class GameSystem extends createSystem({}) {
   init(): void {
     // The page hidden (the headset off, the Quest browser in the background): pause on the next frame.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') this.blurSeen = true;
+      if (document.visibilityState === 'hidden') {
+        this.blurSeen = true;
+        // Trophies not saved yet are kept even if the page closes now.
+        this.achievements?.flush();
+      }
     });
     void this.setup().catch((error) => console.error('[game] setup failed', error));
   }
@@ -283,7 +341,13 @@ export class GameSystem extends createSystem({}) {
     this.audio = new GameAudio(root, this.player.head, createRandom(seed + 100));
     this.particles = new Particles(root, createRandom(seed + 101));
     this.juice = new Juice(root, createRandom(seed + 102));
-    this.handles = new BoardHandles(this.stage);
+    // v3 (docs/v3-plan.md 1.7): the compass crank spins the board in battles (the ring handle is gone).
+    this.compass = new Compass(this.stage.boardLift);
+    this.handles = new CompassCrank(this.stage, this.compass, this.audio);
+    // The board's height in a battle: the home screen's height rail, shown only while paused (v3, docs/v3-plan.md 1.7).
+    this.pauseRail = new HeightRail(this.stage);
+    this.pauseRail.group.visible = false;
+    this.stage.boardLift.add(this.pauseRail.group);
     // The giant's seat: the hole is filled at board level, and the giant's body comes out of it.
     buildSeatFloor(this.stage.boardLift, createRandom(seed + 720));
     this.giant = new GiantBody(root);
@@ -317,16 +381,32 @@ export class GameSystem extends createSystem({}) {
     const toolParts = { stage: this.stage, goblins: this.goblins, audio: this.audio, particles: this.particles };
     this.swatter = new FlySwatter(toolParts);
     this.pepper = new PepperShaker(toolParts);
+    // v3 2.2: pepper on the ground outside the wall fills the pepper ring (built after fadeAtNight, so it keeps its colors at night).
+    this.pepperRing = new PepperRing(this.stage, this.goblins, this.audio, this.particles, this.compass);
+    this.pepper.onHover = (x, z) => this.pepperRing.hoverAt(x, z);
+    this.pepper.onGround = (x, z, dt) => this.pepperRing.shake(x, z, dt);
     this.stun = new StunWave(this.stage, this.goblins, this.audio, this.particles);
     this.horn = new Horn(toolParts);
-    // The bell rings, the game stuns: every goblin dizzy, the shock ring across the board, the rampart goblins knocked down.
-    this.bell = new Bell(toolParts);
-    this.bell.stunning = () => this.stun.active;
-    this.bell.onRing = (where, seconds) => {
+    // The drum is struck, the game stuns: every goblin dizzy, the shock ring across the board, the rampart goblins knocked down.
+    this.drum = new Drum(toolParts);
+    this.drum.stunning = () => this.stun.active;
+    // The big drum rises on the compass's spot while the stick is held (2026-11-17).
+    this.drum.sinkCompass = (share) => this.compass.sink(share);
+    this.drum.onStrike = (where, seconds) => {
       const stunned = this.stun.stun(seconds, where);
+      // v3 2.6: every goblin the drum touched counts it as a helper (Jack of All Trades).
+      for (const g of this.goblins.list) if (g.stunned > 0 || g.mode === 'rampart') this.goblins.credit(g, 'drum');
       return stunned + this.goblins.knockOffRampart();
     };
-    this.tools = [this.swatter, this.pepper, this.bell, this.horn];
+    // v3 2.2: the magnet, the magnifying glass (with the sun garden) and the sugar bowl.
+    this.magnet = new Magnet(toolParts);
+    this.magnifier = new Magnifier(toolParts);
+    this.magnifier.timeOfDay = () => this.timeOverride ?? this.battle.timeOfDay;
+    this.garden = new Garden(this.stage.boardSpin, this.goblins, this.audio, this.particles);
+    this.magnifier.garden = this.garden;
+    this.sugar = new SugarBowl(toolParts);
+    this.slingshot.onCubeLanded = (x, y, z) => this.sugar.landAt(x, y, z);
+    this.tools = [this.swatter, this.pepper, this.drum, this.horn, this.magnet, this.magnifier, this.sugar];
     this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
     // The wall garrison (v2): archers and guards on the rampart, run with the troops.
     const garrison = new Garrison(this.stage.boardSpin, this.troops, this.goblins, this.audio, this.particles, createRandom(seed + 810));
@@ -337,22 +417,43 @@ export class GameSystem extends createSystem({}) {
     // Goblins on the rampart hunt the soldiers there, and jump in only when none is left (v2).
     this.goblins.huntAngle = (g) => garrison.nearestSoldierAngle(g);
     this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
+    this.magnifier.triggers = this.triggers;
+    // v3 2.1: the magnet pulls bell tower bells; the potion cart turns goblins into chickens.
+    this.magnet.triggers = this.triggers;
+    this.chickens = new Chickens(this.stage.boardSpin, this.audio, this.particles, createRandom(seed + 995));
+    this.triggers.onChickens = (points) => {
+      this.chickens.spawn(points);
+      // v3 Phase 4: goblins turned into chickens count as a trap's knockouts.
+      for (const p of points) this.battle.noteTrapped(p);
+    };
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
+    // v3: the swatter pushes balloons away instead of popping them.
+    this.swatter.balloons = this.balloons;
     this.gearDebris = new GearDebris(this.stage.boardSpin, createRandom(seed + 960));
     this.goblins.debris = this.gearDebris;
     this.troops.debris = this.gearDebris;
+    // Gear pulled by the magnet flies to its tips and is crushed there with a clank and a puff (2026-11-17).
+    this.magnet.gearTarget = this.gearDebris.magnetAt;
+    this.gearDebris.onMagnet = (at) => {
+      const world = this.stage.boardSpin.localToWorld(at.clone());
+      this.audio.play('magnetClank', world, 0.9, 0.05);
+      this.particles.burst(world, MAGNET.clankColors, 8, 0.1);
+    };
     // Villagers going about their day in the village squares (decor, their own random stream).
     this.villagers = new Villagers(this.stage.boardSpin, built.villages, createRandom(seed + 970));
     await Promise.all([
       this.villagers.load(),
       this.slingshot.load(),
       this.troops.load(),
-      this.triggers.load(blueprint.triggers),
+      this.triggers.load(built.trapSpots),
       this.goblins
         .load()
         .then(() => this.gearDebris.load(['goblinSpear', 'goblinSword', 'goblinHelmet', 'goblinShield', 'roundShield', 'rectShield'], this.goblins.unitScale)),
       ...this.tools.map((t) => t.load()),
+      this.garden.load(),
     ]);
+    // v3 2.2: the seed beds beside this map's roads (their own seeded stream), clear of the trap spots.
+    this.garden.place(built.network, built.trapSpots, createRandom(seed + 990));
     // Every trigger can be shot: the aim assist bends toward it and it glows while aimed at.
     for (const target of this.triggers.targets) this.slingshot.addTarget(target);
     // Balloons too: a big still target, so the aim assist bends toward it.
@@ -368,12 +469,36 @@ export class GameSystem extends createSystem({}) {
       }
     };
     this.threat = new ThreatCues(this.stage, this.particles, root);
+    // v3 Phase 3: the digger, the shaman, the bomber and the goblin archers' own behavior.
+    this.kinds = new GoblinKinds(
+      this.stage.boardSpin,
+      this.goblins,
+      this.troops,
+      garrison,
+      this.triggers,
+      this.pepperRing,
+      this.threat,
+      this.particles,
+      this.audio,
+      createRandom(seed + 1010),
+    );
+    this.kinds.damage = (amount) => this.battle.damage(amount);
+    this.triggers.onClear = () => {
+      this.chickens.clear();
+      this.kinds.clear();
+    };
     this.pauseMenu = new PauseMenu(root, this.stage.boardLift, this.audio);
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
+    // v3 Phase 3: debug goblins come out like wave goblins (a digger under the ground, an archer with its post).
+    this.spawner.spawnKind = (type, campIndex) => {
+      const camps = this.network.graph.camps;
+      if (camps.length > 0) this.kinds.spawn(type, camps[campIndex % camps.length]);
+    };
     this.debugRng = createRandom(seed + 400);
     const waves = new WaveSpawner(this.stage.boardSpin, built.network, this.goblins, built.hills, this.audio, createRandom(seed + 500));
     this.waves = waves;
+    waves.spawnKind = (type, camp) => this.kinds.spawn(type, camp);
     // A wave's balloons float straight in from their camp's direction.
     const campAt = new Vector3();
     waves.onBalloon = (camp) => {
@@ -385,25 +510,27 @@ export class GameSystem extends createSystem({}) {
     this.sign = new HintSign(this.stage.boardLift, this.audio);
     // The welcome panel's Settings button opens the settings page on its own (there is no battle to pause).
     this.endPanel = new EndPanel(this.stage.boardLift, this.audio, this.particles);
+    this.boostPicker = new BoostPicker(this.stage.boardLift, this.audio);
     this.endPanel.onSettings = () => {
       this.endPanel.hide();
       this.titleSettings = true;
       this.pauseMenu.showSettings(headPosition, headForward, this.stage.boardScale);
     };
     const flags = new Flags(this.stage.boardLift);
-    // The compass in front, out by the wall (replaces the blue wave flag): where enemies come from, how many, the camps, the wave and the goblins left.
-    this.compass = new Compass(this.stage.boardLift);
+    // The compass (built earlier, with its crank): where enemies come from, how many, the camps, the wave and the goblins left.
     this.bait = new LessonBait(this.goblins, built.network);
     this.battle = new Battle({
       stage: this.stage,
       goblins: this.goblins,
       spawner: waves,
       slingshot: this.slingshot,
-      tools: { swatter: this.swatter, pepper: this.pepper, bell: this.bell, horn: this.horn },
+      tools: { swatter: this.swatter, pepper: this.pepper, drum: this.drum, horn: this.horn, magnet: this.magnet, glass: this.magnifier, sugar: this.sugar },
+      garden: this.garden,
       troops: this.troops,
       triggers: this.triggers,
       balloons: this.balloons,
       stun: this.stun,
+      pepperRing: this.pepperRing,
       flags,
       panel: this.endPanel,
       sign: this.sign,
@@ -422,16 +549,10 @@ export class GameSystem extends createSystem({}) {
       celebrate: (won) => this.juice.celebrate(won, this.boardCenter(), this.stage.boardScale),
       camps: this.camps,
       compass: this.compass,
+      crank: this.handles,
       setGarrison: (rules) => garrison.setRules(rules),
     });
-    this.grabEat.onEat = (goblin) => {
-      this.battle.noteEaten(goblin.seasoned);
-      // v2 (docs/v2-plan.md 2.2): every recharging tool's ring jumps forward together, with a flash and a chime.
-      const share = eatShare(goblin.seasoned, TOOLS.eatRefill, TOOLS.seasonedRefill);
-      let filled = false;
-      for (const tool of this.tools) if (tool.refill(share)) filled = true;
-      if (filled) this.audio.play('foodAdded', undefined, 0.8, 0.1);
-    };
+    // v3 2.5: eating heals the castle (the battle counts it and heals): set in wireAchievements.
     // Juice hooks: a star and a ring on every knockout, a big hit for blasts and pops.
     this.goblins.onKnockOut = (_goblin, world) => this.juice.knockout(world, this.stage.boardScale);
     this.goblins.onArmor = (_goblin, world) => {
@@ -448,6 +569,12 @@ export class GameSystem extends createSystem({}) {
     this.hornAim = new HornAim(this.stage, this.troops, this.audio);
     this.glass = new GlassSign(root);
     this.horn.aimValid = () => this.hornAim.valid;
+    // v3 2.5: call, boost or move. A call or a boost costs a charge; a move is free after its lockout.
+    this.horn.aimKind = () => this.hornAim.kind;
+    this.horn.squadsOut = () => this.troops.anySquad;
+    this.troops.canCall = () => this.horn.charged;
+    this.hornAim.canPay = (plan) => (plan.kind === 'move' ? this.troops.moveLock <= 0 : this.horn.charged);
+    this.hornAim.lockShare = () => this.troops.moveLock / KNIGHTS.moveLockout;
     this.horn.onCall = (blown) => {
       // The full bar stays up a moment after the call (see updateGlass).
       this.blowShown = GLASS_SIGN.blownHold;
@@ -455,8 +582,20 @@ export class GameSystem extends createSystem({}) {
       // The spot looked at a moment before the blow (blowing moves the head a little).
       const target = this.hornAim.callTarget();
       // Debug (no hands, no aim): the road in front.
-      if (target && this.troops.command(target)) this.hornAim.markCalled(target);
-      else this.troops.charge(this.stage.spin);
+      if (!target) {
+        this.troops.charge(this.stage.spin);
+        return;
+      }
+      // The path is marked first (the walk the knights will take), then they go.
+      const kind = this.hornAim.kind;
+      // The charge is spent already: the kind the aim showed is what happens.
+      this.troops.callOverride = kind === 'new';
+      this.hornAim.markCalled(target);
+      const done = this.troops.command(target);
+      this.troops.callOverride = null;
+      if (!done) this.hornAim.cancelCalled();
+      // v3 2.6 Commander: call, boost and move in one battle.
+      else if (kind) this.achievements.hornOrder(kind === 'new' ? 'call' : kind);
     };
     // Their crash into the goblins: a hit stop, a ring and a pow star.
     this.troops.onCrash = (world) => {
@@ -466,6 +605,7 @@ export class GameSystem extends createSystem({}) {
     };
     this.grabEat.onGrab = () => this.battle.notePicked();
     this.grabEat.onToss = (_goblin, speed) => this.battle.noteTossed(speed);
+    this.wireAchievements(root);
     // The menus (v2 run 2): display copies of the tools for the shelf and the stand, made before the tools hide,
     // and the trophy model (docs/assets.md) for the achievements shelf.
     const [trophy, platform] = await Promise.all([
@@ -473,6 +613,11 @@ export class GameSystem extends createSystem({}) {
       // The loadout stand uses the tools' own battle platform, so what is put there is what the battle shows.
       loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width: TOOL_SPOTS.platformWidth }),
     ]);
+    // A panel drawn ahead goes to the GPU at once (behind a fade), never on the frame it first shows.
+    setTextureUploader((texture) => {
+      mark('texture upload');
+      this.renderer.initTexture(texture);
+    });
     this.menu = new Menu(
       this.stage,
       this.audio,
@@ -480,24 +625,50 @@ export class GameSystem extends createSystem({}) {
       {
         swatter: this.swatter.displayModel(),
         pepper: this.pepper.displayModel(),
-        bell: this.bell.displayModel(),
+        drum: this.drum.displayModel(),
         horn: this.horn.displayModel(),
         slingshot: this.slingshot.displayModel(),
+        magnet: this.magnet.displayModel(),
+        glass: this.magnifier.displayModel(),
+        sugar: this.sugar.displayModel(),
       },
       { trophy, platform },
       // Separate copies for the campaign card's reward (a small turning tool).
-      { swatter: this.swatter.displayModel().model, pepper: this.pepper.displayModel().model, bell: this.bell.displayModel().model },
+      {
+        swatter: this.swatter.displayModel().model,
+        pepper: this.pepper.displayModel().model,
+        drum: this.drum.displayModel().model,
+        magnet: this.magnet.displayModel().model,
+        glass: this.magnifier.displayModel().model,
+        sugar: this.sugar.displayModel().model,
+      },
       // And full-size copies to hold when a reward is grabbed off the card.
-      { swatter: this.swatter.displayModel(), pepper: this.pepper.displayModel(), bell: this.bell.displayModel() },
+      {
+        swatter: this.swatter.displayModel(),
+        pepper: this.pepper.displayModel(),
+        drum: this.drum.displayModel(),
+        magnet: this.magnet.displayModel(),
+        glass: this.magnifier.displayModel(),
+        sugar: this.sugar.displayModel(),
+      },
     );
     // Compile the home screen and upload its tags now, so the first grab or first look never hitches.
     this.menu.warm(this.renderer, this.scene, this.camera);
+    this.fade = new ViewFade(this.camera);
+    // Every goblin and soldier built now, hidden, then every shader compiled: nothing is built or compiled mid-battle.
+    this.goblins.prebuild();
+    this.troops.prebuild();
+    // The horn's ghost knights and icons too (they were made on the first aim).
+    this.hornAim.prepare();
+    // Every trophy's toast drawn now (it was drawn the frame it was earned).
+    this.toast.prepare();
+    this.warmGpu();
     // The empty tool slots hint's red arrow (POINTER.threat's look, flying to the slot once it is in view).
     this.slotsArrow = new PointerArrow(root, { ...POINTER.threat, flies: true });
     // What sinks into the ground for the menu: the castle, the flags, the ring handle, the tools and their platforms.
     this.swap = new SceneSwap();
     this.swap.addBattle(castle);
-    for (const o of [...flags.roots, ...this.handles.groups]) this.swap.addBattle(o);
+    for (const o of flags.roots) this.swap.addBattle(o);
     // The compass sinks too; it shows itself only while a battle is fought.
     this.swap.addBattle(this.compass.group, false);
     for (const o of [...this.slingshot.groups, ...this.tools.flatMap((t) => t.groups)]) this.swap.addBattle(o, false);
@@ -553,11 +724,216 @@ export class GameSystem extends createSystem({}) {
     console.info('[game] ready');
   }
 
+  /**
+   * v3 2.6: the achievements (docs/v3-plan.md 2.6). The tracker hears what
+   * happens in a battle; the secret abilities' own links (the magnet pulls a
+   * keg to the slingshot, pepper on sugar, the sun for the glass) are here too.
+   */
+  private wireAchievements(root: Object3D): void {
+    const A = new Achievements(this.goblins);
+    this.achievements = A;
+    this.toast = new TrophyToast(root, this.audio, this.particles);
+    A.onUnlock = (id) => {
+      this.toast.show(id);
+      // The shelf (hidden in battle) catches up when the home screen shows (audit 2026-11-17: no redraw mid-battle).
+      this.trophiesChanged = true;
+    };
+    this.goblins.onKnockOutBy = (g, cause, trap) => {
+      A.knockedOut(g, cause);
+      this.battle.noteKnockOut(g, trap ? 'traps' : cause);
+    };
+    // Eating heals (v3 2.5); a seasoned goblin is Acquired Taste, a chicken Change of Menu.
+    this.grabEat.onEat = (goblin) => {
+      this.battle.noteEaten(goblin.seasoned);
+      A.eaten(goblin, goblin.seasoned);
+    };
+    this.grabEat.chickens = this.chickens;
+    this.grabEat.onEatChicken = () => {
+      this.battle.noteChickenEaten();
+      A.chickenEaten();
+    };
+    this.slingshot.onGoblinShot = () => {
+      A.goblinShot();
+      this.battle.noteGoblinShot();
+    };
+    this.slingshot.onFireLit = () => A.fireLit();
+    // Package Deal: the magnet pulls a keg to its stand by the bowl; shot, it blows up where it lands.
+    this.magnet.onKegPulled = () => this.slingshot.addKeg();
+    this.slingshot.onKegBlast = (at) => {
+      this.triggers.blastAt(at, this.slingshot.kegBlastRadius, 'slingshot');
+      A.kegBlast();
+    };
+    this.magnet.onStrip = (pieces) => A.gearPulled(pieces);
+    // Bright Idea: the way to the sun from the head.
+    this.magnifier.sunDirection = (out) => {
+      if (!this.sky?.sunWorld(out)) return false;
+      out.sub(headPosition).normalize();
+      return true;
+    };
+    this.magnifier.waveNow = () => this.battle.timeWave;
+    this.magnifier.onSunCharge = () => A.sunCharge();
+    this.triggers.onBellRung = () => A.bellRung();
+    this.triggers.onSetOffBy = (kind, by) => A.trapSetOff(kind, by);
+    // Secret Recipe: pepper falling on a sugar cube makes it spicy.
+    this.pepper.onSprinkle = (at, dt) => this.sugar.pepperAt(at, dt);
+    this.sugar.onSpicyEaten = () => A.spicyEaten();
+    this.pepperRing.onDiggerStopped = () => A.diggerStopped();
+    // Real battles only: a level, Custom Game, a battle after Skip tutorial (never the tutorial's lessons).
+    this.battle.onStarted = (teach) => {
+      // Endless: a restart is a fresh run on the same map (no cards picked yet).
+      this.endless?.stacks.clear();
+      this.endBreather();
+      A.startBattle(teach ? null : ((this.battle.loadout ?? null) as PickTool[] | null), !teach);
+      this.magnifier.resetSun();
+      this.slingshot.clearExtras();
+      this.toast.clear();
+    };
+    // Endless: each breather offers boost cards (or new tools after waves 10, 20, 30, 40).
+    this.battle.endlessBreather = {
+      start: (cleared) => this.startBreather(cleared),
+      done: () => this.breatherPicked,
+      end: () => this.endBreather(),
+    };
+    this.battle.onWaveStarted = () => A.waveStarted(this.livePlants());
+    this.battle.onWaveCleared = () => A.waveCleared(this.livePlants());
+  }
+
+  /** v3 2.6 Green Thumb: the plants standing now (each its own object). */
+  private livePlants(): object[] {
+    const out: object[] = [];
+    for (const bed of this.garden.beds) if (bed.plant) out.push(bed.plant);
+    return out;
+  }
+
   private get immersive(): boolean {
     return this.visibilityState.value !== VisibilityState.NonImmersive;
   }
 
-  /** The head in XR, the camera on a desktop. */
+  /**
+   * IWSDK's own hand model (the white outline hand, `world.input.xr.visualAdapters.hand`) for a hand the
+   * headset is not tracking right now is hidden (headset test 2026-11-13: the "white artifact" in front of
+   * the eyes, only while one hand was not tracked). IWSDK sets `visual.model.visible = isPrimary` every frame
+   * (XRInputManager.updateControllersAndHands) even when the hand's joint poses fail, and then it skips
+   * moving the model, so a lost hand stays drawn at a stale spot in a broken pose. This runs after IWSDK's
+   * input update and before the frame is drawn, so it wins.
+   */
+  /** Seconds each hand has been tracked without a break (a hand is shown only after HANDS.showAfter). */
+  private handSteady = { left: 0, right: 0 };
+
+  /**
+   * IWSDK's see-through hands, drawn only while that hand is really tracked (headset tests 2026-11-13 to 17:
+   * white hands floated in front of the eyes with both hands out of view). Why the earlier fixes failed:
+   *   - `model.visible = false`: IWSDK sets the model's `visible` again every frame while the hand's input
+   *     source is connected, so it could be undone before the frame was drawn.
+   *   - Scaling the model to 0: a skinned hand is placed by its bones (joint poses written each frame),
+   *     not by its parent's scale, so the hand could still draw at its last or rest pose.
+   *   - A hand coming back is rebuilt in its rest pose (near the head) and drawn a frame or two before its
+   *     first pose arrives.
+   * Now every mesh inside the model goes to a camera layer that is never drawn (HANDS.hiddenLayer) while the
+   * hand is lost, and back only after it has been tracked steadily for HANDS.showAfter seconds. IWSDK never
+   * touches the meshes' layers, and a layer hides a mesh however its bones move. A rebuilt model is new, so
+   * it is hidden the first frame it is seen.
+   */
+  private hideLostHandModels(dt: number): void {
+    const xr = this.input.xr;
+    const rig = this.player;
+    let anyShown = false;
+    for (const state of this.hands.hands) {
+      const tracked = state.tracked && state.lostTime <= 0;
+      const side = state.side as 'left' | 'right';
+      this.handSteady[side] = tracked ? this.handSteady[side] + dt : 0;
+      const show = this.handSteady[side] >= HANDS.showAfter;
+      if (show) anyShown = true;
+      // 2026-11-17 (the white shapes were still there): not only IWSDK's hand model but everything it hangs on
+      // that hand: its controller model, and whatever sits on the hand's ray, grip and index tip spaces (pointer
+      // rays and cursors that freeze where tracking dropped). A lost hand draws nothing at all.
+      const parts: (Object3D | undefined)[] = [
+        xr.visualAdapters.hand[side]?.visual?.model,
+        xr.visualAdapters.controller[side]?.visual?.model,
+        rig.raySpaces[side],
+        rig.gripSpaces[side],
+        rig.secondaryRaySpaces[side],
+        rig.secondaryGripSpaces[side],
+        rig.indexTipSpaces[side],
+      ];
+      for (const part of parts) {
+        if (!part || part.userData.handShown === show) continue;
+        part.userData.handShown = show;
+        part.traverse((o) => {
+          if (show) o.layers.set(0);
+          else o.layers.set(HANDS.hiddenLayer);
+        });
+      }
+    }
+    // Both hands gone for a moment: name anything still drawn near the eyes on the debug page, once, so a
+    // leftover artifact can be found by name (it was guessed at three times).
+    this.bothLostFor = anyShown ? 0 : this.bothLostFor + dt;
+    // Dev server only (it walks the whole scene once).
+    if (import.meta.env.DEV && this.bothLostFor >= 0.6 && !this.nearHeadNoted && this.immersive) {
+      this.nearHeadNoted = true;
+      this.noteNearHead();
+    }
+    if (anyShown) this.nearHeadNoted = false;
+  }
+
+  private bothLostFor = 0;
+  private nearHeadNoted = false;
+
+  /**
+   * Debug (headset test 2026-11-13, a white artifact floating in front of the eyes): every mesh that would be
+   * drawn now (it and all its parents visible) whose bounds come within 40 cm of the eyes, as debug notes:
+   * its path of names or types, its size, its color, and whether it draws on top (depthTest off).
+   */
+  private noteNearHead(): void {
+    this.readHead();
+    const box = new Box3();
+    const sphere = new Sphere();
+    // Also around the default eye spot (the board's middle, BOARD.eyeToBoard up), so it works while leaning aside.
+    const eyes = this.stage.boardLift.getWorldPosition(new Vector3());
+    eyes.y += BOARD.eyeToBoard * this.stage.boardScale;
+    // Small things only (headset test: the castle and the seat floor, 2 m across, wrap round the eyes and filled the list).
+    const found: { gap: number; text: string }[] = [];
+    const instance = new Matrix4();
+    const consider = (o: Object3D, label: string): void => {
+      const gap = Math.min(sphere.center.distanceTo(headPosition), sphere.center.distanceTo(eyes)) - sphere.radius;
+      if (gap > 0.4 || sphere.radius > 0.3) return;
+      const path: string[] = [];
+      for (let p: Object3D | null = o; p && p !== this.scene && path.length < 6; p = p.parent) path.unshift(p.name || p.type);
+      const m = (Array.isArray((o as Mesh).material) ? ((o as Mesh).material as MeshBasicMaterial[])[0] : (o as Mesh).material) as MeshBasicMaterial | undefined;
+      const color = m?.color ? `#${m.color.getHexString()}` : '-';
+      found.push({
+        gap,
+        text: `[near head] ${path.join(' > ')}${label} | ${m?.type ?? '-'} ${color}${m?.map ? ' textured' : ''}${m?.depthTest === false ? ' ON TOP' : ''} | ${(sphere.radius * 200).toFixed(0)} cm, ${(Math.max(0, gap) * 100).toFixed(0)} cm away, at ${sphere.center.toArray().map((v) => v.toFixed(2)).join(', ')}`,
+      });
+    };
+    this.scene.traverseVisible((o) => {
+      // Meshes, sprites, points and lines alike (anything with a geometry).
+      const geometry = (o as Mesh).geometry as BufferGeometry | undefined;
+      if (!geometry) return;
+      o.updateWorldMatrix(true, false);
+      if (!geometry.boundingBox) geometry.computeBoundingBox();
+      const inst = o as unknown as { isInstancedMesh?: boolean; count: number; getMatrixAt(i: number, m: Matrix4): void };
+      if (inst.isInstancedMesh) {
+        // Each instance on its own (particles, clouds, units): a zero-scaled one is hidden.
+        for (let i = 0; i < inst.count; i++) {
+          inst.getMatrixAt(i, instance);
+          if (instance.determinant() === 0) continue;
+          box.copy(geometry.boundingBox!).applyMatrix4(instance.premultiply(o.matrixWorld));
+          box.getBoundingSphere(sphere);
+          consider(o, ` [instance ${i}]`);
+        }
+        return;
+      }
+      box.copy(geometry.boundingBox!).applyMatrix4(o.matrixWorld);
+      box.getBoundingSphere(sphere);
+      consider(o, '');
+    });
+    found.sort((a, b) => a.gap - b.gap);
+    // The notes column keeps only the last 4 lines (MAX_NOTES): the nearest 3, then the summary line.
+    for (const f of found.slice(0, 3).reverse()) note(f.text);
+    note(`[near head] ${found.length} small thing(s) within 40 cm; head ${headPosition.toArray().map((v) => v.toFixed(2)).join(', ')}, eyes ${eyes.toArray().map((v) => v.toFixed(2)).join(', ')}`);
+  }
+
   private readHead(): void {
     const head = this.immersive ? this.player.head : this.camera;
     head.updateWorldMatrix(true, false);
@@ -588,7 +964,11 @@ export class GameSystem extends createSystem({}) {
    * its stars and opens the next level; its end panel shows the stars and a
    * Menu button.
    */
-  private battleOver(won: boolean, share: number): 'menu' | EndExtras {
+  private battleOver(won: boolean, _share: number): 'menu' | EndExtras {
+    // v3 2.6: Commander and Jack of All Trades are earned on a win.
+    this.achievements.endBattle(won);
+    // Trophies earned during the battle are saved now (not the frame they were earned).
+    this.achievements.flush();
     if (this.battle.teaching) {
       if (!won) return { menu: false };
       recordTutorial(progress, true);
@@ -596,10 +976,20 @@ export class GameSystem extends createSystem({}) {
       this.goToMenu('main');
       return 'menu';
     }
-    // Every win shows its stars now (2026-11-12, the revamped win panel), from the red flag's share left.
-    const stars = starsFor(share, MENU.stars.threeAt, MENU.stars.twoAt);
+    // Every win shows its stars (2026-11-12); v3 Phase 4: from the score's share of par.
+    const score = this.battle.finalScore();
+    const stars = starsFor(score.par > 0 ? score.total / score.par : 1, SCORE.stars.threeAt, SCORE.stars.twoAt);
+    // Endless: the score plus the waves survived; the best run is saved on the device.
+    if (this.battle.endless) {
+      const waves = this.battle.wavesSurvived;
+      const total = score.total + waves * ENDLESS.waveBonus;
+      const best = recordEndless(progress, total, waves);
+      saveProgress();
+      console.info(`[endless] run over: wave ${waves}, score ${total}${best ? ' (new best)' : ''}`);
+      return { menu: true, subtitle: `Endless: ${waves} ${waves === 1 ? 'wave' : 'waves'} survived`, endless: { score: total, best, bestScore: progress.endlessBest?.score ?? total } };
+    }
     // A Custom Game level: its name under the title, and its best stars kept with it.
-    if (this.battle.playingLevel) {
+    if (this.battle.playingLevel && this.battle.level === null) {
       const entry = customLevels.levels.find((l) => l.id === this.customId);
       const subtitle = entry?.name;
       if (!won || !entry) return { menu: true, subtitle, stars: won ? stars : undefined };
@@ -625,21 +1015,51 @@ export class GameSystem extends createSystem({}) {
     return { stars, menu: true, best: before > 0 && stars > before, next, subtitle };
   }
 
-  /** The win panel's Next level: the next campaign level starts right away (the same map for now, so no swap). */
+  /**
+   * The win panel's Next level: the next campaign level starts right away.
+   * With its own level file its map is built first (the end panel stays
+   * until it is up); without one, the normal battle on the same map.
+   */
   private nextLevel(): void {
     const level = this.battle.level;
     if (level === null || !isOpen(progress, level + 1)) {
       this.goToMenu('campaign');
       return;
     }
-    this.battle.level = level + 1;
-    this.battle.loadout = this.pickedTools();
-    console.info(`[campaign] next: level ${level + 1}`);
-    this.battle.start(0, false);
+    const next = level + 1;
+    const file = campaignLevel(next);
+    console.info(`[campaign] next: level ${next}`);
+    if (!file) {
+      this.battle.useTutorialWaves();
+      this.battle.level = next;
+      this.battle.loadout = this.pickedTools();
+      if (this.mapKey === MAPS.tutorialKey) this.battle.start(0, false);
+      else this.withTutorialMap(() => this.battle.start(0, false));
+      return;
+    }
+    void this.loadMap(`campaign:${next}`, file.map).then((ok) => {
+      if (!ok) return;
+      this.battle.level = next;
+      this.battle.loadout = this.pickedTools(file.rules.tools);
+      this.battle.playLevel(file);
+    });
   }
 
-  /** Skip tutorial (welcome or pause panel): the tutorial counts as done, and the menu comes up. */
+  /**
+   * Skip tutorial (welcome or pause panel): the tutorial counts as done, and
+   * the menu comes up. v3 (docs/v3-plan.md 1.10): on a first visit the reach
+   * check runs first (it sizes the whole board), so skipping never leaves the
+   * board at the default size. It is saved, so it runs only once.
+   */
   private skipToMenu(): void {
+    if (!this.battle.reachIsKnown && !this.measureThenMenu) {
+      this.measureThenMenu = true;
+      this.endPanel.hide();
+      this.measuring = true;
+      this.battle.startMeasure();
+      return;
+    }
+    this.measureThenMenu = false;
     recordTutorial(progress, false);
     saveProgress();
     this.goToMenu('main');
@@ -653,7 +1073,15 @@ export class GameSystem extends createSystem({}) {
     this.threat.hideArrow();
     this.hornAim.hide();
     this.glass.hide();
+    this.toast.clear();
+    this.achievements.active = false;
     this.battle.stop();
+    // Trophies earned in the battle: saved and shown on the shelf now, not mid-battle.
+    this.achievements.flush();
+    if (this.trophiesChanged) {
+      this.trophiesChanged = false;
+      this.menu.refreshTrophies();
+    }
     this.menu.open(page);
     this.swap.toMenu(
       () => {
@@ -667,13 +1095,29 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** The menu page a battle goes back to: Custom Game's list after one of its levels, else the campaign. */
-  private menuAfterBattle(): 'campaign' | 'customList' {
-    return this.battle.playingLevel ? 'customList' : 'campaign';
+  private menuAfterBattle(): 'main' | 'customList' {
+    // 2026-11-17: campaign levels play their own level files now too, so "playing a level" no longer meant
+    // Custom Game, and Home after a campaign level opened the Custom Game list. Only a Custom Game level goes
+    // back to its list; the campaign, Endless and the rest go to the home screen.
+    return this.customId ? 'customList' : 'main';
   }
 
   /** The loadout's 2 picked hand tools for a battle (the slingshot and the horn are always out). */
-  private pickedTools(): ('swatter' | 'pepper' | 'bell' | 'horn')[] {
-    return battleTools(progress.loadout).filter((t) => t !== 'slingshot') as ('swatter' | 'pepper' | 'bell' | 'horn')[];
+  /**
+   * The loadout's tools for a battle. A level that allows only some tools
+   * (docs/custom-mode.md "Allowed lists") keeps those, then fills the free
+   * slots with its other allowed tools the player has unlocked, so a level
+   * never starts empty. It never adds a locked tool.
+   */
+  private pickedTools(allowed?: PickTool[]): PickTool[] {
+    const picked = battleTools(progress.loadout);
+    if (!allowed) return picked;
+    const kept = picked.filter((t) => allowed.includes(t));
+    for (const t of allowed) {
+      if (kept.length >= LOADOUT_SLOTS) break;
+      if (!kept.includes(t) && toolUnlocked(progress, t)) kept.push(t);
+    }
+    return kept;
   }
 
   // ---- Map loading (docs/custom-mode.md section 11, step 5) ----
@@ -707,10 +1151,151 @@ export class GameSystem extends createSystem({}) {
    * could not (already loading, or the build failed: the tutorial map is
    * built again then).
    */
+  /**
+   * Compiles every shader in the scene (hidden things too: three compiles
+   * every object, seen or not) and uploads every texture now. Lazily,
+   * the first knockout star, gear debris, banner or pop compiled mid-battle,
+   * and on the Quest that dropped frame shows as the sky and UI flickering
+   * (headset test 2026-11-17).
+   */
+  /** Draws the whole scene once, every object shown and none culled, into a 1x1 target, then puts it all back. */
+  private drawEverythingOnce(): void {
+    const hidden: Object3D[] = [];
+    const culled: Object3D[] = [];
+    this.scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o);
+        o.visible = true;
+      }
+      if (o.frustumCulled) {
+        culled.push(o);
+        o.frustumCulled = false;
+      }
+    });
+    const target = new WebGLRenderTarget(1, 1);
+    const before = this.renderer.getRenderTarget();
+    try {
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.scene, this.camera);
+    } catch (error) {
+      note(`[warm] full draw failed: ${String(error)}`);
+    } finally {
+      this.renderer.setRenderTarget(before);
+      target.dispose();
+      for (const o of hidden) o.visible = false;
+      for (const o of culled) o.frustumCulled = true;
+    }
+  }
+
+  /** The parts the last Render stats listed, for Hide part (debug). */
+  private statParts: Object3D[] = [];
+
+  /**
+   * Debug: what the GPU draws each frame. The last frame's totals, then the 8 heaviest visible parts of the
+   * scene by triangles (the most specific node that still holds most of a heavy branch), numbered for Hide part.
+   */
+  private renderStats(): void {
+    const info = this.renderer.info;
+    note(`[render] last frame: ${info.render.calls} draw calls, ${info.render.triangles} triangles; ${info.programs?.length ?? 0} shaders, ${info.memory.textures} textures, ${info.memory.geometries} geometries`);
+    const cost = new Map<Object3D, { tris: number; calls: number; transparent: number }>();
+    const walk = (o: Object3D): { tris: number; calls: number; transparent: number } => {
+      const c = { tris: 0, calls: 0, transparent: 0 };
+      if (!o.visible) return c;
+      const mesh = o as Mesh;
+      if (mesh.isMesh && mesh.geometry) {
+        const g = mesh.geometry;
+        const per = (g.index ? g.index.count : (g.attributes.position?.count ?? 0)) / 3;
+        const instanced = o as unknown as { isInstancedMesh?: boolean; count?: number };
+        c.tris += per * (instanced.isInstancedMesh ? (instanced.count ?? 1) : 1);
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        c.calls += materials.length;
+        if (materials.some((m) => m.transparent)) c.transparent++;
+      }
+      for (const child of o.children) {
+        const k = walk(child);
+        c.tris += k.tris;
+        c.calls += k.calls;
+        c.transparent += k.transparent;
+      }
+      cost.set(o, c);
+      return c;
+    };
+    const total = walk(this.scene);
+    note(`[render] scene: ${Math.round(total.tris)} triangles, ${total.calls} meshes (${total.transparent} see-through)`);
+    const heavy = [...cost.entries()].filter(([o, c]) => o !== this.scene && c.tris >= total.tris * 0.03);
+    const set = new Set(heavy.map(([o]) => o));
+    // Keep the most specific: drop a node when one child already holds 80% of its triangles.
+    const parts = heavy.filter(([o, c]) => !o.children.some((ch) => set.has(ch) && (cost.get(ch)?.tris ?? 0) >= c.tris * 0.8));
+    parts.sort((a, b) => b[1].tris - a[1].tris);
+    this.statParts = parts.slice(0, 8).map(([o]) => o);
+    this.statParts.forEach((o, i) => {
+      const c = cost.get(o)!;
+      const path: string[] = [];
+      for (let p: Object3D | null = o; p && p !== this.scene && path.length < 3; p = p.parent) path.unshift(p.name || p.type);
+      note(`[render] ${i + 1}. ${path.join(' > ')}: ${Math.round(c.tris)} tris, ${c.calls} meshes, ${c.transparent} see-through`);
+    });
+  }
+
+  private warmGpu(): void {
+    const startedAt = performance.now();
+    mark('warm gpu');
+    // In VR the headset draws through a stereo (multiview) target, and three builds a different shader for it.
+    // A warm-up compiled outside VR (or with no target set) made the plain ones only, so in the headset every
+    // material still compiled its stereo version the first time it showed: the flicker that came back with
+    // hits, knockouts and fights (audit 2026-11-17). Setting the target to null while presenting selects the
+    // XR target, so the compile makes the versions the headset really draws with.
+    const presenting = this.renderer.xr.isPresenting;
+    const before = this.renderer.getRenderTarget();
+    if (presenting) this.renderer.setRenderTarget(null);
+    this.renderer.compile(this.scene, this.camera);
+    if (presenting) this.renderer.setRenderTarget(before);
+    // Outside VR (setup, the 2D page): one real draw of everything, hidden things too, into a tiny target
+    // nobody sees. Compiling makes shaders but sends no shapes: a mesh's geometry goes to the GPU the first
+    // time it is drawn, so a hidden model (a card's reward tool, a pooled unit, an effect) still uploaded
+    // mid-game the first time it showed (2026-11-17: campaign card taps flickered). Once drawn, it stays.
+    if (!presenting) this.drawEverythingOnce();
+    const seen = new Set<unknown>();
+    this.scene.traverse((o) => {
+      // A skinned unit's bone texture is made and uploaded the first time it is drawn: for a pooled goblin or
+      // soldier that was mid-fight (2026-11-17: knights fighting and boulder knockouts still flickered).
+      const skinned = o as SkinnedMesh;
+      if (skinned.isSkinnedMesh && skinned.skeleton) {
+        if (!skinned.skeleton.boneTexture) skinned.skeleton.computeBoneTexture();
+        const bones = skinned.skeleton.boneTexture;
+        if (bones && !seen.has(bones)) {
+          seen.add(bones);
+          this.renderer.initTexture(bones);
+        }
+      }
+      const material = (o as Mesh).material as unknown;
+      if (!material) return;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        for (const value of Object.values(m as Record<string, unknown>)) {
+          const texture = value as { isTexture?: boolean; isRenderTargetTexture?: boolean; image?: unknown };
+          if (!texture || !texture.isTexture || texture.isRenderTargetTexture || !texture.image || seen.has(texture)) continue;
+          seen.add(texture);
+          this.renderer.initTexture(texture as Parameters<typeof this.renderer.initTexture>[0]);
+        }
+      }
+    });
+    // Textures made ahead but not on a mesh yet (a panel's other sizes, button icons).
+    for (const texture of preparedTextures) {
+      if (seen.has(texture)) continue;
+      seen.add(texture);
+      this.renderer.initTexture(texture);
+    }
+    note(`GPU warmed: ${seen.size} textures in ${(performance.now() - startedAt).toFixed(0)} ms`);
+  }
+
   private async loadMap(key: string, blueprint: Blueprint): Promise<boolean> {
-    if (key === this.mapKey) return true;
-    if (this.loading) return false;
+    if (key === this.mapKey || this.loading) {
+      // Nothing to build: never leave the view dark (Endless darkens it before calling).
+      this.fade.in();
+      return key === this.mapKey;
+    }
     this.loading = true;
+    // The view goes dark first: building a map blocks the page for a moment (Endless froze for 1 to 2 s).
+    await this.fade.out();
     const startedAt = performance.now();
     mark('map load');
     let ok = false;
@@ -740,10 +1325,15 @@ export class GameSystem extends createSystem({}) {
       this.waves.setMap(built.network, built.hills);
       this.bait.setNetwork(built.network);
       this.spawner.setRoadCount(built.network.graph.camps.length);
-      this.triggers.place(built.network, blueprint.triggers);
+      this.triggers.place(built.network, built.trapSpots);
       this.triggers.hideAll();
+      this.garden.place(built.network, built.trapSpots, createRandom(blueprint.seed + 990), blueprint.extras?.beds);
       for (const target of this.triggers.targets) this.slingshot.addTarget(target);
       this.villagers.setVillages(built.villages);
+      // The new map's shaders and textures, still in the dark (a unit cap change grows the pools here too).
+      this.goblins.prebuild();
+      this.troops.prebuild();
+      this.warmGpu();
       this.mapKey = key;
       ok = true;
       const ms = performance.now() - startedAt;
@@ -758,6 +1348,7 @@ export class GameSystem extends createSystem({}) {
       this.loading = false;
     }
     if (!ok && key !== MAPS.tutorialKey) await this.loadMap(MAPS.tutorialKey, this.tutorialBlueprint);
+    this.fade.in();
     return ok;
   }
 
@@ -775,11 +1366,101 @@ export class GameSystem extends createSystem({}) {
     if (!(await this.loadMap(`custom:${entry.id}:${entry.changed}`, level.map))) return;
     this.battle.level = null;
     this.customId = entry.id;
-    this.battle.loadout = this.pickedTools();
+    this.endless = null;
+    this.battle.loadout = this.pickedTools(level.rules.tools);
     this.battle.useLevel(level);
     this.battle.hideLaterCamps();
     console.info(`[custom] ${entry.name}: ${battleTools(progress.loadout).join(', ')}`);
     this.goToBattle(() => this.battle.playLevel(level));
+  }
+
+  /**
+   * Endless (docs/v3-plan.md Phase 5): a fresh random map every run (made
+   * by the generator from a new seed, built while the menu still shows),
+   * then the run's waves on the fixed ramp with the loadout's 4 tools.
+   * Restart and Try again play a fresh run on the same map.
+   */
+  private async startEndless(): Promise<void> {
+    if (this.loading) return;
+    // The run's seed (every pick after it goes through seeded random streams).
+    const seed = Math.floor(Math.random() * SEED.max);
+    // The generator runs in the dark too (it blocks the page while it plans the map).
+    await this.fade.out();
+    let level: Level;
+    try {
+      level = makeEndlessLevel(seed);
+    } catch (error) {
+      console.error('[endless] no map', error);
+      note(`Endless: no map from seed ${seed}: ${String(error)}`);
+      this.fade.in();
+      return;
+    }
+    const key = `endless:${level.meta.seed}`;
+    if (!(await this.loadMap(key, level.map))) return;
+    this.battle.level = null;
+    this.customId = null;
+    this.endless = { key, stacks: new Map(), rng: createRandom(level.meta.seed * 31 + 7) };
+    this.battle.loadout = this.pickedTools();
+    this.battle.useLevel(level);
+    this.battle.hideLaterCamps();
+    console.info(`[endless] seed ${level.meta.seed}: ${this.battle.loadout.join(', ')}`);
+    note(`Endless run: seed ${level.meta.seed}, ${level.map.nodes.filter((n) => n.kind === 'camp').length} camps`);
+    this.goToBattle(() => this.battle.playEndless(level));
+  }
+
+  /** An Endless breather starts (after `cleared` waves): a new tool pick after the tool waves, else the boost cards. */
+  private startBreather(cleared: number): void {
+    const run = this.endless;
+    this.breatherPicked = false;
+    if (!run) {
+      this.breatherPicked = true;
+      return;
+    }
+    const stand = this.battle.stand;
+    if (ENDLESS.toolWaves.includes(cleared)) {
+      // Every tool not on the stand is shown (not 3 at random), so a bad draw never costs a build.
+      const tools = PICK_TOOLS.filter((t) => !stand.includes(t));
+      if (tools.length > 0) {
+        this.offer = { kind: 'tools', tools };
+        this.boostPicker.showTools(tools);
+        return;
+      }
+    }
+    const cards = drawCards(run.rng, stand, run.stacks, ENDLESS.cards, ENDLESS.rareChance);
+    if (cards.length === 0) {
+      this.breatherPicked = true;
+      return;
+    }
+    this.offer = { kind: 'cards', cards };
+    this.boostPicker.showCards(cards, run.stacks);
+  }
+
+  /** The breather ended (picked, or out of time): the panel goes. */
+  private endBreather(): void {
+    this.offer = null;
+    this.boostPicker.hide();
+  }
+
+  /** Every frame of a battle: the breather's panel, and what was picked on it. */
+  private updateBreather(dt: number): void {
+    const offer = this.offer;
+    if (!offer || this.paused) return;
+    const i = this.boostPicker.update(this.hands.hands, dt);
+    if (i === null) return;
+    if (offer.kind === 'tools') {
+      const tool = offer.tools[i];
+      if (tool) this.battle.addTool(tool);
+      console.info(`[endless] new tool: ${tool}`);
+    } else if (this.endless) {
+      const card = offer.cards[i];
+      const wallBefore = BOOST.wall;
+      const stacks = pickCard(card, this.endless.stacks);
+      if (BOOST.wall !== wallBefore) this.battle.growWall(BOOST.wall / wallBefore);
+      this.audio.play('lessonDone');
+      console.info(`[endless] card: ${card.name} (${stacks})`);
+    }
+    this.breatherPicked = true;
+    this.endBreather();
   }
 
   /** The menu sinks, the battle rises, then `start` starts the battle. */
@@ -792,19 +1473,41 @@ export class GameSystem extends createSystem({}) {
     this.swap.toBattle(() => {}, start, instant);
   }
 
-  /** Fight on a campaign level: the normal battle without the tutorial, with the loadout (decided 2026-11-11 for run 2). */
+  /**
+   * Fight on a campaign level: its own frozen level file (made by `npm run
+   * gen -- --campaign`): its map, waves and rules, with the loadout (only
+   * the tools the level allows). A level with no file plays the normal
+   * battle on the tutorial map, as before.
+   */
   private fight(level: number): void {
-    this.withTutorialMap(() => {
+    const file = campaignLevel(level);
+    this.customId = null;
+    this.endless = null;
+    if (!file) {
+      this.withTutorialMap(() => {
+        this.battle.level = level;
+        this.battle.loadout = this.pickedTools();
+        this.battle.hideLaterCamps();
+        console.info(`[campaign] level ${level} (no level file): ${battleTools(progress.loadout).join(', ')}`);
+        this.goToBattle(() => this.battle.start(0, false));
+      });
+      return;
+    }
+    void this.loadMap(`campaign:${level}`, file.map).then((ok) => {
+      if (!ok) return;
       this.battle.level = level;
-      this.battle.loadout = this.pickedTools();
+      this.battle.loadout = this.pickedTools(file.rules.tools);
+      this.battle.useLevel(file);
       this.battle.hideLaterCamps();
-      console.info(`[campaign] level ${level}: ${battleTools(progress.loadout).join(', ')}`);
-      this.goToBattle(() => this.battle.start(0, false));
+      console.info(`[campaign] level ${level}: ${this.battle.loadout.join(', ')}`);
+      this.goToBattle(() => this.battle.playLevel(file));
     });
   }
 
   /** Replay tutorial (main menu): the whole tutorial again, every tool on its own spot. */
   private replayTutorial(): void {
+    this.endless = null;
+    this.customId = null;
     this.withTutorialMap(() => {
       this.battle.level = null;
       this.battle.loadout = null;
@@ -822,16 +1525,16 @@ export class GameSystem extends createSystem({}) {
   /** The menu's frame: the shelves, the panels, the settings page from it, and the living board around (no battle). */
   private tickMenu(dt: number): void {
     this.stage.update(dt);
-    // No battle: the compass is hidden.
+    // No battle: the compass (and its crank) and the pause height rail are hidden.
     this.compass.group.visible = false;
+    this.pauseRail.group.visible = false;
     this.villagers.update(dt);
     this.particles.update(dt);
     this.juice.update(dt, headPosition);
     this.sky?.update(dt);
     this.updateTimeOfDay(dt);
     this.windmill.update(dt);
-    this.fog.near = SKY.fogNear * this.stage.boardScale;
-    this.fog.far = SKY.fogFar * this.stage.boardScale;
+    updateRoadside(dt);
     // The empty tool slots hint: the glass sign in front of the eyes and a red arrow at the empty slot, for a few seconds.
     this.slotsHintLeft = this.swap.shown === 'menu' ? Math.max(0, this.slotsHintLeft - dt) : 0;
     const slot = this.slotsHintLeft > 0 ? this.menu.emptySlotWorld(slotAt) : null;
@@ -845,7 +1548,16 @@ export class GameSystem extends createSystem({}) {
     }
     if (this.swap.shown !== 'menu') return;
     // A map is being built (Fight on a Custom Game level): the menu waits, so nothing is chosen twice.
-    if (this.loading) return;
+    // A safety (2026-11-17, the menu stopped answering): a build never takes this long; if the flag is
+    // stuck the menu answers again, with a note, instead of waiting for a reload.
+    if (this.loading) {
+      this.loadingFor += dt;
+      if (this.loadingFor < 15) return;
+      note('[menu] a map load never finished: the menu answers again');
+      this.loading = false;
+      this.fade.in();
+    }
+    this.loadingFor = 0;
     if (this.menuSettings) {
       // The settings page from the main menu: Back brings the panels again, Measure reach runs the reach check.
       const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
@@ -881,10 +1593,28 @@ export class GameSystem extends createSystem({}) {
     } else if (choice.kind === 'replay') this.replayTutorial();
     else if (choice.kind === 'fight') this.fight(choice.level);
     else if (choice.kind === 'customFight') void this.fightCustom(choice.id);
+    else if (choice.kind === 'endless') void this.startEndless();
     else if (choice.kind === 'needTools') this.slotsHintLeft = MENU.shelves.emptySlotsHint.seconds;
   }
 
   /** The board's middle in the world (for the celebrations). */
+  /** v3 Phase 3 debug: the camp (its place in the camp list) whose direction is nearest the player's front. */
+  private frontCampIndex(): number {
+    const camps = this.network.graph.camps;
+    const at = new Vector3();
+    let best = 0;
+    let bestD = Infinity;
+    camps.forEach((node, i) => {
+      this.network.nodePosition(node, at);
+      const d = Math.abs(angleDelta(this.stage.spin, angleOf(at.x, at.z)));
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
   private boardCenter(): Vector3 {
     return this.stage.boardLift.getWorldPosition(boardAt);
   }
@@ -911,6 +1641,10 @@ export class GameSystem extends createSystem({}) {
       if (now - this.lastErrorAt > 1000) {
         this.lastErrorAt = now;
         console.error('[game] frame error (the game goes on)', error);
+        // On the debug page too, with where it was thrown (the headset's console cannot be seen).
+        const e = error as Error;
+        const where = e?.stack?.split('\n').find((l) => l.includes('/src/')) ?? '';
+        note(`[error] frame: ${e?.message ?? String(error)} ${where.trim()}`);
       }
     }
   }
@@ -919,6 +1653,7 @@ export class GameSystem extends createSystem({}) {
 
   private tick(delta: number): void {
     if (!this.ready) return;
+    this.fade.update(delta);
     // Entering VR: place the board once the head pose has settled.
     const immersive = this.immersive;
     if (immersive && !this.wasImmersive) {
@@ -1001,6 +1736,7 @@ export class GameSystem extends createSystem({}) {
     const dt = Math.min(delta, 0.05);
     this.player.updateWorldMatrix(true, false);
     this.hands.update(this.world.xrFrame, this.world.xrReferenceSpace, this.player.matrixWorld, dt);
+    this.hideLostHandModels(dt);
     this.readHead();
     // The Quest menu gesture (a pinch with the palm toward the eyes) pauses at once, whatever the browser reports.
     if (immersive && this.battle.canPause && !this.menuPaused && this.metaGesture(dt)) this.pause('menu gesture');
@@ -1020,8 +1756,10 @@ export class GameSystem extends createSystem({}) {
       if (this.battle.updateMeasure(dt, this.hands.hands, headPosition, headForward)) {
         this.measuring = false;
         this.resume();
+        // v3 (1.10): measured first because the tutorial was skipped on a first visit: on to the home screen.
+        if (this.measureThenMenu) this.skipToMenu();
         // Measured from the welcome panel's settings: back to the welcome panel.
-        if (this.titleMeasure) {
+        else if (this.titleMeasure) {
           this.titleMeasure = false;
           this.endPanel.showAgain();
         }
@@ -1051,9 +1789,25 @@ export class GameSystem extends createSystem({}) {
       // Shown here, not when pausing: auto-pause happens while the head pose is unknown (Quest menu).
       if (!this.pauseMenu.isOpen) this.pauseMenu.show(headPosition, headForward, this.stage.boardScale, this.battle.teaching);
       const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
+      // v3 (docs/v3-plan.md 1.7): the height rail shows while paused (never in a wave or a breather).
+      this.pauseRail.group.visible = this.menuPaused;
+      // The compass (and its crank) steps away while paused: the height rail sits where it stands (headset test
+      // 2026-11-13: they overlapped). It comes back on resume (updateCompass).
+      if (this.menuPaused) this.compass.group.visible = false;
+      if (this.menuPaused) {
+        // The rail turns with the pause panel, which follows the head (headset test 2026-11-13): it is always in front.
+        this.pauseMenu.facing(railFacing);
+        this.stage.boardLift.updateWorldMatrix(true, false);
+        railInverse.copy(this.stage.boardLift.matrixWorld).invert();
+        railFacing.transformDirection(railInverse);
+        // The rail's arc is built round the front (-z); turning it by -a puts its middle at board angle a.
+        if (!this.pauseRail.isHeld) this.pauseRail.group.rotation.y = -angleOf(railFacing.x, railFacing.z);
+        this.pauseRail.update(this.hands.hands, dt);
+      }
       if (action) this.pauseAction(action);
       return;
     }
+    this.pauseRail.group.visible = false;
     // The pause button steps aside while the Next button (on the same spot, higher) shows.
     const pauseOn = immersive && this.battle.canPause && !this.sign.nextShown;
     if (this.pauseMenu.updateButton(dt, this.hands.hands, pauseOn)) this.pause();
@@ -1061,7 +1815,12 @@ export class GameSystem extends createSystem({}) {
 
     if (this.placeTimer > 0) {
       this.placeTimer -= dt;
-      if (this.placeTimer <= 0) this.placeBoard();
+      if (this.placeTimer <= 0) {
+        this.placeBoard();
+        // Now in VR (its stereo target exists): every shader again in its stereo version, while the
+        // player is only just looking around, never mid-battle.
+        this.warmGpu();
+      }
     }
     // Once the board is in place (in VR, after the auto placement), the welcome
     // panel shows. Its Play button starts the battle (in the browser: the debug page's Restart game).
@@ -1084,9 +1843,11 @@ export class GameSystem extends createSystem({}) {
     this.handles.update(dt);
     this.spawner.update(dt);
     this.battle.update(dt, this.hands.hands, headPosition, headForward);
+    this.updateBreather(dt);
     // Hit stop (juice): on a big hit the units slow to a crawl for a moment. The board, view and hands never do.
     const unitDt = dt * this.juice.timeScale;
     this.goblins.update(unitDt);
+    this.kinds.update(unitDt);
     this.troops.update(unitDt);
     this.villagers.update(unitDt);
     this.balloons.update(unitDt);
@@ -1098,36 +1859,48 @@ export class GameSystem extends createSystem({}) {
     this.horn.headForward.copy(headForward);
     // The horn lesson's "look around" beat: the horn waits for the "blow" sign.
     this.horn.waiting = this.battle.hornWaiting;
+    // v3 2.2: the magnifying glass is aimed by the head.
+    this.magnifier.headPosition.copy(headPosition);
+    this.magnifier.headForward.copy(headForward);
     this.grabEat.update(dt, headPosition, headForward);
+    // Sugar cubes are pinched off their bowl by a free hand.
+    this.sugar.updateHands(this.hands.hands, (hand) => this.grabEat.handBusy(hand), this.slingshot, dt);
+    // v3 2.6 Night Owl: the torch by the pebble bowl burns at sunset and night only.
+    const timeNow = this.magnifier.timeOfDay();
+    this.slingshot.torchLit = timeNow === 'sunset' || timeNow === 'night';
     this.slingshot.update(dt, headPosition);
+    this.toast.update(dt, headPosition, headForward);
     for (const tool of this.tools) tool.update(dt);
+    this.garden.update(unitDt);
+    this.chickens.update(unitDt, headPosition, headForward);
     // The horn held: the head aims it (a glowing pool, a light pillar, a ghost banner and the path along the roads);
     // raised into the blow zone it turns gold.
     this.hornAim.update(dt, this.horn.aiming, this.horn.ready, this.horn.charge, headPosition, headForward);
     this.updateGlass(dt, headPosition, headForward);
     this.stun.update(dt);
+    this.pepperRing.update(dt);
     this.threat.update(dt);
     // The red arrow only while a battle is fought, and not while a lesson's yellow arrow points the way.
     this.updateCompass(dt);
-    // A camp that just rose gets the arrow too, until the player looks at it (docs/custom-mode.md section 7).
+    // The red arrow is only for goblins at, on or over the wall. A camp that just rose no longer gets it
+    // (headset test 2026-11-13: it looked random, pointing far away as the camp's first goblins came out);
+    // the compass's amber tent and wedge warn about camps instead.
     if (this.battle.canPause && !this.battle.lessonPointing) {
-      const camp = this.camps.unseenWorld(dt, headPosition, headForward, campArrowAt);
-      this.threat.updateArrow(dt, this.goblins, headPosition, headForward, camp);
+      this.threat.updateArrow(dt, this.goblins, headPosition, headForward, null);
     } else this.threat.hideArrow();
     this.particles.update(unitDt);
     this.juice.update(dt, headPosition);
     this.sky?.update(dt);
     this.updateTimeOfDay(dt);
     this.windmill.update(dt);
-    this.fog.near = SKY.fogNear * this.stage.boardScale;
-    this.fog.far = SKY.fogFar * this.stage.boardScale;
+    updateRoadside(dt);
   }
 
   /**
    * The compass (src/ui/compass.ts), while a battle is fought: camps whose
-   * drums have started (amber), goblins on the board by how close they are
-   * (far, near, at the wall or inside: the color) and how many (the height),
-   * a tent for every camp that is up, the wave and the goblins left.
+   * drums have started (amber), goblins on the board by what they do (v3:
+   * walking in yellow, attacking red) and how many (the size), a tent for
+   * every camp that is up, the wave and the goblins left.
    */
   private updateCompass(dt: number): void {
     const compass = this.compass;
@@ -1148,15 +1921,18 @@ export class GameSystem extends createSystem({}) {
       }
       for (const g of this.goblins.list) {
         const mode = g.mode;
-        if (mode === 'dead' || mode === 'held') continue;
+        // v3 Phase 3: a digger under the ground has no wedge (no early warning).
+        if (mode === 'dead' || mode === 'held' || mode === 'tunneling') continue;
         const p = g.root.position;
-        const danger = mode === 'atWall' || mode === 'climbing' || mode === 'rampart' || mode === 'intruder';
-        compass.add(p.x, p.z, danger ? 4 : Math.hypot(p.x, p.z) < COMPASS.near ? 3 : 2);
+        // v3: red while attacking (bashing, climbing, on the rampart, inside, a lit fuse), yellow while walking in.
+        const danger = mode === 'atWall' || mode === 'climbing' || mode === 'rampart' || mode === 'intruder' || mode === 'fuse';
+        compass.add(p.x, p.z, danger ? 3 : 2);
       }
     }
     const fighting = this.battle.fightingWave;
     const left = fighting ? this.waves.waiting(BALLOONS.riders) + this.goblins.aliveCount : null;
-    compass.end(dt, on, this.battle.waveNumber, this.battle.totalWaves, left);
+    // Endless has no last wave: no wave dots (the banner says the wave).
+    compass.end(dt, on, this.battle.waveNumber, this.battle.endless ? 0 : this.battle.totalWaves, left);
   }
 
   /**
@@ -1168,9 +1944,14 @@ export class GameSystem extends createSystem({}) {
     const starts = this.battle.starts;
     const fresh = starts !== this.battleStarts;
     this.battleStarts = starts;
-    if (fresh) this.timeOverride = null;
-    this.dayNight.show(this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves), fresh);
-    this.dayNight.update(dt);
+    if (fresh) {
+      this.timeOverride = null;
+      this.fogOverride = null;
+    }
+    // v3 2.7: a foggy level's night fog (it shows only at night, and changes only between waves).
+    this.dayNight.foggy = this.fogOverride ?? this.battle.foggy;
+    this.dayNight.show(this.timeOverride ?? this.battle.timeOfDay, fresh);
+    this.dayNight.update(dt, this.stage.boardScale);
     this.nightLights.update(dt, this.dayNight.lights);
   }
 
@@ -1185,22 +1966,32 @@ export class GameSystem extends createSystem({}) {
     let bar: GlassBar | null = null;
     if (horn.aiming && horn.ready && !horn.waiting) {
       bar = horn.listening
-        ? { share: horn.loudness / (HORN.blowLevel * GLASS_SIGN.hornBarMax), line: 1 / GLASS_SIGN.hornBarMax, over: horn.loudness > HORN.blowLevel }
+        ? { share: horn.loudness / (HORN.speakLevel * GLASS_SIGN.hornBarMax), line: 1 / GLASS_SIGN.hornBarMax, over: horn.loudness > HORN.speakLevel }
         : { share: horn.charge, line: null, over: false };
     }
     let text = this.battle.glassText;
     if (!text && horn.aiming) {
+      // v3 2.5: what the blow will do (call, boost, move), or why it cannot.
+      const kind = this.hornAim.kind;
+      const block = this.hornAim.blocked;
+      const verb = kind === 'boost' ? 'Boost' : kind === 'move' ? 'Move' : 'Call';
       text = !this.hornAim.valid
-        ? 'Look at a road'
+        ? block === 'charge'
+          ? 'The horn is resting'
+          : block === 'lockout'
+            ? 'Wait to move again'
+            : 'Look at a road'
         : horn.ready
           ? horn.listening
-            ? 'Blow!'
+            ? `${verb}: say "Charge!"`
             : horn.micSilent
               ? 'No mic sound: hold it there'
-              : 'Hold it there'
-          : horn.listening
-            ? 'Raise it and blow'
-            : 'Raise it in front of you';
+              : `${verb}: hold it there`
+          : horn.inZone
+            ? 'Lower it, then raise it again'
+            : horn.listening
+              ? `${verb}: raise it, say "Charge!"`
+              : `${verb}: raise it in front of you`;
     }
     // Just blown: the bar stays full and gold for a moment, so the player sees the blow was loud enough
     // (headset test: it vanished the instant it passed the line).
@@ -1318,6 +2109,8 @@ export class GameSystem extends createSystem({}) {
   private resume(): void {
     if (!this.menuPaused) return;
     this.menuPaused = false;
+    this.pauseRail.release();
+    this.pauseRail.group.visible = false;
     this.measuring = false;
     this.pauseMenu.hide();
     this.battle.notePaused();
@@ -1354,7 +2147,9 @@ export class GameSystem extends createSystem({}) {
       case 'quitToMenu':
         // Out of a battle back to the home screen (the battle is not saved, no stars); a Custom Game level goes back to its list.
         this.resume();
-        this.goToMenu(this.battle.playingLevel ? 'customList' : 'main');
+        // The same rule as the end panel's Menu (2026-11-17: Endless and the campaign play level files too, so
+        // "playing a level" sent them to the Custom Game list).
+        this.goToMenu(this.menuAfterBattle());
         break;
     }
   }
@@ -1406,8 +2201,21 @@ export class GameSystem extends createSystem({}) {
       case 'openMenu':
         this.goToMenu('main');
         break;
+      case 'shelfWhere':
+        for (const line of this.menu.debugShelf(this.hands.hands)) note(line);
+        note(`[shelf] menu state: shown ${this.swap.shown}, loading ${this.loading}, settings ${this.menuSettings}, measuring ${this.menuMeasure}, battle measuring ${this.measuring}, ready ${this.ready}`);
+        break;
       case 'openCustom':
         this.goToMenu('customList');
+        break;
+      case 'startEndless':
+        if (this.swap.shown !== 'menu') console.info('[debug] open the menu first');
+        else void this.startEndless();
+        break;
+      case 'endlessCards':
+      case 'endlessTools':
+        if (!this.battle.endless) console.info('[debug] start an Endless run first');
+        else this.startBreather(id === 'endlessTools' ? ENDLESS.toolWaves[0] : 1);
         break;
       case 'fightCustom': {
         // The newest saved Custom Game level (the list is newest first), with the loadout as it is.
@@ -1425,6 +2233,7 @@ export class GameSystem extends createSystem({}) {
       case 'resetSave':
         resetProgress();
         this.menu.refresh();
+        this.menu.refreshTrophies();
         console.info('[debug] saved progress forgotten (the tutorial, stars, unlocks, the loadout)');
         break;
       case 'unlockAll':
@@ -1495,6 +2304,20 @@ export class GameSystem extends createSystem({}) {
       case 'resetRun':
         this.fps.resetRun();
         break;
+      case 'renderStats':
+        this.renderStats();
+        break;
+      case 'hidePart': {
+        const part = this.statParts[(arg ?? 1) - 1];
+        if (!part) {
+          note('[render] no such part: press Render stats first');
+          break;
+        }
+        part.visible = !part.visible;
+        note(`[render] part ${arg} ${part.name || part.type} now ${part.visible ? 'shown' : 'hidden'}`);
+        this.fps.resetRun();
+        break;
+      }
       case 'autoTest':
         // Only a page in VR runs it, so a laptop tab never measures instead of the headset.
         if (!this.immersive) {
@@ -1521,6 +2344,31 @@ export class GameSystem extends createSystem({}) {
       case 'slingGoblin':
         this.slingshot.debugLoadGoblin();
         break;
+      case 'slingFire':
+        this.slingshot.debugLoadFire();
+        break;
+      case 'slingKeg':
+        this.slingshot.debugLoadKeg();
+        break;
+      case 'spicyLure':
+        this.sugar.debugLure(true);
+        break;
+      case 'chickensFront': {
+        // By the wall straight in front (board cm), a little apart.
+        const points = [-6, 0, 6].map((x) => this.stage.boardSpin.worldToLocal(this.stage.boardLift.localToWorld(new Vector3(x, 0, -(CASTLE.wallOut + 4)))));
+        this.chickens.spawn(points);
+        break;
+      }
+      case 'trophiesAll':
+        this.achievements.unlockAll();
+        this.menu.refreshTrophies();
+        console.info('[debug] every achievement earned');
+        break;
+      case 'trophiesForget':
+        this.achievements.forgetAll();
+        this.menu.refreshTrophies();
+        console.info('[debug] every achievement forgotten');
+        break;
       case 'bowlEmpty':
         this.slingshot.debugBowl(false);
         break;
@@ -1535,12 +2383,16 @@ export class GameSystem extends createSystem({}) {
         for (const tool of this.tools) if (tool.visible) tool.drain();
         console.info('[debug] every tool out recharges from empty');
         break;
+      case 'nearHead':
+        this.noteNearHead();
+        break;
       case 'eatRefill':
-        // What eating one goblin does to the rings, without a goblin.
-        for (const tool of this.tools) tool.refill(TOOLS.eatRefill);
+        // What eating one goblin does (v3 2.5: heals the castle), without a goblin.
+        this.battle.heal(false);
         break;
       case 'showTools':
-        for (const tool of this.tools) if (!tool.visible) tool.appear();
+        // The tutorial's tools on their own spots (the v3 2.2 tools have "Show new tools").
+        for (const tool of [this.swatter, this.pepper, this.drum, this.horn]) if (!tool.visible) tool.appear();
         break;
       case 'swat':
         this.swatter.debugSwat();
@@ -1548,11 +2400,36 @@ export class GameSystem extends createSystem({}) {
       case 'pepper':
         this.pepper.debugShake();
         break;
+      case 'pepperRing':
+        // The front segment and its two neighbors, full at once.
+        this.pepperRing.debugFillFront(true);
+        break;
+      case 'magnet':
+        this.magnet.debugPull();
+        break;
+      case 'sugar':
+        this.sugar.debugLure();
+        break;
+      case 'garden':
+        this.magnifier.debugGrow();
+        break;
+      case 'newTraps':
+        // v3 2.1: the haystacks, bell tower and bridge stand now, and the potion cart shows.
+        this.triggers.showNewTraps();
+        break;
+      case 'newTools':
+        // v3 2.2: the magnet, glass and sugar bowl on the left spots now (no loadout needed).
+        this.magnet.setSpot(LOADOUT_SPOTS[2]);
+        this.magnifier.setSpot(LOADOUT_SPOTS[3]);
+        this.sugar.setSpot(TOOL_SPOTS.leftMiddle);
+        for (const t of [this.swatter, this.pepper, this.drum]) t.setVisible(false);
+        for (const t of [this.magnet, this.magnifier, this.sugar]) if (!t.visible) t.appear();
+        break;
       case 'horn':
         this.horn.debugBlow();
         break;
-      case 'bell':
-        this.bell.debugRing();
+      case 'drum':
+        this.drum.debugStrike();
         break;
       case 'troops':
         // What the horn does, without the horn: a squad charges down the road in front.
@@ -1568,12 +2445,13 @@ export class GameSystem extends createSystem({}) {
         this.garrison.thin(2);
         break;
       case 'triggersReset':
-        this.triggers.setWave(this.battle.totalWaves);
+        this.triggers.setWave(this.battle.totalWaves, true);
         break;
       case 'triggerLesson': {
-        // What the keg lesson does: a small group waits by the keg nearest the front until it is set off.
-        const keg = this.triggers.readyNearest('keg', this.stage.spin);
-        if (keg) this.triggers.baitGroup(keg, TRIGGERS.lesson.group);
+        // What the first trap lesson does (v3 2.6: the boulder, kegs take fire only): a small group waits by the
+        // boulder nearest the front until it is set off.
+        const boulder = this.triggers.readyNearest('boulder', this.stage.spin);
+        if (boulder) this.triggers.baitGroup(boulder, TRIGGERS.lesson.group);
         break;
       }
       case 'triggersFire':
@@ -1629,6 +2507,20 @@ export class GameSystem extends createSystem({}) {
         this.goblins.armoredNext += 3;
         this.spawner.sendGroup('grunt');
         break;
+      // v3 Phase 3: the new goblins, from the camp nearest the player's front.
+      case 'diggerFront':
+        this.spawner.sendMixed(['digger'], this.frontCampIndex());
+        break;
+      case 'shamanGroup':
+        this.goblins.armoredNext += 4;
+        this.spawner.sendMixed(['grunt', 'grunt', 'grunt', 'grunt', 'shaman'], this.frontCampIndex());
+        break;
+      case 'bomberGroup':
+        this.spawner.sendMixed(['grunt', 'grunt', 'bomber', 'grunt'], this.frontCampIndex());
+        break;
+      case 'archerGroup':
+        this.spawner.sendMixed(['archer', 'archer', 'archer'], this.frontCampIndex());
+        break;
       case 'celebrate':
         this.juice.celebrate(false, this.boardCenter(), this.stage.boardScale);
         this.troops.cheerAll();
@@ -1647,7 +2539,15 @@ export class GameSystem extends createSystem({}) {
         const time = TIMES_OF_DAY[Math.round(arg ?? 1) - 1];
         if (time) this.timeOverride = time;
         break;
-      }    }
+      }
+      case 'nightFog': {
+        // Fog on also turns to night (fog shows only then); both held until the next battle starts.
+        const on = !(this.fogOverride ?? this.battle.foggy);
+        this.fogOverride = on;
+        if (on) this.timeOverride = 'night';
+        break;
+      }
+    }
   }
 }
 

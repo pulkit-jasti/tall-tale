@@ -1,10 +1,11 @@
-// The pepper shaker (docs/giant-tools.md, v2 in docs/v2-plan.md 2.3): grab it
-// and shake it over goblins. The first shake starts about 8 seconds of
-// pepper, then it recharges. Pepper falls straight down from where the shaker
-// is, so the falling specks show where it lands. No aiming UI. Every goblin
-// in the small area under it is disarmed (weapon, helmet and shield fly off),
-// sneezes for a few seconds without attacking, and is seasoned: eating it
-// fills the tool rings twice as much. No push back.
+// The pepper shaker (docs/giant-tools.md, v3 2.2 in docs/v3-plan.md): grab it
+// and shake it. The first shake starts about 8 seconds of pepper, then it
+// recharges. Pepper falls straight down from where the shaker is, so the
+// falling specks show where it lands. No aiming UI. Every goblin in the small
+// area under it sneezes for a few seconds without attacking and is seasoned
+// (eaten, it heals double). It no longer strips armor (v3 2.2: the magnet
+// does). Pepper that lands on the ground just outside the wall fills the
+// pepper ring there (src/tools/pepperRing.ts, through onGround). No push back.
 //
 // Shaking is found from the shaker's own movement: a quick move that turns
 // back on the one before is one stroke, two strokes close together are a shake.
@@ -34,6 +35,12 @@ export class PepperShaker extends HandTool {
   /** Pepper falls until this time. */
   private shakeUntil = -Infinity;
   private speckTimer = 0;
+  /** v3 2.2: held over a board point (cm) this frame (the pepper ring shows an outline there). */
+  onHover: (x: number, z: number) => void = () => {};
+  /** v3 2.2: pepper lands on a board point (cm) for dt seconds (the pepper ring fills there). */
+  onGround: (x: number, z: number, dt: number) => void = () => {};
+  /** v3 2.6: pepper falls from this board point (cm) for dt seconds (Spicy sugar: a sugar cube under it turns spicy). */
+  onSprinkle: (board: Vector3, dt: number) => void = () => {};
 
   constructor(parts: ToolParts) {
     super(
@@ -62,6 +69,9 @@ export class PepperShaker extends HandTool {
   }
 
   protected heldUpdate(dt: number): void {
+    // Where pepper would land on the board (the ring's outline follows it).
+    this.bodyToBoard(this.topLocal, board);
+    this.onHover(board.x, board.z);
     // The shaker top in fixedRig, which never moves, so its speed is the hand's.
     this.bodyToWorld(this.topLocal, current);
     this.stage.fixedRig.worldToLocal(current);
@@ -101,6 +111,8 @@ export class PepperShaker extends HandTool {
       this.particles.drizzle(at, PEPPER.speckColors, PEPPER.speckCount, 0.012, 0.45);
     }
     this.stage.boardSpin.worldToLocal(board.copy(at));
+    this.onGround(board.x, board.z, dt);
+    this.onSprinkle(board, dt);
     const r2 = radius * radius;
     let count = 0;
     for (const g of this.goblins.list) {

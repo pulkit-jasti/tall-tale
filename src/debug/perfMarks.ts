@@ -6,6 +6,10 @@
 export type PerfMark =
   | 'goblin built'
   | 'goblin spawn'
+  | 'warm gpu'
+  | 'armor hit'
+  | 'gear debris'
+  | 'shield hit'
   | 'sound'
   | 'panel redraw'
   | 'hint sign'
@@ -23,7 +27,19 @@ export type PerfMark =
   | 'juice'
   | 'time of day'
   | 'map load'
-  | 'horn path';
+  | 'horn path'
+  | 'horn ghosts built'
+  | 'knight boost'
+  | 'night fog'
+  | 'trap back'
+  | 'trophy toast'
+  // v3 Phase 3: the new goblins.
+  | 'digger up'
+  | 'shaman cast'
+  | 'bomber blast'
+  | 'goblin volley'
+  | 'card tap'
+  | 'texture upload';
 
 const marks = new Set<PerfMark>();
 

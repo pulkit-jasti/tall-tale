@@ -11,11 +11,11 @@ const enterButton = document.getElementById('enter-vr') as HTMLButtonElement;
 const micStatus = document.getElementById('mic-status') as HTMLParagraphElement;
 
 const MIC_TEXT: Record<string, string> = {
-  unknown: 'Your war horn can hear you blow into the microphone. Tap the button to allow it (or say no: holding the horn to your mouth works just as well).',
+  unknown: 'Your war horn can hear you shout "Charge!" into the microphone. Tap the button to allow it (or say no: holding the horn to your mouth works just as well).',
   asking: 'Allow the microphone in the browser prompt...',
-  on: 'Microphone on: blow into your war horn!',
-  denied: 'No microphone: hold your war horn to your mouth to blow it. It works just as well.',
-  unsupported: 'No microphone in this browser: hold your war horn to your mouth to blow it.',
+  on: 'Microphone on: shout "Charge!" into your war horn!',
+  denied: 'No microphone: hold your war horn to your mouth to sound it. It works just as well.',
+  unsupported: 'No microphone in this browser: hold your war horn to your mouth to sound it.',
 };
 const showMic = (): void => {
   micStatus.textContent = MIC_TEXT[mic.state];

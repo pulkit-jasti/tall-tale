@@ -13,15 +13,16 @@ import type { GearShares } from '../rules/gear.js';
 import { risingByWave } from './levelDirector.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
-/** v2: the horn replaces the megaphone, and the bell is its own tool (docs/v2-plan.md 2.3). */
-export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'horn' | 'bell';
+/** v2: the horn replaces the megaphone. v3 2.2: the drum replaces the bell. */
+export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'horn' | 'drum';
 
 export interface WavePlan {
   /** Shown on the wave banner when the wave starts. */
   intro: string;
   /** Camp ids from the blueprint that send enemies this wave. */
   camps: string[];
-  counts: Record<GoblinType, number>;
+  /** Goblins of each type (v3 Phase 3: the new types are left out where there are none). */
+  counts: Partial<Record<GoblinType, number>>;
   /** Groups come out over this long (seconds). The wave itself runs until it is cleared. */
   spawnTime: number;
   /** The tool that appears on its platform in the breather before this wave. */
@@ -49,8 +50,9 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     intro: 'Goblins are coming! Eat them before they get in.',
     camps: ['campNorth'],
     // v2: no climber type, every goblin climbs. The old climbers are grunts now.
-    counts: { grunt: 9, runner: 0 },
-    spawnTime: 40,
+    // v3 (docs/v3-plan.md 1.1 and 1.5): faster goblins and shorter spawn windows, a little more food for the horn.
+    counts: { grunt: 10, runner: 0 },
+    spawnTime: 30,
     // v2: the knights only come when the horn calls them. After the basics, wave 1 first plays on its
     // own (eat a few goblins), then the horn is taught in the middle of it (headset test: too many signs in a row).
     newTool: 'horn',
@@ -59,15 +61,15 @@ export const TUTORIAL_WAVES: WavePlan[] = [
   {
     intro: 'A new camp rises! Shoot the far ones.',
     camps: ['campNorth', 'campEast'],
-    counts: { grunt: 12, runner: 0 },
-    spawnTime: 50,
+    counts: { grunt: 15, runner: 0 },
+    spawnTime: 40,
     newTool: 'slingshot',
   },
   {
     intro: 'Runners from a new camp! Small and fast.',
     camps: ['campNorth', 'campWest'],
-    counts: { grunt: 11, runner: 12 },
-    spawnTime: 55,
+    counts: { grunt: 12, runner: 8 },
+    spawnTime: 45,
     newTool: 'swatter',
   },
   {
@@ -75,8 +77,8 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     // lesson left once the bell became a campaign unlock, so this is the final wave now.
     intro: 'Final wave! A camp rises behind you. Watch your compass and spin the board.',
     camps: ['campEast', 'campSouth', 'campWest'],
-    counts: { grunt: 18, runner: 8 },
-    spawnTime: 60,
+    counts: { grunt: 20, runner: 8 },
+    spawnTime: 50,
     newTool: 'pepper',
     balloons: 3,
   },
@@ -123,10 +125,17 @@ export const TUTORIAL_TIMING = {
    * stretched arm (no hands in the browser). The tutorial's reach check waits.
    */
   reachTimeout: 40,
-  /** Spinning the board this far (degrees) finishes the spin lesson. */
-  spinGoal: 60,
-  /** Moving the board this far (cm) finishes the height lesson. */
-  heightGoal: 4,
+  /** Turning the board this far (degrees) with the crank finishes the crank lesson (v3: a quarter circle of the hand and more). */
+  spinGoal: 90,
+  /**
+   * The live compass lessons (2026-11-13): wave 1's camp rises and `count`
+   * scouts come out of it, `gap` seconds apart, starting `delay` after the
+   * camp starts rising, walking `speedScale` times as fast as a grunt so
+   * nobody waits long. They are lesson goblins: they bash the wall, climb up
+   * and then wait on the rampart to be eaten. "In front": within `frontDeg`
+   * of straight ahead.
+   */
+  scouts: { count: 3, gap: 0.6, delay: 1.5, speedScale: 2, frontDeg: 35 },
   /** The lesson climber waits on the rampart this long instead of jumping in (seconds). */
   lessonClimberWait: 90,
   /**
@@ -145,7 +154,8 @@ export const TUTORIAL_TIMING = {
 
 /** What a marker points at. The battle turns it into a world position. */
 export type MarkerTarget =
-  | 'ring'
+  /** The compass crank's knob (v3, replaced the ring). */
+  | 'crank'
   | 'lessonGoblin'
   | 'healthFlag'
   | 'compass'
@@ -155,7 +165,7 @@ export type MarkerTarget =
   | 'swatterHandle'
   | 'pepperHandle'
   | 'hornHandle'
-  | 'bellHandle'
+  | 'drumHandle'
   /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
   /** The pause button on its stand in front, while it shows. */
@@ -257,6 +267,16 @@ export interface TutorialApi {
   clearWave(): void;
   /** The lesson climber right in front of the player. `onRampart`: already up on the wall, in reach (the easier fallback). */
   lessonClimber(onRampart: boolean): void;
+  /** The live compass lessons: wave 1's camp rises and the scouts start coming out of it (keepScouts sends them). */
+  sendScouts(): void;
+  /** Every frame of a scout lesson: the scouts still to come walk out one by one. */
+  keepScouts(dt: number): void;
+  /** True once a scout is out and one of them is in front of the player (the board turned toward them). */
+  scoutsInFront(): boolean;
+  /** True once a scout attacks the wall (bashing it, climbing it or on the rampart). */
+  scoutsAttacking(): boolean;
+  /** The lesson goblin becomes a scout on (or at) the wall, the one nearest the front. False when none is left. */
+  lessonFromScouts(): boolean;
   /**
    * Every frame of a lesson that needs the lesson goblin: when it is gone
    * (eaten, thrown away, knocked out), a new one pops up on the wall in front
@@ -429,40 +449,58 @@ function reachStep(): TutorialStep {
   };
 }
 
-/** Before wave 1: moving the board, then picking up and eating the lesson climber. */
+/**
+ * Before wave 1 (rebuilt 2026-11-13, headset test: the compass was explained
+ * with nothing on it). Everything is taught as it happens on the board:
+ *   1. The crank first (the most novel thing): turn the wheel, the board spins.
+ *   2. Wave 1's camp rises and scouts walk out: their yellow mark shows on the
+ *      compass, and the player turns the board to bring them in front.
+ *   3. They reach the wall: the mark turns red.
+ *   4. Their hits pull the red flag down: the castle's health.
+ *   5. Pinch one of them off the wall, eat it, then throw one.
+ *   6. Pause, so a player who pauses by accident knows the way back.
+ * Wave 1's banner then explains the compass's middle while the wave counts down.
+ */
 function introLessons(): TutorialStep[] {
   // Eating counts from the pinch lesson on, so a goblin eaten straight away finishes both.
   let eatenBefore = 0;
+  const scouts = (api: TutorialApi, dt: number): void => api.keepScouts(dt);
   return [
-    // How to pause comes first, so a player who pauses by accident later knows the way back.
+    // v3 (docs/v3-plan.md 1.7 and 1.9): one crank lesson replaces the ring's spin and height lessons
+    // (height moved to the pause menu and the home screen; the reach check already sets it).
     lessonStep(
-      'learn-pause',
-      lesson('Poke the pause button on your right, then Resume.', 'info', 'pauseButton', {
-        doneText: 'Now you can pause!',
-      }),
-      (api, since) => api.pausedCount() > since,
-      (api) => api.pausedCount(),
-      {},
-    ),
-    lessonStep(
-      'learn-spin',
-      lesson('Grab the ring. Pull it sideways to spin.', 'spin', 'ring', { demo: 'spin' }),
+      'learn-crank',
+      lesson('Pinch the knob on your compass wheel and turn it round. The whole land spins!', 'pinch', 'crank', { demo: 'crank' }),
       (api, since) => api.boardSpun() - since >= TUTORIAL_TIMING.spinGoal,
       (api) => api.boardSpun(),
-      // The goal is met mid-pull: a moment to finish the pull and let go of the ring.
+      // The goal is met mid-turn: a moment to finish the turn and let go.
       { afterDone: PAUSE_AFTER.finish },
     ),
+    // Live: a camp rises and its scouts walk in. Their yellow mark is on the compass; the player turns them to the front.
     lessonStep(
-      'learn-height',
-      lesson('Pull the ring up or down to set the height.', 'up', 'ring', { demo: 'height' }),
-      (api, since) => api.boardMoved() - since >= TUTORIAL_TIMING.heightGoal,
-      (api) => api.boardMoved(),
-      // Done after a few cm: time to keep adjusting until the height feels right.
-      { afterDone: PAUSE_AFTER.watch },
+      'compass-coming',
+      lesson('Goblins are coming! The yellow mark on your compass shows where. Turn the knob to bring them in front.', 'spin', 'compass', {
+        doneText: 'There they are!',
+      }),
+      (api) => api.scoutsInFront(),
+      () => 0,
+      { start: (api) => api.sendScouts(), tick: scouts, afterDone: PAUSE_AFTER.finish },
     ),
+    // Live: they reach the wall and the mark turns red. Moves on by itself when they attack.
+    lessonStep(
+      'compass-attacking',
+      lesson('Watch them run to your wall. When they attack, their mark turns red.', 'warning', 'compass', {
+        doneText: 'Red: they are attacking!',
+      }),
+      (api) => api.scoutsAttacking(),
+      () => 0,
+      { tick: scouts, afterDone: PAUSE_AFTER.watch },
+    ),
+    // 2026-11-17: eating comes straight after the compass (the scouts are on the wall right then); the red
+    // flag is taught after the first meal, with what eating does for it.
     lessonStep(
       'learn-pinch',
-      lesson('A goblin! Pinch it to pick it up.', 'pinch', 'lessonGoblin', {
+      lesson('Pinch a goblin off your wall to pick it up.', 'pinch', 'lessonGoblin', {
         demo: 'pinchGoblin',
       }),
       (api, since) => api.picked() + api.eaten() > since,
@@ -470,7 +508,8 @@ function introLessons(): TutorialStep[] {
       {
         start: (api) => {
           eatenBefore = api.eaten();
-          api.lessonClimber(false);
+          // One of the scouts on the wall; only if none is left, a climber in front.
+          if (!api.lessonFromScouts()) api.lessonClimber(false);
         },
         fallbacks: [(api) => api.lessonClimber(false), (api) => api.lessonClimber(true)],
         // A lesson goblin is always there to pick up (a new one if it was thrown or swatted away).
@@ -490,6 +529,8 @@ function introLessons(): TutorialStep[] {
       // Thrown away instead of eaten: a new goblin comes to eat.
       { fallbacks: [(api) => api.lessonClimber(true)], tick: keepGoblin },
     ),
+    // After the first meal: the red flag, and that eating is how it rises again (v3 2.5).
+    infoStep('health-flag', banner('Each hit pulls your red flag down. Eating goblins raises it again.', 'warning', 'healthFlag', { header: 'Your castle' })),
     // Right after eating: goblins can also be thrown away. A new climber comes; the lesson waits for a throw.
     lessonStep(
       'learn-toss',
@@ -499,13 +540,26 @@ function introLessons(): TutorialStep[] {
       (api, since) => api.tossed() > since,
       (api) => api.tossed(),
       {
-        start: (api) => api.lessonClimber(false),
+        // Another scout if one is left, else a climber in front.
+        start: (api) => {
+          if (!api.lessonFromScouts()) api.lessonClimber(false);
+        },
         fallbacks: [(api) => api.lessonClimber(false), (api) => api.lessonClimber(true)],
         // Eaten instead of thrown (this used to leave nothing to throw): a new goblin pops up to throw.
         tick: keepGoblin,
         // Watch it fly and land, dizzy.
         afterDone: PAUSE_AFTER.finish,
       },
+    ),
+    // Pause last, right before the wave: a player who pauses by accident later knows the way back.
+    lessonStep(
+      'learn-pause',
+      lesson('Poke the pause button on your right, then Resume.', 'info', 'pauseButton', {
+        doneText: 'Now you can pause!',
+      }),
+      (api, since) => api.pausedCount() > since,
+      (api) => api.pausedCount(),
+      {},
     ),
   ];
 }
@@ -589,26 +643,23 @@ function shootLesson(): TutorialStep {
 }
 
 /**
- * In wave 2, right after the shoot lesson: the triggers, which are all set
- * off with the slingshot. One lesson per kind, keg first, then the boulder,
- * then the tree. Each one brings its kind onto the roads, holds the wave's
+ * In wave 2, right after the shoot lesson: the triggers set off with the
+ * slingshot. One lesson per kind, the boulder first, then the tree (v3 2.6:
+ * kegs take fire only, the magnifying glass or a fire pebble, so they have
+ * no lesson here). Each one brings its kind onto the roads, holds the wave's
  * spawns, and sends a small group of goblins to the one nearest the front,
- * where they wait right in what it does (beside the keg, below the boulder,
- * before the tree) until the player sets it off. So the player can take
- * their time and try as often as they need. Each text says what it does:
- * the keg and the boulder knock goblins out, the tree only blocks the road.
- * Ghost aim dots arc from the pouch to it in every one. Only the first (the
- * keg) also shows the ghost hand: the others are shot the same way.
+ * where they wait right in what it does (below the boulder, before the tree)
+ * until the player sets it off. So the player can take their time and try
+ * as often as they need. Each text says what it does: the boulder knocks
+ * goblins out, the tree only blocks the road. Ghost aim dots arc from the
+ * pouch to it in every one. Only the first (the boulder) also shows the
+ * ghost hand: the tree is shot the same way.
  */
 function triggerLessons(): TutorialStep[] {
   const again = (api: TutorialApi): void => api.sendPastTrigger();
   const kinds: { kind: TriggerKind; text: string; extra: Partial<Hint> }[] = [
-    {
-      kind: 'keg',
-      text: 'Shoot the red barrel. Boom, goblins down!',
-      extra: { demo: 'aimKeg' },
-    },
-    { kind: 'boulder', text: 'Shoot the striped boulder. It rolls over goblins.', extra: {} },
+    // The keg's aim demo (a pull straight back from the lesson's trap) now shows on the boulder.
+    { kind: 'boulder', text: 'Shoot the striped boulder. It rolls over goblins.', extra: { demo: 'aimKeg' } },
     {
       kind: 'tree',
       text: 'Shoot the tree with the red band. It blocks the road.',
@@ -636,8 +687,8 @@ function triggerLessons(): TutorialStep[] {
 
 type FoodTool = Exclude<ToolName, 'slingshot'>;
 
-/** The line every resting tool shows (v2: free tools that recharge, eating speeds them up). */
-const RESTING = 'Eat goblins to fill its ring faster!';
+/** The line every resting tool shows (v3: tools recharge on time only; eating fills only the horn). */
+const RESTING = 'It is ready again when its ring is full.';
 
 /** Each hand tool: where its handle is, the ghost hand demo for grabbing it, and its use lesson. */
 interface FoodToolLesson {
@@ -675,7 +726,8 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     hand: 'right',
     marker: 'swatterHandle',
     grabDemo: 'swatterGrab',
-    use: 'Swat a goblin on your wall!',
+    // v3: a 10 s use window, and armor stops it (learned by doing: the clonk).
+    use: 'Swat goblins on your wall! Swat fast, and helmets stop it.',
     locked: `The swatter is resting. ${RESTING}`,
     bait: true,
     afterDone: PAUSE_AFTER.finish,
@@ -684,7 +736,7 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     hand: 'right',
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
-    use: 'Shake pepper on them. Their armor falls off! Then eat a sneezing one.',
+    use: 'Shake pepper on them. They sneeze and stop hitting! Then eat a sneezing one.',
     locked: `The pepper is resting. ${RESTING}`,
     bait: true,
     armored: true,
@@ -698,12 +750,13 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     about: ' It calls your knights.',
     // One lesson in three beats on the glass sign (it follows the look), by what the player is doing (Hint.hornSteps).
     use: 'Hold the horn and look at a road.',
+    // v3 2.5: the horn recharges on time again (eating heals the castle).
     locked: `The horn is resting. ${RESTING}`,
     hornSteps: {
       idle: 'Grab the horn with your left hand.',
       aim: 'Look around. The flag and your knights\' path go where you look.',
       lift: 'Now raise the horn in front of your face.',
-      blow: 'Blow into the horn!',
+      blow: 'Shout "Charge!" into the horn!',
       blowQuiet: 'Hold it there.',
     },
     doneText: 'Charge! Your knights guard that spot.',
@@ -711,13 +764,13 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     afterDone: PAUSE_AFTER.watch,
     strict: true,
   },
-  bell: {
+  drum: {
     hand: 'right',
-    marker: 'bellHandle',
-    grabDemo: 'bellGrab',
-    useDemo: 'bellRing',
-    use: 'Ring the bell! Goblins get dizzy and fall off your wall.',
-    locked: `The bell is resting. ${RESTING}`,
+    marker: 'drumHandle',
+    grabDemo: 'drumGrab',
+    useDemo: 'drumStrike',
+    use: 'Beat the drum! Goblins get dizzy and fall off your wall.',
+    locked: `The drum is resting. ${RESTING}`,
     bait: true,
     // Watch the goblins tumble off the wall.
     afterDone: PAUSE_AFTER.watch,
@@ -726,9 +779,9 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
 
 /**
  * In the breather before its wave: the new hand tool appears and the player
- * grabs it. The first one also says how tools work now (v2): free, but they
- * rest after a use while the ring on their platform fills, and eating fills
- * it faster. (The real tutorial rebuild is run 2.)
+ * grabs it. The first one also says how tools work: free, but they rest
+ * after a use while the ring on their platform fills (v3: on time only; the
+ * horn fills only by eating).
  */
 function toolGrabLesson(tool: FoodTool, first: boolean, beforeFirstWave: boolean, midWave = false): TutorialStep {
   const { marker, grabDemo, about } = FOOD_TOOL_LESSONS[tool];
@@ -816,7 +869,8 @@ function squadFightStep(): TutorialStep {
     id: 'watch-knights',
     hint: lesson('Watch your knights march out.', 'star', undefined, {
       glass: true,
-      doneText: 'Congratulations! Your knights won!',
+      // v3 2.5: the horn recharges on time; eating heals the castle (the full tutorial rework comes later).
+      doneText: 'Your knights won! The horn rests, then calls them again.',
       watchSteps: { march: 'Watch your knights march out.', fight: 'Goblins! Watch your knights fight.' },
     }),
     start: () => {
@@ -898,7 +952,7 @@ const TOOL_NAMES: Record<ToolName, string> = {
   swatter: 'the fly swatter',
   pepper: 'the pepper shaker',
   horn: 'your war horn',
-  bell: 'the bell',
+  drum: 'the drum',
 };
 
 /**
@@ -942,30 +996,16 @@ export function buildTutorialSteps(
       steps.push(toolGrabLesson(wave.newTool, !rechargeTaught, i === 0));
       rechargeTaught = true;
     }
-    // The red flag and the compass ring are explained before the first wave, while nothing attacks yet. One sign
-    // each, so the arrow points at each on its own and the player notices both (headset test: one sign for two was missed).
-    if (i === 0 && teach) {
-      steps.push(
-        infoStep('health-flag', banner('Red flag: your castle health. Goblins at the wall pull it down.', 'info', 'healthFlag', { header: 'Your castle' })),
-        // The compass in two signs (one long sign was missed before): where and how many, then the middle.
-        infoStep(
-          'compass',
-          banner('Your compass: red marks show where goblins come from. Bigger marks, more goblins. The gold needle points ahead.', 'info', 'compass', {
-            header: 'Your compass',
-          }),
-        ),
-        infoStep(
-          'compass-count',
-          banner('Its middle shows the goblins left in this wave. The dots below are the waves.', 'info', 'compass', { header: 'Your compass' }),
-        ),
-      );
-    }
+    // The red flag and the compass are taught live in introLessons (2026-11-13), while the scouts attack.
     // A wave whose new tool has a lesson starts straight into that lesson: the
     // lesson's own text guides the player, and it moves on by their action, so
     // there is no banner and no Next button in between.
     const lessonFollows = has(wave.newTool) && !midWave;
     const startWave = (api: TutorialApi): void => api.startWave(i);
     if (lessonFollows) steps.push({ id: `wave-${i + 1}-start`, start: startWave, done: () => true, timeout: 0 });
+    // Wave 1 in the tutorial: its banner explains the compass's middle while the wave is live and counting down.
+    else if (i === 0 && teach)
+      steps.push(infoStep('wave-1-start', banner('Wave 1 is on! The middle of your compass counts the goblins left.', 'warning', 'compass'), startWave));
     else steps.push(infoStep(`wave-${i + 1}-start`, banner(wave.intro, 'warning'), startWave));
     if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(shootLesson(), ...triggerLessons(), ...balloonLessons());
     else if (midWave && wave.newTool && wave.newTool !== 'slingshot') {

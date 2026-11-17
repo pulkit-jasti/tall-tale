@@ -53,6 +53,21 @@ export interface Blueprint {
   gate: { at: Polar };
   /** Trigger spots (src/world/triggers.ts). Each one sits on the road nearest its spot. */
   triggers: BlueprintTrigger[];
+  /**
+   * How many of the v3 2.1 traps and 2.2 seed beds the board builder adds
+   * (placed when the map is built, from the map's seed). Missing (the
+   * tutorial, levels saved before): the config counts (TRIGGERS.extra, GARDEN.beds).
+   */
+  extras?: BlueprintExtras;
+}
+
+export interface BlueprintExtras {
+  hay: number;
+  bellTower: number;
+  bridge: number;
+  /** Hidden spots the potion cart may show on (0: no cart). */
+  cartSpots: number;
+  beds: number;
 }
 
 const isPolar = (v: unknown): v is Polar =>

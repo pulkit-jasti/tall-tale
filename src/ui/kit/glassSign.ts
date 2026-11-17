@@ -102,7 +102,9 @@ export class GlassSign {
       if (bar.line !== null) this.line.position.x = -w / 2 + bar.line * w;
     } else this.shown = 0;
     this.place(dt, head, forward);
-    this.holder.visible = true;
+    // Only once it has a real spot: looking straight up or down before the first placement left it at an
+    // old spot or the world's origin, drawn on top (a possible floating artifact, 2026-11-13).
+    this.holder.visible = this.placed;
   }
 
   /** A little above the look's center, at GLASS_SIGN.distance, facing the eyes; it glides after the look. */

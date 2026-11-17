@@ -1,19 +1,19 @@
 // The main menu (docs/menus.md section 4): the front panel with round poke
 // buttons in different sizes, a word over each. Campaign is the biggest, in
-// the middle; Daily Battle and Custom Game beside it; Settings and Tutorial
+// the middle; Endless and Custom Game beside it; Settings and Tutorial
 // (replay it) smaller, below. Every option shows and can be poked, none is
-// locked. Daily is not built yet: a poke shows "Coming soon" over the
-// button for a moment (decided 2026-11-11); Custom Game opens its pages
-// (docs/custom-mode.md section 8). Built from the UI
-// library only. The panel is redrawn only when a word changes.
+// locked. Endless starts a run (it took Daily Battle's place: the Daily was
+// dropped 2026-11-16); Custom Game opens its pages (docs/custom-mode.md
+// section 8). Built from the UI library only. The panel is redrawn only
+// when a word changes.
 import type { Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
 import { MENU, POKE, UI_SPACING } from '../../config/game.js';
 import type { HandState } from '../../player/hands.js';
 import { armControls, drawLine, Panel, PanelHeader, panelMap, PokeButton, UI_COLORS, menuCenterY, type ButtonIcon } from '../kit/index.js';
 
-export type MainChoice = 'campaign' | 'custom' | 'settings' | 'replay' | null;
-type Id = 'campaign' | 'daily' | 'custom' | 'settings' | 'replay';
+export type MainChoice = 'campaign' | 'endless' | 'custom' | 'settings' | 'replay' | null;
+type Id = 'campaign' | 'endless' | 'custom' | 'settings' | 'replay';
 
 interface Entry {
   id: Id;
@@ -56,7 +56,7 @@ export class MainMenu {
       this.panel.root.add(button.group);
       this.entries.push({ id, label, button, x, y, radius, labelY });
     };
-    add('daily', 'Daily Battle', 'daily', -M.sideX, M.sideY, M.sideRadius, topLabel);
+    add('endless', 'Endless', 'sword', -M.sideX, M.sideY, M.sideRadius, topLabel);
     add('campaign', 'Campaign', 'campaign', M.heroAt[0], M.heroAt[1], M.heroRadius, topLabel);
     add('custom', 'Custom Game', 'custom', M.sideX, M.sideY, M.sideRadius, topLabel);
     add('settings', 'Settings', 'settings', -M.smallX, M.smallY, M.smallRadius, bottomLabel);
@@ -89,14 +89,7 @@ export class MainMenu {
       if (this.soon.left <= 0) this.clearSoon();
     }
     for (const e of this.entries) {
-      if (!e.button.update(hands, dt)) continue;
-      if (e.id === 'daily') {
-        // Not built yet: the word over it says so for a moment.
-        this.soon = { id: e.id, left: MENU.main.soonTime };
-        this.paint();
-        return null;
-      }
-      return e.id;
+      if (e.button.update(hands, dt)) return e.id;
     }
     return null;
   }

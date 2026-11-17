@@ -29,6 +29,16 @@ export class ToySpawner {
     this.roadCount = count;
   }
 
+  /** v3 Phase 3: how one queued goblin comes out (the game sends it through src/units/goblinKinds.ts). */
+  spawnKind: (type: GoblinType, campIndex: number) => void = (type, campIndex) => {
+    this.goblins.spawnOnRoad(type, campIndex);
+  };
+
+  /** v3 Phase 3: queues goblins of these types, in this order, from one camp (by its place in the camp list). */
+  sendMixed(types: GoblinType[], road: number): void {
+    for (const type of types) this.queue.push({ type, road, wait: TOY_SPAWN.groupGap });
+  }
+
   /** Queues a small group walking in from one camp. */
   sendGroup(type: GoblinType, road = this.rng.int(this.roadCount)): void {
     const size = type === 'runner' ? TOY_SPAWN.runnerGroup : TOY_SPAWN.gruntGroup;
@@ -55,7 +65,7 @@ export class ToySpawner {
       next.wait -= dt;
       if (next.wait <= 0) {
         this.queue.shift();
-        this.goblins.spawnOnRoad(next.type, next.road);
+        this.spawnKind(next.type, next.road);
       }
     }
   }

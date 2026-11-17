@@ -142,9 +142,12 @@ export class Mic {
   /** Opens the mic stream into a silent analyser chain. False if the browser says no. */
   private async open(): Promise<boolean> {
     try {
-      // Raw loudness: no gain control or noise suppression evening out a scream.
+      // Echo cancellation on (2026-11-17): without it the mic heard the game's own sounds from the headset
+      // speakers (drums, booms, music) as speech, and the horn sounded with nobody talking. No gain control
+      // (it would lift room noise) and no noise suppression (it can push quiet to dead silence, which reads
+      // as a broken mic).
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false },
       });
       this.stream = stream;
       const context = ThreeAudioContext.getContext();
@@ -165,7 +168,12 @@ export class Mic {
       this.source = source;
       const analyser = context.createAnalyser();
       analyser.fftSize = 512;
-      source.connect(analyser);
+      // Low rumble (a bump on the headset, breath on the mic) cut out before measuring, so mostly a voice counts (2026-11-17).
+      const voiceOnly = context.createBiquadFilter();
+      voiceOnly.type = 'highpass';
+      voiceOnly.frequency.value = 150;
+      source.connect(voiceOnly);
+      voiceOnly.connect(analyser);
       // Some browsers only run a node that leads to the speakers: a silent gain closes the chain, so nothing is heard.
       const silent = context.createGain();
       silent.gain.value = 0;

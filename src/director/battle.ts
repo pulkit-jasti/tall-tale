@@ -5,19 +5,22 @@
 // does for the lessons. Nothing tutorial-only lives in those systems.
 import { Vector3 } from 'three';
 import { hornHearsMic } from '../player/accessSettings.js';
+import { note } from '../debug/notes.js';
 import type { GameAudio } from '../audio/sound.js';
 import {
   CALIBRATION,
   CASTLE,
   CASTLE_HEALTH,
+  CHICKENS,
   DEBUG,
   END_PANEL,
+  ENDLESS,
   GHOST_HAND,
   GOBLIN_RULES,
-  HANDLES,
   HINT_SIGN,
   GOBLIN_GEAR,
   BALLOONS,
+  LOADOUT_SPOTS,
   TOOL_SPOTS,
   TOOLS,
   TRIGGERS,
@@ -27,13 +30,16 @@ import { WAVE_VOICES } from '../config/sounds.js';
 import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
 import { ReachCheck } from '../player/reachCheck.js';
-import { clearWave, createBattle, damageCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
-import { angleDelta, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import { clearWave, createBattle, damageCastle, healCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
+import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { wallHitDamage } from '../rules/gear.js';
+import { BattleScore, type ScoreParts, type ScoreSource } from '../rules/score.js';
 import { Director } from '../rules/director.js';
 import type { Random } from '../rules/random.js';
 import type { HandToolName, HandTool, ToolSpot } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
+import type { PepperRing } from '../tools/pepperRing.js';
+import type { Garden } from '../world/garden.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
 import type { Balloons } from '../units/balloons.js';
@@ -53,8 +59,12 @@ import type { WaveSpawner } from '../units/waveSpawner.js';
 import type { Flags } from '../world/flags.js';
 import type { RisingCamps } from '../world/risingCamps.js';
 import type { Compass } from '../ui/compass.js';
+import type { CompassCrank } from '../player/crank.js';
 import type { Level, LevelRules } from '../level/level.js';
-import { buildLevelSteps, hiddenAtStart, levelWavePlans, risingByWave } from './levelDirector.js';
+import { buildEndlessSteps, buildLevelSteps, hiddenAtStart, levelWavePlans, risingByWave, type EndlessBreather } from './levelDirector.js';
+import { BOOST, resetBoosts } from '../rules/boosts.js';
+import { timeOfWave } from '../rules/dayNight.js';
+import type { TimeOfDay } from '../config/game.js';
 import type { Stage } from '../world/stage.js';
 import {
   buildTutorialSteps,
@@ -71,15 +81,17 @@ import {
 
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
-const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'bell'];
-const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, bell: 0, horn: 0 });
-const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0 });
+const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'drum'];
+const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, drum: 0, horn: 0, magnet: 0, glass: 0, sugar: 0 });
+/** The hand tools with a home spot of their own (the tutorial's, and a debug battle without a loadout). */
+const TUTORIAL_HAND_TOOLS: HandToolName[] = ['swatter', 'pepper', 'drum', 'horn'];
+const noTriggers = (): Record<TriggerKind, number> => ({ keg: 0, boulder: 0, tree: 0, hay: 0, bellTower: 0, cart: 0, bridge: 0 });
 /** The tool a lesson's marker belongs to, so only that tool works during it (the others are locked). */
 const MARKER_TOOL: Partial<Record<MarkerTarget, ToolName>> = {
   swatterHandle: 'swatter',
   pepperHandle: 'pepper',
   hornHandle: 'horn',
-  bellHandle: 'bell',
+  drumHandle: 'drum',
   slingHandle: 'slingshot',
   bowl: 'slingshot',
   pouch: 'slingshot',
@@ -103,6 +115,9 @@ const pouchAt = new Vector3();
 const lastAnchor = new Vector3();
 const view: ViewFrame = { head: new Vector3(), up: new Vector3(0, 1, 0), shot: new Vector3(), aim: new Vector3() };
 
+/** The red flag's cloth (world), where a heal sparkles. */
+const healAt = new Vector3();
+
 export interface BattleParts {
   stage: Stage;
   goblins: Goblins;
@@ -116,8 +131,12 @@ export interface BattleParts {
   triggers: Triggers;
   /** Balloon riders (from wave 4). */
   balloons: Balloons;
-  /** The stun of the bell. */
+  /** The stun of the drum. */
   stun: StunWave;
+  /** The pepper ring on the ground outside the wall (v3 2.2). */
+  pepperRing: PepperRing;
+  /** The sun garden's seed beds (v3 2.2): emptied for a new battle. */
+  garden: Garden;
   flags: Flags;
   panel: EndPanel;
   sign: HintSign;
@@ -145,6 +164,8 @@ export interface BattleParts {
   camps: RisingCamps;
   /** The compass ring in front (where enemies come from, the wave and the goblins left). */
   compass: Compass;
+  /** The compass crank (v3): its wheel and knob, for the crank lesson's ghost hand and marker. */
+  crank: CompassCrank;
   /** The wall garrison's size and refill: a level's rules, or null for the usual (GARRISON). */
   setGarrison: (rules: LevelRules | null) => void;
 }
@@ -168,11 +189,11 @@ export class Battle implements TutorialApi {
   /** The battle teaches (the tutorial's lessons). False after Skip tutorial, until the welcome panel's Play. */
   private teach = true;
   /**
-   * v2 run 2: the 2 picked hand tools for a battle without the tutorial (the
-   * slingshot and the horn are always out), or null for every tool. Every
-   * tool stands on its own platform spot, picked or not.
+   * v3 2.2: the loadout's tools in slot order (4 free slots, the slingshot
+   * and the horn too), or null for the tutorial's tools. Each stands on its
+   * slot's spot (LOADOUT_SPOTS); a slingshot always takes the right front.
    */
-  loadout: HandToolName[] | null = null;
+  loadout: (HandToolName | 'slingshot')[] | null = null;
   /** The campaign level being fought (its number), or null (the tutorial, or a debug battle). */
   level: number | null = null;
   /**
@@ -182,6 +203,17 @@ export class Battle implements TutorialApi {
    */
   private waves: WavePlan[] = TUTORIAL_WAVES;
   private levelRules: LevelRules | null = null;
+  /** v3 2.7: the level asks for night fog ("Foggy night"). */
+  private foggyNight = false;
+  /** Each wave's time of day (a level's allowed times, or Endless's cycle), or null for the usual spread (timeOfWave). */
+  private times: TimeOfDay[] | null = null;
+  /** Endless mode (playEndless): its own breathers (boost cards) and no last wave to win. */
+  endless = false;
+  /** What an Endless breather does (the game wires it to the card picker). */
+  endlessBreather: EndlessBreather | null = null;
+  /** Endless: the extra tool platforms used so far (ENDLESS.extraSpots), and the tools on them. */
+  private extraUsed = 0;
+  private extraTools: (HandToolName | 'slingshot')[] = [];
   /** The camps that rise at each wave (0 based), for the waves above. */
   private rising: string[][] = risingByWave(TUTORIAL_WAVES);
   /** Each tool's own spot, from when it was built. */
@@ -194,6 +226,10 @@ export class Battle implements TutorialApi {
   onEnd: (won: boolean, healthShare: number) => 'menu' | EndExtras = () => ({ menu: false });
   /** The end panel's Menu button. */
   onMenu: () => void = () => {};
+  /** v3 2.6: a battle started (`teach`: the tutorial's lessons run), a wave started, a wave was cleared (the achievements). */
+  onStarted: (teach: boolean) => void = () => {};
+  onWaveStarted: () => void = () => {};
+  onWaveCleared: () => void = () => {};
   /** The win panel's Next level button (the game starts the next level). */
   onNext: () => void = () => {};
   /** How long this battle has been fought (seconds, not counting pauses), for the end panel. */
@@ -210,6 +246,9 @@ export class Battle implements TutorialApi {
   /** The stalemate's progress check: time to the next look, and how close the nearest goblin was then (cm). */
   private progressTimer = 0;
   private lastClosest = Infinity;
+
+  /** v3 Phase 4: the battle's score (src/rules/score.ts). */
+  readonly score = new BattleScore();
 
   // What the player did in this battle, for the lessons.
   private eatenCount = 0;
@@ -283,6 +322,11 @@ export class Battle implements TutorialApi {
     this.loadBoardScale();
   }
 
+  /** True once the player's reach was measured (now or on an earlier visit, saved in the browser). */
+  get reachIsKnown(): boolean {
+    return this.reachKnown;
+  }
+
   /** The board size saved by an earlier reach check, if any. */
   private loadBoardScale(): void {
     try {
@@ -322,6 +366,8 @@ export class Battle implements TutorialApi {
     this.toolUseCount = noTools();
     this.toolGrabCount = noTools();
     this.parts.stun.reset();
+    this.parts.pepperRing.reset();
+    this.parts.garden.reset();
   }
 
   /** The army and the triggers off the board (before a battle, or when it stops). */
@@ -373,10 +419,14 @@ export class Battle implements TutorialApi {
     this.endTimer = -1;
     this.eatenCount = this.pepperedEatenCount = this.pickedCount = this.tossedCount = this.slingHits = this.spun = this.moved = 0;
     this.fightTime = 0;
+    this.score.reset();
     this.sling = { grabbed: 0, pebbleTaken: 0, loaded: 0, shot: 0 };
     this.lastSpin = stage.spin;
     this.lastHeight = stage.height;
     this.lessonGoblin = null;
+    this.scouts = [];
+    this.scoutsToSend = 0;
+    this.scoutCamp = null;
     this.squadFoes = [];
     this.lessonTrigger = null;
     this.triggerCount = noTriggers();
@@ -385,13 +435,23 @@ export class Battle implements TutorialApi {
     this.doneFlash = 0;
     // Every tool on its own platform, always (the loadout only picks which show). Moving the picks to the
     // left spots put a tool in front of the red flag, so they stay home now.
-    const picks: HandToolName[] | null = !teach && this.loadout ? this.loadout.filter((n) => n !== 'horn') : null;
+    const picks = !teach && this.loadout ? this.loadout : null;
+    // v3 2.1: the new traps (haystacks, bell tower, bridge, potion cart) only in loadout battles, never in the tutorial.
+    this.parts.triggers.extrasOn = !!picks;
     for (const tool of Object.values(this.parts.tools)) tool.setSpot(this.homeSpots.get(tool)!);
     if (picks) {
-      // A battle with a loadout: the slingshot, the horn and the 2 picks (docs/menus.md section 5).
-      slingshot.setVisible(true);
-      this.parts.tools.horn.setVisible(true);
-      for (const name of picks) this.parts.tools[name].setVisible(true);
+      // v3 2.2: a battle with a loadout: each tool on its slot's spot. A slingshot takes the right front
+      // (its bowl and its pull are built for that side); the hand tools fill the other spots in slot order.
+      const hasSling = picks.includes('slingshot');
+      slingshot.setVisible(hasSling);
+      const free = LOADOUT_SPOTS.filter((_, i) => !(hasSling && i === 0));
+      let next = 0;
+      for (const name of picks) {
+        if (name === 'slingshot') continue;
+        const tool = this.parts.tools[name];
+        tool.setSpot(free[next++] ?? LOADOUT_SPOTS[LOADOUT_SPOTS.length - 1]);
+        tool.setVisible(true);
+      }
     } else {
       // Tools of the waves left out are already there. The new tool of `from` comes with its lessons.
       // Without the tutorial and without a loadout (debug): every tool.
@@ -400,10 +460,21 @@ export class Battle implements TutorialApi {
         if (tool === 'slingshot') slingshot.setVisible(true);
         else if (tool) for (const t of this.foodTools(tool)) t.setVisible(true);
       }
-      if (!teach) for (const t of Object.values(this.parts.tools)) t.setVisible(true);
+      // (Only the tutorial's tools: the v3 2.2 tools have no home spot of their own and come with a loadout.)
+      if (!teach) for (const t of Object.values(this.parts.tools)) if (TUTORIAL_HAND_TOOLS.includes(t.name)) t.setVisible(true);
     }
     this.reach.stop();
-    const steps = this.levelRules ? buildLevelSteps(this.waves) : buildTutorialSteps(BUILT_TOOLS, this.waves, from, !this.reachKnown, teach);
+    // Endless boost cards only live for one run.
+    resetBoosts();
+    this.extraUsed = 0;
+    this.extraTools = [];
+    const breather = this.endlessBreather;
+    const steps =
+      this.endless && breather
+        ? buildEndlessSteps(this.waves, breather, ENDLESS.pickTime, ENDLESS.bannerTime)
+        : this.levelRules
+          ? buildLevelSteps(this.waves)
+          : buildTutorialSteps(BUILT_TOOLS, this.waves, from, !this.reachKnown, teach);
     const director = new Director<TutorialApi>(steps, this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
@@ -430,6 +501,7 @@ export class Battle implements TutorialApi {
     };
     this.director = director;
     this.running = true;
+    this.onStarted(teach);
     console.info(
       this.levelRules
         ? `[battle] level started (${this.waves.length} waves)`
@@ -451,11 +523,74 @@ export class Battle implements TutorialApi {
     this.start(0, false);
   }
 
+  /**
+   * An Endless run (src/level/endless.ts): the run's level played like any
+   * level, but with Endless's breathers (a boost card or a new tool between
+   * waves) and no last wave. The game loads its map first.
+   */
+  playEndless(level: Level): void {
+    this.useLevel(level);
+    this.endless = true;
+    this.start(0, false);
+  }
+
+  /** Endless: waves survived (cleared) so far. */
+  get wavesSurvived(): number {
+    return this.state.wavesCleared;
+  }
+
+  /**
+   * Endless: a new tool from the breather's pick goes on the next free
+   * platform around the back (ENDLESS.extraSpots) and joins the loadout.
+   * The slingshot only stands on the right front, so a hand tool standing
+   * there moves to the new platform instead.
+   */
+  addTool(name: HandToolName | 'slingshot'): void {
+    if (!this.loadout || this.stand.includes(name)) return;
+    const spots = ENDLESS.extraSpots;
+    const spot = spots[Math.min(this.extraUsed++, spots.length - 1)];
+    if (name === 'slingshot') {
+      const front = LOADOUT_SPOTS[0];
+      for (const tool of Object.values(this.parts.tools)) {
+        if (tool.visible && tool.spotNow.angleDeg === front.angleDeg && tool.spotNow.radius === front.radius) tool.setSpot(spot);
+      }
+      this.parts.slingshot.setVisible(true);
+    } else {
+      const tool = this.parts.tools[name];
+      tool.setSpot(spot);
+      tool.setVisible(true);
+    }
+    this.extraTools.push(name);
+    this.parts.audio.play('lessonDone');
+  }
+
+  /** The tools on the board now: the loadout, plus Endless's new ones. */
+  get stand(): (HandToolName | 'slingshot')[] {
+    return [...(this.loadout ?? []), ...this.extraTools];
+  }
+
+  /** Endless Thick Walls: the castle's max health grows by `scale`, and so does its health (by what was added). */
+  growWall(scale: number): void {
+    const added = this.state.maxHealth * (scale - 1);
+    this.state.maxHealth += added;
+    this.state.health += added;
+  }
+
   /** A level's waves and rules from now on (playLevel starts it). */
   useLevel(level: Level): void {
+    this.endless = false;
     this.waves = levelWavePlans(level);
     this.rising = risingByWave(this.waves);
     this.levelRules = level.rules;
+    this.foggyNight = level.meta.settings.foggyNight;
+    // Each wave's own time of day (allowed times), when the level has them.
+    this.times = level.waves.every((w) => w.time) ? level.waves.map((w) => w.time!) : null;
+  }
+
+  /** The time of day that shows now (decor only): the level's own time for that wave, or the usual spread. */
+  get timeOfDay(): TimeOfDay {
+    const i = this.timeWave;
+    return this.times?.[i] ?? timeOfWave(i, this.waves.length);
   }
 
   /** The camps that rise later go under the ground now (Fight poked: before the battle rises, so none pops away). */
@@ -468,6 +603,9 @@ export class Battle implements TutorialApi {
     this.waves = TUTORIAL_WAVES;
     this.rising = risingByWave(TUTORIAL_WAVES);
     this.levelRules = null;
+    this.foggyNight = false;
+    this.times = null;
+    this.endless = false;
   }
 
   /** True while the waves are a level's (playLevel). */
@@ -637,9 +775,54 @@ export class Battle implements TutorialApi {
     return false;
   }
 
+  /**
+   * A goblin was eaten. v3 (docs/v3-plan.md 2.5): eating heals the castle
+   * (CASTLE_HEALTH.eatHeal of max, a seasoned goblin seasonedHealScale
+   * times that), the only way to heal: the red flag rises a notch with a
+   * chime and a little sparkle on its cloth.
+   */
   noteEaten(seasoned = false): void {
     this.eatenCount++;
+    this.score.eaten();
     if (seasoned) this.pepperedEatenCount++;
+    this.heal(seasoned);
+  }
+
+  /** v3 Phase 4: a goblin knocked out (score: how far out, and by which tool or a trap for combos). */
+  noteKnockOut(goblin: Goblin, source: ScoreSource | null): void {
+    const p = goblin.root.position;
+    this.score.knockOut(Math.hypot(p.x, p.z), source, this.fightTime);
+  }
+
+  /** v3 Phase 4: a goblin turned into a chicken by the potions, at this board point: a trap's knockout. */
+  noteTrapped(at: Vector3): void {
+    this.score.knockOut(Math.hypot(at.x, at.z), 'traps', this.fightTime);
+  }
+
+  /** v3 Phase 4: a goblin spent as a slingshot shot counts as defeated, like one eaten. */
+  noteGoblinShot(): void {
+    this.score.eaten();
+  }
+
+  /** v3 Phase 4: the score now, with the castle's health left. */
+  finalScore(): ScoreParts {
+    return this.score.final(healthShare(this.state));
+  }
+
+  /** v3 2.6 Chicken dinner: an eaten chicken heals CHICKENS.healScale times a goblin. */
+  noteChickenEaten(): void {
+    this.eatenCount++;
+    this.heal(false, CHICKENS.healScale);
+  }
+
+  /** Heals for one eaten goblin (also the debug "Eat heal" action). */
+  heal(seasoned = false, scale = 1): void {
+    const gained = healCastle(this.state, CASTLE_HEALTH.eatHeal * scale * BOOST.heal * (seasoned ? CASTLE_HEALTH.seasonedHealScale : 1));
+    if (gained <= 0) return;
+    const at = this.parts.flags.clothWorld(healAt);
+    this.parts.audio.play('castleHeal', at);
+    this.parts.particles.burst(at, CASTLE_HEALTH.healSparkle, seasoned ? 10 : 6, 0.08);
+    note(`[heal] +${gained.toFixed(1)} (castle ${this.state.health.toFixed(0)} of ${this.state.maxHealth})`);
   }
 
   notePicked(): void {
@@ -694,7 +877,9 @@ export class Battle implements TutorialApi {
       this.quietTools(step);
       // No new goblins while any are inside the castle (v2): the player has to deal with the intruders first.
       // And none at all while a lesson runs: only the lesson's own goblins are out (headset test: other goblins confused).
-      const inLesson = step?.hint?.kind === 'lesson';
+      // In the tutorial also none in the gap between two steps (the green tick and the pause after a lesson,
+      // headset test 2026-11-13: goblins kept coming then), so the wave only goes on once a lesson is fully over.
+      const inLesson = step?.hint?.kind === 'lesson' || (this.teach && !!this.director && step === null);
       spawner.rate = inLesson || goblins.countMode('intruder') > 0 ? 0 : (this.director?.spawnRate ?? 1);
       spawner.update(dt);
       if (this.state.phase !== 'playing') this.end();
@@ -709,7 +894,9 @@ export class Battle implements TutorialApi {
         const won = this.state.phase === 'won';
         const next = this.onEnd(won, healthShare(this.state));
         // The stats row (2026-11-12): the castle's health left, goblins eaten, how long it took.
-        const stats = { health: healthShare(this.state), eaten: this.eatenCount, seconds: this.fightTime };
+        // v3 Phase 4: a won real battle shows its score breakdown too.
+        const score = won && !this.teach ? this.finalScore() : undefined;
+        const stats = { health: healthShare(this.state), eaten: this.eatenCount, seconds: this.fightTime, score };
         if (next !== 'menu') panel.show(won ? 'won' : 'lost', { ...next, stats });
       }
     }
@@ -876,11 +1063,9 @@ export class Battle implements TutorialApi {
   /** Exact points the ghost hand touches (world, meters). */
   private ghostAnchor(anchor: GhostAnchor, out: Vector3, arcDeg = 0): Vector3 | null {
     switch (anchor) {
-      case 'ring': {
-        // The center of the ring's tube, at an angle along it from the seat's front.
-        const a = degToRad(arcDeg);
-        return this.parts.stage.boardLift.localToWorld(out.set(polarX(HANDLES.radius, a), HANDLES.ringY, polarZ(HANDLES.radius, a)));
-      }
+      case 'crank':
+        // The center of the wheel's tube, round it from the near side.
+        return this.parts.crank.wheelWorld(arcDeg, out);
       case 'pebbles':
         return this.parts.slingshot.partWorld('pebbles', out);
       case 'mouth':
@@ -913,8 +1098,8 @@ export class Battle implements TutorialApi {
   private markerPosition(target: MarkerTarget | undefined, out: Vector3): Vector3 | null {
     const { stage, goblins, flags, slingshot } = this.parts;
     switch (target) {
-      case 'ring':
-        return stage.boardLift.localToWorld(out.set(0, HANDLES.ringY + HANDLES.ringRadius, -HANDLES.radius));
+      case 'crank':
+        return this.parts.crank.knobWorld(out);
       case 'lessonGoblin': {
         const g = this.lessonGoblin;
         // Only while it is on the board: in the hand it needs no marker.
@@ -931,8 +1116,8 @@ export class Battle implements TutorialApi {
         return this.parts.tools.swatter.handleWorld(out);
       case 'pepperHandle':
         return this.parts.tools.pepper.handleWorld(out);
-      case 'bellHandle':
-        return this.parts.tools.bell.handleWorld(out);
+      case 'drumHandle':
+        return this.parts.tools.drum.handleWorld(out);
       case 'hornHandle':
         return this.parts.tools.horn.handleWorld(out);
       case 'slingHandle':
@@ -1039,13 +1224,28 @@ export class Battle implements TutorialApi {
 
   // ---- TutorialApi ----
 
+  /** What the wave's debug note counts from (v3, docs/v3-plan.md 1.5): eaten, at the wall and horn calls when it started. */
+  private waveFrom = { eaten: 0, wall: 0, horn: 0 };
+
+  /** v3: a debug note per wave, to tune the horn's food: goblins sent, reached the wall, eaten, horn calls. */
+  private noteWave(how: string): void {
+    if (this.wave < 0) return;
+    const f = this.waveFrom;
+    note(
+      `[waves] wave ${this.wave + 1} ${how}: sent ${this.parts.spawner.spawned}, reached the wall ${this.parts.goblins.wallArrivals - f.wall}, eaten ${this.eatenCount - f.eaten}, horn calls ${this.toolUses('horn') - f.horn}`,
+    );
+  }
+
   startWave(index: number): void {
     this.wave = index;
     this.inWave = true;
+    this.waveFrom = { eaten: this.eatenCount, wall: this.parts.goblins.wallArrivals, horn: this.toolUses('horn') };
     this.sinceDamage = 0;
     // A lesson goblin still waiting from before becomes an ordinary goblin, so it never holds the wave up.
     const old = this.lessonGoblin;
     if (old && old.mode !== 'dead') this.parts.goblins.makeOrdinary(old);
+    // The tutorial's scouts still on the wall go on like any goblin of the wave.
+    this.releaseScouts();
     const plan = this.waves[index];
     // A level wave hands out its own gear shares from wave 1; the tutorial's helmets and shields come from their wave on.
     this.parts.goblins.gearShares = plan.gear ?? GOBLIN_GEAR;
@@ -1056,6 +1256,10 @@ export class Battle implements TutorialApi {
     // Balloons are taught in the slingshot wave now, so a wave's own balloons never wait for a banner.
     this.parts.spawner.balloonsHeld = false;
     this.parts.spawner.start(plan);
+    // v3 Phase 4: par comes from the goblins the waves send (balloon riders too).
+    let sent = (plan.balloons ?? 0) * BALLOONS.riders;
+    for (const n of Object.values(plan.counts)) sent += n ?? 0;
+    this.score.addPlanned(sent);
     // The army marches out toward the attacking camps, and the triggers of this wave stand ready.
     this.parts.troops.deploy(plan.camps);
     this.parts.triggers.setWave(index + 1);
@@ -1063,6 +1267,7 @@ export class Battle implements TutorialApi {
     this.parts.audio.play('waveHorn');
     this.parts.audio.play(last ? 'finalRound' : WAVE_VOICES[index] ?? 'finalRound');
     console.info(`[battle] wave ${index + 1} started`);
+    this.onWaveStarted();
   }
 
   waveCleared(): boolean {
@@ -1078,7 +1283,18 @@ export class Battle implements TutorialApi {
     return Math.max(0, Math.min(this.waves.length - 1, this.inWave ? this.wave : this.wave + 1));
   }
 
+  /**
+   * v3 2.7: a foggy level wants its fog now (it shows only at night,
+   * DayLook.foggy): while the battle is fought, until the last wave is
+   * cleared. So it rolls in with the night and lifts after.
+   */
+  get foggy(): boolean {
+    const lastCleared = this.wave >= this.waves.length - 1 && !this.inWave;
+    return this.foggyNight && this.canPause && !lastCleared;
+  }
+
   endWave(): void {
+    if (this.inWave) this.noteWave('ended');
     this.inWave = false;
     this.parts.spawner.stop();
     this.parts.troops.recall();
@@ -1086,9 +1302,15 @@ export class Battle implements TutorialApi {
   }
 
   clearWave(): void {
+    if (this.inWave) {
+      this.noteWave('cleared');
+      this.onWaveCleared();
+    }
     this.inWave = false;
     this.parts.troops.recall();
     clearWave(this.state, CASTLE_HEALTH);
+    // Endless Stone Masons: the wall repairs a share of what is missing after each wave.
+    if (BOOST.repair > 0 && this.state.phase === 'playing') this.state.health += (this.state.maxHealth - this.state.health) * BOOST.repair;
     if (this.state.phase === 'playing') this.parts.audio.play('cheer');
     // The soldiers on the field cheer, and confetti flutters down over the castle.
     this.parts.troops.cheerAll();
@@ -1117,6 +1339,84 @@ export class Battle implements TutorialApi {
     const wait = this.inWave ? GOBLIN_RULES.rampartWait : TUTORIAL_TIMING.lessonClimberWait;
     const goblin = goblins.spawnClimberAt(angle, onRampart, wait);
     if (goblin) this.lessonGoblin = goblin;
+  }
+
+  // ---- The live compass lessons' scouts (2026-11-13) ----
+
+  /** The scouts out so far (with the serial they had, so a pooled goblin reused for something else no longer counts). */
+  private scouts: { g: Goblin; serial: number }[] = [];
+  private scoutCamp: string | null = null;
+  private scoutsToSend = 0;
+  private scoutTimer = 0;
+
+  private liveScouts(): Goblin[] {
+    return this.scouts.filter((s) => s.g.serial === s.serial && s.g.mode !== 'dead').map((s) => s.g);
+  }
+
+  sendScouts(): void {
+    // Wave 1's first camp: it rises now (with its drum and dust), and the wave's own rise is then nothing new.
+    const camp = this.waves[0]?.camps[0];
+    if (!camp) return;
+    this.scoutCamp = camp;
+    this.parts.camps.raise([camp]);
+    this.scoutsToSend = TUTORIAL_TIMING.scouts.count;
+    this.scoutTimer = TUTORIAL_TIMING.scouts.delay;
+  }
+
+  keepScouts(dt: number): void {
+    if (this.scoutsToSend <= 0 || !this.scoutCamp) return;
+    this.scoutTimer -= dt;
+    if (this.scoutTimer > 0) return;
+    const g = this.parts.spawner.spawnFrom(this.scoutCamp, 'grunt');
+    // At the unit cap: try again next frame.
+    if (!g) return;
+    this.scoutsToSend--;
+    this.scoutTimer = TUTORIAL_TIMING.scouts.gap;
+    g.speed *= TUTORIAL_TIMING.scouts.speedScale;
+    // A lesson goblin: once up on the rampart it waits there to be eaten (the army leaves it alone).
+    g.rampartWait = TUTORIAL_TIMING.lessonClimberWait;
+    this.scouts.push({ g, serial: g.serial });
+  }
+
+  scoutsInFront(): boolean {
+    const front = degToRad(TUTORIAL_TIMING.scouts.frontDeg);
+    const spin = this.parts.stage.spin;
+    for (const g of this.liveScouts()) {
+      const p = g.root.position;
+      if (Math.abs(angleDelta(spin, angleOf(p.x, p.z))) < front) return true;
+    }
+    return false;
+  }
+
+  scoutsAttacking(): boolean {
+    return this.liveScouts().some((g) => g.mode === 'atWall' || g.mode === 'climbing' || g.mode === 'rampart');
+  }
+
+  lessonFromScouts(): boolean {
+    const { goblins, stage } = this.parts;
+    let best: Goblin | null = null;
+    let bestAngle = Infinity;
+    for (const g of this.liveScouts()) {
+      if (!goblins.isHittable(g) || this.parts.isHeld(g)) continue;
+      if (g.mode !== 'atWall' && g.mode !== 'climbing' && g.mode !== 'rampart') continue;
+      const p = g.root.position;
+      const a = Math.abs(angleDelta(stage.spin, angleOf(p.x, p.z)));
+      if (a < bestAngle) {
+        best = g;
+        bestAngle = a;
+      }
+    }
+    if (!best) return false;
+    this.lessonGoblin = best;
+    return true;
+  }
+
+  /** The scouts left become ordinary goblins (wave 1 starts) or are forgotten (a new battle). */
+  private releaseScouts(): void {
+    for (const g of this.liveScouts()) this.parts.goblins.makeOrdinary(g);
+    this.scouts = [];
+    this.scoutsToSend = 0;
+    this.scoutCamp = null;
   }
 
   showTool(tool: ToolName): void {
@@ -1265,7 +1565,7 @@ export class Battle implements TutorialApi {
   }
 
   sendPastTrigger(): void {
-    const kind = this.lessonTrigger?.kind ?? 'keg';
+    const kind = this.lessonTrigger?.kind ?? 'boulder';
     if (!this.lessonTrigger?.standing) this.lessonTrigger = this.parts.triggers.readyNearest(kind, this.parts.stage.spin);
     // Only the goblins that are gone (picked up, or knocked out another way) are replaced.
     if (this.lessonTrigger) this.parts.triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);

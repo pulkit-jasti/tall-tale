@@ -302,8 +302,41 @@ function local(up: number, quarter: number): Matrix4 {
   return new Matrix4().makeRotationY((quarter * Math.PI) / 2).setPosition(0, up, 0);
 }
 
+/** The village house tiles (keepOrigin templates, 1 tile across). */
+export interface HouseParts {
+  wall: ModelTemplate;
+  wallDoor: ModelTemplate;
+  wallWindow: ModelTemplate;
+  wood: ModelTemplate;
+  woodDoor: ModelTemplate;
+  woodWindow: ModelTemplate;
+  roofGable: ModelTemplate;
+  roofPoint: ModelTemplate;
+  chimney: ModelTemplate;
+}
+
+/**
+ * A house: four wall tiles (the door on its local +x side, toward `yaw`), one
+ * or two floors (`floors`, or SETTLEMENTS.houses.twoStoryShare), a roof,
+ * sometimes a chimney. Window tiles are told apart by `add` (night lights).
+ */
+export function addHouse(add: (template: ModelTemplate, matrix: Matrix4) => void, parts: HouseParts, x: number, z: number, yaw: number, rng: Random, floors?: number): void {
+  const H = SETTLEMENTS.houses;
+  const set = rng.next() < H.woodShare ? { plain: parts.wood, door: parts.woodDoor, window: parts.woodWindow } : { plain: parts.wall, door: parts.wallDoor, window: parts.wallWindow };
+  const stories = floors ?? (rng.next() < H.twoStoryShare ? 2 : 1);
+  const base = place(x, lowestGround(x, z, H.size) - 0.15, z, yaw, H.size);
+  for (let floor = 0; floor < stories; floor++) {
+    for (let side = 0; side < 4; side++) {
+      const piece = floor === 0 && side === 0 ? set.door : side % 2 === 0 || rng.next() < 0.5 ? set.window : set.plain;
+      add(piece, base.clone().multiply(local(floor, side)));
+    }
+  }
+  add(rng.next() < 0.6 ? parts.roofGable : parts.roofPoint, base.clone().multiply(local(stories, rng.int(2))));
+  if (rng.next() < H.chimneyShare) add(parts.chimney, base.clone().multiply(local(stories, rng.int(4))));
+}
+
 /** The lowest ground under a square footprint (cm across), so a building on a slope never floats. */
-function lowestGround(x: number, z: number, width: number): number {
+export function lowestGround(x: number, z: number, width: number): number {
   const h = width / 2;
   let low = groundAt(x, z);
   for (const [dx, dz] of [
@@ -412,22 +445,8 @@ export async function buildSettlements(plan: SettlementPlan, roads: Road[], rng:
     if (template === wallWindow || template === woodWindow) windows.push(matrix.clone());
     else if (template === lantern) lanterns.push(matrix.clone());
   };
-  const H = SETTLEMENTS.houses;
-
-  /** A house: four wall tiles (the door toward the square), one or two floors, a roof, sometimes a chimney. */
-  const house = (x: number, z: number, yaw: number): void => {
-    const set = rng.next() < H.woodShare ? { plain: wood, door: woodDoor, window: woodWindow } : { plain: wall, door: wallDoor, window: wallWindow };
-    const floors = rng.next() < H.twoStoryShare ? 2 : 1;
-    const base = place(x, lowestGround(x, z, H.size) - 0.15, z, yaw, H.size);
-    for (let floor = 0; floor < floors; floor++) {
-      for (let side = 0; side < 4; side++) {
-        const piece = floor === 0 && side === 0 ? set.door : side % 2 === 0 || rng.next() < 0.5 ? set.window : set.plain;
-        add(piece, base.clone().multiply(local(floor, side)));
-      }
-    }
-    add(rng.next() < 0.6 ? roofGable : roofPoint, base.clone().multiply(local(floors, rng.int(2))));
-    if (rng.next() < H.chimneyShare) add(chimney, base.clone().multiply(local(floors, rng.int(4))));
-  };
+  const houseParts: HouseParts = { wall, wallDoor, wallWindow, wood, woodDoor, woodWindow, roofGable, roofPoint, chimney };
+  const house = (x: number, z: number, yaw: number): void => addHouse(add, houseParts, x, z, yaw, rng);
 
   for (const village of plan.villages) {
     // Houses in an arc on the far side of the square, doors toward it: the side toward the castle stays open,

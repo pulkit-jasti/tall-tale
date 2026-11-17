@@ -5,7 +5,7 @@
 // spins and never follows the head. Each user draws its own content on it
 // (paint) and can add things to `root` that tilt with it, like a poke button.
 // The canvas is redrawn only when a user paints, never every frame.
-import { Group, PlaneGeometry, type CanvasTexture, type Mesh, type MeshBasicMaterial, type Object3D } from 'three';
+import { Group, PlaneGeometry, type CanvasTexture, type Mesh, type MeshBasicMaterial, type Object3D, type Texture } from 'three';
 import { popIn } from '../fx/ease.js';
 import { degToRad } from '../rules/boardMath.js';
 import { uiCenterY } from '../rules/reach.js';
@@ -15,6 +15,22 @@ import { drawNineSlice } from './uiImages.js';
 
 /** Dark brown ink for text on the light panel. */
 export const PANEL_INK = '#4a3424';
+
+/**
+ * Textures made ahead of their first use but not on any mesh yet (a panel's other sizes, button icons):
+ * the game's warm-up sends them to the GPU too (src/game.ts warmGpu), so their first showing costs nothing.
+ */
+export const preparedTextures = new Set<Texture>();
+
+/**
+ * Sends a texture to the GPU now (the game sets it: renderer.initTexture). A panel drawn ahead (the campaign
+ * cards, at menu open behind the fade) is then uploaded right there, not on the frame it first shows
+ * (2026-11-17: card taps still flickered, the cards were drawn after the last GPU warm-up).
+ */
+let uploadNow: ((texture: Texture) => void) | null = null;
+export function setTextureUploader(fn: (texture: Texture) => void): void {
+  uploadNow = fn;
+}
 
 export interface PanelOptions {
   /** Size (cm). */
@@ -69,6 +85,13 @@ export class Panel {
     this.layoutHeight = this.canvas.height / canvasScale;
     this.texture = canvasTexture(this.canvas, options.anisotropy ?? 1);
     this.board = canvasPlane(this.texture, width, height);
+    this.sizes.set(`${width.toFixed(2)}x${height.toFixed(2)}`, {
+      canvas: this.canvas,
+      texture: this.texture,
+      geometry: this.board.geometry as PlaneGeometry,
+      layoutWidth: this.layoutWidth,
+      layoutHeight: this.layoutHeight,
+    });
     this.root.add(this.board);
     // Its face (+z) toward the player, tilted back like a lectern.
     this.root.position.set(0, options.centerY, -options.radius);
@@ -92,20 +115,43 @@ export class Panel {
    */
   resize(width: number, height: number): void {
     if (Math.abs(width - this.width) < 1e-3 && Math.abs(height - this.height) < 1e-3) return;
+    // Its own canvas, texture and board for each size, kept: a size used before (or prepared, prepareSize)
+    // swaps in with nothing made and nothing new sent to the GPU (audit 2026-11-17: the end panel made a
+    // new full-size texture and board the moment it appeared at a battle's end).
+    const size = this.sizeFor(width, height);
     this.width = width;
     this.height = height;
-    this.layoutWidth = Math.round(width * this.pxPerCm);
-    this.canvas.width = Math.round(this.layoutWidth * this.canvasScale);
-    this.canvas.height = Math.round(height * this.pxPerCm * this.canvasScale);
-    this.layoutHeight = this.canvas.height / this.canvasScale;
-    // A new canvas size needs a new texture (the old one keeps its size on the GPU).
-    const material = this.board.material as MeshBasicMaterial;
-    this.texture.dispose();
-    this.texture = canvasTexture(this.canvas, this.texture.anisotropy);
-    material.map = this.texture;
-    this.board.geometry.dispose();
-    this.board.geometry = new PlaneGeometry(width, height);
+    this.layoutWidth = size.layoutWidth;
+    this.layoutHeight = size.layoutHeight;
+    this.canvas = size.canvas;
+    this.texture = size.texture;
+    (this.board.material as MeshBasicMaterial).map = this.texture;
+    this.board.geometry = size.geometry;
     if (this.zoned) this.root.position.y = uiCenterY(height, this.tiltDeg);
+  }
+
+  /** Every size this panel has made (or prepared), by "width x height". */
+  private sizes = new Map<string, { canvas: HTMLCanvasElement; texture: CanvasTexture; geometry: PlaneGeometry; layoutWidth: number; layoutHeight: number }>();
+
+  private sizeFor(width: number, height: number) {
+    const key = `${width.toFixed(2)}x${height.toFixed(2)}`;
+    let size = this.sizes.get(key);
+    if (!size) {
+      const canvas = document.createElement('canvas');
+      const layoutWidth = Math.round(width * this.pxPerCm);
+      canvas.width = Math.round(layoutWidth * this.canvasScale);
+      canvas.height = Math.round(height * this.pxPerCm * this.canvasScale);
+      const texture = canvasTexture(canvas, this.texture.anisotropy);
+      preparedTextures.add(texture);
+      size = { canvas, texture, geometry: new PlaneGeometry(width, height), layoutWidth, layoutHeight: canvas.height / this.canvasScale };
+      this.sizes.set(key, size);
+    }
+    return size;
+  }
+
+  /** Makes a size's canvas, texture and board now (setup), so resizing to it later costs nothing. */
+  prepareSize(width: number, height: number): void {
+    this.sizeFor(width, height);
   }
 
   /**
@@ -117,10 +163,37 @@ export class Panel {
     afterDrag(this, () => this.paintNow(draw));
   }
 
-  private paintNow(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
-    const c = this.canvas.getContext('2d')!;
+  /**
+   * A page with several looks (the settings page's tabs, 2026-11-17): each `slot` keeps its own canvas and
+   * texture, and switching shows that slot's at once. It is drawn again only when its `key` (what it shows:
+   * values, states) changed since it was last drawn. A tab switch then draws and uploads nothing.
+   */
+  paintVariant(slot: string, key: string, draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
+    let v = this.variants.get(slot);
+    if (!v) {
+      const canvas = document.createElement('canvas');
+      canvas.width = this.canvas.width;
+      canvas.height = this.canvas.height;
+      const texture = canvasTexture(canvas, this.texture.anisotropy);
+      preparedTextures.add(texture);
+      v = { canvas, texture, key: null };
+      this.variants.set(slot, v);
+    }
+    this.canvas = v.canvas;
+    this.texture = v.texture;
+    (this.board.material as MeshBasicMaterial).map = v.texture;
+    if (v.key === key) return;
+    v.key = key;
+    const target = v;
+    afterDrag(target, () => this.paintNow(draw, target.canvas, target.texture));
+  }
+
+  private variants = new Map<string, { canvas: HTMLCanvasElement; texture: CanvasTexture; key: string | null }>();
+
+  private paintNow(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void, canvas = this.canvas, texture = this.texture): void {
+    const c = canvas.getContext('2d')!;
     c.setTransform(1, 0, 0, 1, 0, 0);
-    c.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    c.clearRect(0, 0, canvas.width, canvas.height);
     // Laid out at layoutWidth, drawn canvasScale times sharper, so text stays sharp further away.
     c.setTransform(this.canvasScale, 0, 0, this.canvasScale, 0, 0);
     const w = this.layoutWidth;
@@ -130,7 +203,8 @@ export class Panel {
       c.fillRect(0, 0, w, h);
     }
     draw(c, w, h);
-    this.texture.needsUpdate = true;
+    texture.needsUpdate = true;
+    uploadNow?.(texture);
   }
 
   /** The board pops in over this long (seconds): it grows with a small overshoot and settles. */

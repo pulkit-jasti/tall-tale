@@ -39,7 +39,21 @@ export interface LevelSettings {
   kegs: boolean;
   boulders: boolean;
   trees: boolean;
+  /** v3 2.1 traps on the map (0 leaves a kind out): haystacks, bell towers, rope bridges, and the potion cart's spots. */
+  hay: number;
+  bellTowers: number;
+  bridges: number;
+  potionCart: boolean;
+  /** v3 2.2: seed beds for the magnifying glass's sun garden. */
+  seedBeds: number;
   // Waves
+  /** How many waves the level has. */
+  waves: number;
+  /** The allowed times of day (docs/custom-mode.md "Allowed lists"): the waves are spread over the chosen ones, in this order. */
+  morning: boolean;
+  day: boolean;
+  sunset: boolean;
+  night: boolean;
   difficulty: Difficulty;
   /** Goblins in wave 1. */
   goblins: number;
@@ -56,6 +70,13 @@ export interface LevelSettings {
   /** Goblins come out over this long (seconds). */
   waveLength: number;
   campsAtOnce: number;
+  /** v3 2.7: fog rolls in for the night wave (NIGHT_FOG). */
+  foggyNight: boolean;
+  /** v3 Phase 3: the new goblins per wave, from wave 2 (0: none). */
+  diggers: number;
+  shamans: number;
+  bombers: number;
+  goblinArchers: number;
   // Rules
   archers: number;
   guards: number;
@@ -63,7 +84,30 @@ export interface LevelSettings {
   refill: number;
   /** The castle's starting health (share). */
   castleHealth: number;
+  /** The allowed tools (docs/custom-mode.md "Allowed lists"): the loadout only takes these. Never adds a locked tool. */
+  toolSlingshot: boolean;
+  toolHorn: boolean;
+  toolSwatter: boolean;
+  toolPepper: boolean;
+  toolDrum: boolean;
+  toolMagnet: boolean;
+  toolGlass: boolean;
+  toolSugar: boolean;
 }
+
+/** The time of day settings, in the order the waves go through them. */
+export const TIME_SETTINGS = ['morning', 'day', 'sunset', 'night'] as const;
+/** Each tool's allowed switch (the tool names are PickTool in src/rules/campaign.ts). */
+export const TOOL_SETTINGS = {
+  slingshot: 'toolSlingshot',
+  horn: 'toolHorn',
+  swatter: 'toolSwatter',
+  pepper: 'toolPepper',
+  drum: 'toolDrum',
+  magnet: 'toolMagnet',
+  glass: 'toolGlass',
+  sugar: 'toolSugar',
+} as const satisfies Record<string, keyof LevelSettings>;
 
 export type SettingKey = keyof LevelSettings;
 
@@ -148,7 +192,18 @@ export const LEVEL_SETTINGS: SettingDef[] = [
   { key: 'kegs', group: 'map', label: 'Powder kegs', kind: 'toggle', default: true },
   { key: 'boulders', group: 'map', label: 'Boulders', kind: 'toggle', default: true },
   { key: 'trees', group: 'map', label: 'Trees', kind: 'toggle', default: true },
+  // v3 2.1 and 2.2: the new traps and the seed beds, now per level (were fixed counts for every map).
+  { key: 'hay', group: 'map', label: 'Haystacks', kind: 'count', min: 0, max: 4, default: 2 },
+  { key: 'bellTowers', group: 'map', label: 'Bell towers', kind: 'count', min: 0, max: 2, default: 1 },
+  { key: 'bridges', group: 'map', label: 'Rope bridges', kind: 'count', min: 0, max: 2, default: 1 },
+  { key: 'potionCart', group: 'map', label: 'Potion cart', kind: 'toggle', default: true },
+  { key: 'seedBeds', group: 'map', label: 'Seed beds', kind: 'count', min: 0, max: 10, default: 6 },
   // Waves: who comes, and how many.
+  { key: 'waves', group: 'waves', label: 'Waves', kind: 'count', min: 2, max: 6, default: 4 },
+  { key: 'morning', group: 'waves', label: 'Morning', kind: 'toggle', default: true },
+  { key: 'day', group: 'waves', label: 'Day', kind: 'toggle', default: true },
+  { key: 'sunset', group: 'waves', label: 'Sunset', kind: 'toggle', default: true },
+  { key: 'night', group: 'waves', label: 'Night', kind: 'toggle', default: true },
   {
     key: 'difficulty',
     group: 'waves',
@@ -161,21 +216,38 @@ export const LEVEL_SETTINGS: SettingDef[] = [
     ],
     default: 'normal',
   },
-  { key: 'goblins', group: 'waves', label: 'Goblins in wave 1', kind: 'count', min: 4, max: 30, default: 10 },
-  { key: 'growth', group: 'waves', label: 'More each wave', kind: 'range', min: 0, max: 0.6, step: 0.05, default: 0.25, unit: 'percent' },
+  // v3 (docs/v3-plan.md 1.5): bigger waves (was 10 and 25%), so enough goblins reach the wall to feed the horn about twice a wave.
+  { key: 'goblins', group: 'waves', label: 'Goblins in wave 1', kind: 'count', min: 4, max: 40, default: 22 },
+  { key: 'growth', group: 'waves', label: 'More each wave', kind: 'range', min: 0, max: 0.6, step: 0.05, default: 0.2, unit: 'percent' },
   { key: 'runners', group: 'waves', label: 'Runners', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.25, unit: 'percent' },
-  { key: 'balloons', group: 'waves', label: 'Balloons', kind: 'count', min: 0, max: 4, default: 1 },
+  // Up to 10 a wave (was 4), so a level can be all about balloons (Sky Pirates). At most BALLOONS.max fly at once; the rest wait their turn.
+  { key: 'balloons', group: 'waves', label: 'Balloons', kind: 'count', min: 0, max: 10, default: 1 },
   { key: 'helmets', group: 'waves', label: 'Helmets', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.35, unit: 'percent' },
   { key: 'shields', group: 'waves', label: 'Shields', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.3, unit: 'percent' },
   { key: 'spears', group: 'waves', label: 'Spears', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.4, unit: 'percent' },
   { key: 'swords', group: 'waves', label: 'Swords', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.25, unit: 'percent' },
   { key: 'waveLength', group: 'waves', label: 'Wave length', kind: 'range', min: 30, max: 90, step: 5, default: 50, unit: 'seconds' },
   { key: 'campsAtOnce', group: 'waves', label: 'Camps at once', kind: 'count', min: 1, max: 5, default: 2 },
+  { key: 'foggyNight', group: 'waves', label: 'Foggy night', kind: 'toggle', default: false },
+  // v3 Phase 3 (the "allowed goblins" list, docs/custom-mode.md section 4): 0 leaves a type out.
+  { key: 'diggers', group: 'waves', label: 'Diggers', kind: 'count', min: 0, max: 4, default: 0 },
+  { key: 'shamans', group: 'waves', label: 'Shamans', kind: 'count', min: 0, max: 3, default: 0 },
+  { key: 'bombers', group: 'waves', label: 'Bombers', kind: 'count', min: 0, max: 4, default: 0 },
+  { key: 'goblinArchers', group: 'waves', label: 'Goblin archers', kind: 'count', min: 0, max: 9, default: 0 },
   // Rules: the battle around the map and the waves.
   { key: 'archers', group: 'rules', label: 'Archers', kind: 'count', min: 0, max: 6, default: 4 },
   { key: 'guards', group: 'rules', label: 'Guards', kind: 'count', min: 0, max: 4, default: 2 },
   { key: 'refill', group: 'rules', label: 'Help comes every', kind: 'range', min: 5, max: 40, step: 1, default: 15, unit: 'seconds' },
   { key: 'castleHealth', group: 'rules', label: 'Castle health', kind: 'range', min: 0.3, max: 1, step: 0.05, default: 1, unit: 'percent' },
+  // The allowed tools: the loadout stand only takes these in this level.
+  { key: 'toolSlingshot', group: 'rules', label: 'Slingshot', kind: 'toggle', default: true },
+  { key: 'toolHorn', group: 'rules', label: 'War horn', kind: 'toggle', default: true },
+  { key: 'toolSwatter', group: 'rules', label: 'Fly swatter', kind: 'toggle', default: true },
+  { key: 'toolPepper', group: 'rules', label: 'Pepper', kind: 'toggle', default: true },
+  { key: 'toolDrum', group: 'rules', label: 'Drum', kind: 'toggle', default: true },
+  { key: 'toolMagnet', group: 'rules', label: 'Magnet', kind: 'toggle', default: true },
+  { key: 'toolGlass', group: 'rules', label: 'Magnifying glass', kind: 'toggle', default: true },
+  { key: 'toolSugar', group: 'rules', label: 'Sugar cubes', kind: 'toggle', default: true },
 ];
 
 /** A short line under each setting's name on the Custom Game page: what it does (headset test 2026-11-11). */
@@ -193,6 +265,24 @@ export const SETTING_HINTS: Record<SettingKey, string> = {
   kegs: 'Blow up when you shoot them',
   boulders: 'Roll down the road when shot',
   trees: 'Fall across the road when shot',
+  hay: 'Burn with the glass and block a road',
+  bellTowers: 'Drop the bell with the magnet',
+  bridges: 'Cut the rope with a shot',
+  potionCart: 'A cart of strange potions now and then',
+  seedBeds: 'Beds the magnifying glass grows plants in',
+  waves: 'How many waves the battle has',
+  morning: 'Waves may be fought in the morning',
+  day: 'Waves may be fought by day',
+  sunset: 'Waves may be fought at sunset',
+  night: 'Waves may be fought at night',
+  toolSlingshot: 'Allowed in the loadout',
+  toolHorn: 'Allowed in the loadout',
+  toolSwatter: 'Allowed in the loadout',
+  toolPepper: 'Allowed in the loadout',
+  toolDrum: 'Allowed in the loadout',
+  toolMagnet: 'Allowed in the loadout',
+  toolGlass: 'Allowed in the loadout',
+  toolSugar: 'Allowed in the loadout',
   difficulty: 'More goblins, and they come faster',
   goblins: 'How many come in the first wave',
   growth: 'Extra goblins in every later wave',
@@ -204,6 +294,11 @@ export const SETTING_HINTS: Record<SettingKey, string> = {
   swords: 'Strike your soldiers faster',
   waveLength: 'Time over which the goblins come out',
   campsAtOnce: 'Camps sending goblins at the same time',
+  foggyNight: 'Fog hides the far board in the night wave',
+  diggers: 'Tunnel in unseen each wave from wave 2',
+  shamans: 'Give stripped goblins their gear back',
+  bombers: 'Carry a keg to blow up your wall',
+  goblinArchers: 'Shoot at your wall guards from the road',
   archers: 'Archers on the castle wall',
   guards: 'Guards fighting on the rampart',
   refill: 'How fast lost soldiers come back',
@@ -289,5 +384,10 @@ export function describeSettings(s: LevelSettings): string {
   if (s.shields >= 0.6) extras.push('shields');
   if (s.spears >= 0.6) extras.push('spears');
   if (s.castleHealth < 0.7) extras.push('a damaged castle');
+  if (s.foggyNight) extras.push('a foggy night');
+  if (s.diggers > 0) extras.push('diggers');
+  if (s.shamans > 0) extras.push('shamans');
+  if (s.bombers > 0) extras.push('bombers');
+  if (s.goblinArchers > 0) extras.push('goblin archers');
   return [camps, roads, ...extras.slice(0, 1), s.difficulty].join(', ');
 }

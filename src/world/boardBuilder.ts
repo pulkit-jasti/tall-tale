@@ -13,7 +13,7 @@ import {
   RingGeometry,
   Vector3,
 } from 'three';
-import { BOARD, CAMP_LOOK, CASTLE, DECOR, NIGHT_LIGHTS, ROADS, SETTLEMENTS } from '../config/game.js';
+import { BOARD, CAMP_LOOK, CASTLE, DECOR, NIGHT_LIGHTS, ROADS, SETTLEMENTS, TRIGGERS } from '../config/game.js';
 import type { Blueprint } from '../rules/blueprint.js';
 import { RoadGraph, type GraphNode } from '../rules/roadGraph.js';
 import { boardHeight, degToRad, groundAt, polarX, polarZ, setBumps } from '../rules/boardMath.js';
@@ -24,8 +24,9 @@ import type { RoadTorch } from './nightLights.js';
 import { buildStorySpots, planStorySpots } from './storySpots.js';
 import { Meadow } from './grass.js';
 import { buildSettlements, builtSpots, flatSpots, gapTo, placeLandmarks, planSettlements, type Spot } from './settlements.js';
-import { campDistance, RoadField, Terrain, type CampSpot } from './terrain.js';
-import { placeTriggers, triggerGround } from './triggers.js';
+import { campDistance, RoadField, Terrain, type CampSpot, type Cut } from './terrain.js';
+import { addExtraTraps, addSpareSpots, placeTriggers, triggerGround, type TriggerPlacement } from './triggers.js';
+import { buildRoadside, planRoadside } from './roadside.js';
 import { flatMaterial } from './shapes.js';
 
 const yAxis = new Vector3(0, 1, 0);
@@ -312,6 +313,8 @@ export interface BuiltBoard {
   roadTorches: RoadTorch[];
   /** The villages (for the villagers who walk about in them). */
   villages: Spot[];
+  /** v3 2.8: every trap spot, the blueprint's and the spares (src/world/triggers.ts). */
+  trapSpots: TriggerPlacement[];
 }
 
 /**
@@ -333,10 +336,33 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   // Where people live comes first (the villages sit by the roads, so this needs road distances far out).
   const roadField = new RoadField(network.roads, ROADS.width / 2 + SETTLEMENTS.villages.radius[1] + SETTLEMENTS.villages.roadGap[1] + 6);
   // The triggers on the roads: flat ground under them and toward the castle (never hidden by a hill), and nothing built beside them.
-  const triggerSpots = triggerGround(placeTriggers(network, blueprint.triggers));
+  // v3 2.8: the blueprint's traps and their spare spots (where used ones come back), all with flat ground and kept clear.
+  // v3 2.1: plus the new traps (haystacks, the bell tower, the bridge, the cart's spots), from their own stream.
+  const trapSpots = addSpareSpots(network, addExtraTraps(network, placeTriggers(network, blueprint.triggers), createRandom(seed + 14), blueprint.extras), createRandom(seed + 13));
+  const triggerSpots = triggerGround(trapSpots);
   const plan = planSettlements(roadField, campSpots, createRandom(seed + 6), triggerSpots.clear);
   // Then the terrain, flat under the camps, villages, fields and triggers: from here on groundAt() has its hills.
-  const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan), ...triggerSpots.flats], createRandom(seed));
+  // 2026-11-17: a ravine under each rope bridge, so the bridge spans a gap you can see (it sat on flat ground).
+  const B = TRIGGERS.bridge;
+  const bridges = trapSpots.filter((s) => s.kind === 'bridge' && !s.spare);
+  const dir = new Vector3();
+  const cuts: Cut[] = bridges.map((s) => {
+    network.roads[s.road].directionAt(s.along, dir).setY(0).normalize();
+    return { x: s.x, z: s.z, ux: dir.x, uz: dir.z, halfIn: B.gapIn, halfOut: B.gapOut, lenIn: B.streamLength * 0.35, lenOut: B.streamLength / 2, depth: B.gapDepth };
+  });
+  const terrain = new Terrain(roadField, [...campSpots, ...flatSpots(plan), ...triggerSpots.flats], createRandom(seed), cuts);
+  // The road crosses each ravine on the bridge's deck: at the banks' height, a little arched.
+  const end = new Vector3();
+  for (const s of bridges) {
+    const road = network.roads[s.road];
+    const from = Math.max(0, s.along - B.length / 2);
+    const to = Math.min(road.length, s.along + B.length / 2);
+    road.curve.getPointAt(from / road.length, end);
+    const atFrom = groundAt(end.x, end.z);
+    road.curve.getPointAt(to / road.length, end);
+    const level = Math.max(atFrom, groundAt(end.x, end.z));
+    road.addSpan(from, to, level, B.arch);
+  }
   placeLandmarks(plan, terrain, campSpots, createRandom(seed + 7), triggerSpots.clear);
   // The village squares are worn to dirt, like the camps.
   const plazas = plan.villages.map((v) => ({ ...v, size: v.size * 0.45 }));
@@ -349,26 +375,31 @@ export async function buildBoard(parent: Object3D, blueprint: Blueprint): Promis
   // Little scenes in the empty land (a stone circle, a ruined tower, an old battlefield...), clear of everything built.
   const built = [...builtSpots(plan), ...triggerSpots.clear];
   const stories = planStorySpots(roadField, campSpots, built, createRandom(seed + 9));
+  // v3 2.0: small scenes beside the near roads (cottages, carts, banners...), clear of the traps and the torches.
+  const roadTorches = roadTorchSpots(network.roads);
+  const roadside = planRoadside(network.roads, roadField, [...built, ...stories], triggerSpots.clear, roadTorches, createRandom(seed + 11));
   // The courtyard stays empty until the main gameplay is done (houses and stalls come back with the polish).
   const campGroups = new Map<string, Object3D>();
-  const [camps, decor, settlements, storyScenes] = await Promise.all([
+  const [camps, decor, settlements, storyScenes, roadsideScenes] = await Promise.all([
     buildCamps(campNodes, createRandom(seed + 2), hills, campGroups),
-    buildDecor(terrain, campSpots, [...built, ...stories], plan.forests, createRandom(seed + 3)),
+    buildDecor(terrain, campSpots, [...built, ...stories, ...roadside], plan.forests, createRandom(seed + 3)),
     buildSettlements(plan, network.roads, createRandom(seed + 8)),
     buildStorySpots(stories, createRandom(seed + 10)),
+    buildRoadside(roadside, createRandom(seed + 12)),
   ]);
-  parent.add(camps, decor, settlements, storyScenes);
+  parent.add(camps, decor, settlements, storyScenes, roadsideScenes);
   return {
     network,
     hills,
     camps: campGroups,
     sails: (settlements.userData.sails as Object3D | undefined) ?? null,
     // For the night lights: every window tile and lantern (in the settlements' frame, the board's), and a lantern's height.
-    windows: settlements.userData.windows as Matrix4[],
-    lanterns: settlements.userData.lanterns as Matrix4[],
+    windows: [...(settlements.userData.windows as Matrix4[]), ...(roadsideScenes.userData.windows as Matrix4[])],
+    lanterns: [...(settlements.userData.lanterns as Matrix4[]), ...(roadsideScenes.userData.lanterns as Matrix4[])],
     lanternHeight: settlements.userData.lanternHeight as number,
-    roadTorches: roadTorchSpots(network.roads),
+    roadTorches,
     villages: plan.villages,
+    trapSpots,
   };
 }
 

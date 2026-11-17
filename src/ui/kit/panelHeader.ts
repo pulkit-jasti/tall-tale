@@ -62,15 +62,26 @@ export class PanelHeader implements Control {
     if (title === this.title) return;
     this.title = title;
     const H = HEADER;
+    // A title shown before: its plate and face come back as they were (audit 2026-11-17: each switch built
+    // new rounded plates and a new texture, "New level" and "Edit level" on every Custom Game open).
+    const kept = this.made.get(title);
+    if (kept) {
+      for (const old of this.plate.children.filter((o) => o !== this.face)) this.plate.remove(old);
+      this.plate.remove(this.face);
+      this.plate.add(kept.edge, kept.body, this.face);
+      this.width = kept.width;
+      this.texture = kept.texture;
+      (this.face.material as MeshBasicMaterial).map = this.texture;
+      this.face.scale.set(this.width, H.height, 1);
+      if (this.back) this.back.group.position.x = -this.width / 2 - H.backGap - BUTTON_SIZE.medium * POKE.rimScale;
+      return;
+    }
     const c = this.canvas.getContext('2d')!;
     c.font = `bold ${Math.round(H.textSize * PX)}px sans-serif`;
     const textW = c.measureText(title).width / PX;
     this.width = Math.max(H.minWidth, textW + H.pad * 2);
-    // The plate: a dark edge slab and the colored plate on it, both rounded.
-    for (const old of this.plate.children.filter((o) => o !== this.face)) {
-      this.plate.remove(old);
-      (old as Mesh).geometry.dispose();
-    }
+    // The plate: a dark edge slab and the colored plate on it, both rounded. The old ones are kept (made).
+    for (const old of this.plate.children.filter((o) => o !== this.face)) this.plate.remove(old);
     const edge = new Mesh(new ExtrudeGeometry(rounded(this.width + 0.5, H.height + 0.5, 0.9), { depth: H.depth * 0.6, bevelEnabled: false }), flatMaterial(POKE.rimColor));
     // Unlit, so its color shows as it is set (lit, the scene's light made it a dull dark red, headset test 2026-11-11).
     const body = new Mesh(
@@ -82,20 +93,27 @@ export class PanelHeader implements Control {
     this.plate.add(edge, body, this.face);
     this.face.scale.set(this.width, H.height, 1);
     if (this.back) this.back.group.position.x = -this.width / 2 - H.backGap - BUTTON_SIZE.medium * POKE.rimScale;
+    const width = this.width;
     afterDrag(this, () => {
-      this.canvas.width = Math.round(this.width * PX);
-      this.canvas.height = Math.round(H.height * PX);
-      const ctx = this.canvas.getContext('2d')!;
+      // Its own canvas and texture, kept with its plate for the next time this title shows.
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(width * PX);
+      canvas.height = Math.round(H.height * PX);
+      const ctx = canvas.getContext('2d')!;
       ctx.font = `bold ${Math.round(H.textSize * PX)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = H.ink;
-      ctx.fillText(title, this.canvas.width / 2, this.canvas.height / 2 + 2);
-      this.texture.dispose();
-      this.texture = canvasTexture(this.canvas, 4);
-      (this.face.material as MeshBasicMaterial).map = this.texture;
+      ctx.fillText(title, canvas.width / 2, canvas.height / 2 + 2);
+      this.canvas = canvas;
+      this.texture = canvasTexture(canvas, 4);
+      this.made.set(title, { edge, body, texture: this.texture, width });
+      if (this.title === title) (this.face.material as MeshBasicMaterial).map = this.texture;
     });
   }
+
+  /** Each title's plate, face texture and width, made once. */
+  private made = new Map<string, { edge: Mesh; body: Mesh; texture: CanvasTexture; width: number }>();
 
   /** True on the frame Back is poked. */
   update(hands: HandState[], dt: number): boolean {

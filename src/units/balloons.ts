@@ -64,6 +64,8 @@ export class Balloon implements SlingTarget {
   /** Height gained since it turned away (cm). */
   lift = 0;
   aimed = false;
+  /** Swatted away (v3): seconds left of drifting outward. */
+  pushLeft = 0;
   /** The balloon lesson: it stops this far out (cm) and hovers there, riders aboard, until popped. Null: it comes all the way in. */
   waitAt: number | null = null;
   readonly radius = BALLOONS.radius * 1.2;
@@ -232,6 +234,7 @@ export class Balloons {
     balloon.age = 0;
     balloon.lift = 0;
     balloon.aimed = false;
+    balloon.pushLeft = 0;
     balloon.waitAt = waitAt;
     this.tint(balloon);
     this.place(balloon, 0);
@@ -253,6 +256,41 @@ export class Balloons {
       }
     }
     return best;
+  }
+
+  /** The balloon carrying this rider, or null. */
+  carrierOf(rider: Goblin): Balloon | null {
+    for (const b of this.list) if (b.phase !== 'off' && b.riders.includes(rider)) return b;
+    return null;
+  }
+
+  /** The balloon whose envelope or basket is within `reach` cm of a board point, or null. */
+  near(point: Vector3, reach: number): Balloon | null {
+    for (const b of this.list) {
+      if (!b.hittable()) continue;
+      const dx = point.x - b.position.x;
+      const dz = point.z - b.position.z;
+      // The envelope and the basket under it: a short upright line.
+      const dy = Math.max(0, Math.max(b.position.y - BASKET_DROP - point.y, point.y - b.position.y));
+      if (Math.hypot(dx, dy, dz) < BALLOONS.radius + reach) return b;
+    }
+    return null;
+  }
+
+  /**
+   * v3 (docs/v3-plan.md 1.4): swatted. It drifts away from the castle for a
+   * moment (BALLOONS.pushTime), riders aboard, then comes back. Returns false
+   * when it is already being pushed or cannot be.
+   */
+  push(balloon: Balloon): boolean {
+    if (!balloon.hittable() || balloon.phase === 'leave' || balloon.pushLeft > 0) return false;
+    balloon.pushLeft = BALLOONS.pushTime;
+    // One that was dropping riders floats off and has to come in again.
+    if (balloon.phase === 'drop') balloon.phase = 'approach';
+    this.board.localToWorld(temp.copy(balloon.position));
+    this.particles.burst(temp, BALLOONS.popColors, 6, 0.2);
+    this.audio.play('swatWhoosh', temp);
+    return true;
   }
 
   /** Hit by a slingshot shot: it bursts, and its riders fall and poof where they land. */
@@ -307,6 +345,12 @@ export class Balloons {
       for (const g of b.riders) if (g.stunned > 0) stunned = true;
       switch (b.phase) {
         case 'approach':
+          // Swatted away: it drifts outward for a moment, then comes back.
+          if (b.pushLeft > 0) {
+            b.pushLeft -= dt;
+            b.radiusOut += BALLOONS.pushSpeed * dt;
+            break;
+          }
           if (!stunned && !this.hold) b.radiusOut -= BALLOONS.speed * dt;
           // The lesson balloon hovers outside the wall, riders aboard, until it is popped.
           if (b.waitAt !== null && b.radiusOut <= b.waitAt) b.radiusOut = b.waitAt;

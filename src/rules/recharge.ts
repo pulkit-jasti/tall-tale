@@ -7,9 +7,9 @@
 // - The use window starts with the first use (a swat, a shake, a ring), not
 //   the grab, so an accidental grab never wastes it.
 // - The recharge only fills while the tool is back on its platform.
-// - Eating a goblin fills every recharging tool's ring by a share of its full
-//   recharge (10%, a seasoned goblin 20%). It never touches a use window and
-//   never makes a ready tool "more ready".
+// - v3 (docs/v3-plan.md 1.4): a use can count in swings instead of seconds
+//   (spendUse per swing; switched off for now). v3 2.5: every tool
+//   recharges on time, and eating heals the castle instead.
 
 export type ChargePhase = 'ready' | 'using' | 'recharging';
 
@@ -51,7 +51,7 @@ export function endUse(state: ToolCharge): void {
 
 /**
  * One frame. The use window runs down while `windowRuns` (the tutorial can
- * hold it), the recharge fills while `onPlatform`. Returns 'ended' on the
+ * hold it; never for a use counted in swings), the recharge fills while `onPlatform`. Returns 'ended' on the
  * frame the use window runs out and 'ready' on the frame the ring is full.
  */
 export function tickCharge(state: ToolCharge, dt: number, rechargeSeconds: number, windowRuns: boolean, onPlatform: boolean): 'ended' | 'ready' | null {
@@ -62,8 +62,9 @@ export function tickCharge(state: ToolCharge, dt: number, rechargeSeconds: numbe
     endUse(state);
     return 'ended';
   }
-  if (state.phase === 'recharging' && onPlatform) {
-    state.charge = rechargeSeconds > 0 ? state.charge + dt / rechargeSeconds : 1;
+  // A recharge of 0 never fills by time.
+  if (state.phase === 'recharging' && onPlatform && rechargeSeconds > 0) {
+    state.charge += dt / rechargeSeconds;
     if (state.charge < 1) return null;
     readyNow(state);
     return 'ready';
@@ -71,16 +72,16 @@ export function tickCharge(state: ToolCharge, dt: number, rechargeSeconds: numbe
   return null;
 }
 
-/** Eating: a recharging tool's ring jumps forward by `share` of its full recharge. Returns true if it moved. */
-export function refillCharge(state: ToolCharge, share: number): boolean {
-  if (state.phase !== 'recharging' || share <= 0) return false;
-  state.charge = Math.min(1, state.charge + share);
+/**
+ * A use counted in swings (the swatter): one swing spent. Returns true when
+ * that was the last one (the use is over and the recharge starts).
+ */
+export function spendUse(state: ToolCharge): boolean {
+  if (state.phase !== 'using') return false;
+  state.useLeft -= 1;
+  if (state.useLeft > 0) return false;
+  endUse(state);
   return true;
-}
-
-/** The share of a full recharge one eaten goblin gives (seasoned: peppered). */
-export function eatShare(seasoned: boolean, basic: number, seasonedShare: number): number {
-  return seasoned ? seasonedShare : basic;
 }
 
 /** Ready at once (a new battle, the tutorial's help, debug). */

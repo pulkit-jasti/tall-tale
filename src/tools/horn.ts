@@ -10,9 +10,11 @@
 //      and HORN.zoneDown below them), from the lips out to a hand's length,
 //      so it need not come close to the headset and tracking holds. Near the face the horn
 //      fades to see-through (HORN.fade*), so the spot and path stay in view.
-//   3. Blow: with the mic, only a real blow in the zone sends them (the raw
-//      loudness of one frame over HORN.blowLevel is enough, shown live on a
-//      bar in front of the eyes, the glass sign, src/ui/kit/glassSign.ts).
+//   3. Speak: with the mic, a word said in the zone sends them ("Charge!"):
+//      the loudness must stay over HORN.speakLevel for HORN.speakTime in all
+//      (2026-11-17: one loud frame was enough before, so any small noise
+//      called knights on the wrong road). Shown live on a bar in front of the
+//      eyes, the glass sign (src/ui/kit/glassSign.ts).
 //      With the quiet horn setting or no mic, keeping it in the zone for
 //      HORN.holdTime sends them (voice is never required, hard rule). The
 //      knights go to the spot looked at a moment before the blow
@@ -40,9 +42,9 @@ export class Horn extends HandTool {
   private bellLocal = new Vector3();
   /** Time held in the blow zone with a spot (seconds), and the mic's raw loudness this frame. */
   private inZoneTime = 0;
-  /** Time out of the zone since it was last in (seconds), and how long the last loud frame still counts (seconds). */
+  /** Time out of the zone since it was last in (seconds), and the speech heard so far (seconds over HORN.speakLevel, draining in quiet). */
   private outTime = 0;
-  private loudLeft = 0;
+  private voice = 0;
   /** How long the mic has heard dead silence while held (seconds); past HORN.silentFallback it counts as broken. */
   private silentFor = 0;
   /** The mic hears nothing: the horn uses the quiet hold instead (the game shows why). */
@@ -58,6 +60,10 @@ export class Horn extends HandTool {
   onCall: (blown: boolean) => void = () => {};
   /** True while the aim has a road spot a squad can go to (src/ui/hornAim.ts). Only then can it blow. */
   aimValid: () => boolean = () => true;
+  /** What a blow would do now (v3 2.5): call, boost or move, or null (src/ui/hornAim.ts). */
+  aimKind: () => 'new' | 'boost' | 'move' | null = () => 'new';
+  /** After a free move it must leave the blow zone before it can blow again (no accidental boost on the same spot). */
+  private needsLeave = false;
   /** Held and not yet sounded: the head aims it. */
   aiming = false;
   /** The mouthpiece is in the blow zone in front of the mouth (HORN.zoneRadius). */
@@ -87,11 +93,38 @@ export class Horn extends HandTool {
   }
 
   protected resetMotion(): void {
+    // The word that sounded it is used up (it never sends a second squad).
+    this.voice = 0;
     this.inZoneTime = 0;
     this.outTime = 0;
     this.inZone = false;
     this.ready = false;
     this.charge = 0;
+  }
+
+  /**
+   * v3 2.5: the horn can be held while it recharges too: a move (at the
+   * squad cap) is free. A call or a boost still needs a charge (the aim
+   * shows why it cannot blow).
+   */
+  get grabbable(): boolean {
+    return !this.tiedDown && !this.quiet;
+  }
+
+  /** Set by the game: knights are out on the board (so a free move is possible). */
+  squadsOut: () => boolean = () => false;
+
+  /**
+   * Bright while resting too when it can move a squad (2026-11-17: it went
+   * grey after a call, so nobody thought to pick it up to move the knights).
+   */
+  protected get looksUsable(): boolean {
+    return this.usable || (this.grabbable && this.squadsOut());
+  }
+
+  /** True while it holds a charge (ready): a call or a boost can be paid for. */
+  get charged(): boolean {
+    return this.usable && !this.recharging;
   }
 
   /** The mic loudness now (smoothed RMS), read while the horn is held. 0 without the mic. */
@@ -123,8 +156,12 @@ export class Horn extends HandTool {
       this.level = 0;
       this.silentFor = 0;
       this.micSilent = false;
+      this.needsLeave = false;
       this.fade(1);
     }
+    // The cost preview (v3 2.5): its ring shows the charge a call or a boost will spend; calm for a free move.
+    const kind = this.aiming ? this.aimKind() : null;
+    this.costPreview = kind === 'new' || kind === 'boost';
   }
 
   private wasAiming = false;
@@ -173,8 +210,9 @@ export class Horn extends HandTool {
     // Near the face it fades to see-through.
     const t = Math.min(1, Math.max(0, (distance - HORN.fadeNear) / (HORN.fadeFar - HORN.fadeNear)));
     this.fade(HORN.fadeOpacity + (1 - HORN.fadeOpacity) * t);
-    // A loud frame is remembered a moment (HORN.blowMemory): a blow that starts just before the horn is in place still counts.
-    this.loudLeft = hears && this.level >= HORN.blowLevel ? HORN.blowMemory : Math.max(0, this.loudLeft - dt);
+    // Speech fills up while it is loud enough and drains in quiet (HORN.speakDecay): a word started just
+    // before the horn is in place still counts, a click or a bump (a frame or two) never fills it.
+    this.voice = hears && this.level >= HORN.speakLevel ? this.voice + dt : Math.max(0, this.voice - dt * HORN.speakDecay);
     // The blow zone: a ball in front of the mouth, measured from the eyes with the look kept level, so looking
     // down at the board never moves it into the chest (fixed 2026-11-12: a cone from the eyes left out the
     // mouth itself, which sits below the eyes, so raising it to blow kept failing).
@@ -187,7 +225,16 @@ export class Horn extends HandTool {
     const inside = mouthWorld.distanceTo(zoneCenter) < HORN.zoneRadius + (this.inZone ? HORN.zoneExitMargin : 0);
     this.outTime = inside ? 0 : this.outTime + dt;
     if (!inside && (!this.inZone || this.outTime >= HORN.zoneGrace)) {
+      this.needsLeave = false;
       this.resetMotion();
+      return;
+    }
+    // Just moved a squad (free): lowered out of the zone first, then it can blow again.
+    if (this.needsLeave) {
+      this.inZone = true;
+      this.ready = false;
+      this.inZoneTime = 0;
+      this.charge = 0;
       return;
     }
     this.inZone = true;
@@ -209,9 +256,9 @@ export class Horn extends HandTool {
     // With the mic only a real blow sends them; the quiet horn (or no mic) sends them after a short hold.
     let blown = false;
     if (hears) {
-      // One frame over the line is a blow (headset test: holding it a while was too hard to hit), or one a moment ago.
-      blown = this.loudLeft > 0;
-      this.charge = Math.min(1, this.level / HORN.blowLevel);
+      // A short word at a normal speaking level is enough ("Charge!").
+      blown = this.voice >= HORN.speakTime;
+      this.charge = Math.min(1, this.voice / HORN.speakTime);
     } else this.charge = Math.min(1, this.inZoneTime / HORN.holdTime);
     if (this.charge > 0) {
       this.puffTimer -= dt;
@@ -225,6 +272,17 @@ export class Horn extends HandTool {
 
   /** It sounds: the war horn, a burst from the bell, and the knights charge. */
   private sound(blown: boolean): void {
+    // v3 2.5: a move is free: no charge spent, it stays in the hand (lowered first before the next blow).
+    if (this.aimKind() === 'move') {
+      mark('horn');
+      this.bodyToWorld(this.bellLocal, world);
+      this.audio.play('waveHorn', world, (blown ? HORN.blownVolume : HORN.heldVolume) * HORN.moveVolume);
+      this.particles.burst(world, HORN.waveColors, 8, 0.25);
+      this.onCall(blown);
+      this.resetMotion();
+      this.needsLeave = true;
+      return;
+    }
     if (!this.tryUse()) return;
     mark('horn');
     this.bodyToWorld(this.bellLocal, world);

@@ -16,7 +16,7 @@ Back to [GDD index](GDD.md). Related: [Enemies](enemies.md), [Map](map.md).
 
 ## 2. The flag and the compass ring
 
-A tall flagpole on the inner rim on the left, just outside the ring handle, slightly in front of the player, and the compass ring low in front. (The blue wave flag on the right was dropped 2026-11-11: nobody noticed it. The compass shows the wave instead.)
+A tall flagpole on the inner rim on the left, slightly in front of the player, and the compass ring low in front. (The blue wave flag on the right was dropped 2026-11-11: nobody noticed it. The compass shows the wave instead.)
 
 - **They stay with the player, like the tool platforms.** They do not spin with the board, so they are always in front of the player and never have to be searched for (see [controls-and-ui.md](controls-and-ui.md#2-the-360-degree-board)).
 - The health flag has no numbers: it works like a progress bar built into the world.
@@ -25,17 +25,20 @@ A tall flagpole on the inner rim on the left, just outside the ring handle, slig
 
 - Starts at the top. Slides down the pole as the castle takes damage.
 - The flag tears and smokes as it gets low.
-- **Repair:** during the short breather between waves, tiny soldiers at the base of the pole pull the rope and raise the flag a little. Part of the damage heals, not all of it.
+- **Healing (v3 2.5, replaces the breather repair):** eating is the only way to heal. Each goblin eaten heals 2% of max health (a seasoned one double), and the flag rises a notch with a chime and a sparkle (`CASTLE_HEALTH.eatHeal`). The breather no longer repairs (`repairShare` 0): health carries over from wave to wave (v3 2.8).
 - Later: small notches on the pole mark the star thresholds (stars are not in the MVP).
 
 ### Compass ring (replaces the blue wave flag, 2026-11-11)
 
-- **3D since 2026-11-12:** an 11 cm brass compass dish on a short post straight in front, 37 cm out by the wall and 7 cm up, nearly flat like a compass on a table (`COMPASS`, `src/ui/compass.ts`). The first, flat disc sat low just outside the ring and hid under it from the seat. The pause and Next buttons moved to the blue flag's old spot on the right to make room (34 degrees since everything moved nearer the front, was 39). Only looked at, never touched.
-- **Rim wedges show where enemies come from, early**, relative to the player (a gold needle points straight ahead, so the marks move round as the board spins). 32 wedges pointing in. **Color is how close:** a camp whose drums have started (amber pulse), goblins far on the roads (dim red), near (red, inside 150 cm), at the wall, climbing, on the rampart or inside (bright red, blinking); the wedges beside a threat light one level lower. **Height is how many goblins** are in that direction (up to 6 counted), gliding as it changes. The red threat arrow stays as the last warning.
-- **Tents on the lip:** one for every camp that is up (a camp still under the ground has none), dim while quiet, amber and bobbing while its drums play. So the player knows where the camps are before they send.
+- **3D since 2026-11-12:** an 11 cm brass compass dish on a short post straight in front, tipped toward the eyes (`COMPASS`, `src/ui/compass.ts`). v3 (2026-11-13): 33 cm out, 4.5 cm up, tipped 25 degrees (was 37 and 7, then 30 and 10, which covered the view in front). Its crank wheel sits round it on 8 spokes. It hides while paused (the height rail stands there). The pause and Next buttons stand 24 degrees right, just beside it (34 until 2026-11-13).
+- **The crank (v3, [controls-and-ui.md](controls-and-ui.md)):** a brass wheel round the dish's rim with a knob that turns with the board. Pinch the knob (pinch only) and circle the hand: one circle is one turn of the board.
+- **Rim wedges show where enemies come from, early**, relative to the player (a gold needle points straight ahead, so the marks move round as the board spins). 32 wedges pointing in. **v3 (1.3): color is the state, not the distance:** a camp whose drums have started (amber, slow pulse: the warning about 3 s before a group leaves), goblins walking in (bright yellow, steady), goblins attacking the wall, climbing, on the rampart or inside (full red, pulsing). **Never color alone:** red also pulses, so it works for color blind players. The wedges beside goblins show their color dimmer. **Size is how many goblins** are in that direction (up to 6 counted), gliding as it changes. The red threat arrow stays as the last warning. All colors are far above 4.5 to 1 against the dark face, and unlit, so night does not change them.
+- **Tents on the lip:** one for every camp that is up (a camp still under the ground has none), v3: light cream with a dark outline while quiet (was a grey that vanished on the dark dish), amber and bobbing while its drums play. So the player knows where the camps are before they send.
+- **Phase 3 goblins (built 2026-11-17):** no icons of their own. A digger under the ground has no wedge at all (no early warning); when it comes up in the courtyard its wedge turns red at once. A bomber with its fuse lit at the wall shows red like any attack. The purple catapult icon and the brute's skull stay on hold with those enemies. No knight markers.
 - **Tipped 35 degrees toward the eyes** (2026-11-12: nearly flat was hard to read). More goblins in a direction make its wedge taller and also longer and wider (reaching in from the lip), since height reads less on a tipped dish. Idle wedges (dark grey) are the empty directions: nothing there.
 - **The middle shows the goblins left in the wave as one big number** with a skull in front of it (Kenney Board Game Icons, so it never reads as a random number; the code-drawn goblin head was removed) on a raised brass boss (the main information), a gold tick between waves and after the last, and a row of dots under it, one per wave (gold won, white the one being fought, hollow to come). Was three lines of small text. A canvas redrawn only when a number changes; the wedges and tents are two instanced meshes, so they cost no canvas redraws.
-- Shown only while a battle is fought. The tutorial explains it before the first wave, right after the red flag.
+- **The red threat arrow** points only at goblins at, on or over the wall (2026-11-13: a camp that just rose no longer gets it; it looked random as the camp's first goblins came out).
+- Shown only while a battle is fought (hidden while paused). The tutorial teaches it live (2026-11-13): right after the crank lesson, scouts come out of a rising camp, the player turns their yellow mark to the front, then watches it turn red when they attack ([mvp.md](mvp.md#tutorial-director)).
 
 ### Wave flag (blue, dropped 2026-11-11)
 
@@ -72,13 +75,14 @@ The health flag shows how much damage, not where. Direction is shown in other wa
 
 ## 4. End of battle screens (MVP)
 
-- **Win (revamped 2026-11-12, `src/ui/endPanel.ts`, `END_PANEL`):** the battle stops, confetti and fireworks, the fanfare, then a taller panel (38 x 32 cm):
+- **Win (revamped 2026-11-12, `src/ui/endPanel.ts`, `END_PANEL`):** the battle stops, confetti and fireworks, the fanfare, then a taller panel (38 x 42.4 cm since the score, v3 Phase 4):
   - A "Victory!" banner, the level's name under it ("Level 3: The Shield Wall", or the Custom Game level's name).
   - **Three real 3D stars** floating in front of the panel (`src/ui/winStars.ts`, `END_PANEL.stars`): gold for the stars won, dull stone for the ones missed, the middle one bigger and higher. They pop in one at a time, a won one spins once with a chime that climbs with each star and a burst of sparkles; then they bob and a glint runs across the gold ones. A perfect or best result gets an extra chime.
   - **Stats** with Kenney Board Game icons (`public/ui/board/`, tinted: heart, skull, hourglass): castle health left, goblins eaten, the battle's time (pauses not counted). The level's name has a Fantasy UI Borders divider on each side, and "New best!" wears a crown.
-  - **A line under them:** "New best!" (only when it beats an earlier win), "A perfect defense!", or what the next star needs ("Keep 70% castle health for 3 stars", from `MENU.stars`).
+  - **The score (v3 Phase 4, 2026-11-16):** "Score N" in gold, then a breakdown table: goblins, far out, castle health, combos, the best combo and combo points by tool (Traps count as their own source). Rules and numbers: docs/v3-plan.md ("The score as built"), `SCORE` in config, `src/rules/score.ts`.
+  - **A line under them:** "New best!" (only when it beats an earlier win), "A perfect defense!", or what the next star needs ("Score 240 for 3 stars").
   - **Buttons:** Menu (left), the big one (Next level when the next campaign level is open, else Play again), and Play again (right) beside Next. Next level starts it right away (the same map for now).
-- **Stars for every win:** from the red flag's share left (3 at 70%, 2 at 35%, else 1). Campaign levels keep their best stars (the menu card shows them); Custom Game levels keep theirs too (`best` in `tallTale.customLevels`, cleared when the level is edited); debug battles show them and save nothing.
+- **Stars for every win (v3 Phase 4):** from the score's share of par (3 at 85%, 2 at 60%, else 1; `SCORE.stars`). Before 2026-11-16 they came from the red flag's share left. Campaign levels keep their best stars (the menu card shows them); Custom Game levels keep theirs too (`best` in `tallTale.customLevels`, cleared when the level is edited); debug battles show them and save nothing. The best score itself is not saved.
 - **Lose:** "The castle has fallen", the level's name, the same stats, a word of hope, Try again (big) and Menu.
 - Debug page: "Win battle" and "Lose castle" show them at once.
 
@@ -88,10 +92,7 @@ The health flag shows how much damage, not where. Direction is shown in other wa
 
 ### Star rating
 
-- **3 stars:** health flag stays high (above the top notch).
-- **2 stars:** health flag ends between the notches.
-- **1 star:** health flag ends low but the castle survives.
-- Gives a reason to replay a level for a perfect result.
+- Built, from the score instead of the health flag (section 4 and docs/v3-plan.md "The score as built"). No notches on the pole.
 
 ### Losing should feel generous
 

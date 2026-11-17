@@ -1,14 +1,14 @@
 // Day and night (docs/mvp.md, "Day and night cycle"). Blends everything
 // that changes with the time of day: the sky (dome, sun, moon, stars, ringed
 // planet, cloud tint), the one real light (sun or moon: direction, color,
-// strength), the fog color, the soft sky fill, the night rim on the units and
-// the terrain fade.
+// strength), the fog color and distance (v3 2.7: a foggy level's night fog
+// too), the soft sky fill, the night rim on the units and the terrain fade.
 //
 // The game picks the time from the waves (src/rules/dayNight.ts). A change
 // takes DAY_NIGHT.changeSeconds, eased, and only runs between waves. When
 // nothing changes it does nothing, so a wave costs no extra time.
 import { Color, type DirectionalLight, type Fog, type Scene } from 'three';
-import { DAY_NIGHT, type TimeOfDay } from '../config/game.js';
+import { DAY_NIGHT, NIGHT_FOG, SKY, type TimeOfDay } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import { setTerrainLook } from '../fx/nightFade.js';
 import { setNightRim } from '../fx/nightRim.js';
@@ -27,6 +27,11 @@ export class DayNight {
   private t = 1;
   private fill = DAY_NIGHT.looks.morning.fill;
   private lightLevel = 0;
+  /** v3 2.7: the level's fog is wanted now (Battle.foggy), and how far it is in (0 to 1, eased over changeSeconds). */
+  foggy = false;
+  private fogOn = 0;
+  /** How much fog shows now (0 to 1): fogOn times the time of day's DayLook.foggy. */
+  private haze = 0;
 
   constructor(
     private sky: Sky | null,
@@ -53,6 +58,7 @@ export class DayNight {
     if (snap) {
       this.from = this.to = time;
       this.t = 1;
+      this.fogOn = this.foggy ? 1 : 0;
       this.apply();
       return;
     }
@@ -65,11 +71,24 @@ export class DayNight {
     console.info(`[day night] ${this.from} to ${time}`);
   }
 
-  update(dt: number): void {
+  /** Every frame. `scale` is stage.boardScale: the fog's distances grow with the board. */
+  update(dt: number, scale: number): void {
+    let changed = false;
     if (this.t < 1) {
       this.t = Math.min(1, this.t + dt / DAY_NIGHT.changeSeconds);
-      this.apply();
+      changed = true;
     }
+    // The fog rolls in or lifts at the same pace as a change of time (only between waves).
+    const fogTarget = this.foggy ? 1 : 0;
+    if (this.fogOn !== fogTarget) {
+      if (this.fogOn === 0 || this.fogOn === 1) mark('night fog');
+      const step = dt / DAY_NIGHT.changeSeconds;
+      this.fogOn = fogTarget > this.fogOn ? Math.min(1, this.fogOn + step) : Math.max(0, this.fogOn - step);
+      changed = true;
+    }
+    if (changed) this.apply();
+    this.fog.near = lerp(SKY.fogNear, NIGHT_FOG.near, this.haze) * scale;
+    this.fog.far = lerp(SKY.fogFar, NIGHT_FOG.far, this.haze) * scale;
     // IWSDK sets the fill once when its sky light loads, so it is set again every frame (a plain number).
     this.scene.environmentIntensity = this.fill;
   }
@@ -79,14 +98,17 @@ export class DayNight {
     const t = this.t * this.t * (3 - 2 * this.t);
     const a = DAY_NIGHT.looks[this.from];
     const b = DAY_NIGHT.looks[this.to];
-    this.sky?.apply(this.from, this.to, t);
+    // v3 2.7: night fog, eased in and out like the time.
+    const f = this.fogOn * this.fogOn * (3 - 2 * this.fogOn);
+    this.haze = lerp(a.foggy, b.foggy, t) * f;
+    this.sky?.apply(this.from, this.to, t, this.haze);
     skyDirection(lerp(a.lightAt[0], b.lightAt[0], t), lerp(a.lightAt[1], b.lightAt[1], t), this.light.position).multiplyScalar(
       LIGHT_DISTANCE,
     );
     this.light.color.setHex(a.lightColor).lerp(tint.setHex(b.lightColor), t);
     this.light.intensity = lerp(a.lightIntensity, b.lightIntensity, t);
     // The haze is the dome's horizon color.
-    this.fog.color.setHex(a.domeHorizon).lerp(tint.setHex(b.domeHorizon), t);
+    this.fog.color.setHex(a.domeHorizon).lerp(tint.setHex(b.domeHorizon), t).lerp(tint.setHex(NIGHT_FOG.color), this.haze);
     this.fill = lerp(a.fill, b.fill, t);
     this.scene.environmentIntensity = this.fill;
     setNightRim(lerp(a.rim, b.rim, t));

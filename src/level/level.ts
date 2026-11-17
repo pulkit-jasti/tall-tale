@@ -7,6 +7,8 @@
 import { fixSettings, type LevelSettings } from '../config/levelSettings.js';
 import { parseBlueprint, type Blueprint } from '../rules/blueprint.js';
 import type { GearShares } from '../rules/gear.js';
+import type { PickTool } from '../rules/campaign.js';
+import type { TimeOfDay } from '../config/game.js';
 
 export const LEVEL_FORMAT = 1;
 
@@ -15,12 +17,15 @@ export interface LevelWave {
   camps: string[];
   /** Camp ids that rise as this wave starts (docs/custom-mode.md section 7). */
   rising: string[];
-  counts: { grunt: number; runner: number };
+  /** v3 Phase 3: the new types are optional (levels saved before them have none). */
+  counts: { grunt: number; runner: number; digger?: number; shaman?: number; bomber?: number; archer?: number };
   /** Groups come out over this long (seconds); the wave runs until it is cleared. */
   spawnTime: number;
   balloons: number;
   /** Shares of the grunts with each piece of gear. */
   gear: GearShares;
+  /** The time of day it is fought at (from the allowed times). Missing (levels saved before): timeOfWave's default spread. */
+  time?: TimeOfDay;
 }
 
 export interface LevelRules {
@@ -31,6 +36,8 @@ export interface LevelRules {
   guardRefillEvery: number;
   /** The castle's starting health (share of the full). */
   startHealth: number;
+  /** The tools the loadout may take in this level. Missing (levels saved before): every tool. */
+  tools?: PickTool[];
 }
 
 export interface LevelMeta {

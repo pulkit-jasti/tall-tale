@@ -107,6 +107,23 @@ function valueNoise(seed: number): (x: number, z: number) => number {
   };
 }
 
+/**
+ * A ravine cut across a road under a bridge (2026-11-17): centered at (x, z), the road running along
+ * (ux, uz). `halfIn`..`halfOut` cm along the road it goes from full depth to none (its banks); along the
+ * stream it fades out from `lenIn` to `lenOut` cm. `depth` cm below the ground.
+ */
+export interface Cut {
+  x: number;
+  z: number;
+  ux: number;
+  uz: number;
+  halfIn: number;
+  halfOut: number;
+  lenIn: number;
+  lenOut: number;
+  depth: number;
+}
+
 export class Terrain {
   private readonly noise: (x: number, z: number) => number;
   /** Ring radii before the nudge (cm), and points around each ring. */
@@ -127,6 +144,7 @@ export class Terrain {
     readonly roads: RoadField,
     private readonly flats: CampSpot[],
     rng: Random,
+    private readonly cuts: Cut[] = [],
   ) {
     this.noise = valueNoise(rng.int(0x7fffffff));
     for (let r = BOARD.holeRadius; r < BOARD.outerRadius; ) {
@@ -153,7 +171,7 @@ export class Terrain {
         const z = polarZ(r, a);
         this.px[at] = x;
         this.pz[at] = z;
-        this.py[at] = boardHeight(r) + this.bump(x, z);
+        this.py[at] = boardHeight(r) + this.bump(x, z) - this.cut(x, z);
         this.flip[at] = rng.next() < 0.5 ? 0 : 1;
       }
     });
@@ -208,7 +226,22 @@ export class Terrain {
         if (h !== null) return h;
       }
     }
-    return boardHeight(r) + this.bump(x, z);
+    return boardHeight(r) + this.bump(x, z) - this.cut(x, z);
+  }
+
+  /** How deep the ravines go at a board point (cm, 0 outside them). Not softened by the road or flat masks. */
+  cut(x: number, z: number): number {
+    let deepest = 0;
+    for (const c of this.cuts) {
+      const dx = x - c.x;
+      const dz = z - c.z;
+      const along = Math.abs(dx * c.ux + dz * c.uz);
+      const across = Math.abs(-dx * c.uz + dz * c.ux);
+      if (along >= c.halfOut || across >= c.lenOut) continue;
+      const d = c.depth * (1 - smooth(c.halfIn, c.halfOut, along)) * (1 - smooth(c.lenIn, c.lenOut, across));
+      if (d > deepest) deepest = d;
+    }
+    return deepest;
   }
 
   /**

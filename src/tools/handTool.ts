@@ -24,19 +24,20 @@
 import { Color, Group, Matrix4, Mesh, MeshBasicMaterial, Quaternion, RingGeometry, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { HOLD, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { popIn, shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
 import type { HandState } from '../player/hands.js';
 import { holdMatrix } from '../player/hold.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
-import { chargeUsable, createCharge, endUse, readyNow, refillCharge, tickCharge, useCharge } from '../rules/recharge.js';
+import { chargeUsable, createCharge, endUse, readyNow, spendUse, tickCharge, useCharge } from '../rules/recharge.js';
 import type { Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate } from '../world/models.js';
 import { post, toolRope } from '../world/shapes.js';
 import type { Stage } from '../world/stage.js';
 
-export type HandToolName = 'swatter' | 'pepper' | 'bell' | 'horn';
+export type HandToolName = 'swatter' | 'pepper' | 'drum' | 'horn' | 'magnet' | 'glass' | 'sugar';
 
 /** What a hand near the tool shows. Held is managed by the tool. */
 export type ToolReady = 'idle' | 'ready' | 'locked';
@@ -94,6 +95,7 @@ const targetQuaternion = new Quaternion();
 const targetScale = new Vector3();
 const wobbleQuaternion = new Quaternion();
 const turnTemp = new Quaternion();
+const costWhite = new Color(0xffffff);
 
 export abstract class HandTool {
   /** Platform, post, ring and rope (they move only with the tool's spot, between battles). */
@@ -117,12 +119,15 @@ export abstract class HandTool {
   /** Gliding back to the platform: time left (seconds). */
   private returnLeft = 0;
   private touch: TouchState = 'idle';
-  private ready: ToolReady = 'idle';
+  /** The touch look a hand near it asks for (own name: the horn has a `ready` of its own, which overwrote this one). */
+  private touchReady: ToolReady = 'idle';
   private wobble = 0;
   private dimmed = false;
-  /** The use and recharge ring on the platform (null for a tool without a platform of its own). */
-  private ring: Mesh | null = null;
-  private ringMaterial: MeshBasicMaterial | null = null;
+  /** The use and recharge ring on the platform (null for a tool without a platform of its own): one fill, or one per pip. */
+  /** Own name: the magnet's aim ring was also called `ring` and overwrote this one. */
+  private chargeRing: Mesh | null = null;
+  private ringFills: Mesh[] = [];
+  private chargeRingMaterial: MeshBasicMaterial | null = null;
   private ringFlash = 0;
   private rope!: Mesh;
   private timerHold = false;
@@ -174,13 +179,48 @@ export abstract class HandTool {
   /** The hand let go or the tool was taken away: forget the motion tracking. */
   protected abstract resetMotion(): void;
 
+  /** Its platform moved to (x, top, z) in boardLift (cm): a tool with a fixed part on the platform (the drum) moves it there. */
+  protected placed(_x: number, _top: number, _z: number): void {}
+
+  /** False while a running use window should not run down (the glass: only while raised). */
+  protected useTicking(): boolean {
+    return true;
+  }
+
+  /** Spends one swing of a swing-counted use (sugar cubes); public for tools that count from outside. */
+  spendOne(): void {
+    this.spendSwing();
+  }
+
+  /** Tries to start or continue a use from outside the held update (sugar cubes). */
+  tryUseNow(): boolean {
+    return this.tryUse();
+  }
+
   /** The use window (seconds) and the full recharge (seconds). */
   get useSeconds(): number {
-    return TOOLS.use[this.name];
+    // Endless boost cards (src/rules/boosts.ts) lengthen a window and shorten a recharge; 0 and 1 elsewhere.
+    return TOOLS.use[this.name] + BOOST.use[this.name];
   }
   get rechargeSeconds(): number {
-    return TOOLS.recharge[this.name];
+    return TOOLS.recharge[this.name] * BOOST.recharge[this.name];
   }
+
+  /** v3: the use is counted in swings (useSeconds is then the swings per charge), not seconds. */
+  get swingUse(): boolean {
+    return TOOLS.swings[this.name];
+  }
+
+  /** Pips on its ring: one per swing; 0 for a smooth ring. */
+  get pips(): number {
+    return this.swingUse ? this.useSeconds : 0;
+  }
+
+  /**
+   * v3 2.5: the ring shows the charge a blow will spend, pulsing (the horn
+   * aiming a call or a boost). Set by the tool every frame.
+   */
+  costPreview = false;
 
   /**
    * Tied down whatever the ring: dimmed, the rope on, and a grab buzzes.
@@ -191,6 +231,16 @@ export abstract class HandTool {
   /** True when the tool can be used right now: ready, or its use window is open. */
   get usable(): boolean {
     return !this.tiedDown && !this.quiet && chargeUsable(this.use);
+  }
+
+  /** Shown bright (not dimmed). The horn stays bright while it rests if it can still move a squad. */
+  protected get looksUsable(): boolean {
+    return this.usable;
+  }
+
+  /** True when closing a hand on it picks it up (usable; the horn also while recharging, for its free move, v3 2.5). */
+  get grabbable(): boolean {
+    return this.usable;
   }
 
   /** True while its use window is open. */
@@ -215,14 +265,9 @@ export abstract class HandTool {
     this.timerHold = on;
   }
 
-  /**
-   * A goblin was eaten (v2, docs/v2-plan.md 2.2): a recharging ring jumps
-   * forward by `share` of the full recharge, with a flash. Returns true if it moved.
-   */
-  refill(share: number): boolean {
-    if (!this.root.visible || !refillCharge(this.use, share)) return false;
-    this.ringFlash = TOOLS.ring.flashTime;
-    return true;
+  /** How full its charge is now, 0 to 1 (1 while ready or in use). */
+  get chargeShare(): number {
+    return this.use.phase === 'recharging' ? this.use.charge : 1;
   }
 
   /** Ready at once, ring full (a new battle, the tutorial's help, debug). */
@@ -264,6 +309,11 @@ export abstract class HandTool {
     this.placeSpot();
     this.placeAtRest();
     this.stage.boardLift.add(this.root, this.body);
+  }
+
+  /** The platform and its post (the drum sinks it while its big drum stands in front). */
+  protected get platformGroup(): Group {
+    return this.platform;
   }
 
   /** Its platform group and the tool itself (the menu sinks them, src/world/sceneSwap.ts). */
@@ -312,9 +362,12 @@ export abstract class HandTool {
         // The tool's starting colors (not a dimmed or glowing look it had when copied).
         const i = this.materials.indexOf(own);
         if (i >= 0) copy.color.copy(this.baseColors[i]);
-        copy.emissive.setHex(0x000000);
         copies.set(own, copy);
-        materials.push(copy);
+        // Unlit parts (the magnifying glass's lens) have no glow: they keep their look and take no touch states.
+        if (copy.emissive) {
+          copy.emissive.setHex(0x000000);
+          materials.push(copy);
+        }
       }
       mesh.material = copy;
     });
@@ -346,11 +399,12 @@ export abstract class HandTool {
     const x = polarX(this.spot.radius, a);
     const z = polarZ(this.spot.radius, a);
     this.platform.position.set(x, 0, z);
-    this.ring?.parent?.position.set(x, TOOL_SPOTS.platformTop + TOOLS.ring.lift, z);
+    this.chargeRing?.parent?.position.set(x, TOOL_SPOTS.platformTop + TOOLS.ring.lift, z);
     // Around the tool's base, on the platform (a tool that hangs below its handle still stands on its base).
     this.rope.position.set(x, top + 1.5, z);
     this.restPosition.set(x, top + (this.options.restLift ?? 0), z);
     this.restTurn(this.spot.angleDeg, this.restQuaternion);
+    this.placed(x, top, z);
     const outward = temp.set(Math.sin(a), 0, -Math.cos(a));
     // The hand area: above the platform, a little toward the player.
     this.hoverPosition.copy(this.restPosition).addScaledVector(outward, -3);
@@ -369,33 +423,62 @@ export abstract class HandTool {
       new RingGeometry(R.inner - 0.15, R.outer + 0.15, R.segments, 1),
       new MeshBasicMaterial({ color: R.trackColor, transparent: true, opacity: 0.8, depthWrite: false }),
     );
-    const fill = new Mesh(new RingGeometry(R.inner, R.outer, R.segments, 1), new MeshBasicMaterial({ color: R.chargeColor }));
-    // Flat, facing up. The fill sits a hair above the track (its local +z is up).
+    const material = new MeshBasicMaterial({ color: R.chargeColor });
+    // Flat, facing up. Placed at the tool's spot by placeSpot().
     track.rotation.x = -Math.PI / 2;
-    // Placed at the tool's spot by placeSpot().
-    fill.position.set(0, 0, 0.08);
-    track.add(fill);
+    const pips = this.pips;
+    if (pips > 0) {
+      // v3: one arc per pip (a swing, a meal) with a small gap between them, sharing one material.
+      const gap = degToRad(R.pipGapDeg);
+      const arc = (Math.PI * 2) / pips;
+      const segs = Math.max(2, Math.round(R.segments / pips));
+      for (let i = 0; i < pips; i++) {
+        const pip = new Mesh(new RingGeometry(R.inner, R.outer, segs, 1, Math.PI / 2 - (i + 1) * arc + gap / 2, arc - gap), material);
+        pip.position.set(0, 0, 0.08);
+        track.add(pip);
+        this.ringFills.push(pip);
+      }
+    } else {
+      const fill = new Mesh(new RingGeometry(R.inner, R.outer, R.segments, 1), material);
+      // The fill sits a hair above the track (its local +z is up).
+      fill.position.set(0, 0, 0.08);
+      track.add(fill);
+      this.ringFills.push(fill);
+    }
     track.visible = false;
     this.root.add(track);
-    this.ring = fill;
-    this.ringMaterial = fill.material as MeshBasicMaterial;
+    this.chargeRing = this.ringFills[0];
+    this.chargeRingMaterial = material;
   }
 
   /** The ring shows how much is left of a use, or how full the recharge is. Hidden while ready. */
   private updateRing(dt: number): void {
-    const fill = this.ring;
-    const material = this.ringMaterial;
+    const fill = this.chargeRing;
+    const material = this.chargeRingMaterial;
     if (!fill || !material) return;
     const track = fill.parent!;
     const R = TOOLS.ring;
     const using = this.active;
-    const show = !this.tiedDown && (using || this.recharging);
+    // v3 2.5: the cost preview shows the full charge a blow will spend while ready.
+    const preview = this.costPreview && this.use.phase === 'ready';
+    const show = !this.tiedDown && (using || this.recharging || preview);
     track.visible = show;
     if (!show) return;
-    const share = using ? this.use.useLeft / this.useSeconds : this.use.charge;
-    const segments = Math.max(0, Math.min(R.segments, Math.ceil(share * R.segments)));
-    fill.geometry.setDrawRange(0, segments * 6);
+    const share = preview ? 1 : using ? this.use.useLeft / this.useSeconds : this.use.charge;
+    // Each fill (one, or one per pip) shows its part of the share (each segment is 6 indices).
+    const fills = this.ringFills;
+    const total = share * fills.length;
+    for (let i = 0; i < fills.length; i++) {
+      const part = Math.max(0, Math.min(1, total - i));
+      const segs = (fills[i].geometry as RingGeometry).parameters.thetaSegments;
+      fills[i].geometry.setDrawRange(0, Math.ceil(part * segs - 1e-6) * 6);
+    }
     this.ringFlash = this.quiet ? 0 : Math.max(0, this.ringFlash - dt);
+    if (preview) {
+      // Pulses between the cost color and white: "this is what a blow spends".
+      material.color.setHex(R.costColor).lerp(costWhite, 0.5 + 0.5 * Math.sin(this.time * R.costPulse));
+      return;
+    }
     material.color.setHex(this.ringFlash > 0 ? R.flashColor : using ? R.useColor : R.chargeColor);
   }
 
@@ -437,7 +520,7 @@ export abstract class HandTool {
   }
 
   setReady(state: ToolReady): void {
-    this.ready = state;
+    this.touchReady = state;
   }
 
   /** Lets go without using it (board placed again, battle over). */
@@ -494,6 +577,15 @@ export abstract class HandTool {
     return true;
   }
 
+  /**
+   * A use counted in swings (the swatter): one swing done. The last one ends
+   * the use and it goes back to recharge. Free while the tutorial holds the use.
+   */
+  protected spendSwing(): void {
+    if (this.timerHold || !this.active) return;
+    if (spendUse(this.use)) this.startShrink();
+  }
+
   /** A one-use tool (the bell, the horn) did its thing: the use ends now and it goes back to recharge. */
   protected finishUse(): void {
     if (!this.active) return;
@@ -516,7 +608,10 @@ export abstract class HandTool {
     this.phaseTime += dt;
     // The use window runs down (unless the tutorial holds it), the recharge fills only on the platform.
     const onPlatform = this.phase === 'resting' && this.returnLeft <= 0 && !this.holder;
-    if (tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold, onPlatform) === 'ended') this.startShrink();
+    const charge = tickCharge(this.use, dt, this.rechargeSeconds, !this.timerHold && !this.swingUse && this.useTicking(), onPlatform);
+    if (charge === 'ended') this.startShrink();
+    else if (charge === 'ready') this.announceReady();
+    this.readyFlash = Math.max(0, this.readyFlash - dt);
     switch (this.phase) {
       case 'held':
         this.updateHeld(dt);
@@ -601,7 +696,7 @@ export abstract class HandTool {
     this.body.position.copy(this.restPosition);
     this.body.quaternion.copy(this.restQuaternion);
     // Locked: a small wobble after a refused grab, and while a hand is near it.
-    const wobbling = this.wobble > 0 || this.ready === 'locked';
+    const wobbling = this.wobble > 0 || this.touchReady === 'locked';
     this.wobble = Math.max(0, this.wobble - dt);
     if (wobbling) {
       wobbleQuaternion.setFromAxisAngle(UP, Math.sin(this.time * 30) * degToRad(TOOLS.wobbleDeg));
@@ -639,7 +734,7 @@ export abstract class HandTool {
   /** Touch state, dimming, rope, beckon pulse and end-of-use blink. */
   private updateLook(dt: number): void {
     const usable = this.usable;
-    const dim = !usable;
+    const dim = !this.looksUsable;
     if (dim !== this.dimmed) {
       this.dimmed = dim;
       this.materials.forEach((m, i) => {
@@ -649,12 +744,14 @@ export abstract class HandTool {
     }
     // The rope only when tied down; recharging shows the ring instead.
     this.rope.visible = this.tiedDown && this.phase === 'resting' && this.returnLeft <= 0;
-    let state: TouchState = this.holder ? 'held' : this.ready;
-    if (this.ready === 'locked' && usable) state = 'ready';
+    let state: TouchState = this.holder ? 'held' : this.touchReady;
+    if (this.touchReady === 'locked' && usable) state = 'ready';
     // The last seconds of a use: blink, so the end is no surprise.
     if (this.active && this.use.useLeft < TOOLS.warnTime && this.useSeconds > TOOLS.warnTime && Math.sin(this.time * 18) > 0) state = 'idle';
     // A new tool glows until grabbed. A hand near it shows Ready instead.
     if (this.beckon && state === 'idle' && Math.sin(this.time * 6) > 0) state = 'ready';
+    // Just recharged: a few quick glowing pulses.
+    if (this.readyFlash > 0 && state === 'idle' && Math.sin(this.time * 14) > 0) state = 'ready';
     // Quiet during another lesson: only held shows.
     if (this.quiet && !this.holder) state = 'idle';
     if (state !== this.touch) {
@@ -681,6 +778,23 @@ export abstract class HandTool {
   }
 
   /** A poof at a boardLift point (cm). */
+  /** Seconds left of the "ready again" glow pulse. */
+  private readyFlash = 0;
+
+  /**
+   * The recharge is done (2026-11-17: nothing said so): a chime and a glass ping from the tool, a burst of
+   * gold sparkles, a small hop, and a few glowing pulses, so the player knows at a glance and by ear.
+   */
+  private announceReady(): void {
+    if (!this.root.visible || this.quiet) return;
+    const at = this.stage.boardLift.localToWorld(temp.copy(this.body.position));
+    this.audio.play('toolReady', at, 1, 0.3);
+    this.audio.play('toolReadyPing', at, 1, 0.3);
+    this.particles.burst(at, TOOLS.readySparkle, 14, 0.12);
+    this.readyFlash = TOOLS.readyFlashTime;
+    this.wobble = Math.max(this.wobble, 0.25);
+  }
+
   private poof(at: Vector3, count: number): void {
     this.particles.burst(this.stage.boardLift.localToWorld(temp.copy(at)), POOF_COLORS, count, 0.18);
   }

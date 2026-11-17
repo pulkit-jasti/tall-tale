@@ -1,0 +1,872 @@
+{
+ "format": 1,
+ "map": {
+  "name": "Nightfall",
+  "seed": 505,
+  "nodes": [
+   {
+    "id": "w0",
+    "kind": "wall",
+    "at": [
+     58,
+     0
+    ]
+   },
+   {
+    "id": "w60",
+    "kind": "wall",
+    "at": [
+     58,
+     60
+    ]
+   },
+   {
+    "id": "w120",
+    "kind": "wall",
+    "at": [
+     58,
+     120
+    ]
+   },
+   {
+    "id": "w180",
+    "kind": "wall",
+    "at": [
+     58,
+     180
+    ]
+   },
+   {
+    "id": "w240",
+    "kind": "wall",
+    "at": [
+     58,
+     -120
+    ]
+   },
+   {
+    "id": "w300",
+    "kind": "wall",
+    "at": [
+     58,
+     -60
+    ]
+   },
+   {
+    "id": "j1",
+    "kind": "junction",
+    "at": [
+     143.8,
+     -140.5
+    ]
+   },
+   {
+    "id": "j2",
+    "kind": "junction",
+    "at": [
+     128.6,
+     -29.5
+    ]
+   },
+   {
+    "id": "j3",
+    "kind": "junction",
+    "at": [
+     125.6,
+     64.7
+    ]
+   },
+   {
+    "id": "j4",
+    "kind": "junction",
+    "at": [
+     139.1,
+     135.1
+    ]
+   },
+   {
+    "id": "k1",
+    "kind": "junction",
+    "at": [
+     94.4,
+     -134.8
+    ]
+   },
+   {
+    "id": "k2",
+    "kind": "junction",
+    "at": [
+     87.1,
+     -35.7
+    ]
+   },
+   {
+    "id": "k3",
+    "kind": "junction",
+    "at": [
+     94.1,
+     59.5
+    ]
+   },
+   {
+    "id": "k4",
+    "kind": "junction",
+    "at": [
+     91.4,
+     143
+    ]
+   },
+   {
+    "id": "camp1",
+    "kind": "camp",
+    "at": [
+     360,
+     23.8
+    ],
+    "size": 30,
+    "wave": 1
+   },
+   {
+    "id": "f1",
+    "kind": "junction",
+    "at": [
+     256.6,
+     42.9
+    ]
+   },
+   {
+    "id": "camp2",
+    "kind": "camp",
+    "at": [
+     375,
+     94.1
+    ],
+    "size": 30,
+    "wave": 1
+   },
+   {
+    "id": "camp3",
+    "kind": "camp",
+    "at": [
+     353,
+     -166.7
+    ],
+    "size": 31,
+    "wave": 2
+   },
+   {
+    "id": "f3",
+    "kind": "junction",
+    "at": [
+     248.8,
+     -156.3
+    ]
+   },
+   {
+    "id": "camp4",
+    "kind": "camp",
+    "at": [
+     404,
+     -57.8
+    ],
+    "size": 31,
+    "wave": 3
+   }
+  ],
+  "roads": [
+   {
+    "from": "j1",
+    "to": "k1",
+    "via": [
+     [
+      127.3,
+      -136.7
+     ],
+     [
+      110.9,
+      -138.9
+     ]
+    ]
+   },
+   {
+    "from": "k1",
+    "to": "w240",
+    "via": [
+     [
+      78.2,
+      -127.4
+     ]
+    ]
+   },
+   {
+    "from": "k1",
+    "to": "w180",
+    "via": [
+     [
+      78.2,
+      -157.4
+     ]
+    ]
+   },
+   {
+    "from": "j2",
+    "to": "k2",
+    "via": [
+     [
+      107.9,
+      -29.1
+     ]
+    ]
+   },
+   {
+    "from": "k2",
+    "to": "w300",
+    "via": [
+     [
+      74.6,
+      -47.8
+     ]
+    ]
+   },
+   {
+    "from": "k2",
+    "to": "w0",
+    "via": [
+     [
+      74.6,
+      -17.8
+     ]
+    ]
+   },
+   {
+    "from": "j3",
+    "to": "k3",
+    "via": [
+     [
+      109.9,
+      59
+     ]
+    ]
+   },
+   {
+    "from": "k3",
+    "to": "w60",
+    "via": [
+     [
+      78.1,
+      59.8
+     ]
+    ]
+   },
+   {
+    "from": "j4",
+    "to": "k4",
+    "via": [
+     [
+      123.2,
+      135
+     ],
+     [
+      107.3,
+      143.5
+     ]
+    ]
+   },
+   {
+    "from": "k4",
+    "to": "w120",
+    "via": [
+     [
+      76.7,
+      131.5
+     ]
+    ]
+   },
+   {
+    "from": "camp1",
+    "to": "f1",
+    "via": [
+     [
+      338.7,
+      27.9
+     ],
+     [
+      317.4,
+      32.6
+     ],
+     [
+      296.1,
+      37.1
+     ],
+     [
+      274.8,
+      40.8
+     ]
+    ]
+   },
+   {
+    "from": "f1",
+    "to": "j3",
+    "via": [
+     [
+      253.5,
+      43.3
+     ],
+     [
+      232.1,
+      45.1
+     ],
+     [
+      210.8,
+      47
+     ],
+     [
+      189.5,
+      50.1
+     ],
+     [
+      168.2,
+      54.7
+     ],
+     [
+      146.9,
+      60.1
+     ]
+    ]
+   },
+   {
+    "from": "f1",
+    "to": "j4",
+    "via": [
+     [
+      254.6,
+      50.9
+     ],
+     [
+      252,
+      59.3
+     ],
+     [
+      248.4,
+      68.1
+     ],
+     [
+      243.4,
+      76.8
+     ],
+     [
+      236.6,
+      85.4
+     ],
+     [
+      227.9,
+      93.5
+     ],
+     [
+      217,
+      101.1
+     ],
+     [
+      204.3,
+      108.2
+     ],
+     [
+      189.7,
+      114.8
+     ],
+     [
+      173.7,
+      121.2
+     ],
+     [
+      156.7,
+      127.9
+     ]
+    ]
+   },
+   {
+    "from": "camp2",
+    "to": "j4",
+    "via": [
+     [
+      353.6,
+      98
+     ],
+     [
+      332.1,
+      102.3
+     ],
+     [
+      310.7,
+      106.8
+     ],
+     [
+      289.2,
+      111.3
+     ],
+     [
+      267.8,
+      115.7
+     ],
+     [
+      246.3,
+      119.7
+     ],
+     [
+      224.9,
+      123.2
+     ],
+     [
+      203.4,
+      126.2
+     ],
+     [
+      182,
+      129
+     ],
+     [
+      160.5,
+      131.8
+     ]
+    ]
+   },
+   {
+    "from": "camp3",
+    "to": "f3",
+    "via": [
+     [
+      329.8,
+      -164
+     ],
+     [
+      306.5,
+      -161.8
+     ],
+     [
+      283.3,
+      -159.7
+     ],
+     [
+      260,
+      -157.5
+     ]
+    ]
+   },
+   {
+    "from": "f3",
+    "to": "j1",
+    "via": [
+     [
+      236.8,
+      -154.8
+     ],
+     [
+      213.5,
+      -151.5
+     ],
+     [
+      190.3,
+      -147.7
+     ],
+     [
+      167,
+      -143.9
+     ]
+    ]
+   },
+   {
+    "from": "f3",
+    "to": "j2",
+    "via": [
+     [
+      246.9,
+      -147
+     ],
+     [
+      244.7,
+      -137.4
+     ],
+     [
+      241.8,
+      -127.5
+     ],
+     [
+      237.9,
+      -117.4
+     ],
+     [
+      232.9,
+      -107.5
+     ],
+     [
+      226.6,
+      -97.7
+     ],
+     [
+      218.7,
+      -88.2
+     ],
+     [
+      209.4,
+      -79.2
+     ],
+     [
+      198.6,
+      -70.6
+     ],
+     [
+      186.4,
+      -62.4
+     ],
+     [
+      173.1,
+      -54.4
+     ],
+     [
+      158.8,
+      -46.4
+     ],
+     [
+      143.9,
+      -38.2
+     ]
+    ]
+   },
+   {
+    "from": "camp4",
+    "to": "j2",
+    "via": [
+     [
+      379,
+      -55.1
+     ],
+     [
+      353.9,
+      -52.2
+     ],
+     [
+      328.9,
+      -49.1
+     ],
+     [
+      303.9,
+      -45.9
+     ],
+     [
+      278.8,
+      -42.9
+     ],
+     [
+      253.8,
+      -40.1
+     ],
+     [
+      228.7,
+      -37.7
+     ],
+     [
+      203.7,
+      -35.6
+     ],
+     [
+      178.7,
+      -33.7
+     ],
+     [
+      153.6,
+      -31.8
+     ]
+    ]
+   },
+   {
+    "from": "j4",
+    "to": "j1",
+    "via": [
+     [
+      143.9,
+      147.6
+     ],
+     [
+      147.6,
+      160.5
+     ],
+     [
+      149.5,
+      177.3
+     ],
+     [
+      149.2,
+      -166
+     ],
+     [
+      147,
+      -153
+     ]
+    ]
+   },
+   {
+    "from": "j1",
+    "to": "k2",
+    "via": [
+     [
+      136.7,
+      -128
+     ],
+     [
+      129.6,
+      -115.9
+     ],
+     [
+      122.5,
+      -102.7
+     ],
+     [
+      115.5,
+      -88.1
+     ],
+     [
+      108.4,
+      -73.3
+     ],
+     [
+      101.3,
+      -59.9
+     ],
+     [
+      94.2,
+      -48
+     ]
+    ]
+   }
+  ],
+  "gate": {
+   "at": [
+    52,
+    180
+   ]
+  },
+  "triggers": [
+   {
+    "kind": "tree",
+    "wave": 1,
+    "at": [
+     285.9,
+     38.8
+    ]
+   },
+   {
+    "kind": "tree",
+    "wave": 1,
+    "at": [
+     275,
+     114.1
+    ]
+   },
+   {
+    "kind": "boulder",
+    "wave": 1,
+    "at": [
+     237.9,
+     -155
+    ]
+   },
+   {
+    "kind": "keg",
+    "wave": 1,
+    "at": [
+     254.4,
+     -40.2
+    ]
+   }
+  ],
+  "extras": {
+   "hay": 2,
+   "bellTower": 1,
+   "bridge": 1,
+   "cartSpots": 3,
+   "beds": 6
+  }
+ },
+ "waves": [
+  {
+   "camps": [
+    "camp2",
+    "camp1"
+   ],
+   "rising": [],
+   "counts": {
+    "grunt": 15,
+    "runner": 5,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 0,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.35,
+    "shieldShare": 0.3
+   },
+   "time": "sunset"
+  },
+  {
+   "camps": [
+    "camp3",
+    "camp1"
+   ],
+   "rising": [
+    "camp3"
+   ],
+   "counts": {
+    "grunt": 18,
+    "runner": 6,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 1,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.35,
+    "shieldShare": 0.3
+   },
+   "time": "night"
+  },
+  {
+   "camps": [
+    "camp4",
+    "camp2"
+   ],
+   "rising": [
+    "camp4"
+   ],
+   "counts": {
+    "grunt": 22,
+    "runner": 7,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 1,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.35,
+    "shieldShare": 0.3
+   },
+   "time": "night"
+  },
+  {
+   "camps": [
+    "camp1",
+    "camp4"
+   ],
+   "rising": [],
+   "counts": {
+    "grunt": 26,
+    "runner": 9,
+    "digger": 0,
+    "shaman": 0,
+    "bomber": 0,
+    "archer": 0
+   },
+   "spawnTime": 50,
+   "balloons": 1,
+   "gear": {
+    "spearShare": 0.4,
+    "swordShare": 0.25,
+    "helmetShare": 0.35,
+    "shieldShare": 0.3
+   },
+   "time": "night"
+  }
+ ],
+ "rules": {
+  "archers": 4,
+  "guards": 2,
+  "refillEvery": 15,
+  "guardRefillEvery": 30,
+  "startHealth": 1,
+  "tools": [
+   "slingshot",
+   "horn",
+   "swatter",
+   "pepper",
+   "drum",
+   "magnet",
+   "glass",
+   "sugar"
+  ]
+ },
+ "meta": {
+  "seed": 505,
+  "askedSeed": 505,
+  "settings": {
+   "camps": 4,
+   "campSpread": "around",
+   "campDistance": [
+    330,
+    430
+   ],
+   "campSize": 30,
+   "junctions": 4,
+   "wiggle": 0.6,
+   "forks": 2,
+   "loops": 1,
+   "crossings": 1,
+   "triggersPerRoad": 1,
+   "kegs": true,
+   "boulders": true,
+   "trees": true,
+   "hay": 2,
+   "bellTowers": 1,
+   "bridges": 1,
+   "potionCart": true,
+   "seedBeds": 6,
+   "waves": 4,
+   "morning": false,
+   "day": false,
+   "sunset": true,
+   "night": true,
+   "difficulty": "normal",
+   "goblins": 20,
+   "growth": 0.2,
+   "runners": 0.25,
+   "balloons": 1,
+   "helmets": 0.35,
+   "shields": 0.3,
+   "spears": 0.4,
+   "swords": 0.25,
+   "waveLength": 50,
+   "campsAtOnce": 2,
+   "foggyNight": true,
+   "diggers": 0,
+   "shamans": 0,
+   "bombers": 0,
+   "goblinArchers": 0,
+   "archers": 4,
+   "guards": 2,
+   "refill": 15,
+   "castleHealth": 1,
+   "toolSlingshot": true,
+   "toolHorn": true,
+   "toolSwatter": true,
+   "toolPepper": true,
+   "toolDrum": true,
+   "toolMagnet": true,
+   "toolGlass": true,
+   "toolSugar": true
+  },
+  "generator": 2,
+  "skulls": 2,
+  "level": 5
+ }
+}

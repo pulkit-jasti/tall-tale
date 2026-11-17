@@ -16,9 +16,12 @@
 //   grip (HOLD.poses), with a tag (its name and what it does). A locked tool
 //   is a grey silhouette: a grab buzzes and the tag says which level unlocks
 //   it. A newly unlocked tool glows until it is grabbed once.
-//   Achievements shelf (left): 9 trophies (the Kenney trophy model, dimmed
-//   until earned; run 3 gives them riddles), a counter, a "???" tag on grab.
-//   Each shelf ends with a "More coming soon" card.
+//   Achievements shelf (left, v3 2.6): 16 trophies (the Kenney trophy
+//   model) in two even rows: the 8 secret abilities high, the 8 regular
+//   achievements low. Dimmed until earned; an unfound secret has a "?" over
+//   it. A grab shows its tag: a secret's name and riddle, a regular one's
+//   goal, and once earned what it does or taught. A counter above.
+//   The tool shelf ends with a "More coming soon" card.
 //
 // Its own grab code (no goblins or tools in the menu): the same pinch and
 // fist switches as everything else, the same Idle, Ready and Held looks.
@@ -37,11 +40,13 @@ import {
   type Object3D,
 } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
+import { ACHIEVEMENT_LIST, GOALS, SECRETS, type Achievement } from '../../config/achievements.js';
 import { MENU, RENDER_ORDER, TOOLS } from '../../config/game.js';
 import { LEVELS } from '../../config/levels.js';
 import type { Particles } from '../../fx/particles.js';
 import { applyTouchState, type TouchState } from '../../player/feedback.js';
 import type { HandState } from '../../player/hands.js';
+import { note } from '../../debug/notes.js';
 import { holdMatrix, type HoldName } from '../../player/hold.js';
 import { degToRad, polarX, polarZ } from '../../rules/boardMath.js';
 import { canMoveTo, PICK_TOOLS, placeOf, SHELF_SPOTS, toolIsNew, toolUnlocked, type PickTool, type Place, type Progress } from '../../rules/campaign.js';
@@ -54,7 +59,7 @@ import { drawLine, UI_COLORS } from '../kit/text.js';
 import { drawIconCentered, drawNineSlice } from '../uiImages.js';
 import type { CampaignPanel } from './campaignPanel.js';
 
-export type DisplayName = PickTool | 'slingshot' | 'horn';
+export type DisplayName = PickTool;
 
 /**
  * A display copy of a tool (its own materials), its origin at the end the
@@ -70,19 +75,22 @@ export interface DisplayModel {
   turn: ((angleDeg: number, out: Quaternion) => Quaternion) | null;
 }
 
-/** The trophies on the shelf for now (run 3 gives them riddles). */
-export const TROPHY_COUNT = 9;
+/** The trophies on the shelf (v3 2.6: 8 secret abilities and 8 regular achievements). */
+export const TROPHY_COUNT = ACHIEVEMENT_LIST.length;
 
 const TOOL_TAGS: Record<DisplayName, [string, string]> = {
   swatter: ['Fly swatter', 'Swat groups on the wall.'],
-  pepper: ['Pepper shaker', 'Goblins drop their gear.'],
-  bell: ['Bell', 'Stuns every goblin.'],
-  slingshot: ['Slingshot', 'Always in your loadout.'],
-  horn: ['War horn', 'Always in your loadout.'],
+  pepper: ['Pepper shaker', 'Pepper the ground by the wall.'],
+  drum: ['Drum', 'Stuns every goblin.'],
+  slingshot: ['Slingshot', 'Shoot pebbles far.'],
+  horn: ['War horn', 'Call, boost or move knights.'],
+  magnet: ['Magnet', 'Pull gear off goblins.'],
+  glass: ['Magnifying glass', 'Grow plants, burn goblins.'],
+  sugar: ['Sugar cubes', 'Lure goblins to a spot.'],
 };
 const POOF = [0xffffff, 0xf2c230, 0xddd6c8];
-/** The stand's platforms, left to right: the two fixed tools, then the two slots the player fills. */
-const FIXED: DisplayName[] = ['slingshot', 'horn'];
+/** v3 2.2: no fixed tools on the stand any more: all 4 slots are free. */
+const FIXED: DisplayName[] = [];
 
 /** Which level unlocks a tool (its reward), as the locked tag says it. */
 function unlockText(tool: PickTool): string {
@@ -122,6 +130,10 @@ interface Item {
   fromScale: number;
   /** Size while held in a fist (grows from homeScale to 1). */
   heldScale: number;
+  /** v3 2.6: a trophy's achievement, its colors when earned, and its "?" (an unfound secret). */
+  achievement?: Achievement;
+  colors?: number[];
+  question?: Mesh;
 }
 
 interface Holder {
@@ -171,6 +183,9 @@ export class Shelves {
   /** A refused grab shows its tag this long (seconds). */
   private tagLeft = 0;
   private counter: { canvas: HTMLCanvasElement; texture: CanvasTexture };
+  /** The count the counter shows now (-1: not drawn yet), so it redraws only when it changes. */
+  private counted = -1;
+  private trophies: Item[] = [];
   private time = 0;
   /** A tool was let go over a place it may go: the game moves it there (and the one there to where it came from), then calls layout(). */
   onDrop: (tool: PickTool, to: Place) => void = () => {};
@@ -196,10 +211,14 @@ export class Shelves {
       else this.spots.push({ place: { where: 'stand', i: i - FIXED.length }, top: spot(T.radius, angle, T.y), angle, materials });
     });
     // The tool shelf (right, back row): a wooden pedestal per spot.
+    // v3 2.2: two rows (8 tools), the upper one a little farther back so the lower one never hides it.
     for (let i = 0; i < SHELF_SPOTS; i++) {
-      const angle = S.tools.angles[i] ?? S.tools.angles[S.tools.angles.length - 1] + 14 * (i - S.tools.angles.length + 1);
-      const materials = [this.pedestal(S.tools.radius, angle, S.tools.y, S.plankDepth)];
-      this.spots.push({ place: { where: 'shelf', i }, top: spot(S.tools.radius, angle, S.tools.y), angle, materials });
+      const row = Math.floor(i / S.tools.angles.length);
+      const angle = S.tools.angles[i % S.tools.angles.length];
+      const radius = S.tools.radius + row * S.tools.rowBack;
+      const y = S.tools.y + row * S.tools.rowUp;
+      const materials = [this.pedestal(radius, angle, y, S.plankDepth)];
+      this.spots.push({ place: { where: 'shelf', i }, top: spot(radius, angle, y), angle, materials });
     }
     this.card(S.tools.radius, S.tools.cardAngle, S.tools.y + 4);
     // The pick tools, wherever the progress puts them (layout).
@@ -209,26 +228,40 @@ export class Shelves {
       item.model.userData.silhouette = silhouette;
       this.tools.set(name, item);
     }
-    // The achievements shelf (left): trophies on two rows of pedestals, dimmed until earned, a counter above, a card at the end.
+    // The achievements shelf (left, v3 2.6): the regular achievements on the low row, the secret abilities on the
+    // high row, dimmed until earned (refreshTrophies), a "?" over each unfound secret, a counter above.
     const R = S.trophies;
-    const rows: [number[], number, number][] = [
-      [R.lowAngles, R.lowRadius, R.lowY],
-      [R.highAngles, R.highRadius, R.highY],
+    const rows: [Achievement[], number[], number, number][] = [
+      [GOALS, R.lowAngles, R.lowRadius, R.lowY],
+      [SECRETS, R.highAngles, R.highRadius, R.highY],
     ];
-    for (const [angles, radius, y] of rows) {
-      for (const angle of angles) {
+    const questionTexture = this.questionTexture();
+    for (const [list, angles, radius, y] of rows) {
+      list.forEach((achievement, i) => {
+        const angle = angles[i] ?? angles[angles.length - 1];
         this.pedestal(radius, angle, y, R.plank);
         const model = cloneStatic(templates.trophy);
-        const materials = ownMaterials(model, TOOLS.dimShare);
-        this.addItem('trophy', null, { model, materials, gripMid: templates.trophy.size.y * 0.4, lift: 0, turn: null }, spot(radius, angle, y), angle, 1);
-      }
+        const materials = ownMaterials(model, 1);
+        const item = this.addItem('trophy', null, { model, materials, gripMid: templates.trophy.size.y * 0.4, lift: 0, turn: null }, spot(radius, angle, y), angle, 1);
+        item.achievement = achievement;
+        item.colors = materials.map((m) => m.color.getHex());
+        if (achievement.secret) {
+          const q = canvasPlane(questionTexture, R.questionSize, R.questionSize);
+          (q.material as MeshBasicMaterial).depthWrite = false;
+          q.renderOrder = 1;
+          q.position.copy(spot(radius, angle, y + templates.trophy.size.y + R.questionAbove + R.questionSize / 2));
+          q.quaternion.copy(facing(angle));
+          this.group.add(q);
+          item.question = q;
+        }
+        this.trophies.push(item);
+      });
     }
     const midAngle = (R.highAngles[0] + R.highAngles[R.highAngles.length - 1]) / 2;
-    this.counter = this.sign(R.highRadius, midAngle, R.highY + R.height + 6, 16, 5);
-    this.card(R.highRadius, R.cardAngle, R.highY);
+    this.counter = this.sign(R.highRadius, midAngle, R.highY + R.height + R.questionSize + 8, 16, 5);
     // The tag over a held thing.
     this.drawTags();
-    this.tag = canvasPlane(this.tagTextures.get('trophy')!, S.tagWidth, S.tagHeight);
+    this.tag = canvasPlane(this.tagTextures.get(this.trophyKey(this.trophies[0]))!, S.tagWidth, S.tagHeight);
     // On top and never writing depth: a see-through plane that writes depth hid the clouds behind it (they blinked).
     drawOnTop(this.tag, RENDER_ORDER.labels);
     this.tag.visible = false;
@@ -262,7 +295,40 @@ export class Shelves {
         });
       }
     }
-    this.drawCounter(0);
+    this.refreshTrophies();
+  }
+
+  /**
+   * v3 2.6: each trophy's look from the saved achievements: earned ones in
+   * full color, the rest dimmed, a "?" over each unfound secret; the counter
+   * redraws only when the count changed.
+   */
+  refreshTrophies(): void {
+    let earned = 0;
+    for (const item of this.trophies) {
+      const has = !!item.achievement && this.progress.trophies.includes(item.achievement.id);
+      if (has) earned++;
+      item.materials.forEach((m, i) => m.color.setHex(item.colors![i]).multiplyScalar(has ? 1 : TOOLS.dimShare));
+      if (item.question) item.question.visible = !has;
+    }
+    if (earned !== this.counted) {
+      this.counted = earned;
+      this.drawCounter(earned);
+    }
+  }
+
+  /** The tag key of a trophy: its achievement, earned or not. */
+  private trophyKey(item: Item): string {
+    const a = item.achievement;
+    return a ? `trophy|${a.id}|${this.progress.trophies.includes(a.id) ? 1 : 0}` : 'trophy';
+  }
+
+  /** The "?" over an unfound secret (the Kenney question icon), drawn once and shared. */
+  private questionTexture(): CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    drawIconCentered(canvas.getContext('2d')!, 'question', 64, 64, 120, '#7a3fb0');
+    return canvasTexture(canvas, 4);
   }
 
   /** The top of the first empty stand slot (world), or null when both are filled. */
@@ -491,6 +557,29 @@ export class Shelves {
   }
 
   /** The nearest thing a hand could grab, within MENU.shelves.grabRadius of its palm or pinch. */
+  /** Debug: each tool's grip middle (world m), locked or not, and what each tracked hand is near now. */
+  debugGrips(hands: HandState[]): string[] {
+    const lines: string[] = [
+      `[shelf] update clock ${this.time.toFixed(2)} s, holders ${this.holders.map((h) => `${h.hand.side}:${h.item.kind}/${h.item.name} visible ${h.item.model.visible}`).join('; ') || 'none'}`,
+    ];
+    const f = (v: Vector3): string => `${v.x.toFixed(3)},${v.y.toFixed(3)},${v.z.toFixed(3)}`;
+    for (const item of this.items) {
+      if (item.kind !== 'tool') continue;
+      item.model.localToWorld(temp.set(0, item.gripMid, 0));
+      lines.push(`[shelf] ${item.name} grip ${f(temp)}${item.locked ? ' LOCKED' : ''} visible ${item.model.visible} held ${this.holders.some((h) => h.item === item)}`);
+    }
+    for (const s of this.spots) {
+      this.group.localToWorld(temp.copy(s.top));
+      lines.push(`[shelf] spot ${s.place.where} ${s.place.i} at ${f(temp)} holds ${s.place.where === 'stand' ? this.progress.loadout[s.place.i] : '-'}`);
+    }
+    for (const holder of this.holders) lines.push(`[shelf] holder ${holder.hand.side} target ${holder.target ? `${holder.target.place.where} ${holder.target.place.i}` : 'none'}`);
+    for (const hand of hands) {
+      const near = hand.tracked ? this.nearest(hand) : null;
+      lines.push(`[shelf] hand ${hand.side} tracked ${hand.tracked} palm ${f(hand.palm)} pinch ${hand.pinch.on} fist ${hand.fist.on} near ${near?.name ?? 'none'}`);
+    }
+    return lines;
+  }
+
   private nearest(hand: HandState): Item | null {
     const radius = MENU.shelves.grabRadius * this.stage.boardScale;
     let best: Item | null = null;
@@ -514,6 +603,7 @@ export class Shelves {
     handMatrix.compose(viaPinch ? hand.pinchPoint : hand.palm, hand.quaternion, unit);
     const offset = new Matrix4().copy(handMatrix).invert().multiply(item.model.matrixWorld);
     this.holders.push({ hand, item, viaPinch, openTime: 0, lostTime: 0, offset, target: null });
+    if (import.meta.env.DEV) note(`[shelf] grab ${item.kind}/${item.name} with ${hand.side} ${viaPinch ? 'pinch' : 'fist'}`);
     item.glide = 0;
     item.heldScale = item.model.scale.x;
     this.audio.play('grab', hand.palm);
@@ -536,6 +626,10 @@ export class Shelves {
       return;
     }
     if (!hand.tracked) return;
+    // Letting go: it stays where it is, with the slot it would snap to (2026-11-17, found in the emulator: the
+    // pinch point moves several cm as the fingers open, so the tool drifted off the slot during the release,
+    // lost its target and glided back to the shelf; nothing could be put on the stand).
+    if (holder.openTime > 0) return;
     const name = item.name;
     // A tool in a fist (a reward preview too) is held the way it is held in real life, growing to full size.
     // A pinch keeps it as it was grabbed (its size and angle), easy to turn and look around.
@@ -550,7 +644,15 @@ export class Shelves {
     matrix.decompose(item.model.position, item.model.quaternion, scaleOut);
     item.model.scale.setScalar(scaleOut.x);
     // The spot it would snap to now: that platform glows, with a tick when it changes.
-    const target = item.kind === 'tool' && name ? this.snapTarget(item, name as PickTool) : null;
+    let target = item.kind === 'tool' && name ? this.snapTarget(item, name as PickTool) : null;
+    // A slot once targeted stays targeted until the tool is clearly away from it (1.8 times the drop radius):
+    // as the fingers open the pinch point slides a couple of cm before the pinch reads as open, and the tool
+    // lost its slot in that moment and went back to the shelf (found in the emulator, 2026-11-17).
+    if (!target && holder.target) {
+      item.model.localToWorld(temp.set(0, item.gripMid, 0));
+      const away = this.group.localToWorld(temp2.copy(holder.target.top)).distanceTo(temp);
+      if (away < MENU.shelves.dropRadius * this.stage.boardScale * 1.8) target = holder.target;
+    }
     if (target && target !== holder.target) this.audio.play('readyTick', undefined, 1, 0.05);
     holder.target = target;
   }
@@ -576,6 +678,7 @@ export class Shelves {
     this.holders = this.holders.filter((h) => h !== holder);
     const item = holder.item;
     const target = holder.target;
+    if (import.meta.env.DEV) note(`[shelf] let go ${item.kind}/${item.name} target ${target ? `${target.place.where} ${target.place.i}` : 'none'} open ${holder.openTime.toFixed(2)} lost ${holder.lostTime.toFixed(2)}`);
     this.startGlide(item);
     if (!target || item.kind !== 'tool' || !item.name) return;
     const at = this.group.localToWorld(temp2.copy(target.top));
@@ -590,7 +693,7 @@ export class Shelves {
   private showTag(item: Item, seconds: number): void {
     this.tagLeft = seconds;
     this.tagFor = item;
-    const key = item.kind === 'trophy' ? 'trophy' : item.locked ? `${item.name}|locked` : item.name!;
+    const key = item.kind === 'trophy' ? this.trophyKey(item) : item.locked ? `${item.name}|locked` : item.name!;
     const material = this.tag.material as MeshBasicMaterial;
     const texture = this.tagTextures.get(key);
     if (texture && material.map !== texture) material.map = texture;
@@ -603,22 +706,39 @@ export class Shelves {
    */
   private drawTags(): void {
     const S = MENU.shelves;
-    const tags: [string, string, string, boolean][] = [['trophy', '???', 'A riddle comes soon.', false]];
+    const tags: [string, string, string, boolean][] = [];
     for (const name of Object.keys(TOOL_TAGS) as DisplayName[]) {
       tags.push([name, TOOL_TAGS[name][0], TOOL_TAGS[name][1], false]);
       if ((PICK_TOOLS as string[]).includes(name)) tags.push([`${name}|locked`, TOOL_TAGS[name][0], unlockText(name as PickTool), true]);
     }
-    for (const [key, title, line, locked] of tags) {
+    const page = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(S.tagWidth * 40);
       canvas.height = Math.round(S.tagHeight * 40);
       const c = canvas.getContext('2d')!;
+      parchment(c, canvas.width, canvas.height);
+      return [canvas, c];
+    };
+    for (const [key, title, line, locked] of tags) {
+      const [canvas, c] = page();
       const w = canvas.width;
       const h = canvas.height;
-      parchment(c, w, h);
       drawLine(c, title, w / 2, h * 0.34, w * 0.88, h * 0.26, UI_COLORS.ink);
       drawLine(c, line, w / 2, h * 0.68, w * 0.88, h * 0.2, locked ? UI_COLORS.warn : UI_COLORS.note);
       this.tagTextures.set(key, canvasTexture(canvas, 4));
+    }
+    // v3 2.6: each trophy's two tags: before it is earned (a secret's riddle, a regular one's goal) and after.
+    for (const a of ACHIEVEMENT_LIST) {
+      for (const has of [0, 1]) {
+        const [canvas, c] = page();
+        const w = canvas.width;
+        const h = canvas.height;
+        const [first, second] = has ? a.earned : a.hint;
+        drawLine(c, has || !a.secret ? a.name : `? ${a.name} ?`, w / 2, h * 0.27, w * 0.88, h * 0.22, has ? UI_COLORS.ink : a.secret ? '#7a3fb0' : UI_COLORS.ink);
+        drawLine(c, first, w / 2, h * 0.57, w * 0.88, h * 0.17, UI_COLORS.note);
+        drawLine(c, second, w / 2, h * 0.78, w * 0.88, h * 0.17, UI_COLORS.note);
+        this.tagTextures.set(`trophy|${a.id}|${has}`, canvasTexture(canvas, 4));
+      }
     }
   }
 
@@ -630,7 +750,20 @@ export class Shelves {
     for (const texture of this.tagTextures.values()) renderer.initTexture(texture);
     const wasVisible = this.group.visible;
     this.tag.visible = true;
+    // Each tool's other look (locked grey or its own colors) too: flipping "Unlock all tools" swapped to a
+    // material never compiled, and that frame flickered (2026-11-17).
+    const swapped: [Mesh, Mesh['material']][] = [];
+    for (const item of this.tools.values()) {
+      item.model.traverse((o) => {
+        const mesh = o as Mesh;
+        const other = (item.locked ? mesh.userData.own : item.model.userData.silhouette) as MeshStandardMaterial | undefined;
+        if (!mesh.isMesh || !other) return;
+        swapped.push([mesh, mesh.material]);
+        mesh.material = other;
+      });
+    }
     renderer.compile(scene, camera);
+    for (const [mesh, material] of swapped) mesh.material = material;
     this.tag.visible = false;
     this.group.visible = wasVisible;
   }

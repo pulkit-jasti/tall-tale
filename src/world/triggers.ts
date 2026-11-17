@@ -21,6 +21,9 @@
 // One rule for chain reactions: explosions set off the triggers near them.
 // All motion is simple math, no physics engine. Board units (cm), in boardSpin.
 import {
+  LatheGeometry,
+  Vector2,
+  BoxGeometry,
   BufferGeometry,
   Color,
   CylinderGeometry,
@@ -36,16 +39,19 @@ import {
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
 import { GOBLIN_RULES, ROADS, TRIGGERS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
 import { applyAimGlow, applyTouchState } from '../player/feedback.js';
-import type { BlueprintTrigger, TriggerKind } from '../rules/blueprint.js';
+import type { BlueprintExtras, BlueprintTrigger, TriggerKind } from '../rules/blueprint.js';
 import { boardHeight, degToRad, groundAt, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
+import type { PickTool } from '../rules/campaign.js';
 import type { Random } from '../rules/random.js';
-import type { SlingTarget } from '../tools/slingshot.js';
+import type { SlingHit, SlingTarget } from '../tools/slingshot.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate, type ModelTemplate } from './models.js';
 import type { Road, RoadNetwork } from './roads.js';
+import { ravineWater, ropeBridge } from './shapes.js';
 import type { Spot } from './settlements.js';
 import type { CampSpot } from './terrain.js';
 
@@ -92,6 +98,102 @@ export interface TriggerPlacement {
   /** The road's center at that spot (board cm). */
   x: number;
   z: number;
+  /** v3 2.8: a spare spot (not in the blueprint), where a used trap of its kind may come back. */
+  spare: boolean;
+}
+
+/**
+ * v3 (docs/v3-plan.md 2.8): spare spots for the traps to come back at. For
+ * each kind, TRIGGERS.respawn.spareShare times as many spots as the map has
+ * of it, on the roads at the same distances from the castle as the
+ * blueprint's (a little either way), at least spareGap from every other
+ * trap spot. Seeded (the map's own stream), flat math only, so it runs
+ * before the terrain (the ground is flattened under the spares too). Works
+ * on every map, the hand-made tutorial map too. Returns the blueprint's
+ * spots followed by the spares.
+ */
+export function addSpareSpots(network: RoadNetwork, placements: TriggerPlacement[], rng: Random): TriggerPlacement[] {
+  const R = TRIGGERS.respawn;
+  const all = [...placements];
+  if (placements.length === 0) return all;
+  const rs = placements.map((p) => Math.hypot(p.x, p.z));
+  const from = Math.max(R.spareFrom, Math.min(...rs) - R.spareSlack);
+  const to = Math.max(from + 10, Math.max(...rs) + R.spareSlack);
+  const candidates: { road: number; along: number; x: number; z: number }[] = [];
+  network.roads.forEach((road, i) => {
+    for (let d = R.spareStep / 2; d < road.length; d += R.spareStep) {
+      road.curve.getPointAt(Math.min(1, d / road.length), temp);
+      const r = Math.hypot(temp.x, temp.z);
+      if (r >= from && r <= to) candidates.push({ road: i, along: d, x: temp.x, z: temp.z });
+    }
+  });
+  // v3 2.1: the bridge comes back in place, the bell tower never, and the cart has its own spots: no spares for them.
+  const kinds = [...new Set(placements.map((p) => p.kind))].filter((k) => !NO_SPARES.has(k));
+  for (const kind of kinds) {
+    const want = Math.round(placements.filter((p) => p.kind === kind).length * R.spareShare);
+    for (let k = 0; k < want && candidates.length > 0; k++) {
+      // A few random tries for a free spot (far enough from every trap spot so far).
+      for (let tries = 0; tries < 40; tries++) {
+        const i = rng.int(candidates.length);
+        const c = candidates[i];
+        if (all.some((p) => Math.hypot(p.x - c.x, p.z - c.z) < R.spareGap)) continue;
+        all.push({ kind, wave: 1, road: c.road, along: c.along, x: c.x, z: c.z, spare: true });
+        candidates.splice(i, 1);
+        break;
+      }
+    }
+  }
+  return all;
+}
+
+/** v3 2.1: traps that get no spare spots (see addSpareSpots) and never come back on the trap timer. */
+const NO_SPARES: ReadonlySet<TriggerKind> = new Set<TriggerKind>(['bridge', 'bellTower', 'cart']);
+/** v3 2.1: the new trap kinds (shown only when Triggers.extrasOn). */
+const EXTRA_KINDS: ReadonlySet<TriggerKind> = new Set<TriggerKind>(['hay', 'bridge', 'bellTower', 'cart']);
+
+/**
+ * v3 (docs/v3-plan.md 2.1): the new traps on every map, from the map's own
+ * stream, like the spare spots: TRIGGERS.extra.<kind>.count haystacks, bell
+ * towers and bridges on the roads at their distances, at least `gap` from
+ * every other trap spot, and `cartSpots` hidden spots for the rare potion
+ * cart. Flat math only. Returns the given placements followed by the new ones.
+ */
+export function addExtraTraps(network: RoadNetwork, placements: TriggerPlacement[], rng: Random, counts?: BlueprintExtras): TriggerPlacement[] {
+  const E = TRIGGERS.extra;
+  // A level's own counts (its settings), else the config's.
+  const n = counts ?? { hay: E.hay.count, bellTower: E.bellTower.count, bridge: E.bridge.count, cartSpots: E.cartSpots, beds: 0 };
+  const all = [...placements];
+  const spotsFor = (from: number, to: number): { road: number; along: number; x: number; z: number }[] => {
+    const list: { road: number; along: number; x: number; z: number }[] = [];
+    network.roads.forEach((road, i) => {
+      for (let d = E.step / 2; d < road.length; d += E.step) {
+        road.curve.getPointAt(Math.min(1, d / road.length), temp);
+        const r = Math.hypot(temp.x, temp.z);
+        // A bridge needs room for its whole length on the road.
+        if (r >= from && r <= to && d > TRIGGERS.bridge.length && d < road.length - TRIGGERS.bridge.length) list.push({ road: i, along: d, x: temp.x, z: temp.z });
+      }
+    });
+    return list;
+  };
+  const add = (kind: TriggerKind, count: number, from: number, to: number, spare: boolean): void => {
+    const candidates = spotsFor(from, to);
+    for (let k = 0; k < count && candidates.length > 0; k++) {
+      for (let tries = 0; tries < 40; tries++) {
+        const i = rng.int(candidates.length);
+        const c = candidates[i];
+        const gap = kind === 'bridge' ? E.gap + TRIGGERS.bridge.length / 2 : E.gap;
+        if (all.some((p) => Math.hypot(p.x - c.x, p.z - c.z) < gap)) continue;
+        all.push({ kind, wave: 1, road: c.road, along: c.along, x: c.x, z: c.z, spare });
+        candidates.splice(i, 1);
+        break;
+      }
+    }
+  };
+  add('bridge', n.bridge, E.bridge.from, E.bridge.to, false);
+  add('bellTower', n.bellTower, E.bellTower.from, E.bellTower.to, false);
+  add('hay', n.hay, E.hay.from, E.hay.to, false);
+  add('cart', n.cartSpots, E.cart.from, E.cart.to, true);
+  return all;
 }
 
 /** Each blueprint trigger on the road nearest its spot. Only flat math, so it runs before the terrain is built. */
@@ -111,7 +213,7 @@ export function placeTriggers(network: RoadNetwork, spots: BlueprintTrigger[]): 
     });
     const along = network.roads[road].nearestAlong(x, z);
     network.roads[road].curve.getPointAt(Math.min(1, along / network.roads[road].length), temp);
-    return { kind: spot.kind, wave: spot.wave, road, along, x: temp.x, z: temp.z };
+    return { kind: spot.kind, wave: spot.wave, road, along, x: temp.x, z: temp.z, spare: false };
   });
 }
 
@@ -243,6 +345,15 @@ export abstract class Trigger implements SlingTarget {
 
   abstract readonly radius: number;
   readonly assist = TRIGGERS.assist;
+  /** v3 2.8: a spare spot: it only stands when a used trap of its kind comes back here. */
+  spare = false;
+  /** v3 2.6: the player tool that set it off (null: a debug button), for the achievements' knockout credit. */
+  setBy: PickTool | null = null;
+
+  /** Has it stood this battle yet (a blueprint trap shows by its wave only once; after that it comes back on the timer). */
+  get seenThisBattle(): boolean {
+    return this.seen;
+  }
 
   constructor(
     readonly kind: TriggerKind,
@@ -307,12 +418,27 @@ export abstract class Trigger implements SlingTarget {
 
   abstract center(out: Vector3): Vector3;
 
+  /** The slingshot can set it off (v3 2.1: not the haystack, fire only, nor the bell tower, the magnet only). */
+  protected get slingable(): boolean {
+    return true;
+  }
+
   hittable(): boolean {
+    return this.phase === 'standing' && this.slingable;
+  }
+
+  /** A blast nearby sets it off (v3 2.1: not the bell tower). */
+  get chainable(): boolean {
     return this.phase === 'standing';
   }
 
-  onHit(): void {
-    if (this.phase === 'standing') this.setOff();
+  onHit(_by: SlingHit): void {
+    if (this.phase === 'standing') this.setOff('slingshot');
+  }
+
+  /** v3 2.6: a fire pebble lights it (Night Owl): kegs and haystacks, like the magnifying glass. */
+  get lightable(): boolean {
+    return this.phase === 'standing' && (this.kind === 'keg' || this.kind === 'hay');
   }
 
   setAimed(aimed: boolean): void {
@@ -323,15 +449,30 @@ export abstract class Trigger implements SlingTarget {
   }
 
   /** Sets it off: a shot, or a blast nearby. */
-  setOff(): void {
+  setOff(by: PickTool | null = null): void {
     if (this.phase !== 'standing') return;
     mark('trigger');
     this.setAimed(false);
     applyTouchState(this.materials, 'idle');
     this.phase = 'acting';
     this.time = 0;
+    this.setBy = by;
+    this.owner.cause = by;
     this.act();
     this.owner.onSetOff(this);
+  }
+
+  /**
+   * v3 2.6 Package Deal: the magnet pulled it off its spot (no blast). It is
+   * gone at once and comes back on the trap timer at a new spot, like a used one.
+   */
+  pullAway(): void {
+    if (this.phase !== 'standing') return;
+    this.setAimed(false);
+    applyTouchState(this.materials, 'idle');
+    this.phase = 'done';
+    this.root.visible = false;
+    this.owner.comeBackLater(this);
   }
 
   /** A group walks right past it: a strong pulse and a sound from its direction. */
@@ -385,6 +526,17 @@ export abstract class Trigger implements SlingTarget {
     }
   }
 
+  /** True while it is set off and still doing its thing (a rolling boulder, a fallen tree blocking its road). */
+  get acting(): boolean {
+    return this.phase === 'acting';
+  }
+
+  /** v3 2.8: it comes back here (a used trap rebuilt at a new spot): standing, with a poof. */
+  appear(): void {
+    this.seen = false;
+    this.reset(Infinity);
+  }
+
   hide(): void {
     this.cleanUp();
     this.phase = 'hidden';
@@ -401,7 +553,10 @@ export abstract class Trigger implements SlingTarget {
     if (this.phase === 'standing') {
       this.stand();
       this.updateCue(dt);
-    } else if (this.phase === 'acting') this.during(dt);
+    } else if (this.phase === 'acting') {
+      this.owner.cause = this.setBy;
+      this.during(dt);
+    }
   }
 
   /** Standing: a little wobble while the slingshot aims at it. */
@@ -434,6 +589,11 @@ class Keg extends Trigger {
     this.road.pointAt(along, TRIGGERS.keg.side, this.spot);
   }
 
+  /** v3 2.6: fire only (the magnifying glass, a fire pebble): a plain pebble or a goblin shot does nothing to a keg. */
+  protected get slingable(): boolean {
+    return false;
+  }
+
   center(out: Vector3): Vector3 {
     return out.copy(this.spot).setY(this.spot.y + TRIGGERS.keg.height / 2);
   }
@@ -457,7 +617,7 @@ class Keg extends Trigger {
   protected act(): void {
     this.root.visible = false;
     this.center(temp2);
-    this.owner.explode(temp2, TRIGGERS.keg.blastRadius, TRIGGERS.keg.chainRadius, this);
+    this.owner.explode(temp2, TRIGGERS.keg.blastRadius * BOOST.kegBlast, TRIGGERS.keg.chainRadius, this);
     this.owner.debris(temp2, TRIGGERS.keg.debris);
     this.phase = 'done';
   }
@@ -752,11 +912,473 @@ class Tree extends Trigger {
   }
 }
 
+/**
+ * Haystack (v3 2.1): beside its road. Fire only (the magnifying glass, a
+ * blast nearby): it burns for TRIGGERS.hay.burnTime and closes its road like
+ * the fallen tree (goblins on it turn back), then leaves a burnt patch for a
+ * while. A code shape (no pack has a haystack: docs/placeholder-shapes.md).
+ */
+class Hay extends Trigger {
+  readonly radius = TRIGGERS.hay.hitRadius;
+  private readonly spot = new Vector3();
+  private readonly patch: Mesh;
+  private burning = false;
+  private fireTimer = 0;
+
+  constructor(owner: Triggers, wave: number, road: number, along: number) {
+    super('hay', wave, owner, road, along);
+    const H = TRIGGERS.hay;
+    const straw = new MeshStandardMaterial({ color: H.color, roughness: 1, metalness: 0, flatShading: true });
+    const dark = new MeshStandardMaterial({ color: H.darkColor, roughness: 1, metalness: 0, flatShading: true });
+    const body = new Mesh(new CylinderGeometry(H.radius * 0.9, H.radius, H.height * 0.6, 9), straw);
+    body.position.y = H.height * 0.3;
+    const top = new Mesh(new CylinderGeometry(0.2, H.radius * 0.9, H.height * 0.45, 9), dark);
+    top.position.y = H.height * 0.6 + H.height * 0.22;
+    this.root.add(body, top);
+    this.materials = [straw, dark];
+    this.road.pointAt(along, H.side, this.spot);
+    this.patch = new Mesh(new CylinderGeometry(H.radius * 1.6, H.radius * 1.8, 0.2, 10), new MeshStandardMaterial({ color: H.patchColor, roughness: 1, flatShading: true }));
+    this.patch.visible = false;
+    owner.group.add(this.patch);
+  }
+
+  protected get slingable(): boolean {
+    return false;
+  }
+
+  center(out: Vector3): Vector3 {
+    return out.copy(this.spot).setY(this.spot.y + TRIGGERS.hay.height / 2);
+  }
+
+  topY(): number {
+    return this.spot.y + TRIGGERS.hay.height;
+  }
+
+  waitSpot(i: number): { along: number; lane: number } {
+    return { along: this.clampAlong(this.along - this.towardCastle * (4 + i * 3.2)), lane: [0, -1.4, 1.4][i % 3] };
+  }
+
+  protected place(): void {
+    this.root.position.copy(this.spot);
+    this.root.quaternion.identity();
+    this.root.scale.setScalar(1);
+  }
+
+  protected act(): void {
+    this.burning = true;
+    this.fireTimer = 0;
+    this.center(temp2);
+    this.owner.burnSound(temp2);
+    this.owner.closeRoad(this.roadIndex, true);
+  }
+
+  protected during(dt: number): void {
+    const H = TRIGGERS.hay;
+    if (this.burning) {
+      this.fireTimer -= dt;
+      if (this.fireTimer <= 0) {
+        this.fireTimer = H.fireEvery;
+        this.center(temp2);
+        this.owner.flames(temp2, H.fireColors);
+      }
+      // It burns down as it goes.
+      const t = Math.min(1, this.time / H.burnTime);
+      this.root.scale.set(1, Math.max(0.15, 1 - t * 0.85), 1);
+      if (t < 1) return;
+      this.burning = false;
+      this.owner.closeRoad(this.roadIndex, false);
+      this.root.visible = false;
+      this.patch.position.copy(this.spot);
+      this.patch.visible = true;
+      this.center(temp2);
+      this.owner.poof(temp2, 8);
+      return;
+    }
+    // The burnt patch stays a while, then the trap is spent (it comes back on the trap timer, 2.8).
+    if (this.time > H.burnTime + H.patchTime) {
+      this.patch.visible = false;
+      this.phase = 'done';
+    }
+  }
+
+  protected cleanUp(): void {
+    if (this.burning) this.owner.closeRoad(this.roadIndex, false);
+    this.burning = false;
+    this.patch.visible = false;
+  }
+}
+
+/**
+ * Bell tower (v3 2.1): a ruined tower beside its road (Kenney castle kit
+ * pieces), its belfry leaning over the road with an old iron bell in it.
+ * The magnet's ring held on the bell drops it (Magnet): a short fall with a
+ * bounce, a "BONG" and dust, and every goblin under it is knocked out,
+ * helmets too. The tower stays, without its bell, for the rest of the
+ * battle: it never comes back on the trap timer (2.8).
+ */
+class BellTower extends Trigger {
+  readonly radius = TRIGGERS.bellTower.hitRadius;
+  /** The road point under the bell (where it lands) and where it hangs. */
+  private readonly drop = new Vector3();
+  private readonly hang = new Vector3();
+  private readonly base = new Vector3();
+  private readonly bell: Mesh;
+  private readonly tower = new Group();
+  private landed = false;
+  /** v3 2.6: when a pebble last rang it (its own time), and the bell's own target for the slingshot. */
+  private rungAt = -Infinity;
+  private bellMaterial: MeshStandardMaterial;
+  readonly bellTarget: SlingTarget;
+
+  constructor(owner: Triggers, wave: number, road: number, along: number, pieces: ModelTemplate[]) {
+    super('bellTower', wave, owner, road, along);
+    const B = TRIGGERS.bellTower;
+    this.road.pointAt(along, 0, this.drop);
+    this.road.pointAt(along, B.side, this.base);
+    // The tower: the pieces stacked upright (base, middle, the arched belfry, the roof), one arch facing the
+    // road so the bell shows through it.
+    let y = 0;
+    let archTop = 0;
+    let archHeight = 0;
+    const toRoad = temp.subVectors(this.drop, this.base).setY(0).normalize();
+    const facing = Math.atan2(toRoad.x, toRoad.z);
+    pieces.forEach((piece, i) => {
+      const part = cloneStatic(piece);
+      part.position.y = y;
+      part.rotation.y = facing;
+      this.tower.add(part);
+      y += piece.size.y;
+      if (i === pieces.length - 2) {
+        archTop = y;
+        archHeight = piece.size.y;
+      }
+    });
+    this.root.add(this.tower);
+    this.materials = ownMaterials(this.tower);
+    // The bell: a simple flared shape (docs/placeholder-shapes.md), hanging under the belfry's top on the road side.
+    const bronze = new MeshStandardMaterial({ color: B.bellColor, roughness: 0.6, metalness: 0.4, flatShading: true });
+    // 2026-11-17: a real bell's turned profile (a flared lip, a waist, a rounded crown and a hanging loop), 10 sides.
+    const r = B.bellRadius;
+    const h = B.bellHeight;
+    const bellProfile = [
+      new Vector2(r * 0.9, -h),
+      new Vector2(r, -h * 0.94),
+      new Vector2(r * 0.92, -h * 0.82),
+      new Vector2(r * 0.66, -h * 0.55),
+      new Vector2(r * 0.55, -h * 0.25),
+      new Vector2(r * 0.42, -h * 0.08),
+      new Vector2(r * 0.18, 0),
+      new Vector2(r * 0.12, h * 0.14),
+      new Vector2(0, h * 0.16),
+    ];
+    this.bell = new Mesh(new LatheGeometry(bellProfile, 10), bronze);
+    this.materials.push(bronze);
+    // Hanging from the top of the arched belfry, in its road-side opening.
+    const top = pieces.length > 1 ? archTop - archHeight * 0.12 : 12;
+    this.hang.copy(this.base).addScaledVector(toRoad, Math.min(B.side * 0.6, B.width * 0.42));
+    this.hang.y = this.base.y + top;
+    owner.group.add(this.bell);
+    this.bell.visible = false;
+    this.bellMaterial = bronze;
+    // v3 2.6 (Gentle Touch): the hanging bell is a slingshot target of its own: a pebble rings it, never drops it.
+    this.bellTarget = {
+      center: (out) => out.copy(this.hang).setY(this.hang.y - B.bellHeight / 2),
+      radius: B.ringHitRadius,
+      assist: TRIGGERS.assist,
+      hittable: () => this.phase === 'standing' && this.root.visible,
+      onHit: () => this.ring(),
+      setAimed: (aimed) => (aimed ? applyAimGlow([this.bellMaterial]) : applyTouchState([this.bellMaterial], 'idle')),
+    };
+  }
+
+  /** v3 2.6: a pebble rang the bell: it swings and bongs, and goblins near the road under it are dazed. */
+  private ring(): void {
+    if (this.phase !== 'standing') return;
+    this.rungAt = this.time;
+    this.owner.ringBell(this.drop, this.hang);
+  }
+
+  protected get slingable(): boolean {
+    return false;
+  }
+
+  get chainable(): boolean {
+    return false;
+  }
+
+  /** The road point under the bell: the magnet's ring aims here. */
+  center(out: Vector3): Vector3 {
+    return out.copy(this.drop).setY(this.drop.y + 1);
+  }
+
+  /** Where the bell hangs (board cm), for the magnet's glints. */
+  bellAt(out: Vector3): Vector3 {
+    return out.copy(this.bell.position);
+  }
+
+  topY(): number {
+    return this.hang.y + 2;
+  }
+
+  waitSpot(i: number): { along: number; lane: number } {
+    return { along: this.clampAlong(this.along + (i % 3 - 1) * 2.5), lane: [0, -1.4, 1.4][i % 3] };
+  }
+
+  protected place(): void {
+    this.root.position.copy(this.base);
+    this.root.quaternion.identity();
+    this.bell.visible = true;
+    this.bell.position.copy(this.hang);
+    // v3 2.6: rung by a pebble, it swings and settles.
+    const since = this.time - this.rungAt;
+    const swing = TRIGGERS.bellTower.ringSwing;
+    this.bell.rotation.set(0, 0, since >= 0 && since < swing ? Math.sin(since * 16) * 0.45 * (1 - since / swing) : 0);
+  }
+
+  /** The magnet pulls the bell: it shakes and glints (called while the ring is held on it). */
+  shake(time: number): void {
+    if (this.phase !== 'standing') return;
+    this.bell.rotation.z = Math.sin(time * 30) * 0.12;
+  }
+
+  protected act(): void {
+    this.landed = false;
+  }
+
+  protected during(): void {
+    const B = TRIGGERS.bellTower;
+    if (this.landed) {
+      // It lies on the road a moment, then fades away; the tower stays without it.
+      if (this.time > B.fallTime + 1.5) {
+        this.bell.visible = false;
+        this.phase = 'done';
+      }
+      return;
+    }
+    const t = Math.min(1, this.time / B.fallTime);
+    this.bell.position.lerpVectors(this.hang, this.drop, t);
+    // Falls faster and faster, then a small bounce.
+    this.bell.position.y = this.hang.y + (this.drop.y + B.bellHeight - this.hang.y) * t * t;
+    if (t < 1) return;
+    this.landed = true;
+    this.bell.position.y = this.drop.y + B.bellHeight;
+    this.owner.bong(this.drop);
+    this.owner.dust(this.drop, B.dustColors);
+    this.owner.debris(this.drop, 3);
+    this.owner.crush(this.drop, B.knockRadius);
+  }
+
+  hide(): void {
+    super.hide();
+    this.bell.visible = false;
+    this.rungAt = -Infinity;
+  }
+}
+
+/**
+ * Potion cart (v3 2.1): an alchemist's cart (Kenney cart) with purple
+ * potions (Kenney mini dungeon) on it. Rare: Triggers shows it now and then
+ * at one of its spots. A pebble bursts the potions in a purple fizz, and
+ * every goblin around turns into a chicken for good (src/units/chickens.ts).
+ */
+class Cart extends Trigger {
+  readonly radius = TRIGGERS.cart.hitRadius;
+  private readonly spot = new Vector3();
+  private readonly potions: Object3D[] = [];
+  /** Seconds left before it goes away unused. */
+  standLeft = 0;
+
+  constructor(owner: Triggers, wave: number, road: number, along: number, cart: ModelTemplate, potion: ModelTemplate) {
+    super('cart', wave, owner, road, along);
+    const C = TRIGGERS.cart;
+    const model = cloneStatic(cart);
+    this.materials = ownMaterials(model);
+    this.root.add(model);
+    for (let i = 0; i < C.potionCount; i++) {
+      const p = cloneStatic(potion);
+      this.materials.push(...ownMaterials(p, C.potionTint));
+      const a = (i / C.potionCount) * Math.PI * 2;
+      p.position.set(Math.cos(a) * cart.size.x * 0.22, cart.size.y * 0.75, Math.sin(a) * cart.size.z * 0.2);
+      this.root.add(p);
+      this.potions.push(p);
+    }
+    this.road.pointAt(along, C.side, this.spot);
+    // Facing along its road.
+    this.road.pointAt(Math.min(this.road.length, along + 2), C.side, temp);
+    this.yaw = Math.atan2(temp.x - this.spot.x, temp.z - this.spot.z);
+  }
+
+  private yaw = 0;
+
+  center(out: Vector3): Vector3 {
+    return out.copy(this.spot).setY(this.spot.y + 3);
+  }
+
+  topY(): number {
+    return this.spot.y + 6;
+  }
+
+  waitSpot(i: number): { along: number; lane: number } {
+    return { along: this.clampAlong(this.along + (i % 3 - 1) * 3), lane: [0, -1.4, 1.4][i % 3] };
+  }
+
+  protected place(): void {
+    this.root.position.copy(this.spot);
+    this.root.rotation.set(0, this.yaw, 0);
+    this.root.scale.setScalar(1);
+    for (const p of this.potions) p.visible = true;
+  }
+
+  protected act(): void {
+    for (const p of this.potions) p.visible = false;
+    this.center(temp2);
+    this.owner.potionBurst(temp2, TRIGGERS.cart.radius);
+  }
+
+  protected during(): void {
+    // The empty cart stays a moment, then poofs away.
+    if (this.time < 2.5) return;
+    this.center(temp2);
+    this.owner.poof(temp2, 8);
+    this.root.visible = false;
+    this.phase = 'done';
+  }
+}
+
+/**
+ * Rope bridge (v3 2.1): a wooden bridge (Kenney Nature Kit) on its road over
+ * a stream (a flat blue strip on the ground, no real water), long enough for
+ * a whole goblin group. A pebble or a blast drops it: every goblin on it is
+ * knocked out, and its road is closed (goblins take the long way round)
+ * until it is rebuilt in place after TRIGGERS.bridge.downTime.
+ */
+class Bridge extends Trigger {
+  readonly radius = TRIGGERS.bridge.hitRadius;
+  private readonly mid = new Vector3();
+  private readonly a = new Vector3();
+  private readonly b = new Vector3();
+  private readonly deck: Object3D;
+  private readonly stream: Mesh;
+  private down = false;
+
+  constructor(owner: Triggers, wave: number, road: number, along: number, template: ModelTemplate) {
+    super('bridge', wave, owner, road, along);
+    const B = TRIGGERS.bridge;
+    this.road.pointAt(along, 0, this.mid);
+    this.road.pointAt(this.clampAlong(along - B.length / 2), 0, this.a);
+    this.road.pointAt(this.clampAlong(along + B.length / 2), 0, this.b);
+    const yaw = Math.atan2(-(this.b.z - this.a.z), this.b.x - this.a.x);
+    this.yaw = yaw;
+    // 2026-11-17: a rope bridge built for it (planks, posts, rope rails, stone footings) over a real ravine
+    // (cut into the terrain when the map is built, boardBuilder), with low-poly water in it.
+    void template;
+    // The banks' height: the deck's ends (the road's span starts there, src/world/roads.ts).
+    this.level = Math.min(this.a.y, this.b.y) - ROADS.lift;
+    const built = ropeBridge(B.length, B.width, B.arch);
+    this.deck = built.deck;
+    this.materials = built.materials;
+    this.root.add(built.group);
+    this.stream = ravineWater(B.streamLength, B.gapOut * 2.4, B.streamColor);
+    this.stream.position.set(this.mid.x, this.level - B.gapDepth * 0.55, this.mid.z);
+    this.stream.rotation.y = yaw;
+    owner.group.add(this.stream);
+    // Part of the land from the start (the road crosses its ravine on it).
+    this.place();
+    this.root.visible = true;
+  }
+
+  /** The banks' height at the bridge (cm). */
+  private readonly level: number;
+
+  center(out: Vector3): Vector3 {
+    return out.copy(this.mid).setY(this.mid.y + 1.5);
+  }
+
+  topY(): number {
+    return this.mid.y + 3;
+  }
+
+  /** On the bridge itself, spread along it. */
+  waitSpot(i: number): { along: number; lane: number } {
+    return { along: this.clampAlong(this.along + (i - 2) * 4), lane: [0, -1, 1][i % 3] };
+  }
+
+  private readonly yaw: number;
+
+  protected place(): void {
+    // At the banks' height: the deck's own arch carries the road over the gap.
+    this.root.position.set(this.mid.x, this.level + ROADS.lift, this.mid.z);
+    this.root.rotation.set(0, this.yaw, 0);
+    this.deck.position.set(0, 0, 0);
+    this.deck.rotation.set(0, 0, 0);
+    this.deck.visible = true;
+    this.root.scale.setScalar(1);
+    this.stream.visible = true;
+  }
+
+  protected act(): void {
+    this.down = false;
+    this.center(temp2);
+    this.owner.sound('treeCreak', temp2);
+    // Every goblin on it falls in.
+    this.owner.crushAlong(this.a, this.b, TRIGGERS.bridge.onRadius);
+    this.owner.closeRoad(this.roadIndex, true);
+  }
+
+  protected during(): void {
+    const B = TRIGGERS.bridge;
+    if (!this.down) {
+      // The deck drops and tips into the stream.
+      const t = Math.min(1, this.time / B.fallTime);
+      this.deck.position.y = -B.gapDepth * 1.2 * t * t;
+      this.deck.rotation.x = t * 0.5;
+      if (t < 1) return;
+      this.down = true;
+      // The deck is gone into the stream; the stone footings stay on the banks, so the gap reads.
+      this.deck.visible = false;
+      this.owner.splash(this.mid);
+      return;
+    }
+    // Rebuilt in place after a while: the road opens again.
+    if (this.time < B.downTime) return;
+    this.owner.closeRoad(this.roadIndex, false);
+    this.down = false;
+    this.appear();
+  }
+
+  protected cleanUp(): void {
+    if (this.phase === 'acting') this.owner.closeRoad(this.roadIndex, false);
+    this.down = false;
+  }
+
+  hide(): void {
+    super.hide();
+    // 2026-11-17: the ravine is always cut and the road always crosses it on the deck, so a bridge never
+    // vanishes: hidden (the tutorial, a wave it does not belong to yet) it stands as part of the land, it just
+    // cannot be set off.
+    this.place();
+    this.root.visible = true;
+  }
+
+  reset(wave: number): void {
+    super.reset(wave);
+    // Before its wave it still stands as land (see hide).
+    if (this.phase === 'hidden') {
+      this.place();
+      this.root.visible = true;
+    }
+  }
+}
+
 /** Every trigger on the map, the blasts between them, and the flying debris. */
 export class Triggers {
   readonly group = new Group();
   /** Called whenever a trigger is set off (a shot, a blast, or debug), for the lessons. */
   onSetOffKind: (kind: TriggerKind) => void = () => {};
+  /** v3 2.6: a trigger was set off, and by which player tool (null: debug or a chain with no tool), for Trap Master. */
+  onSetOffBy: (kind: TriggerKind, by: PickTool | null) => void = () => {};
+  /** v3 2.6: the tool whose trap is acting now: its crushes and blasts are credited to it. */
+  cause: PickTool | null = null;
   /** A keg blew up at this world point (juice: a big ring, a star and a hit stop). */
   onBlast: (world: Vector3) => void = () => {};
   private list: Trigger[] = [];
@@ -765,7 +1387,21 @@ export class Triggers {
   private cueTimer = 0;
 
   /** The trigger models, loaded once (place() puts them on each map). */
-  private models: { keg: ModelTemplate; rock: ModelTemplate; tree: ModelTemplate; hills: ModelTemplate[] } | null = null;
+  private models: {
+    keg: ModelTemplate;
+    rock: ModelTemplate;
+    tree: ModelTemplate;
+    hills: ModelTemplate[];
+    tower: ModelTemplate[];
+    cart: ModelTemplate;
+    potion: ModelTemplate;
+    bridge: ModelTemplate;
+  } | null = null;
+  /** v3 2.1: goblins turned into chickens at these board points (the game spawns the chickens). */
+  onChickens: (points: Vector3[]) => void = () => {};
+  /** v3 2.1: the rare potion cart: seconds until it shows (-1: not this time), and if a battle is on. */
+  private cartIn = -1;
+  private battleOn = false;
 
   constructor(
     private board: Object3D,
@@ -778,17 +1414,35 @@ export class Triggers {
     board.add(this.group);
   }
 
-  /** Loads the models and puts the triggers of the blueprint on the map, each on the road nearest its spot. */
-  async load(spots: BlueprintTrigger[]): Promise<void> {
-    const [keg, rock, tree, planks, wood, ...hills] = await Promise.all([
+  /**
+   * v3 2.8: used traps waiting to come back (seconds left), one at a time
+   * (appearWait), each at a free spot of its kind (never its old one).
+   */
+  private respawns: { kind: TriggerKind; from: Trigger; left: number }[] = [];
+  private appearWait = 0;
+
+  /** Loads the models and puts the map's traps on it (the blueprint's and the spare spots, from buildBoard). */
+  async load(spots: TriggerPlacement[]): Promise<void> {
+    const W = TRIGGERS.bellTower.width;
+    const [keg, rock, tree, planks, wood, towerBase, towerMid, towerArch, towerTop, cart, potion, bridge, ...hills] = await Promise.all([
       loadTemplate('props/survival/barrel.glb', { height: TRIGGERS.keg.height }),
       loadTemplate('rocks/nature/rock_smallH.glb', { width: TRIGGERS.boulder.size }),
       loadTemplate('trees/fantasy-town/tree-crooked.glb', { height: TRIGGERS.tree.height }),
       loadTemplate('props/survival/resource-planks.glb', { width: TRIGGERS.debris.size }),
       loadTemplate('props/survival/resource-wood.glb', { width: TRIGGERS.debris.size }),
+      // v3 2.1: the bell tower (castle kit pieces), the potion cart and its potions, the rope bridge.
+      // 2026-11-17: a real bell tower (was a plain stack): a bordered base, a windowed middle, an open
+      // arched belfry (the bell hangs in it) and a high pointed roof.
+      loadTemplate('castle/castle-kit/tower-square-base-border.glb', { width: W }),
+      loadTemplate('castle/castle-kit/tower-square-mid-windows.glb', { width: W }),
+      loadTemplate('castle/castle-kit/tower-square-arch.glb', { width: W }),
+      loadTemplate('castle/castle-kit/tower-square-top-roof-high.glb', { width: W }),
+      loadTemplate('town/fantasy-town/cart-high.glb', { width: 7 }),
+      loadTemplate('props/mini-dungeon/potion.glb', { height: TRIGGERS.cart.potionHeight }),
+      loadTemplate('props/nature/bridge_wood.glb', { width: TRIGGERS.bridge.length }),
       ...['A', 'B', 'C', 'D'].map((v) => loadTemplate(`rocks/nature/rock_large${v}.glb`, { width: TRIGGERS.boulder.hillWidth })),
     ]);
-    this.models = { keg, rock, tree, hills };
+    this.models = { keg, rock, tree, hills, tower: [towerBase, towerMid, towerArch, towerTop], cart, potion, bridge };
     this.place(this.network, spots);
     for (let i = 0; i < TRIGGERS.debris.pool; i++) {
       const object = cloneStatic(i % 2 === 0 ? planks : wood);
@@ -803,9 +1457,10 @@ export class Triggers {
    * map, src/game.ts loadMap). The old map's triggers go: unregister their
    * slingshot targets before, register the new ones after.
    */
-  place(network: RoadNetwork, spots: BlueprintTrigger[]): void {
+  place(network: RoadNetwork, spots: TriggerPlacement[]): void {
     const models = this.models;
     if (!models) return;
+    this.respawns.length = 0;
     // Everything but the debris pool goes (the triggers, and the boulders' hills).
     const keep = new Set<Object3D>(this.debrisPool.map((d) => d.object));
     for (const child of [...this.group.children]) if (!keep.has(child)) this.group.remove(child);
@@ -815,12 +1470,18 @@ export class Triggers {
       d.object.visible = false;
     }
     this.network = network;
-    for (const spot of placeTriggers(network, spots)) {
+    // One trap object per spot, the spares too (hidden until a used trap of their kind comes back there).
+    for (const spot of spots) {
       const { road, along } = spot;
       let trigger: Trigger;
       if (spot.kind === 'keg') trigger = new Keg(this, spot.wave, road, along, models.keg);
       else if (spot.kind === 'boulder') trigger = new Boulder(this, spot.wave, road, along, models.rock, this.rng.pick(models.hills));
+      else if (spot.kind === 'hay') trigger = new Hay(this, spot.wave, road, along);
+      else if (spot.kind === 'bellTower') trigger = new BellTower(this, spot.wave, road, along, models.tower);
+      else if (spot.kind === 'cart') trigger = new Cart(this, spot.wave, road, along, models.cart, models.potion);
+      else if (spot.kind === 'bridge') trigger = new Bridge(this, spot.wave, road, along, models.bridge);
       else trigger = new Tree(this, spot.wave, road, along, models.tree);
+      trigger.spare = spot.spare;
       this.group.add(trigger.root);
       this.list.push(trigger);
     }
@@ -828,17 +1489,79 @@ export class Triggers {
 
   /** The things the slingshot can shoot (register each with slingshot.addTarget). */
   get targets(): SlingTarget[] {
-    return this.list;
+    // v3 2.6: each bell tower's hanging bell too (a pebble rings it).
+    const bells = this.list.filter((t): t is BellTower => t instanceof BellTower).map((t) => t.bellTarget);
+    return [...this.list, ...bells];
   }
 
-  /** A new wave (1 based): every trigger of this wave or an earlier one stands ready again. */
-  setWave(wave: number): void {
-    for (const t of this.list) t.reset(wave);
+  /** v3 2.6: a pebble rang a bell tower's bell (Gentle Touch), with how many goblins it dazed. */
+  onBellRung: (dazed: number) => void = () => {};
+
+  /** v3 2.6: the bell rings: a bong from the bell, and goblins on their feet near the road under it are dazed (not again for a while). */
+  ringBell(drop: Vector3, hang: Vector3): void {
+    const B = TRIGGERS.bellTower;
+    this.board.localToWorld(world.copy(hang));
+    this.audio.play('bell', world, 0.8);
+    this.particles.burst(world, [0xffd23f, 0xffffff], 6, 0.08);
+    const r2 = B.ringRadius * B.ringRadius;
+    let dazed = 0;
+    for (const g of this.goblins.list) {
+      if (!ON_FIELD.has(g.mode)) continue;
+      const p = g.root.position;
+      if ((p.x - drop.x) ** 2 + (p.z - drop.z) ** 2 > r2) continue;
+      if (this.goblins.stunOne(g, B.ringDaze, B.ringImmune)) dazed++;
+    }
+    this.onBellRung(dazed);
   }
 
-  /** Brings every hidden trigger of one kind onto the roads now (its lesson), with a poof. */
+  /**
+   * A new wave (1 based). v3 2.8: a wave never resets the battle: a
+   * blueprint trap of this wave or an earlier one that has not stood yet
+   * comes out; used ones come back on their own timer at a new spot (see
+   * update). `rebuild` (debug) puts every blueprint trap back now instead.
+   */
+  setWave(wave: number, rebuild = false): void {
+    if (rebuild) this.respawns.length = 0;
+    // v3 2.1: a battle starts: roll whether the rare potion cart shows this time, and when.
+    if (!this.battleOn) {
+      this.battleOn = true;
+      if (this.extrasOn) this.rollCart(TRIGGERS.cart.firstIn);
+      else this.cartIn = -1;
+    }
+    for (const t of this.list) {
+      if (t.spare) {
+        if (rebuild) t.hide();
+        continue;
+      }
+      // v3 2.1: the new traps only in battles that may use them (not the tutorial).
+      if (!this.extrasOn && EXTRA_KINDS.has(t.kind)) continue;
+      if (rebuild || (!t.seenThisBattle && t.hiddenNow)) t.reset(wave);
+    }
+  }
+
+  /** v3 2.1: the new traps (haystacks, bell tower, bridge, cart) are on in this battle (set by the battle: a loadout battle). */
+  extrasOn = false;
+
+  /** Brings every hidden trigger of one kind onto the roads now (its lesson), with a poof. Spare spots stay empty. */
   revealKind(kind: TriggerKind): void {
-    for (const t of this.list) if (t.kind === kind && t.hiddenNow) t.reset(Infinity);
+    for (const t of this.list) if (t.kind === kind && t.hiddenNow && !t.spare) t.reset(Infinity);
+  }
+
+  /** v3 2.2: the standing trigger of a kind nearest a board point within `radius` cm (flat), or null (the magnifying glass lights kegs). */
+  standingNear(kind: TriggerKind, x: number, z: number, radius: number): Trigger | null {
+    let best: Trigger | null = null;
+    let bestD = radius;
+    for (const t of this.list) {
+      // Standing is enough: the glass lights haystacks and the magnet pulls bells, which the slingshot cannot set off.
+      if (t.kind !== kind || !t.standing) continue;
+      t.center(temp);
+      const d = Math.hypot(temp.x - x, temp.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    }
+    return best;
   }
 
   /** The standing trigger of a kind closest to a board angle (radians, 0 = the board's front), or null. */
@@ -919,11 +1642,165 @@ export class Triggers {
     // The lesson goblins waiting by it are free to go (or be squashed, or turn back).
     this.goblins.releaseWaiting();
     this.onSetOffKind(trigger.kind);
+    this.onSetOffBy(trigger.kind, trigger.setBy);
+    // v3 2.8: it comes back at a new spot after a while, during waves too.
+    // v3 2.1: the bridge rebuilds itself in place, the bell tower is once per battle, the cart is rare.
+    if (trigger.kind === 'cart') this.rollCart(TRIGGERS.cart.againIn);
+    if (NO_SPARES.has(trigger.kind)) return;
+    // Endless Quick Rebuild: used traps come back sooner.
+    this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay * BOOST.trapDelay });
   }
 
-  /** Before the battle, or at its end: every trigger gone, every road open. */
+  /** v3 2.6: a trap taken away without being set off (a keg the magnet pulled in) comes back on the usual timer. */
+  comeBackLater(trigger: Trigger): void {
+    if (!NO_SPARES.has(trigger.kind)) this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay * BOOST.trapDelay });
+  }
+
+  /**
+   * v3 2.6: a blast at a board point not from a trap (a flying keg shot from
+   * the slingshot, Package Deal): goblins in `radius` knocked out, credited to `by`.
+   */
+  blastAt(point: Vector3, radius: number, by: PickTool | null): void {
+    this.cause = by;
+    this.explode(point, radius, 0, null);
+  }
+
+  /**
+   * v3 Phase 3: a bomber's keg blows up at a board point: goblins within
+   * `radius` are knocked out (armor too, like a trap), and standing kegs
+   * within `chainRadius` go off (a keg on its back is fire). Credited to `by`.
+   */
+  bomberBlast(point: Vector3, radius: number, chainRadius: number, by: PickTool | null): void {
+    this.cause = by;
+    this.explode(point, radius, 0, null);
+    for (const t of this.list) {
+      if (t.kind !== 'keg' || !t.chainable) continue;
+      t.center(temp2);
+      if (Math.hypot(temp2.x - point.x, temp2.z - point.z) < chainRadius) t.setOff(by);
+    }
+  }
+
+  /** Before the battle, or at its end: every trigger gone, every road open, none waiting to come back. */
   hideAll(): void {
     for (const t of this.list) t.hide();
+    this.respawns.length = 0;
+    this.appearWait = 0;
+    this.battleOn = false;
+    this.cartIn = -1;
+    this.onClear();
+  }
+
+  /** v3 2.1: the board is cleared (the game removes the chickens). */
+  onClear: () => void = () => {};
+
+  /** v3 2.1: whether the potion cart shows (TRIGGERS.cart.chance) and when, within `window` seconds. Seeded. */
+  private rollCart(window: [number, number]): void {
+    const spots = this.list.filter((t) => t.kind === 'cart').length;
+    this.cartIn = spots > 0 && this.rng.next() < Math.min(1, TRIGGERS.cart.chance * BOOST.cart) ? this.rng.range(window[0], window[1]) : -1;
+  }
+
+  /** v3 2.1: the rare cart's timer: it shows at a free spot of its own (no goblins by it), and goes away unused. */
+  private updateCart(dt: number): void {
+    for (const t of this.list) {
+      if (!(t instanceof Cart) || !t.standing) continue;
+      t.standLeft -= dt;
+      if (t.standLeft > 0) continue;
+      t.center(temp);
+      t.hide();
+      this.poof(temp, 8);
+      this.rollCart(TRIGGERS.cart.againIn);
+    }
+    if (this.cartIn < 0) return;
+    this.cartIn -= dt;
+    if (this.cartIn > 0) return;
+    const free = this.list.filter((t) => t instanceof Cart && t.hiddenNow && !this.goblinsNear(t, TRIGGERS.respawn.goblinClear));
+    if (free.length === 0) {
+      this.cartIn = TRIGGERS.respawn.retry;
+      return;
+    }
+    this.cartIn = -1;
+    const cart = this.rng.pick(free) as Cart;
+    mark('trap back');
+    cart.appear();
+    cart.standLeft = TRIGGERS.cart.standTime;
+    cart.center(temp);
+    this.audio.play('toolPoof', this.board.localToWorld(world.copy(temp)), 0.9, 0.1);
+  }
+
+  /** Debug: the new traps (v3 2.1) stand now, and the potion cart shows at once. */
+  showNewTraps(): void {
+    this.extrasOn = true;
+    for (const t of this.list) if ((t.kind === 'hay' || t.kind === 'bellTower' || t.kind === 'bridge') && !t.spare && !t.standing) t.reset(Infinity);
+    this.battleOn = true;
+    if (!this.list.some((t) => t instanceof Cart && t.standing)) this.cartIn = 0.01;
+  }
+
+  /** v3 2.1: the standing bell tower nearest a board point within `radius` (the magnet pulls its bell). */
+  bellTowerNear(x: number, z: number, radius: number): { tower: Trigger; shake: (time: number) => void; bellAt: (out: Vector3) => Vector3 } | null {
+    const t = this.standingNear('bellTower', x, z, radius);
+    if (!(t instanceof BellTower)) return null;
+    return { tower: t, shake: (time) => t.shake(time), bellAt: (out) => t.bellAt(out) };
+  }
+
+  /**
+   * v3 2.8: the traps waiting to come back, one at a time. A trap comes back
+   * at a free spot of its kind picked at random (seeded), never its old spot,
+   * never with goblins right by it (it tries again a moment later), and never
+   * more of a kind than the map's own count. A poof and a sound show where.
+   * Its old spot is cleared (the boulder's hill goes with a poof).
+   */
+  private updateRespawns(dt: number): void {
+    const R = TRIGGERS.respawn;
+    this.appearWait = Math.max(0, this.appearWait - dt);
+    for (let i = this.respawns.length - 1; i >= 0; i--) {
+      const r = this.respawns[i];
+      r.left -= dt;
+      if (r.left > 0 || this.appearWait > 0) continue;
+      // Still doing its thing (a fallen tree blocking its road): wait for it.
+      if (r.from.acting) {
+        r.left = R.retry;
+        continue;
+      }
+      // As many of a kind as the map has, never more (a lesson may have put one back already).
+      const kindCount = this.list.filter((t) => t.kind === r.kind && !t.spare).length;
+      const up = this.list.filter((t) => t.kind === r.kind && (t.standing || t.acting)).length;
+      if (up >= kindCount) {
+        this.respawns.splice(i, 1);
+        continue;
+      }
+      const free = this.list.filter((t) => t.kind === r.kind && t !== r.from && t.resettable && !this.goblinsNear(t, R.goblinClear));
+      if (free.length === 0) {
+        r.left = R.retry;
+        continue;
+      }
+      const next = this.rng.pick(free);
+      mark('trap back');
+      // The old spot is cleared (a boulder's hill goes with it), unless something already put it back there.
+      if (r.from.resettable && !r.from.hiddenNow) {
+        r.from.center(temp);
+        r.from.hide();
+        this.poof(temp, 6);
+      }
+      next.appear();
+      next.center(temp);
+      this.audio.play('toolPoof', this.board.localToWorld(world.copy(temp)), 0.9, 0.1);
+      this.respawns.splice(i, 1);
+      this.appearWait = R.gap;
+    }
+  }
+
+  /** True when a goblin on the board is within `radius` cm of a trap's spot. */
+  private goblinsNear(t: Trigger, radius: number): boolean {
+    t.center(temp2);
+    const r2 = radius * radius;
+    for (const g of this.goblins.list) {
+      if (g.mode === 'dead') continue;
+      const p = g.root.position;
+      const dx = p.x - temp2.x;
+      const dz = p.z - temp2.z;
+      if (dx * dx + dz * dz < r2) return true;
+    }
+    return false;
   }
 
   /** Debug: sets off every trigger standing now. */
@@ -942,6 +1819,8 @@ export class Triggers {
       this.countGoblins();
     }
     for (const t of this.list) t.update(dt);
+    this.updateRespawns(dt);
+    if (this.battleOn) this.updateCart(dt);
     this.updateDebris(dt);
   }
 
@@ -970,7 +1849,7 @@ export class Triggers {
   // ---- Shared effects (called by the triggers) ----
 
   /** A blast: goblins in `radius` are knocked out, triggers in `chainRadius` are set off. */
-  explode(point: Vector3, radius: number, chainRadius: number, from: Trigger): void {
+  explode(point: Vector3, radius: number, chainRadius: number, from: Trigger | null): void {
     // Its own copy: the caller's vector is a shared scratch one, and reading
     // other triggers' centers into it made every keg on the board blow up.
     const at = blastAt.copy(point);
@@ -982,10 +1861,73 @@ export class Triggers {
     this.crush(at, radius);
     if (chainRadius <= 0) return;
     for (const t of this.list) {
-      if (t === from || !t.hittable()) continue;
+      if (t === from || !t.chainable) continue;
       t.center(temp2);
-      if (temp2.distanceTo(at) < chainRadius) t.setOff();
+      if (temp2.distanceTo(at) < chainRadius) t.setOff(from?.setBy ?? null);
     }
+  }
+
+  /** v3 2.1: every goblin on its feet within `radius` (cm) of the segment a to b is knocked out (the bridge drops). */
+  crushAlong(a: Vector3, b: Vector3, radius: number): void {
+    const abx = b.x - a.x;
+    const abz = b.z - a.z;
+    const len2 = abx * abx + abz * abz || 1;
+    for (const g of this.goblins.list) {
+      if (!this.goblins.isHittable(g) || !ON_FIELD.has(g.mode)) continue;
+      const p = g.root.position;
+      const t = Math.min(1, Math.max(0, ((p.x - a.x) * abx + (p.z - a.z) * abz) / len2));
+      const dx = p.x - (a.x + abx * t);
+      const dz = p.z - (a.z + abz * t);
+      if (dx * dx + dz * dz > radius * radius) continue;
+      this.goblins.worldPosition(g, world);
+      this.particles.burst(world, POOF_COLORS, 6, 0.15);
+      this.audio.play('poof', world, 0.8, 0.04);
+      this.goblins.cause = this.cause;
+      this.goblins.trapHit = true;
+      this.goblins.kill(g, true);
+    }
+  }
+
+  /** v3 2.1: the potions burst: a purple fizz, and every goblin on its feet within `radius` turns into a chicken. */
+  potionBurst(at: Vector3, radius: number): void {
+    this.board.localToWorld(world.copy(at));
+    this.particles.burst(world, TRIGGERS.cart.fizzColors, 24, 0.3);
+    this.audio.play('potionFizz', world);
+    const points: Vector3[] = [];
+    const r2 = radius * radius;
+    for (const g of this.goblins.list) {
+      if (!this.goblins.isHittable(g) || !ON_FIELD.has(g.mode)) continue;
+      const p = g.root.position;
+      if ((p.x - at.x) ** 2 + (p.z - at.z) ** 2 > r2) continue;
+      points.push(p.clone());
+      this.goblins.worldPosition(g, world);
+      this.particles.burst(world, TRIGGERS.cart.fizzColors, 5, 0.1);
+      // Its gear falls off with the change.
+      this.goblins.disarm(g);
+      this.goblins.kill(g, false);
+    }
+    if (points.length > 0) this.onChickens(points);
+  }
+
+  /** v3 2.1: fire on a burning haystack (a few flame particles). */
+  flames(at: Vector3, colors: number[]): void {
+    this.particles.burst(this.board.localToWorld(world.copy(at)), colors, 3, 0.12);
+  }
+
+  burnSound(at: Vector3): void {
+    this.audio.play('hayBurn', this.board.localToWorld(world.copy(at)));
+  }
+
+  /** v3 2.1: the bell lands on the road. */
+  bong(at: Vector3): void {
+    this.audio.play('bell', this.board.localToWorld(world.copy(at)), 1);
+  }
+
+  /** v3 2.1: the bridge falls into its stream. */
+  splash(at: Vector3): void {
+    this.board.localToWorld(world.copy(at));
+    this.particles.burst(world, [0x6aa8e0, 0xbfe0ff, 0xffffff], 14, 0.25);
+    this.audio.play('bridgeSplash', world);
   }
 
   /** Every goblin on its feet within `radius` (flat, cm) of a board point is knocked out with a poof. */
@@ -1000,6 +1942,8 @@ export class Triggers {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, POOF_COLORS, 6, 0.15);
       this.audio.play('poof', world, 0.8, 0.04);
+      this.goblins.cause = this.cause;
+      this.goblins.trapHit = true;
       this.goblins.kill(g, true);
     }
   }

@@ -1,5 +1,7 @@
 # Sounds
 
+> **Partly stale (2026-11-16).** The v3 2.2 tool sounds (`drumBoom`, `drumCrash`, `pepperRingFull`, `pepperRingGone`, `magnetClank`, `magnetHum`, `sugarLand`, `glassHum`, `glassSizzle`, `plantPop`, `seedSpit`, `mushroomPuff`) and the v3 2.1 trap sounds (`hayBurn`, `potionFizz`, `chickenCluck` on the chime, `bridgeSplash` a stand-in) are not listed below: they are in `src/config/sounds.ts`, mostly Kenney stand-ins, and the hum, sizzle and ring sizzle use the chime until real files are picked. The bell sound is kept for the bell tower (2.1). The v3 Phase 3 goblin sounds (2026-11-17) are stand-ins too: `diggerSurface` and `diggerDig` (`impact/impactMining_*`), `bomberFuse` (`rpg/drawKnife1`, `drawKnife2`), `goblinBowShot` (`interface/pluck_001`, `pluck_002`), and `shamanCast` on the chime.
+
 Most are CC0 from Kenney packs (the Freesound files are listed below). Short `.ogg` files (the Quest browser plays them). Numbered files are variants: pick one at random so repeats do not sound robotic. Sound names in docs/audio.md map to these files in the sound config.
 
 | Sound (docs/audio.md) | Files |
@@ -51,9 +53,11 @@ Check each file's license on its Freesound page (the number in the name is the s
 Downloaded but not used yet:
 
 - `276874__lucabia__sword-hits.wav`: 10 s of many hits. Cut into single hits for `swordClash`.
-- Music (`MUSIC` in `src/config/sounds.ts`): `812170__giangallegos__ambient-music.mp3` on the menus and the pause panel, `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac` in battle (looped at 32 s).
-- `875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.wav`: ambience idea. 20 MB, needs a shorter loop as `.ogg`.
+- Music (`MUSIC` in `src/config/sounds.ts`): since 2026-11-17 `875456__coretexzip__fantasy-village-ambience-renaissance-fair-ambient.m4a` (village ambience, an AAC copy of the 20 MB `.wav`: 1.3 MB, the full 116 s, `afconvert -f m4af -d aac -b 96000`) on the home screen, the end panels and the pause panel, `649132__sonically_sound__medievalfantasy-rpg-loop-mix-at-32-secs-to-extendrepeat.flac` in battle (looped at 32 s). The `.wav` is no longer loaded. `812170__giangallegos__ambient-music.mp3` is no longer used.
+- `toolReady` (a tool recharged): `chime.mp3` with `interface/glass_002.ogg`.
 
 ## Still missing
 
 Goblin chatter, burp, keg explosion, worker cheer, lose trombone, ambient wind and birds, night crickets, torch crackle. Keep `chime.mp3` as the placeholder for these.
+
+**v3 adds many more** (the magnet hum, glass hum and sizzle, the pepper ring sizzle, the 2.1 traps, and the Kenney stand-ins for the drum, horn hints and new tools). The full to-do list is in docs/v3-plan.md, "To do later".

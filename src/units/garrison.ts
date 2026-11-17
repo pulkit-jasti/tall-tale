@@ -35,6 +35,8 @@ interface Member {
   /** The archer's goblin to shoot, and the countdown to its arrow of this volley (-1: none). */
   target: Goblin | null;
   fireIn: number;
+  /** An archer backing away from a goblin on the rampart: it keeps going until clearly clear (a gap, no flip-flop). */
+  backing?: boolean;
 }
 
 const temp = new Vector3();
@@ -126,6 +128,17 @@ export class Garrison {
       }
     }
     return best;
+  }
+
+  /**
+   * v3 Phase 3: the soldiers standing on the wall now (not climbing up), into
+   * `out` (reused, no garbage): the goblin archers' targets. Empty when none is up there.
+   */
+  soldiersOnWall(out: Troop[]): Troop[] {
+    out.length = 0;
+    if (!this.active) return out;
+    for (const m of this.slots) if (m && m.troop.mode !== 'climbingUp' && m.troop.mode !== 'dead') out.push(m.troop);
+    return out;
   }
 
   /** Debug: `n` soldiers on the rampart go down (archers first), to watch the refill climb up. */
@@ -304,16 +317,37 @@ export class Garrison {
     }
     m.target = target;
     const foe = this.rampartFoe(t);
-    if (foe && foe.arc < GARRISON.backAway) {
+    // Two lines, not one (2026-11-17, second test): at exactly backAway it stepped away, was past it, walked
+    // home toward the goblin, was inside it again... a fast back-and-forth for seconds. Once backing, it keeps
+    // backing until the goblin is backAwayEnd away, and it never walks home toward a goblin that near.
+    if (foe) m.backing = foe.arc < (m.backing ? GARRISON.backAwayEnd : GARRISON.backAway);
+    else m.backing = false;
+    if (foe && m.backing) {
       // Back away from it along the wall, and keep shooting.
       const away = t.angle - Math.sign(angleDelta(t.angle, foe.angle) || 1) * 0.4;
-      this.walkTo(t, away, dt);
-      return;
+      if (!this.walkTo(t, away, dt)) return;
+      // Cornered at its stretch's end (a tower): it stands its ground. 2026-11-17: it kept its walk clip
+      // there, running on the spot for seconds until the goblin moved.
+      if (t.playing('walk')) t.play('idle');
+      if (!target) {
+        const q = foe.goblin.root.position;
+        t.face(q.x - p.x, q.z - p.z);
+        return;
+      }
     }
     if (target) {
+      // Never left walking on the spot once it stops (its shot clip plays over idle).
+      if (t.playing('walk')) t.play('idle');
       const q = target.root.position;
       t.face(q.x - p.x, q.z - p.z);
       if (t.mode !== 'guarding') t.mode = 'guarding';
+      return;
+    }
+    // A goblin still near on the wall: it stands where it is, facing it, rather than walking home toward it.
+    if (foe && foe.arc < GARRISON.backAwayEnd * 1.5) {
+      if (t.playing('walk')) t.play('idle');
+      const q = foe.goblin.root.position;
+      t.face(q.x - p.x, q.z - p.z);
       return;
     }
     // Nothing to shoot: back to its home spot, facing out.
@@ -429,6 +463,6 @@ export class Garrison {
   private clash(at: Vector3): void {
     this.audio.play('swordClash', this.board.localToWorld(temp.copy(at)), 1, TROOPS.clashGap);
     temp.y += 0.004;
-    this.particles.burst(temp, CLASH_SPARKS, 2, 0.12);
+    if (JUICE.gearSparks) this.particles.burst(temp, CLASH_SPARKS, 2, 0.12);
   }
 }

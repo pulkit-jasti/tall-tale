@@ -16,6 +16,18 @@
 // thrown pebble only knocks a goblin back, dazed. A held goblin brought to the
 // empty pouch clicks in like a pebble: shot, it knocks out the goblin it hits,
 // knocks back the ones around it, and poofs. It costs a meal.
+// v3 2.6 (Goblin shot, Fair Trade): goblins right where it lands are knocked
+// out, the ones around them flung back farther than a pebble's knock, dazed.
+//
+// v3 2.6 secret abilities that go through the slingshot:
+//   - Fire pebble (Night Owl): a torch beside the bowl, lit at sunset and
+//     night. A pinched pebble held in its flame FIRE_PEBBLE.lightTime catches
+//     fire and burns out FIRE_PEBBLE.burnTime later; shot, it lights kegs and
+//     haystacks (things with `lightable`).
+//   - Flying keg (Package Deal): a keg the magnet pulled in stands by the
+//     bowl (addKeg); pinch it to the pouch and shoot it: a big blast where it
+//     lands (onKegBlast).
+//   - Spicy sugar: a spicy cube stays spicy through the pouch and the shot.
 //
 // Aim assist, in order of importance:
 //   1. Steady release: the shot uses the average aim of the last ~100 ms
@@ -34,6 +46,8 @@
 // (cm), where the goblins are, so hits are simple.
 import {
   CircleGeometry,
+  ConeGeometry,
+  CylinderGeometry,
   Group,
   IcosahedronGeometry,
   InstancedMesh,
@@ -46,7 +60,8 @@ import {
   type MeshStandardMaterial,
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { AIM_ASSIST, BOARD, GOBLIN_SHOT, HOLD, JUICE, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS } from '../config/game.js';
+import { AIM_ASSIST, BOARD, FIRE_PEBBLE, FLYING_KEG, GOBLIN_SHOT, HOLD, JUICE, PEBBLE_BOWL, PEBBLE_THROW, SLINGSHOT, TOOL_SPOTS, TRIGGERS } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
@@ -57,12 +72,16 @@ import { shrinkAway } from '../fx/ease.js';
 import { Goblin, type Goblins } from '../units/goblins.js';
 import { cloneStatic, InstancedPool, loadTemplate, type ModelTemplate } from '../world/models.js';
 import { flatMaterial, pebbleBowl, post, slingshotBand, slingshotFrame, slingshotPouch } from '../world/shapes.js';
+import { flameGeometry } from '../world/nightLights.js';
 import type { Stage } from '../world/stage.js';
 
 export type SlingEvent = 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot';
 
-/** The three things on the slingshot a hand can reach for. */
-export type SlingPart = 'pouch' | 'bowl' | 'handle';
+/** The things on the slingshot a hand can reach for (v3 2.6: a pulled-in keg waiting by the bowl). */
+export type SlingPart = 'pouch' | 'bowl' | 'handle' | 'keg';
+
+/** What hit a slingshot target: a pebble shot, a goblin shot, or a burning pebble (v3 2.6). */
+export type SlingHit = 'shot' | 'goblin' | 'fire';
 
 /**
  * Something besides goblins the slingshot can hit, which the aim assist also
@@ -78,7 +97,9 @@ export interface SlingTarget {
   /** False once it was set off or is gone. */
   hittable(): boolean;
   /** Hit by a slingshot pebble or a goblin shot. A thrown pebble never sets it off. */
-  onHit(by: 'shot' | 'goblin'): void;
+  onHit(by: SlingHit): void;
+  /** v3 2.6: a burning pebble lights it now (kegs and haystacks), even when a plain pebble cannot set it off. */
+  readonly lightable?: boolean;
   /** Glow while the slingshot aims at it. */
   setAimed(aimed: boolean): void;
 }
@@ -91,12 +112,17 @@ type Target = Goblin | SlingTarget;
  * back (thrown by hand), knock it out (shot), or knock it out plus a splash
  * (a goblin shot).
  */
-type PebbleKind = 'dropped' | 'thrown' | 'shot' | 'goblin';
+/** v3 2.2: 'cube' is a sugar cube shot from the pouch: it flies like a shot, hits nothing, and becomes a lure where it lands. */
+/** v3 2.6: 'keg' is a flying keg (Package Deal): a big blast where it lands. */
+type PebbleKind = 'dropped' | 'thrown' | 'shot' | 'goblin' | 'cube' | 'keg';
 
 interface Pebble {
   alive: boolean;
   age: number;
   kind: PebbleKind;
+  /** v3 2.6: a burning pebble (Night Owl), or a spicy sugar cube. */
+  fire: boolean;
+  spicy: boolean;
   /** The goblin flying in place of the pebble (kind 'goblin'). */
   goblin: Goblin | null;
   readonly position: Vector3;
@@ -145,6 +171,11 @@ interface HandPebble {
   readonly velocity: Vector3;
   readonly last: Vector3;
   hasLast: boolean;
+  /** v3 2.6: time in the torch's flame so far, and seconds left burning (0: not lit). */
+  heat: number;
+  fire: number;
+  /** v3 2.6: the pulled-in keg instead of a pebble. */
+  keg: boolean;
 }
 
 const SAMPLES = 64;
@@ -167,6 +198,7 @@ const restAt = new Vector3();
 const restScale = new Vector3();
 const rollAxis = new Vector3();
 const rollTurn = new Quaternion();
+const splashAt = new Vector3();
 
 /**
  * The pebble: a low-poly ball like the sun (flat faces), a little squashed
@@ -247,6 +279,32 @@ export class Slingshot {
   private loaded = false;
   /** The goblin in the pouch instead of a pebble, if any (held mode, so nothing else touches it). */
   private pouchGoblin: Goblin | null = null;
+  /** v3 2.2: a sugar cube in the pouch instead of a pebble. */
+  private pouchCube = false;
+  /** v3 2.2: a shot sugar cube landed at a board point (cm): the game puts a lure there (v3 2.6: spicy if peppered). */
+  onCubeLanded: (x: number, y: number, z: number, spicy: boolean) => void = () => {};
+  /** v3 2.6: the cube in the pouch is spicy; the pebble in the pouch burns (seconds left); the pulled-in keg is in the pouch. */
+  private pouchSpicy = false;
+  private pouchFire = 0;
+  private pouchKeg = false;
+  private pouchKegMesh: Object3D | null = null;
+  /** v3 2.6 Night Owl: the torch beside the bowl (lit at sunset and night: set by the game every frame). */
+  torchLit = false;
+  private torch = new Group();
+  private torchFlame!: Mesh;
+  private flamePuff = 0;
+  /** v3 2.6: a pebble caught fire in the torch (the achievement). */
+  onFireLit: () => void = () => {};
+  /** v3 2.6 Package Deal: the keg waiting on its stand by the bowl (null: none), the one in flight, its template. */
+  private kegTemplate: ModelTemplate | null = null;
+  private kegWaiting: Object3D | null = null;
+  private kegStand = new Group();
+  private kegFlying: Object3D | null = null;
+  private kegRest = new Vector3();
+  /** v3 2.6 Package Deal: a flying keg landed or hit at a board point (cm): the game blasts there. */
+  onKegBlast: (at: Vector3) => void = () => {};
+  /** v3 2.6 Fair Trade: a goblin shot landed and knocked out this many. */
+  onGoblinShot: (knocked: number) => void = () => {};
   /** Pebbles in the bowl. */
   private bowlCount: number = PEBBLE_BOWL.capacity;
   private refillTimer = 0;
@@ -293,6 +351,7 @@ export class Slingshot {
   partWorld(part: SlingPart | 'pebbles', out: Vector3): Vector3 {
     if (part === 'pouch') return this.pouchWorld(out);
     if (part === 'bowl') return this.stage.boardLift.localToWorld(out.copy(this.bowlCenter));
+    if (part === 'keg') return this.stage.boardLift.localToWorld(out.copy(this.kegRest).setY(this.kegRest.y + FLYING_KEG.height / 2));
     if (part === 'pebbles') {
       out.copy(this.bowlCenter);
       out.y += -PEBBLE_BOWL.depth * 0.85 + (this.pile?.visible ? this.pile.scale.y * this.pileHeight : 0);
@@ -320,17 +379,126 @@ export class Slingshot {
   ) {}
 
   async load(): Promise<void> {
-    const [platform, pile] = await Promise.all([
+    const [platform, pile, keg] = await Promise.all([
       loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width: TOOL_SPOTS.platformWidth }),
       loadTemplate('rocks/survival/resource-stone-large.glb', { width: PEBBLE_BOWL.pileWidth }),
+      // v3 2.6 Package Deal: the keg the magnet pulls in, small enough for the pouch (the traps' barrel model).
+      loadTemplate('props/survival/barrel.glb', { height: FLYING_KEG.height }),
     ]);
     const stone = pebbleTemplate();
     this.stoneTemplate = stone;
+    this.kegTemplate = keg;
+    // A few hand pebbles and the flying keg made now, hidden, so nothing is cloned mid-battle.
+    for (let i = 0; i < 4; i++) {
+      const mesh = cloneStatic(stone);
+      this.recycleStone(mesh);
+    }
+    this.kegMesh = cloneStatic(keg);
+    this.kegMesh.visible = false;
+    this.stage.boardLift.add(this.kegMesh);
     this.buildPlatform(platform);
     this.buildFrame();
     this.buildBowl(pile);
     this.buildPebbles(stone);
+    this.buildTorch();
+    this.buildKegStand();
     this.stage.boardLift.add(this.root, this.frame);
+  }
+
+  /**
+   * v3 2.6 Night Owl: a torch on a stick beside the bowl (the castle torches'
+   * look, docs/placeholder-shapes.md), its flame shown only while lit.
+   */
+  private buildTorch(): void {
+    const F = FIRE_PEBBLE;
+    const a = degToRad(F.angleDeg);
+    const stickHeight = F.flameY - F.flameSize * 0.5;
+    const stick = new Mesh(new CylinderGeometry(0.3, 0.22, stickHeight, 6).translate(0, stickHeight / 2, 0), flatMaterial(F.stickColor));
+    // The layered low-poly flame of the castle torches (2026-11-17), sized to this torch.
+    this.torchFlame = new Mesh(
+      flameGeometry()
+        .scale(F.flameSize * 0.8, F.flameSize * 0.8, F.flameSize * 0.8)
+        .translate(0, F.flameSize * 0.45, 0),
+      new MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false }),
+    );
+    this.torchFlame.position.y = stickHeight;
+    this.torch.add(stick, this.torchFlame);
+    this.torch.position.set(polarX(F.radius, a), 0, polarZ(F.radius, a));
+    this.root.add(this.torch);
+  }
+
+  /** The torch's flame (boardLift cm). */
+  private flameLocal(out: Vector3): Vector3 {
+    return out.set(this.torch.position.x, FIRE_PEBBLE.flameY, this.torch.position.z);
+  }
+
+  /** v3 2.6 Package Deal: a small post by the bowl the pulled-in keg lands on (hidden while empty). */
+  private buildKegStand(): void {
+    const K = FLYING_KEG;
+    const a = degToRad(K.angleDeg);
+    this.kegRest.set(polarX(K.radius, a), K.topY, polarZ(K.radius, a));
+    const stem = post(K.topY);
+    this.kegStand.add(stem);
+    this.kegStand.position.set(this.kegRest.x, 0, this.kegRest.z);
+    this.kegStand.visible = false;
+    this.root.add(this.kegStand);
+  }
+
+  /**
+   * Pebbles carried by hand, made ahead and reused (audit 2026-11-17: each pinch at the bowl cloned a new
+   * one). Kept in boardLift, hidden when not in a hand, so the warm-up compiles them.
+   */
+  private stonePool: Object3D[] = [];
+
+  private takeStone(): Object3D {
+    const mesh = this.stonePool.pop() ?? cloneStatic(this.stoneTemplate!);
+    mesh.visible = true;
+    this.stage.boardLift.add(mesh);
+    return mesh;
+  }
+
+  private recycleStone(mesh: Object3D): void {
+    mesh.visible = false;
+    if (mesh.parent !== this.stage.boardLift) this.stage.boardLift.add(mesh);
+    this.stonePool.push(mesh);
+  }
+
+  /** The one flying keg, made once and reused (it was cloned for every keg the magnet pulled in). */
+  private kegMesh: Object3D | null = null;
+
+  /** v3 2.6 Package Deal: a keg pulled in by the magnet lands on its stand by the bowl, with a poof. False if one already waits. */
+  addKeg(): boolean {
+    if (!this.kegTemplate || this.kegWaiting || this.pouchKeg || this.handPebbles.some((p) => p.keg) || this.kegFlying) return false;
+    const keg = this.kegMesh ?? (this.kegMesh = cloneStatic(this.kegTemplate));
+    keg.visible = true;
+    keg.rotation.set(0, 0, 0);
+    keg.scale.setScalar(1);
+    keg.position.copy(this.kegRest);
+    this.stage.boardLift.add(keg);
+    this.kegWaiting = keg;
+    this.kegStand.visible = true;
+    this.particles.burst(this.stage.boardLift.localToWorld(temp.copy(this.kegRest)), [0xffffff, 0xddd6c8, 0xe8ecf0], 10, 0.08);
+    this.audio.play('toolPoof', temp);
+    return true;
+  }
+
+  /** v3 2.6: no keg anywhere and no burning pebble (a new battle). */
+  clearExtras(): void {
+    for (const k of [this.kegWaiting, this.kegFlying, this.pouchKegMesh]) k?.removeFromParent();
+    this.kegWaiting = null;
+    this.kegFlying = null;
+    this.pouchKegMesh = null;
+    this.kegStand.visible = false;
+    if (this.pouchKeg) {
+      this.pouchKeg = false;
+      this.loaded = false;
+    }
+    for (let i = this.handPebbles.length - 1; i >= 0; i--) {
+      if (!this.handPebbles[i].keg) continue;
+      this.handPebbles[i].mesh.removeFromParent();
+      this.handPebbles.splice(i, 1);
+    }
+    this.pouchFire = 0;
   }
 
   private buildPlatform(platform: ModelTemplate): void {
@@ -399,6 +567,8 @@ export class Slingshot {
         alive: false,
         age: 0,
         kind: 'dropped',
+        fire: false,
+        spicy: false,
         goblin: null,
         position: new Vector3(),
         velocity: new Vector3(),
@@ -457,6 +627,14 @@ export class Slingshot {
         part = 'pouch';
       }
     }
+    // v3 2.6: the pulled-in keg on its stand: pinch to take it.
+    if (this.kegWaiting) {
+      const d = hand.pinchPoint.distanceTo(this.partWorld('keg', temp));
+      if (d < FLYING_KEG.grabRadius * this.stage.boardScale && d < best) {
+        best = d;
+        part = 'keg';
+      }
+    }
     // Bowl: pinch to take a pebble.
     {
       const d = hand.pinchPoint.distanceTo(this.stage.boardLift.localToWorld(temp.copy(this.bowlCenter)));
@@ -487,7 +665,17 @@ export class Slingshot {
    * A pinch on the pouch (pull) or the bowl (take a pebble). Returns false,
    * with a buzz, when there is no pebble to pull or take.
    */
-  pinch(part: 'pouch' | 'bowl', hand: HandState): boolean {
+  pinch(part: 'pouch' | 'bowl' | 'keg', hand: HandState): boolean {
+    if (part === 'keg') {
+      const keg = this.kegWaiting;
+      if (!keg) return false;
+      this.kegWaiting = null;
+      this.kegStand.visible = false;
+      this.handPebbles.push({ hand, mesh: keg, velocity: new Vector3(), last: new Vector3(), hasLast: false, heat: 0, fire: 0, keg: true });
+      this.placeHandPebble(hand, keg);
+      this.audio.play('grab', hand.pinchPoint);
+      return true;
+    }
     if (part === 'pouch') {
       if (!this.loaded) {
         this.audio.play('locked', undefined, 1, 0.4);
@@ -507,9 +695,8 @@ export class Slingshot {
     }
     this.bowlCount--;
     this.updatePile();
-    const mesh = cloneStatic(this.stoneTemplate);
-    this.stage.boardLift.add(mesh);
-    this.handPebbles.push({ hand, mesh, velocity: new Vector3(), last: new Vector3(), hasLast: false });
+    const mesh = this.takeStone();
+    this.handPebbles.push({ hand, mesh, velocity: new Vector3(), last: new Vector3(), hasLast: false, heat: 0, fire: 0, keg: false });
     this.onEvent('pebbleTaken');
     this.placeHandPebble(hand, mesh);
     this.audio.play('grab', hand.pinchPoint);
@@ -544,6 +731,19 @@ export class Slingshot {
     if (this.loaded || !this.frame.visible) return false;
     if (hand.pinchPoint.distanceTo(this.pouchWorld(temp)) >= SLINGSHOT.attachRadius) return false;
     this.putGoblinInPouch(goblin);
+    return true;
+  }
+
+  /** v3 2.2: a held sugar cube brought to the empty pouch clicks in, like a pebble. True if it did. */
+  loadCube(hand: HandState, spicy = false): boolean {
+    if (this.loaded || !this.frame.visible) return false;
+    if (hand.pinchPoint.distanceTo(this.pouchWorld(temp)) >= SLINGSHOT.attachRadius) return false;
+    this.loaded = true;
+    this.pouchCube = true;
+    this.pouchSpicy = spicy;
+    if (this.pouchPebble) this.pouchPebble.visible = true;
+    this.audio.play('pebbleLoad', this.pouchWorld(temp));
+    this.onEvent('loaded');
     return true;
   }
 
@@ -630,6 +830,7 @@ export class Slingshot {
         this.pouchGoblin = null;
         this.loaded = false;
       }
+      this.clearExtras();
     }
     this.root.visible = visible;
     this.frame.visible = visible;
@@ -648,6 +849,7 @@ export class Slingshot {
       applyTouchState(this.woodMaterials, Math.sin(this.time * 6) > 0 ? 'ready' : 'idle');
     }
     this.updateHandPebbles(dt);
+    this.updateTorch(dt);
 
     const hand = this.pouchHolder;
     if (hand) {
@@ -773,14 +975,80 @@ export class Slingshot {
       }
       this.placeHandPebble(hand, p.mesh);
       this.trackHandPebble(p, dt);
+      if (!p.keg) this.heatHandPebble(p, dt);
       if (!this.loaded && this.frame.visible && hand.pinchPoint.distanceTo(this.pouchWorld(temp)) < SLINGSHOT.attachRadius) {
         this.loaded = true;
-        if (this.pouchPebble) this.pouchPebble.visible = true;
-        this.stage.boardLift.remove(p.mesh);
         this.handPebbles.splice(i, 1);
         this.audio.play('pebbleLoad', temp);
+        if (p.keg) {
+          // v3 2.6: the keg sits in the pouch's cup like a pebble.
+          this.pouchKeg = true;
+          this.pouchKegMesh = p.mesh;
+          this.pouch.add(p.mesh);
+          p.mesh.position.set(0, -FLYING_KEG.height / 2, SLINGSHOT.pouchSag - 1);
+          p.mesh.rotation.set(Math.PI / 2, 0, 0);
+        } else {
+          this.recycleStone(p.mesh);
+          if (this.pouchPebble) this.pouchPebble.visible = true;
+          this.pouchFire = p.fire;
+        }
         this.onEvent('loaded');
       }
+    }
+  }
+
+  /**
+   * v3 2.6 Night Owl: a pinched pebble in the lit torch's flame heats up and
+   * catches fire; a burning one throws off flames and burns out after a while.
+   */
+  private heatHandPebble(p: HandPebble, dt: number): void {
+    if (p.fire > 0) {
+      p.fire -= dt;
+      if (p.fire <= 0) {
+        p.fire = 0;
+        p.heat = 0;
+        this.particles.burst(this.stage.boardLift.localToWorld(temp2.copy(p.mesh.position)), FIRE_PEBBLE.smokeColors, 4, 0.04);
+        return;
+      }
+      this.flames(this.stage.boardLift.localToWorld(temp2.copy(p.mesh.position)), dt);
+      return;
+    }
+    if (!this.torchLit || !this.torch.visible) {
+      p.heat = 0;
+      return;
+    }
+    this.stage.boardLift.localToWorld(this.flameLocal(temp2));
+    if (p.hand.pinchPoint.distanceTo(temp2) > FIRE_PEBBLE.lightRadius * this.stage.boardScale) {
+      p.heat = Math.max(0, p.heat - dt);
+      return;
+    }
+    p.heat += dt;
+    if (p.heat < FIRE_PEBBLE.lightTime) return;
+    p.fire = FIRE_PEBBLE.burnTime;
+    this.particles.burst(temp2, FIRE_PEBBLE.flameColors, 10, 0.06);
+    this.audio.play('hayBurn', temp2, 0.8);
+    this.onFireLit();
+  }
+
+  /** Flame puffs from a burning pebble (world point), now and then. */
+  private flames(at: Vector3, dt: number): void {
+    this.flamePuff -= dt;
+    if (this.flamePuff > 0) return;
+    this.flamePuff = FIRE_PEBBLE.puffEvery;
+    this.particles.burst(at, FIRE_PEBBLE.flameColors, 1, 0.02);
+  }
+
+  /** v3 2.6: the torch shows only while lit (sunset and night), its flame flickering; a burning pebble in the pouch burns down. */
+  private updateTorch(dt: number): void {
+    this.torch.visible = this.torchLit;
+    if (this.torchLit) {
+      const s = 0.85 + 0.15 * Math.sin(this.time * 17) * Math.sin(this.time * 5.3);
+      this.torchFlame.scale.set(s, 0.9 + 0.25 * Math.sin(this.time * 13), s);
+    }
+    if (this.pouchFire > 0) {
+      this.pouchFire = Math.max(0, this.pouchFire - dt);
+      if (this.pouchFire > 0) this.flames(this.pouchWorld(temp2), dt);
+      else this.particles.burst(this.pouchWorld(temp2), FIRE_PEBBLE.smokeColors, 4, 0.04);
     }
   }
 
@@ -803,7 +1071,16 @@ export class Slingshot {
 
   /** Let go of a carried pebble: back into the bowl if over it, otherwise it flies with the hand's speed. */
   private dropHandPebble(p: HandPebble): void {
-    this.stage.boardLift.remove(p.mesh);
+    // v3 2.6: the keg is never tossed: let go anywhere but the pouch, it goes back on its stand.
+    if (p.keg) {
+      p.mesh.position.copy(this.kegRest);
+      p.mesh.rotation.set(0, 0, 0);
+      this.kegWaiting = p.mesh;
+      this.kegStand.visible = true;
+      this.audio.play('drop', this.stage.boardLift.localToWorld(temp.copy(this.kegRest)), 0.6);
+      return;
+    }
+    this.recycleStone(p.mesh);
     const at = p.mesh.position;
     const dx = at.x - this.bowlCenter.x;
     const dz = at.z - this.bowlCenter.z;
@@ -889,7 +1166,10 @@ export class Slingshot {
       return;
     }
     const target = this.pickTarget(this.aimOrigin, this.aimVelocity, this.trace, true);
-    this.launch(this.aimOrigin, this.aimVelocity, target, ...this.takeLoad());
+    const fire = this.pouchFire > 0 && !this.pouchKeg && !this.pouchCube && !this.pouchGoblin;
+    const spicy = this.pouchCube && this.pouchSpicy;
+    const [kind, goblin] = this.takeLoad();
+    this.launch(this.aimOrigin, this.aimVelocity, target, kind, goblin, fire, spicy);
     this.audio.play('slingRelease', this.pouchWorld(temp));
     this.endAim();
     this.onEvent('shot');
@@ -898,11 +1178,30 @@ export class Slingshot {
   /** Empties the pouch. Returns what flies: a pebble shot, or a goblin shot with its goblin. */
   private takeLoad(): [PebbleKind, Goblin | null] {
     const goblin = this.pouchGoblin;
+    const cube = this.pouchCube;
+    const keg = this.pouchKeg;
     this.loaded = false;
     this.pouchGoblin = null;
+    this.pouchCube = false;
+    this.pouchSpicy = false;
+    this.pouchFire = 0;
+    this.pouchKeg = false;
     if (this.pouchPebble) this.pouchPebble.visible = false;
     if (goblin) this.audio.play('squeal', this.pouchWorld(temp));
-    return goblin ? ['goblin', goblin] : ['shot', null];
+    if (keg) {
+      // v3 2.6: the keg leaves the pouch and flies in the board (shown by updatePebbles).
+      const mesh = this.pouchKegMesh;
+      this.pouchKegMesh = null;
+      if (mesh) {
+        mesh.removeFromParent();
+        mesh.rotation.set(0, 0, 0);
+        // Board cm, like the pebbles: it is placed there each frame of its flight.
+        this.stage.boardSpin.add(mesh);
+      }
+      this.kegFlying = mesh;
+      return ['keg', null];
+    }
+    return goblin ? ['goblin', goblin] : cube ? ['cube', null] : ['shot', null];
   }
 
   /** The goblin in the pouch sits in it, wherever the slingshot goes (frame to board). */
@@ -925,6 +1224,8 @@ export class Slingshot {
     target: Target | null,
     kind: PebbleKind,
     goblin: Goblin | null = null,
+    fire = false,
+    spicy = false,
   ): void {
     // A free slot, or else the landed pebble closest to going away.
     let pebble = this.pebbles.find((p) => !p.alive);
@@ -936,6 +1237,7 @@ export class Slingshot {
     if (!pebble) {
       // No free slot: a goblin shot must not stay stuck in held mode.
       if (goblin) this.goblins.drop(goblin);
+      if (kind === 'keg') this.kegLanded(origin);
       return;
     }
     mark('pebble shot');
@@ -944,6 +1246,8 @@ export class Slingshot {
     pebble.rest = -1;
     pebble.rolling = false;
     pebble.kind = kind;
+    pebble.fire = fire;
+    pebble.spicy = spicy;
     pebble.goblin = goblin;
     pebble.position.copy(origin);
     pebble.velocity.copy(velocity);
@@ -1092,7 +1396,8 @@ export class Slingshot {
 
   private updatePebbles(dt: number): void {
     const g = SLINGSHOT.gravity;
-    const turnMax = degToRad(AIM_ASSIST.turnDegPerSec) * AIM_ASSIST.strength * dt;
+    // Endless Steady Aim: the pebbles turn toward their goblin a little more.
+    const turnMax = degToRad(AIM_ASSIST.turnDegPerSec) * AIM_ASSIST.strength * BOOST.aim * dt;
     const cone = degToRad(AIM_ASSIST.coneDeg);
     for (let i = 0; i < this.pebbles.length; i++) {
       const pebble = this.pebbles[i];
@@ -1155,16 +1460,17 @@ export class Slingshot {
         }
       }
       // Juice: a shot leaves a faint trail of puffs.
-      if (pebble.kind === 'shot' || pebble.kind === 'goblin') {
+      if (pebble.kind === 'shot' || pebble.kind === 'goblin' || pebble.kind === 'cube' || pebble.kind === 'keg') {
         pebble.trail -= dt;
         if (pebble.trail <= 0) {
           pebble.trail = JUICE.pebbleTrailEvery;
-          this.particles.burst(this.stage.boardSpin.localToWorld(temp2.copy(p)), JUICE.pebbleTrailColors, 1, 0.01);
+          // v3 2.6: a burning pebble leaves a trail of flames.
+          this.particles.burst(this.stage.boardSpin.localToWorld(temp2.copy(p)), pebble.fire ? FIRE_PEBBLE.flameColors : JUICE.pebbleTrailColors, 1, 0.01);
         }
       }
       temp.set(p.x + v.x * dt, p.y + v.y * dt - 0.5 * g * dt * dt, p.z + v.z * dt);
       v.y -= g * dt;
-      const hit = pebble.kind === 'dropped' ? null : this.hitAlong(p, temp);
+      const hit = pebble.kind === 'dropped' || pebble.kind === 'cube' ? null : this.hitAlong(p, temp, pebble.fire);
       if (hit) {
         p.copy(temp);
         this.strike(pebble, hit);
@@ -1175,6 +1481,18 @@ export class Slingshot {
       if (this.landed(p)) {
         if (pebble.kind === 'goblin') {
           this.splash(p, null, pebble.goblin!);
+          this.removePebble(i);
+          continue;
+        }
+        if (pebble.kind === 'cube') {
+          // v3 2.2: a sugar cube becomes a lure where it lands.
+          const ground = landingHeight(p.x, p.z);
+          if (ground !== null) this.onCubeLanded(p.x, ground, p.z, pebble.spicy);
+          this.removePebble(i);
+          continue;
+        }
+        if (pebble.kind === 'keg') {
+          this.kegLanded(p);
           this.removePebble(i);
           continue;
         }
@@ -1201,7 +1519,19 @@ export class Slingshot {
       }
       if (pebble.age > SLINGSHOT.maxFlight || p.y < SLINGSHOT.killBelow) {
         if (pebble.goblin) this.goblins.kill(pebble.goblin);
+        if (pebble.kind === 'keg') {
+          this.kegFlying?.removeFromParent();
+          this.kegFlying = null;
+        }
         this.removePebble(i);
+        continue;
+      }
+      if (pebble.kind === 'keg') {
+        // v3 2.6: the flying keg tumbles along the pebble's path.
+        if (this.kegFlying) {
+          this.kegFlying.position.set(p.x, p.y - FLYING_KEG.height / 2, p.z);
+          this.kegFlying.rotation.x = pebble.age * GOBLIN_SHOT.spin * 0.6;
+        }
         continue;
       }
       if (pebble.goblin) {
@@ -1229,10 +1559,19 @@ export class Slingshot {
   /** What a pebble does to the target it hit, by kind. */
   private strike(pebble: Pebble, hit: Target): void {
     const p = pebble.position;
+    // v3 2.6 Package Deal: a flying keg blows up on whatever it hits.
+    if (pebble.kind === 'keg') {
+      this.kegLanded(p);
+      return;
+    }
     if (hit instanceof Goblin) {
       if (pebble.kind === 'thrown') this.bonk(hit, pebble.velocity);
       else if (pebble.kind === 'goblin') this.splash(p, hit, pebble.goblin!);
-      else this.knockOut(hit);
+      else {
+        // v3 2.6: a burning pebble on a goblin is a normal pebble plus a little smoke.
+        if (pebble.fire) this.particles.burst(this.goblins.centerWorld(hit, temp2), FIRE_PEBBLE.smokeColors, 6, 0.06);
+        this.knockOut(hit);
+      }
       return;
     }
     // A thing: set off by a shot, a thrown pebble only bounces off it.
@@ -1241,12 +1580,30 @@ export class Slingshot {
       this.splash(p, null, pebble.goblin!);
       return;
     }
-    if (pebble.kind === 'shot') hit.onHit('shot');
+    // v3 2.6 Night Owl: a burning pebble lights what fire lights (kegs, haystacks).
+    if (pebble.kind === 'shot' && pebble.fire && hit.lightable) {
+      hit.onHit('fire');
+      this.particles.burst(this.stage.boardSpin.localToWorld(temp2.copy(p)), FIRE_PEBBLE.flameColors, 8, 0.08);
+      return;
+    }
+    if (pebble.kind === 'shot' && hit.hittable()) hit.onHit('shot');
     this.dust(p);
   }
 
-  /** 5. First target whose middle is within the hit area of the segment a to b (board space). */
-  private hitAlong(a: Vector3, b: Vector3): Target | null {
+  /** v3 2.6 Package Deal: the flying keg lands or hits at a board point: it is gone and the game blasts there. */
+  private kegLanded(p: Vector3): void {
+    this.kegFlying?.removeFromParent();
+    this.kegFlying = null;
+    this.onKegBlast(temp3.copy(p));
+  }
+
+  /** The blast radius of a flying keg (cm). */
+  get kegBlastRadius(): number {
+    return TRIGGERS.keg.blastRadius * FLYING_KEG.blastScale * BOOST.kegBlast;
+  }
+
+  /** 5. First target whose middle is within the hit area of the segment a to b (board space). v3 2.6: `fire` also hits lightable things. */
+  private hitAlong(a: Vector3, b: Vector3, fire = false): Target | null {
     segment.copy(b).sub(a);
     const lengthSq = segment.lengthSq();
     let best: Target | null = null;
@@ -1260,7 +1617,7 @@ export class Slingshot {
       }
     }
     for (const thing of this.things) {
-      if (!thing.hittable()) continue;
+      if (!thing.hittable() && !(fire && thing.lightable)) continue;
       const t = this.touchAt(thing.center(center), a, AIM_ASSIST.hitRadius + thing.radius, lengthSq);
       if (t < bestT) {
         bestT = t;
@@ -1298,9 +1655,12 @@ export class Slingshot {
     this.goblins.worldPosition(goblin, temp2);
     // A helmet or shield takes the hit: it flies off and the goblin is knocked back (a hit for the lessons all the same).
     if (this.goblins.armor(goblin)) {
+      // Endless Heavy Pebbles: the hit breaks more pieces.
+      for (let i = 0; i < BOOST.pebbleGear; i++) this.goblins.armor(goblin);
       this.onHit(goblin);
       return;
     }
+    this.goblins.cause = 'slingshot';
     this.goblins.kill(goblin, true);
     this.particles.burst(temp2, HIT_COLORS, 10);
     this.audio.play('pebbleHit', temp2);
@@ -1321,19 +1681,33 @@ export class Slingshot {
    * any, knocks back the goblins around the impact, and poofs.
    */
   private splash(p: Vector3, hit: Goblin | null, shot: Goblin): void {
-    if (hit) this.knockOut(hit);
+    // Its own copy: knockOut below reuses the shared scratch vectors.
+    const at = splashAt.copy(p);
+    let knocked = 0;
+    if (hit && this.goblins.isHittable(hit)) {
+      this.knockOut(hit);
+      knocked++;
+    }
+    // v3 2.6 Goblin shot: the goblins right where it lands are knocked out, the ones around them flung back, dazed.
+    const knock = GOBLIN_SHOT.knockRadius;
     const r = GOBLIN_SHOT.splashRadius;
     for (const g of this.goblins.list) {
-      if (!this.goblins.isHittable(g)) continue;
-      const dx = g.root.position.x - p.x;
-      const dy = g.root.position.y - p.y;
-      const dz = g.root.position.z - p.z;
-      if (dx * dx + dz * dz < r * r && Math.abs(dy) < r) this.goblins.knockBack(g, dx, dz);
+      if (g === shot || !this.goblins.isHittable(g)) continue;
+      const dx = g.root.position.x - at.x;
+      const dy = g.root.position.y - at.y;
+      const dz = g.root.position.z - at.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= r * r || Math.abs(dy) >= r) continue;
+      if (d2 < knock * knock) {
+        this.knockOut(g);
+        knocked++;
+      } else this.goblins.knockBack(g, dx, dz, GOBLIN_SHOT.flingScale);
     }
     this.goblins.worldPosition(shot, temp2);
     this.goblins.kill(shot);
     this.particles.burst(temp2, HIT_COLORS, 16);
     this.audio.play('poof', temp2);
+    this.onGoblinShot(knocked);
   }
 
   private dust(p: Vector3): void {
@@ -1453,7 +1827,11 @@ export class Slingshot {
   debugShoot(): void {
     if (this.pouchHolder) return;
     let load: [PebbleKind, Goblin | null] = ['shot', null];
+    let fire = false;
+    let spicy = false;
     if (this.loaded) {
+      fire = this.pouchFire > 0 && !this.pouchKeg && !this.pouchCube && !this.pouchGoblin;
+      spicy = this.pouchCube && this.pouchSpicy;
       load = this.takeLoad();
     } else if (this.bowlCount > 0) {
       this.bowlCount--;
@@ -1490,7 +1868,7 @@ export class Slingshot {
     temp.sub(this.aimOrigin);
     const flight = 0.35 + Math.hypot(temp.x, temp.z) / 450;
     this.aimVelocity.set(temp.x / flight, (temp.y + 0.5 * g * flight * flight) / flight, temp.z / flight);
-    this.launch(this.aimOrigin, this.aimVelocity, best, ...load);
+    this.launch(this.aimOrigin, this.aimVelocity, best, load[0], load[1], fire, spicy);
     this.audio.play('slingRelease', this.pouchWorld(temp));
     this.onEvent('shot');
   }
@@ -1536,6 +1914,31 @@ export class Slingshot {
     if (this.pouchGoblin) return;
     this.loaded = true;
     if (this.pouchPebble) this.pouchPebble.visible = true;
+    this.audio.play('pebbleLoad', this.pouchWorld(temp));
+  }
+
+  /** Debug (v3 2.6 Night Owl): a burning pebble in the pouch, as if lit at the torch (counts as lighting one). */
+  debugLoadFire(): void {
+    if (this.loaded) return;
+    this.debugLoad();
+    this.pouchFire = FIRE_PEBBLE.burnTime;
+    this.onFireLit();
+  }
+
+  /** Debug (v3 2.6 Package Deal): a keg on its stand by the bowl, then straight into the pouch. */
+  debugLoadKeg(): void {
+    if (this.loaded || !this.kegTemplate) return;
+    if (!this.kegWaiting) this.addKeg();
+    const keg = this.kegWaiting;
+    if (!keg) return;
+    this.kegWaiting = null;
+    this.kegStand.visible = false;
+    this.loaded = true;
+    this.pouchKeg = true;
+    this.pouchKegMesh = keg;
+    this.pouch.add(keg);
+    keg.position.set(0, -FLYING_KEG.height / 2, SLINGSHOT.pouchSag - 1);
+    keg.rotation.set(Math.PI / 2, 0, 0);
     this.audio.play('pebbleLoad', this.pouchWorld(temp));
   }
 

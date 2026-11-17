@@ -6,6 +6,7 @@
 import { Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { RENDER_ORDER, STUN } from '../config/game.js';
+import { BOOST } from '../rules/boosts.js';
 import type { Particles } from '../fx/particles.js';
 import { boardHeight } from '../rules/boardMath.js';
 import type { Goblins } from '../units/goblins.js';
@@ -43,7 +44,8 @@ export class StunWave {
   /** A scream or a ring: every goblin is stunned for at least `seconds`. Returns how many. `at` is where it came from (world). */
   stun(seconds: number, at: Vector3): number {
     if (!this.active) this.startedAt = this.time;
-    this.endsAt = Math.min(this.startedAt + STUN.maxSeconds, Math.max(this.endsAt, this.time + seconds));
+    // Endless Loud Drum: every stun, and its cap, longer.
+    this.endsAt = Math.min(this.startedAt + STUN.maxSeconds * BOOST.stun, Math.max(this.endsAt, this.time + seconds * BOOST.stun));
     this.ringAge = 0;
     this.ring.visible = true;
     this.particles.burst(at, STAR_COLORS, 10, 0.2);
@@ -54,7 +56,7 @@ export class StunWave {
   /** Still screaming or ringing: the running stun lasts this much longer (up to the cap). Returns how many goblins. */
   extend(seconds: number): number {
     if (!this.active) return 0;
-    this.endsAt = Math.min(this.startedAt + STUN.maxSeconds, this.endsAt + seconds);
+    this.endsAt = Math.min(this.startedAt + STUN.maxSeconds * BOOST.stun, this.endsAt + seconds * BOOST.stun);
     return this.goblins.stunAll(this.endsAt - this.time);
   }
 

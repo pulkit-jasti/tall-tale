@@ -1,5 +1,7 @@
 # Level Generator, Custom Game and the Campaign Levels (next)
 
+> **Mostly current (2026-11-16).** Stale bits: the bell is now the drum (still the level 3 reward), and every map also gets seed beds (v3 2.2, `src/world/garden.ts`) and the new traps (v3 2.1: haystacks, a bell tower, a rope bridge, potion cart spots; `addExtraTraps` in `src/world/triggers.ts`) when it is built. They are not Custom Game settings yet. Where they disagree, [v3-plan.md](v3-plan.md) wins.
+
 Status: decided with the developer (2026-11-11). **First part done and tested on the headset (2026-11-11):** the generator, its command line, the new UI kit parts and the Custom Game menu (section 12). **Next: the wave director and the map loading** (build order steps 4 and 5, section 11; the handoff for them is section 13). Where it disagrees with [map.md](map.md) section 8 or [modes-and-progression.md](modes-and-progression.md), this file wins. [v2-plan.md](v2-plan.md) still wins over this file.
 
 Back to [GDD index](GDD.md). Related: [menus.md](menus.md) (the campaign panel and the 15 level cards), [map.md](map.md) (blueprints, the road graph, triggers), [controls-and-ui.md](controls-and-ui.md#ui-library) (the UI kit).
@@ -56,13 +58,24 @@ Each setting **describes itself**: its type (range, choice, on and off, number, 
 
 | Group | Settings |
 |---|---|
-| Map | camps (count), camp directions (spread out, opposite, one side), camp distance (range), camp size, junctions (count), road wiggle, crossings and loops, triggers per road (kegs, boulders, trees, and their share) |
-| Waves | goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once |
-| Rules | garrison size and refill time, the castle's starting health |
+| Map | camps (count), camp directions (spread out, opposite, one side), camp distance (range), camp size, junctions (count), road wiggle, crossings and loops, triggers per road (kegs, boulders, trees, and their share), haystacks, bell towers, rope bridges, the potion cart and seed beds (counts, 0 leaves a kind out; built 2026-11-16) |
+| Waves | the wave count (2 to 6) and the allowed times of day (built 2026-11-16), goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once, foggy night (v3 2.7: fog in the night wave), diggers, shamans, bombers and goblin archers per wave from wave 2 (v3 Phase 3, 0 leaves a type out) |
+| Rules | garrison size and refill time, the castle's starting health, the allowed tools (built 2026-11-16) |
 | Difficulty | easy, normal, hard (moves the wave settings together; the skulls on the card) |
 
 - **Rising camps (section 7) have no setting in Custom Game:** the generator decides from the camp count and difficulty. Campaign presets may set them exactly in their level file.
 - **Map and enemy mix are what you face; difficulty is how much** ([map.md](map.md#map-vs-difficulty)). New problems, never tougher goblins.
+
+### Allowed lists (decided 2026-11-16)
+
+Custom Game is a form over the generator's settings list (`LEVEL_SETTINGS`), so each of these is a setting in that list plus the generator code that uses it. The generator gets reworked anyway for the new campaign levels (section 10) and for the new tools and enemies (their numbers go into the generator too). Each list is a short column of the existing `Switch` controls (no new UI part). Campaign level files set the same lists.
+
+- **Allowed times of day:** morning, day, sunset, night. The waves are spread over only the chosen times, in that order (for example day and night only: waves 1 to 3 by day, wave 4 at night). The campaign needs it too: Nightfall is sunset, then night (section 10). The time is still decor only and still changes only between waves.
+- **Allowed tools:** which tools the loadout stand offers for this level. It never adds tools the player has not unlocked. Fewer than 4 allowed means fewer loadout slots, a valid challenge ("slingshot only").
+- **Allowed goblins:** on or off for each type: grunts, runners, balloons, and the new enemies (digger, shaman, bomber, archers). A type's own sliders (runner share, balloon count, its gear shares) show only while it is on. **Built so far (v3 Phase 3, 2026-11-17):** the four new types are counts on the Waves tab (`diggers`, `shamans`, `bombers`, `goblinArchers` in `LEVEL_SETTINGS`, 0 by default), and a count of 0 is the type switched off; the switches, and hiding a type's sliders, are not built. Each count is per wave, from wave 2, on top of the wave's goblins (`LevelWave.counts.digger`, `shaman`, `bomber`, `archer`; levels saved before have none). The wave banner names shamans, bombers and archers, never diggers.
+- **Allowed traps:** on or off for each kind: keg, boulder, tree, bridge, hay, bell tower, potion cart. Works with the existing trigger settings (the count per road and the share), which then only pick among the allowed kinds.
+- **Checks** (section 5): at least one time, one tool and one goblin type must stay on, or the level is not valid and the page says why.
+- **Built (2026-11-16, docs/v3-plan.md "Phase 5 as built"):** the times of day and the tools are switches (Waves and Rules tabs); the new traps are counts on the Map tab (0 is a kind switched off), like the goblin counts. With all four times on, the waves keep the usual spread; otherwise each wave keeps its usual time if allowed, else the nearest allowed one before it, and the last wave takes the last allowed time. Hiding a type's sliders while it is off is still not built.
 
 ---
 
@@ -84,6 +97,7 @@ The generator checks its result and tries the next seed when a check fails, so i
 - The generator is **plain TypeScript with no browser code**, like the rules in `src/rules/` (pure math is fine, models, the DOM and WebGL are not). The board builder in the browser only draws its result.
 - A script calls it: for example `npm run gen -- --seed 42 --preset level3` writes the level file, and `--settings file.json` takes custom settings. It also runs the checks (section 5) and prints the summary. So level files are made by a command, never typed by hand (by the developer or a coding agent).
 - Running TypeScript from the command line needs a runner (newer Node runs `.ts` directly; else a small dev dependency like `tsx`, asked for first).
+- **One command for the whole campaign (2026-11-16):** `npm run gen -- --campaign` makes every campaign level from its preset (`src/level/presets.ts`: seed, settings, and the exact camp rise waves and times of day a preset may set) and writes `src/maps/levels/levelN.json`. `--preset N` prints one level (add `--out` to write it). `--endless --seed S --waves 20` prints an Endless run's map and ramp.
 
 ### Reuse what exists
 
@@ -109,7 +123,7 @@ The planning parts (where things go) move into the generator, with no models or 
 - **Not every camp is there from the start.** A level's camps can appear later: a new camp rises **the moment its wave starts** (with the wave banner), never in the breather before and never mid-wave. This is the feel of progression and growing danger.
 - **The tutorial does it too**: each wave's new camp rises as that wave starts.
 - **The animation** is the one the menu and the castle walls use (`src/world/sceneSwap.ts`): the camp group slides up out of the ground, a transform only, no frame cost. A camp not up yet is hidden (fewer draw calls early on).
-- **Seen without sound or looking**: the drum sound from its direction, a dust burst, and the red threat arrow points at it until the player looks.
+- **Seen without sound or looking**: the drum sound from its direction, a dust burst, and its tent on the compass. (The red threat arrow pointed at it until the player looked; dropped 2026-11-13, it looked random. The arrow is only for goblins at the wall now.)
 - **The road to it is there from the start**: a road to an empty hill hints that something will come.
 - **Data**: each camp in a blueprint gets the wave it appears in. Campaign presets set it; Custom Game leaves it to the generator (no setting, section 4).
 
@@ -191,28 +205,37 @@ All of them follow the kit's rules: Idle, Ready, Held and Locked looks with a so
 
 ## 10. The 15 campaign levels
 
-Reviewed with the developer (2026-11-11): four levels were only gear and two only runners, so 1, 5, 6, 9, 14 and 15 changed. Every level has its own map and one twist; every 5th mixes earlier twists. Each uses rising camps.
+Redone with the developer (2026-11-16, replaces the 2026-11-11 list). **Only levels 1 to 5 are built and playable;** 6 to 15 are locked teasers with a name and a card description only (not built, so they may promise things that do not exist yet). Every level uses rising camps. Every battle already moves through the day with its waves (morning, day, sunset, night; docs/mvp.md "Day and night cycle"), so each level ends with one night wave.
 
-| # | Name | Twist | Shows off |
-|---|---|---|---|
-| 1 | First Watch | One camp, then a second rises. Gentle, mostly straight roads. | Hands, the rising camps |
-| 2 | Runner's Road | Mostly runners | Swatter, slingshot |
-| 3 | The Shield Wall | Every goblin brought a shield (unlocks the bell) | Pepper |
-| 4 | Balloon Festival | Lots of balloon riders | Slingshot |
-| 5 | Two Fronts | The opposite camp rises in wave 2: a surprise from behind | Spinning, the horn |
-| 6 | Spear Rush | Spears everywhere: every wall hit counts twice, so fast hands matter | Hands, swatter |
-| 7 | Powder Valley | Kegs and boulders on every road | Slingshot and triggers |
-| 8 | Thin Walls | Only 2 archers, slow refill | Protect the garrison |
-| 9 | Camp Surge | Every wave, a new camp. By the end they are everywhere | Spinning, everything |
-| 10 | Shields and Spears | Shields in front, spears behind (mix) | Pepper, then swatter |
-| 11 | The Great Horde | One huge camp, one long winding road | The horn |
-| 12 | Sky and Stone | Balloons above, boulders below (mix) | Slingshot, triggers |
-| 13 | The Siege | The castle starts damaged | Everything |
-| 14 | Close Quarters | The camps are right outside the walls: short roads, quick hands | Hands, swatter, pepper |
-| 15 | The Last Stand | Camps rise every wave, everything at once (mix) | Everything |
+**Playable (1 to 5):** each of 3 to 5 shows off one new system, the most visual ones early (judges play only 10 to 15 minutes). Beating a level unlocks the tool the next one teaches.
 
-- **Levels 1 to 5 are open from the start**; 6 to 15 open one by one. All 15 get real level files now (they were text only).
-- The card text in `src/config/levels.ts` (name, flavor, enemies) is updated to match this table when the levels are built.
+| # | Name | Card description | Twist | Unlocks |
+|---|---|---|---|---|
+| 1 | First Watch | "A quiet morning. One camp stirs, then another behind you." | None: the walls, eating, rising camps, and turning to face the second camp (it rises behind the player) | |
+| 2 | Sky Pirates | "A fleet of balloons is drifting in. Bring them down." | Lots of balloon riders: a slingshot level | Magnet |
+| 3 | Tin Hats | "Someone sold the goblins helmets. Take them back." | Most goblins wear helmets: introduces the magnet | Magnifying glass |
+| 4 | Sun Garden | "A bright day and good soil. Make it bloom." | Many seed beds on a sunny map: introduces the magnifying glass, the sunflower and the mushroom | (open) |
+| 5 | Nightfall | "The sun is setting. They fight better in the dark." | Wave 1 at sunset, waves 2 to 4 at night with night fog, torches and the compass (night fog is built: v3-plan.md 2.7, the `foggyNight` setting; it shows in every night wave, but today only the last wave is at night, so this level still needs its own times of day) | (open) |
+
+**Locked teasers (6 to 15):** each hints at one new enemy or system; 15 brings it all together.
+
+| # | Name | Card description |
+|---|---|---|
+| 6 | Molehill Meadow | "The ground is moving. Something is digging toward you." |
+| 7 | Drums of the Shaman | "Every time you strip them, someone hands them more." |
+| 8 | Powder Pass | "Kegs on every road, and goblins carrying their own." |
+| 9 | Arrow Rain | "Archers on the hills. Keep your knights alive." |
+| 10 | Harvest Fire | "Fields of hay as far as you can see. Bring a light." |
+| 11 | The Great Horde | "One camp. One road. Too many goblins." |
+| 12 | River Crossing | "Wooden bridges over a wide river. Drop them at the right moment." |
+| 13 | Moonless | "No moon, thick fog. Trust your compass." |
+| 14 | The Alchemist's Road | "A cart full of potions broke down nearby. Things are getting strange." |
+| 15 | The Last Stand | "Every camp, every goblin, all at once." |
+
+- **Levels 1 to 5 are open from the start**; 6 to 15 show as locked.
+- **Built (2026-11-16):** levels 1 to 5 are level files made by `npm run gen -- --campaign` from `src/level/presets.ts`, played from their own maps; the cards in `src/config/levels.ts` match the tables above. Not tuned on the headset yet.
+- **Open:** what levels 4 and 5 unlock (start values: 4 the drum, 5 sugar cubes, so every tool can be earned).
+- The card text in `src/config/levels.ts` (name, flavor, enemies) is updated to match these tables when the levels are built.
 
 ---
 
@@ -275,7 +298,7 @@ Build order steps 4 and 5 (section 11), then make Custom Game's Fight play a sav
 - **Wave director:** battles now play the fixed `TUTORIAL_WAVES` through the tutorial director (`src/director/battle.ts`, `src/director/tutorial.ts`; campaign levels play the normal battle with `teach = false`). The new director plays a level's 4 waves: breather, banner, the wave's rising camps come up (`src/world/sceneSwap.ts` slide, drum from its direction, dust, the red threat arrow), groups from `camps` with `counts` over `spawnTime`, balloons, the gear shares (`src/rules/gear.ts` `rollGear`), cleared, next; the time of day per wave as today. It only calls systems (docs/map.md section 8). The tutorial keeps its own director.
 - **Rules:** garrison size and refill (`GARRISON` in config today) and the castle's starting health (`CASTLE_HEALTH`) come from `level.rules` for a level battle.
 - **Rising camps in the tutorial too** (section 7): each tutorial wave's new camp rises as it starts.
-- **Rules to keep:** the UI rules in AGENTS.md and docs/controls-and-ui.md ("Rules learned on the headset"); never run typecheck (AGENTS.md); `npm run build` is the check, `npm test` when tested code changes.
+- **Rules to keep:** the UI rules in AGENTS.md and docs/controls-and-ui.md ("Rules learned on the headset"); never run typecheck (AGENTS.md); `npm run build` with no errors is the only check (no tests, AGENTS.md).
 
 ### As built (steps 4 and 5, 2026-11-11, build and tests only, not checked on the headset yet)
 
