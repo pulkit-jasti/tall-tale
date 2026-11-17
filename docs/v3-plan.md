@@ -1,6 +1,6 @@
 # v3 Plan: Faster, Clearer, Deeper
 
-Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. The rest of Phase 2 and Phases 3 to 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **2.7 Night fog is built (2026-11-16, "2.7 as built").** **2.6 Secret achievements is built (2026-11-17, "2.6 as built"): all 16 achievements, the 8 secret abilities, the shelf and the toast.** **The game runs again** (2026-11-17): three bugs froze it at start (a black board, no castle, nothing moving) and three more hid in the tools; all found by running it in the IWSDK emulator and with the type check, all fixed (see "2.6 as built", "Fixed on the way"). **Phase 2 is fully built; 2.0, 2.4 and 2.5 are tested, the rest is not.** **Phase 3 is built (2026-11-17): the digger, shaman, bomber and goblin archers, each with its own look** (see "Phase 3 as built"; not tested). **Next: the developer tests Phase 2 and Phase 3 on the headset.** Every step: after each major change `npm run typecheck` (no new errors) and `npm run build` (no errors), not after minor ones, no tests (decided 2026-11-17); update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
+Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. Phases 4 and 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **2.7 Night fog is built (2026-11-16, "2.7 as built").** **2.6 Secret achievements is built (2026-11-17, "2.6 as built"): all 16 achievements, the 8 secret abilities, the shelf and the toast.** **The game runs again** (2026-11-17): three bugs froze it at start (a black board, no castle, nothing moving) and three more hid in the tools; all found by running it in the IWSDK emulator and with the type check, all fixed (see "2.6 as built", "Fixed on the way"). **Phase 2 is fully built; 2.0, 2.4 and 2.5 are tested, the rest is not.** **Phase 3 is done (2026-11-17): the digger, shaman, bomber and goblin archers, each with its own look** (see "Phase 3 as built"; type check and build pass, not tested on the headset; the brute and the catapult crew stay on hold). **Next: the developer tests Phase 2 and Phase 3 on the headset.** Every step: after each major change `npm run typecheck` (no new errors) and `npm run build` (no errors), not after minor ones, no tests (decided 2026-11-17); update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
 
 Where this file disagrees with [v2-plan.md](v2-plan.md), [custom-mode.md](custom-mode.md), [giant-tools.md](giant-tools.md), [enemies.md](enemies.md) or [modes-and-progression.md](modes-and-progression.md), **this file wins**.
 
@@ -138,7 +138,7 @@ The horn call now costs 5 meals, so each squad must be worth it. The developer's
   - **One knight beats about 2 bare goblins** (more hit points or faster strikes than a goblin; armor and swords still matter).
   - Goblin groups stay at **4 to 5** (1.2).
 - **A squad holds its spot until it breaks.** It already holds the first junction of the aimed road (`KNIGHTS` leash). It stays there for the whole wave (and across the breather) until it is down to `breakAt`, so a call is an investment, not a one-off charge.
-- **What beats a held squad:** two groups at once, armored groups, and in Phase 3 bombers, archers and the brute. The player still has to look back now and then, and thin a big group with the slingshot before it reaches the squad.
+- **What beats a held squad:** two groups at once, armored groups, and (since Phase 3) bombers, whose blast hurts knights near them (the brute is on hold). The player still has to look back now and then, and thin a big group with the slingshot before it reaches the squad.
 - **The decisions:** **where** (the road behind you, the one with 2 camps, the one an armored group is on) and **when** (a call costs 5 meals). At the squad limit, the horn moves the squad nearest the aimed road there (as today), so a squad can be re-posted.
 - **Knights and traps:** goblins fighting a squad stand still in a clump, so a keg or a tree next to a held junction becomes a planned combo (Phase 2 objects).
 - `KNIGHTS.maxSquads` stays 4.
@@ -611,7 +611,7 @@ Type check and build pass. Runs in the IWSDK emulator (a battle starts, goblins 
   - **Change of Menu (Chicken dinner):** chickens can be pinched and eaten like goblins (`GrabEat`, `Chickens.nearest`, `grab`, `holdAt`, `drop`, `eat`); one heals 3 times a goblin (`CHICKENS.healScale`). No Ready glow on chickens (they share one material).
   - **Secret Recipe (Spicy sugar):** pepper falling within 4 cm over a held cube or a lure for 0.3 s turns it spicy (reddish, a sneeze); it stays spicy through the pouch and the shot. Goblins that eat it are seasoned. Earned when one does.
   - **Package Deal (Flying keg):** the magnet's ring on a standing keg for 2 s pulls it away (it comes back on the trap timer at a new spot), ends the use window, and a small keg lands on a post by the bowl (79 degrees, 30 cm, `FLYING_KEG`). Pinch it to the pouch (let go elsewhere, it goes back on its post); shot, it tumbles and blows up where it lands or hits, 1.4 times a keg's blast. Simplified: the keg does not fly in from the board; it poofs away there and poofs onto the post.
-- **The regular achievements:** Long Shot (a slingshot knockout within 45 cm of the goblin's own camp, `Goblin.camp`); Eyes Everywhere (player-made knockouts in all 4 quarters of the board within 15 s); Bless You (`PepperRing.onDiggerStopped`, the digger hook: **earnable once diggers exist**, Phase 3); Iron Grip (5 gear pieces within 1.5 s of magnet pulls); Green Thumb (3 plants standing from a wave's start to its clear); Commander (call, boost and move in a won battle); Trap Master (3 trap kinds set off by player tools in one battle); Jack of All Trades (a won loadout battle where every loadout tool is credited).
+- **The regular achievements:** Long Shot (a slingshot knockout within 45 cm of the goblin's own camp, `Goblin.camp`); Eyes Everywhere (player-made knockouts in all 4 quarters of the board within 15 s); Bless You (`PepperRing.onDiggerStopped`, the digger hook: **earnable now**, diggers were built in Phase 3, 2026-11-17); Iron Grip (5 gear pieces within 1.5 s of magnet pulls); Green Thumb (3 plants standing from a wave's start to its clear); Commander (call, boost and move in a won battle); Trap Master (3 trap kinds set off by player tools in one battle); Jack of All Trades (a won loadout battle where every loadout tool is credited).
 - **Fixed on the way** (found by running the game in the IWSDK emulator, 2026-11-17; together they froze the game at start: a black board, no castle, nothing moving):
   - `src/game.ts` had two fields named `glass` (the magnifying glass and the glass sign); the sign overwrote the glass. The glass is `magnifier` now.
   - The tool shelf copy (`HandTool.displayModel`) assumed every material glows; the glass's unlit lens has no `emissive`, so the game's setup threw and stopped. Unlit parts are skipped now.
@@ -630,13 +630,13 @@ Type check and build pass. Runs in the IWSDK emulator (a battle starts, goblins 
 
 ---
 
-## Phase 3: new enemies
+## Phase 3: new enemies [DONE: digger, shaman, bomber, archers; brute and catapult crew on hold]
 
 The rule: a new enemy changes **what** the player does or **when**, never just the hit count. Models come from the packs (see "Finding assets").
 
 **The roster is complete** (decided 2026-11-16): no goblin types beyond the ones below.
-- **Built today:** grunts and runners, gear (helmet, shield, spear, sword) and balloon riders.
-- **Planned here:** digger, shaman, bomber and archers. The brute is on hold. **The catapult crew is on hold indefinitely** (2026-11-16): too much logic and testing; it comes back only if time is left after everything else is built and tested.
+- **Built before Phase 3:** grunts and runners, gear (helmet, shield, spear, sword) and balloon riders.
+- **Built in Phase 3 (2026-11-17):** digger, shaman, bomber and archers ("Phase 3 as built" below). The brute is on hold. **The catapult crew is on hold indefinitely** (2026-11-16): too much logic and testing; it comes back only if time is left after everything else is built and tested.
 - **Why no more:** five new types is already a lot to build, test and balance, and each needs two or more answers among the tools. Variety now comes from the board (chickens, the bell, the garden, bridges, fog, night) and from the gear mix (a helmeted runner and a bare grunt play differently without being new types).
 - **Each new type has a reason:** the digger is the pepper ring's job and a surprise from underground; the shaman gives gear back, so it pushes back against the magnet; the bomber is a middle zone threat; archers and the catapult crew press from far, answered by the slingshot and the magnifying glass.
 - **Build order:** 1. digger, 2. shaman, 3. bomber, 4. archers (catapult crew on hold). The first two pair with tools added in Phase 2 (pepper and magnet), so they make those tools matter right away.
@@ -644,33 +644,33 @@ The rule: a new enemy changes **what** the player does or **when**, never just t
 
 **Zones:** far (shaman, archers; catapult on hold), middle (bomber), near (the climbers, as today), underground (the digger). Every tool gets a job.
 
-**Digger** (the wildcard, decided 2026-11-14)
+**Digger** (the wildcard, decided 2026-11-14) [DONE]
 - Tunnels underground from its camp straight to the castle. **Unseen while underground:** no marker on the board and no compass wedge, so there is no early warning.
 - **Pops up inside the courtyard,** often on the side the player is not facing, sometimes several at once. **Once up, it is simply a regular intruder goblin** (the usual intruder damage, no new rules), and intruders already hurt more than goblins outside, so diggers chip the castle fast.
 - **Sneaks past everything:** the garrison, the knights and the far tools never meet it. The garrison does not fight it in the courtyard either: that is the giant's to clean up.
 - **Easy to finish:** one grab and it is eaten. The danger is the surprise, not its toughness.
 - **Untouchable underground:** the drum does not stun it there. Only the pepper ring stops it.
 - **The answer is the pepper ring** (2.2, Pepper): a digger that tunnels into a peppered segment uses it all up, stops outside the wall, comes up sneezing and seasoned (heals double when eaten), and walks and climbs like a regular goblin.
-- **Where and how many:** decided later by the developer.
+- **Where and how many:** a level setting (Diggers per wave, from wave 2); each comes alone from a random camp that sends that wave. Which campaign level brings them is decided later by the developer.
 - **Without pepper** it still loses to a grab, so no loadout leaves the player stuck ("best answer, never the only answer").
 - **The magnet does nothing to it:** diggers carry no gear.
 - **Visible when it surfaces** (AGENTS.md: every attack visible without sound): a dirt burst where it comes up, the threat cue flash, and its compass wedge turns red at once.
 - **A dirt mound only for the last 2 to 3 seconds:** hidden for most of the trip, then a small crack of dirt races toward the wall. A player facing that side sees it coming and can react; a player facing away is still surprised. It is the only warning (no rumble). It also shows the pepper working: the mound hits the ring, stops, and the goblin pops up sneezing.
 
-**Shaman**
-- Stays at the back of its group and gives knocked-out goblins their helmets back, or wakes them up.
+**Shaman** [DONE]
+- Stays at the back of its group and gives stripped goblins their helmets (or shields) back. (Waking knocked-out goblins was dropped 2026-11-17: knockouts vanish at once, so there is nothing to wake.)
 - Question: find me behind the crowd. Answers: slingshot, the knights.
 
-**Bomber**
-- Carries a keg on its back toward the wall. At the wall it explodes: big damage.
+**Bomber** [DONE]
+- Carries a keg on its back toward the wall. At the wall it lights a short fuse, then explodes: big damage. During the fuse the player can pinch it and toss it away; it blows up where it lands (decided 2026-11-17). It cannot be eaten.
 - Hit it on the road and it explodes among its own group (and sets off kegs near it).
 - Question: hit me before I arrive. Answers: slingshot, the knights.
 - Reuses the goblin and the keg model.
 
-**Goblin archers** (after the shaman)
-- Stop at middle range in a tight group and shoot volleys at **the garrison** (not the castle, not the giant's hands).
-- Question: break up the group before your wall is empty. They are the only goblins that stand still, so they are the best target for a keg, a tree or the slingshot.
-- Fits a level about the garrison (level 8, Thin Walls).
+**Goblin archers** (after the shaman) [DONE]
+- Stop at middle range in a tight group and shoot volleys at **the garrison** (not the castle, not the knights, not the giant's hands). When the garrison is empty they walk in and climb like grunts (decided 2026-11-17).
+- Question: break up the group before your wall is empty. They are the only goblins that stand still (with the shaman at its post), so they are the best target for a keg, a tree or the slingshot.
+- Fits a level about the garrison (level 9, Arrow Rain, docs/custom-mode.md section 10).
 - No arrows at the giant's hands: small fast arrows plus tracking lag would feel unfair.
 
 **Catapult crew** **On hold indefinitely (2026-11-16)**, kept as a record.
@@ -691,7 +691,7 @@ The rule: a new enemy changes **what** the player does or **when**, never just t
 - **No special protection:** a player who turns away from the catapults takes the hits. The sound and the compass warn enough.
 - **Bare hands rule change (update AGENTS.md when built):** "only grab and eat" becomes "grab, eat, and block shots". Still no smashing or slapping.
 
-### Phase 3 as built (2026-11-17)
+### Phase 3 as built (2026-11-17) [DONE]
 
 Type check and build pass. Not tested on the headset or in the emulator. Not committed. All numbers are start values in config (`GOBLINS`, `DIGGER`, `SHAMAN`, `BOMBER`, `GOBLIN_ARCHERS`, `WAVES.archerGroup`).
 
@@ -903,12 +903,15 @@ On hold until the new tools and enemies exist, since how difficulty rises and wh
   - **Using the chime (no sound yet):** the magnet hum (`magnetHum`), the glass hum and sizzle (`glassHum`, `glassSizzle`), the pepper ring running out (`pepperRingGone`, a sizzle), the keg blast (`kegBoom`), the crowd cheer (`cheer`), the trigger cue (`triggerNow`), and the old list in `public/audio/README.md` ("Still missing": goblin chatter, burp, lose trombone, wind and birds, night crickets, torch crackle).
   - **Kenney stand-ins to replace:** the drum boom and cymbal crash (`drumBoom`, `drumCrash`), the horn hints (`hornHintCall`, `hornHintBoost`, `hornHintMove`: a rising two-note horn, a drum roll tap, a light whistle), the magnet clank, the sugar cube landing, the plant pop, the sunflower seed spit, the mushroom puff, the pepper ring filling (a ding).
   - **The 2.1 traps:** the hay burning, the bridge rope snapping and creaking, the bell tower's "BONG" (the old hand bell file for now), the potion fizz, chicken clucks.
+  - **The Phase 3 goblins:** the shaman's cast (`shamanCast`, the chime), the bomber's fuse hiss (`bomberFuse`, a knife draw), the digger breaking out and digging (`diggerSurface`, `diggerDig`, Kenney mining impacts), the goblin bow (`goblinBowShot`, a pluck). The bomber's blast shares `kegBoom` (the chime).
+- [ ] **The shaman's lantern glows at night** (Phase 3): today it only has the goblins' night rim. A moving glow would go in `src/world/nightLights.ts`.
 
 ## Open
 
 - Final tempo numbers (headset).
 - Knight strength so a held squad beats one group (1.6), and the horn's numbers (recharge, squad cap, boost, move lockout, 2.5).
 - The magnifying glass, magnet, pepper, drum and trap respawn start numbers (2.2, 2.8).
+- The Phase 3 goblins' start numbers (`DIGGER`, `SHAMAN`, `BOMBER`, `GOBLIN_ARCHERS`): the digger's speed and mound time, the shaman's stop and cast time, the bomber's fuse and wall damage, the archers' stop and hit chance; and how the props sit on each goblin.
 - The snap step (30 degrees to start, 1.7).
 - Which tutorial steps go (1.9).
 - The chain rules, the score values and the star thresholds (Phase 4).

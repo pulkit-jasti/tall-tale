@@ -96,6 +96,7 @@ Players who cannot hear, or play with the sound off, still need to know where go
 - **Rampart flash:** the stretch of wall under a goblin running on the rampart flashes red like a wall hit (no damage). A giggle plays where one pops up (v2).
 
 - **Wall hit flash:** every hit makes that part of the wall top flash red and fade, with a small dust puff. The wall top is easy to see from the seat, also out of the corner of the eye.
+- **Phase 3 goblins (2026-11-17):** a digger coming up flashes the wall at its direction (with a dirt burst where it surfaces); a bomber's lit fuse flashes the wall under it again and again until it blows or is tossed, and its wall blast flashes with dust. The goblin archers hurt only the garrison, so they have no wall flash (their arrows are seen flying).
 - An "attack compass" arc with red marks inside the ring was tried and removed after the headset test: the wall flash alone reads well enough.
 
 ### The player's hand models (lost tracking)

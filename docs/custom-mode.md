@@ -59,7 +59,7 @@ Each setting **describes itself**: its type (range, choice, on and off, number, 
 | Group | Settings |
 |---|---|
 | Map | camps (count), camp directions (spread out, opposite, one side), camp distance (range), camp size, junctions (count), road wiggle, crossings and loops, triggers per road (kegs, boulders, trees, and their share) |
-| Waves | goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once, foggy night (v3 2.7: fog in the night wave) |
+| Waves | goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once, foggy night (v3 2.7: fog in the night wave), diggers, shamans, bombers and goblin archers per wave from wave 2 (v3 Phase 3, 0 leaves a type out) |
 | Rules | garrison size and refill time, the castle's starting health |
 | Difficulty | easy, normal, hard (moves the wave settings together; the skulls on the card) |
 
@@ -72,7 +72,7 @@ Custom Game is a form over the generator's settings list (`LEVEL_SETTINGS`), so 
 
 - **Allowed times of day:** morning, day, sunset, night. The waves are spread over only the chosen times, in that order (for example day and night only: waves 1 to 3 by day, wave 4 at night). The campaign needs it too: Nightfall is sunset, then night (section 10). The time is still decor only and still changes only between waves.
 - **Allowed tools:** which tools the loadout stand offers for this level. It never adds tools the player has not unlocked. Fewer than 4 allowed means fewer loadout slots, a valid challenge ("slingshot only").
-- **Allowed goblins:** on or off for each type: grunts, runners, balloons, and the new enemies (digger, shaman, bomber, archers) once they exist. A type's own sliders (runner share, balloon count, its gear shares) show only while it is on.
+- **Allowed goblins:** on or off for each type: grunts, runners, balloons, and the new enemies (digger, shaman, bomber, archers). A type's own sliders (runner share, balloon count, its gear shares) show only while it is on. **Built so far (v3 Phase 3, 2026-11-17):** the four new types are counts on the Waves tab (`diggers`, `shamans`, `bombers`, `goblinArchers` in `LEVEL_SETTINGS`, 0 by default), and a count of 0 is the type switched off; the switches, and hiding a type's sliders, are not built. Each count is per wave, from wave 2, on top of the wave's goblins (`LevelWave.counts.digger`, `shaman`, `bomber`, `archer`; levels saved before have none). The wave banner names shamans, bombers and archers, never diggers.
 - **Allowed traps:** on or off for each kind: keg, boulder, tree, bridge, hay, bell tower, potion cart. Works with the existing trigger settings (the count per road and the share), which then only pick among the allowed kinds.
 - **Checks** (section 5): at least one time, one tool and one goblin type must stay on, or the level is not valid and the page says why.
 
