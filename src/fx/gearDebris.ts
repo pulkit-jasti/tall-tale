@@ -11,6 +11,7 @@ import type { Random } from '../rules/random.js';
 import { gearTemplate } from '../units/gear.js';
 import { InstancedPool } from '../world/models.js';
 import { shrinkAway } from './ease.js';
+import { mark } from '../debug/perfMarks.js';
 
 interface Piece {
   alive: boolean;
@@ -68,6 +69,7 @@ export class GearDebris {
   throw(name: GearName, at: Vector3, dx: number, dz: number, toMagnet = false): void {
     const kind = this.kinds.get(name);
     if (!kind) return;
+    mark('gear debris');
     let index = kind.pieces.findIndex((p) => !p.alive);
     // All busy: reuse the one lying longest.
     if (index < 0) index = this.rng.int(kind.pieces.length);

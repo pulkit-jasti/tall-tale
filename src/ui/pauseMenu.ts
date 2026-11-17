@@ -44,6 +44,7 @@ import {
   type ButtonIcon,
   type UiImageName,
 } from './kit/index.js';
+import { uiImage } from './uiImages.js';
 
 /** The Kenney icon beside each sound row's name, and their tint. */
 const SOUND_ICONS: Record<SoundCategory, UiImageName> = {
@@ -220,6 +221,11 @@ export class PauseMenu {
       };
       this.rows.push({ category: c.id, label: c.label, slider, y });
     });
+    // Both tabs drawn now, so the first switch to either draws nothing.
+    const shown = this.tab;
+    this.tab = shown === 'sound' ? 'access' : 'sound';
+    this.repaintSettings();
+    this.tab = shown;
     this.repaintSettings();
     // Nothing ever hides the pause panel (it went through the towers): it draws on top, the board first, then each button's parts.
     drawOnTop(this.holder, PAUSE.panel.renderOrder);
@@ -339,7 +345,15 @@ export class PauseMenu {
 
   private repaintSettings(): void {
     mark('panel redraw');
-    this.settings.paint((c, w, h) => this.drawSettings(c, w, h));
+    // One image per tab, drawn again only when what it shows changed (2026-11-17: a tab switch redrew and
+    // uploaded the whole page, a flicker). Sound: each group's level. Access: whether a mic is on.
+    // Whether the icons are in yet too, so a page drawn before they loaded is drawn again once they are.
+    const icons = uiImage('panel') ? 'icons' : 'no icons';
+    const key =
+      this.tab === 'sound'
+        ? `${icons} ${this.rows.map((r) => Math.round(this.audio.settings.level(r.category) * 100)).join(',')}`
+        : `${icons} mic ${mic.on}`;
+    this.settings.paintVariant(this.tab, key, (c, w, h) => this.drawSettings(c, w, h));
   }
 
   /** The pause button while the battle runs (`enabled`: a battle is on and the Next button is not out). True on the frame it is poked. */

@@ -7,6 +7,8 @@ export type TouchState = 'idle' | 'ready' | 'held' | 'locked';
 
 export function applyTouchState(materials: MeshStandardMaterial[], state: TouchState): void {
   for (const m of materials) {
+    // An unlit material has no glow to set (it threw, and stopped the rest of the frame's part).
+    if (!m.emissive) continue;
     switch (state) {
       case 'ready':
         m.emissive.setHex(FEEDBACK.ready);

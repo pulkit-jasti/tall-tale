@@ -1,6 +1,6 @@
 # v3 Plan: Faster, Clearer, Deeper
 
-Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. Phases 4 and 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **2.7 Night fog is built (2026-11-16, "2.7 as built").** **2.6 Secret achievements is built (2026-11-17, "2.6 as built"): all 16 achievements, the 8 secret abilities, the shelf and the toast.** **The game runs again** (2026-11-17): three bugs froze it at start (a black board, no castle, nothing moving) and three more hid in the tools; all found by running it in the IWSDK emulator and with the type check, all fixed (see "2.6 as built", "Fixed on the way"). **Phase 2 is fully built; 2.0, 2.4 and 2.5 are tested, the rest is not.** **Phase 3 is done (2026-11-17): the digger, shaman, bomber and goblin archers, each with its own look** (see "Phase 3 as built"; type check and build pass, not tested on the headset; the brute and the catapult crew stay on hold). **Phase 4's score and stars are built (2026-11-16, "The score as built"); chains are on hold.** **Next: the developer tests Phases 2, 3 and the score on the headset.** **Phase 5 started (2026-11-16): the generator knows everything new, campaign levels 1 to 5 are made by one command and played from their files, and Endless mode is built ("Phase 5 as built"); the Daily Challenge is dropped.** Every step: after each major change `npm run typecheck` (no new errors) and `npm run build` (no errors), not after minor ones, no tests (decided 2026-11-17); update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
+Status: **What is tested and what still needs a headset test: "Testing status (2026-11-17)" near the end.** Decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. Phases 4 and 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **2.7 Night fog is built (2026-11-16, "2.7 as built").** **2.6 Secret achievements is built (2026-11-17, "2.6 as built"): all 16 achievements, the 8 secret abilities, the shelf and the toast.** **The game runs again** (2026-11-17): three bugs froze it at start (a black board, no castle, nothing moving) and three more hid in the tools; all found by running it in the IWSDK emulator and with the type check, all fixed (see "2.6 as built", "Fixed on the way"). **Phase 2 is fully built; 2.0, 2.4 and 2.5 are tested, the rest is not.** **Phase 3 is done (2026-11-17): the digger, shaman, bomber and goblin archers, each with its own look** (see "Phase 3 as built"; type check and build pass, not tested on the headset; the brute and the catapult crew stay on hold). **Phase 4's score and stars are built (2026-11-16, "The score as built"); chains are on hold.** **Next: the developer tests Phases 2, 3 and the score on the headset.** **Phase 5 started (2026-11-16): the generator knows everything new, campaign levels 1 to 5 are made by one command and played from their files, and Endless mode is built ("Phase 5 as built"); the Daily Challenge is dropped.** Every step: after each major change `npm run typecheck` (no new errors) and `npm run build` (no errors), not after minor ones, no tests (decided 2026-11-17); update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
 
 Where this file disagrees with [v2-plan.md](v2-plan.md), [custom-mode.md](custom-mode.md), [giant-tools.md](giant-tools.md), [enemies.md](enemies.md) or [modes-and-progression.md](modes-and-progression.md), **this file wins**.
 
@@ -947,6 +947,92 @@ Type check and build pass. Not tested on the headset or in the emulator. Not com
 **Maybe later** (good, not planned): the trench coat goblin (three goblins in a coat, scatter when hit, count as 3 when eaten whole), the chieftain (knock out its banner carrier and nearby goblins run back), the thief (steals a tool from a platform), the torch bearer (sets your traps on fire, or sets them off among its friends), engineers building a siege tower (a timer you can see), bees from a beehive, the boomerang. **Interactions with the camps** (2026-11-16): worth exploring properly later, but never anything that needs hitting a camp precisely from the seat (camps are too far away). **Deal cards in Endless** (2026-11-16): every 5 waves or so, one of the 3 cards is a big upside with a real downside (the dropped Daily's idea, for example "eating heals double, but the garrison leaves"); only if plain boosts feel flat once Endless is played.
 
 ---
+
+## Testing status (2026-11-17)
+
+Worked out from the playtest reports of 2026-11-17 (six rounds of fixes, "Bug fixes from a friend's playtest" below). Every fix in those rounds passes the type check and the build; **none of them has been seen on the headset yet**. Three groups:
+
+**A. Seen on the headset and confirmed good (keep an eye on, nothing to fix):**
+- The drum strike itself (detection, stun): "works great".
+- The layered torch flames' look (only their size changed since).
+- Morning, day and night looks (the afternoon look was the one called out).
+- The menus and UI kit in general (headset rounds of 2026-11-11 to 12).
+
+**B. Seen on the headset, found broken, fixed in code: re-test each.**
+- Flicker during fights, slingshot and swatter hits, knights, boulders, sunflower shots and toggling tools. Fixes: pools built up front, the shader warm-up in its VR (multiview) version after entering VR, bone textures, compass number throttled, garden, horn previews, panels, icons and toasts made ahead. The biggest single change; re-test hard.
+- The white hands in front of the eyes when hands are out of view (now a hidden camera layer and a short steady-tracking wait).
+- Endless start freeze (dark fade while the map builds; every map load now fades).
+- Endless cards: buttons over text, no timer any more, Wide Swatter grows the swatter with a pop.
+- Shields 2.2 times bigger.
+- Magnifying glass: aiming works (the hole bug), grip slant and size (30% bigger), the fill ring, the beam look, the goblin aim assist.
+- Horn: a spoken word ("Charge!") with echo cancellation, `speakLevel` 0.04 and `speakTime` 0.25 (tune on the mic panel); moving squads while it rests; it stays bright then.
+- Compass and crank: higher and 10% smaller; pinch with the other fingers curled; letting go on an open pinch or a raised hand; smoothed turning.
+- Drum: the big drum rising on the compass's spot, its big stick, the platform and compass sinking, the 2 s stay after a strike.
+- Magnet: grip, gear flying to the tips, the waves of force.
+- Sugar: thrown by hand, goblins walking off the road to it and back, on the rampart too, the new bowl.
+- Sunflower (new model, tracking, fire rate) and mushroom (puffs when goblins come near).
+- Rampart: goblins walk while hunting the garrison; archers no longer flip-flop or run on the spot.
+- Goblins about 15% slower.
+- Bell tower model, rope bridge with its ravine and water, torch flames 2.3 times bigger.
+- Night sky: the planet's two-color ring, the moon's glow at a quarter.
+- Tutorial order (eat right after the compass, the red flag after).
+- Win panel farther and its lines apart; all tools unlocked by default.
+- Sounds: the eating gulp fades, the tool-ready chime and glow, the village ambience on the home screen and pause (now a 1.3 MB file).
+
+**C. Not seen on the headset at all (no report touched them):**
+- Campaign levels 1 to 5 one by one, each with its twist: First Watch's second camp rising behind in wave 2, Sky Pirates' balloons, Tin Hats' helmets, Sun Garden's beds and haystacks, Nightfall's sunset then three foggy nights. Next level from the win panel.
+- Night fog in a battle (rolls in before the night wave, lifts after; compass, tools and signs stay sharp).
+- The Phase 3 goblins in play: the digger (no warning, the mound, the courtyard pop-up, stopped by the pepper ring), the shaman (gives helmets back), the bomber (blows up its group, the fuse at the wall, pinch and toss), goblin archers (shoot the garrison, walk in when it is empty). Their looks by day and night.
+- The pepper ring (filling segments by shaking, the compass arcs, goblins sneezing through it).
+- Traps beyond the boulder: kegs by fire (glass or fire pebble), haystacks (glass lights them, they block the road), the bell tower drop (magnet) and ring (pebble), the potion cart and chickens (rare: use "Show new traps"), the bridge drop with goblins on it and the long way round, traps coming back at new spots.
+- Knights beyond the move: boost (fallen knights back, faster strikes) and the squad cap of 3.
+- Balloons: popping with the slingshot, the swatter pushing them away.
+- The 8 secret abilities (Spicy snack, Goblin shot, Fire pebble, Sun charge, Ring the bell, Chicken dinner, Spicy sugar, Flying keg) and the 8 regular achievements; the toast and the shelf rows.
+- The score and stars: the breakdown table on the win panel, combos, the stars matching the score.
+- Endless past the first waves: the new tool after wave 10 on a platform behind, boost cards other than Wide Swatter, the ramp (diggers from 4, shamans 6, bombers 8, archers 10), the loss panel's waves and best score, Try again.
+- Custom Game: making, editing, duplicating and deleting a level, the new settings (traps, beds, times of day, allowed tools, the four new goblin counts, foggy night), "Surprise me".
+- The pause menu: the height rail, Snap turning, Quiet horn, Measure reach again, Restart, Menu; auto-pause on the Quest menu and with the headset off.
+- First visit: the start page's mic prompt, the reach check, Skip tutorial, the whole tutorial from start to end (the drum, magnet, glass and sugar are not taught in it).
+- Frame rate: the FPS panel in a big late Endless wave (100 goblins, night, fog, plants, chickens) and the stress test since the troops and new goblins.
+- Load time on the headset (first load and a map load behind the fade).
+
+### Seventh round (2026-11-17)
+
+- **Campaign page stopped answering after several taps** (the world kept moving, a reload fixed it). The cause was not found by reading. Now:
+  - The menu's rail, shelves and page update each on their own (`guarded` in src/debug/notes.ts), so an error in one no longer stops the pages.
+  - Every frame error goes on the debug page with where it was thrown.
+  - The menu's wait on a map load frees itself after 15 s.
+  - If it happens again, the debug page's notes name the cause.
+- **White shapes with the hands out of view:** a lost hand now draws nothing it carries: IWSDK's hand and controller models and everything on its ray, grip and index tip spaces (`hideLostHandModels`). On the dev server, when both hands are gone a note names anything still drawn near the eyes.
+- **Fight flicker:** every goblin's and soldier's animation actions are made when the unit is built (a pooled unit made each on its first use, many at once in a fight).
+- **Lose panel:** 34 cm tall, each line on its own band (`END_PANEL.lostSubtitleFromTop`, `lostStatsFromTop`, `lostNoteFromTop`).
+- **Home after a battle:** the home screen, or the Custom Game list after a Custom Game level (it looked at "a level file was played", true for the campaign now too).
+- **Sky Pirates:** 9 balloons a wave (4 in wave 1) and 6 to 10 ground goblins; the Balloons setting goes to 10; wave 1 gets half the balloons. Only level2.json changed when the levels were made again.
+
+### Eighth round (2026-11-17)
+
+- **Pause, Home in Endless (and the campaign):** it went to the Custom Game list; it uses the end panel's rule now (`menuAfterBattle`).
+- **Card taps still flickered:** compiling makes shaders but never sends shapes; a hidden mesh's geometry went to the GPU the first time it was drawn (a card's reward tool, pooled units, effects). At setup the whole scene, hidden things too, is drawn once into a 1x1 target (`drawEverythingOnce` in `warmGpu`, outside VR only).
+- **Magnet aim assist** (`MAGNET.assist`): it snaps onto a standing bell tower within 22 cm and moves halfway toward a goblin with gear within 14 cm.
+- **Not found yet:** rewards on the campaign card (magnet, drum, sugar) and the shelf tools could not be grabbed. Nothing in the code read as the cause; the shelves now run on their own (`guarded`), so if they throw, the debug page's notes say where. (Found in the ninth round.)
+
+### Ninth round (2026-11-17, found with the headset's debug notes)
+
+Found by reading the dev server's debug page from the laptop (`/__debug/stats`) while the developer played, not by guessing.
+
+- **Shelves and trophies could not be grabbed on the campaign page** [FIXED, seen working on the headset]. The card's reward tool has an unlit part with no emissive color. The Ready glow (`applyTouchState`) threw on it every frame, before the shelves stored the new card, so the shelf update stopped there each frame. Now only lit materials go in the card's glow list, and `applyTouchState` skips a material without an emissive color.
+- **Shelf drop** [seen working]: the freeze while the fingers open plus the sticky slot target (seventh round) work; the headset log shows tools dropped onto stand slots.
+- **Card tap flicker** [mostly fixed: 12 dropped frames after taps in 52 s went to 2 in 29 s]:
+  - The list never redraws on a tap: a gold band (`ScrollList.setSelected`, `SCROLL_LIST.selectColor`) moves over the selected row; every row is drawn the same.
+  - Each level's card keeps its own image (`Panel.paintVariant`), drawn again only when its stars or lock change. All 15 are drawn when the menu opens, behind the fade (`CampaignPanel.prepareCards`, about 130 MB of GPU memory). The headset log showed taps on locked levels drawing and uploading their card on the tap.
+  - A panel drawn ahead goes to the GPU at once (`setTextureUploader` in src/ui/panel.ts, set to `renderer.initTexture` in src/game.ts), not on the frame it first shows.
+  - The Fight button draws its Fight! and Locked faces once and swaps them (it redrew on every lock change).
+  - A tool swap on the home screen only changes Fight's lock (`refreshFight`), never redraws the card.
+- **Debug tools added** (dev server):
+  - Menu and pause frames are never measured, so each dropped one is now noted with what ran before it ("[slow frame]", src/debug/fpsCounter.ts). New marks: `card tap`, `texture upload`.
+  - Shelf grabs and let-gos are noted. The debug page keeps 12 notes (was 4: one repeating error hid everything).
+  - Performance section: **Render stats** (the last frame's draw calls and triangles, shader and texture counts, the 8 heaviest visible parts of the scene) and **Hide part 1 to 8** (hides that part and starts a new measured run, to see what it costs).
+- **The real cause of the leftover flicker (open, next):** the whole game misses its frame rate. Headset runs on 2026-11-17: the home screen with no units 57 to 59 fps, Sky Pirates 53.5 fps with 9.5% of frames dropped, against a target of 72. Most dropped frames have nothing marked, so every frame is too heavy to draw, and any extra work (a spark burst, a balloon pop, a sound, a tap) tips it over. That is why the flicker moves around: gear sparks (`JUICE.gearSparks` is still off as a test) and the balloon pop share the same particle burst, which is cheap and pooled. Next: in a battle in VR, press Render stats, then Hide part one at a time, find what costs the most and simplify it. Then turn the gear sparks back on and check.
 
 ## Bug fixes from a friend's playtest (2026-11-17)
 

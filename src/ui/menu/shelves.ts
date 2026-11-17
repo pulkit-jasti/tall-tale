@@ -46,6 +46,7 @@ import { LEVELS } from '../../config/levels.js';
 import type { Particles } from '../../fx/particles.js';
 import { applyTouchState, type TouchState } from '../../player/feedback.js';
 import type { HandState } from '../../player/hands.js';
+import { note } from '../../debug/notes.js';
 import { holdMatrix, type HoldName } from '../../player/hold.js';
 import { degToRad, polarX, polarZ } from '../../rules/boardMath.js';
 import { canMoveTo, PICK_TOOLS, placeOf, SHELF_SPOTS, toolIsNew, toolUnlocked, type PickTool, type Place, type Progress } from '../../rules/campaign.js';
@@ -556,6 +557,29 @@ export class Shelves {
   }
 
   /** The nearest thing a hand could grab, within MENU.shelves.grabRadius of its palm or pinch. */
+  /** Debug: each tool's grip middle (world m), locked or not, and what each tracked hand is near now. */
+  debugGrips(hands: HandState[]): string[] {
+    const lines: string[] = [
+      `[shelf] update clock ${this.time.toFixed(2)} s, holders ${this.holders.map((h) => `${h.hand.side}:${h.item.kind}/${h.item.name} visible ${h.item.model.visible}`).join('; ') || 'none'}`,
+    ];
+    const f = (v: Vector3): string => `${v.x.toFixed(3)},${v.y.toFixed(3)},${v.z.toFixed(3)}`;
+    for (const item of this.items) {
+      if (item.kind !== 'tool') continue;
+      item.model.localToWorld(temp.set(0, item.gripMid, 0));
+      lines.push(`[shelf] ${item.name} grip ${f(temp)}${item.locked ? ' LOCKED' : ''} visible ${item.model.visible} held ${this.holders.some((h) => h.item === item)}`);
+    }
+    for (const s of this.spots) {
+      this.group.localToWorld(temp.copy(s.top));
+      lines.push(`[shelf] spot ${s.place.where} ${s.place.i} at ${f(temp)} holds ${s.place.where === 'stand' ? this.progress.loadout[s.place.i] : '-'}`);
+    }
+    for (const holder of this.holders) lines.push(`[shelf] holder ${holder.hand.side} target ${holder.target ? `${holder.target.place.where} ${holder.target.place.i}` : 'none'}`);
+    for (const hand of hands) {
+      const near = hand.tracked ? this.nearest(hand) : null;
+      lines.push(`[shelf] hand ${hand.side} tracked ${hand.tracked} palm ${f(hand.palm)} pinch ${hand.pinch.on} fist ${hand.fist.on} near ${near?.name ?? 'none'}`);
+    }
+    return lines;
+  }
+
   private nearest(hand: HandState): Item | null {
     const radius = MENU.shelves.grabRadius * this.stage.boardScale;
     let best: Item | null = null;
@@ -579,6 +603,7 @@ export class Shelves {
     handMatrix.compose(viaPinch ? hand.pinchPoint : hand.palm, hand.quaternion, unit);
     const offset = new Matrix4().copy(handMatrix).invert().multiply(item.model.matrixWorld);
     this.holders.push({ hand, item, viaPinch, openTime: 0, lostTime: 0, offset, target: null });
+    if (import.meta.env.DEV) note(`[shelf] grab ${item.kind}/${item.name} with ${hand.side} ${viaPinch ? 'pinch' : 'fist'}`);
     item.glide = 0;
     item.heldScale = item.model.scale.x;
     this.audio.play('grab', hand.palm);
@@ -601,6 +626,10 @@ export class Shelves {
       return;
     }
     if (!hand.tracked) return;
+    // Letting go: it stays where it is, with the slot it would snap to (2026-11-17, found in the emulator: the
+    // pinch point moves several cm as the fingers open, so the tool drifted off the slot during the release,
+    // lost its target and glided back to the shelf; nothing could be put on the stand).
+    if (holder.openTime > 0) return;
     const name = item.name;
     // A tool in a fist (a reward preview too) is held the way it is held in real life, growing to full size.
     // A pinch keeps it as it was grabbed (its size and angle), easy to turn and look around.
@@ -615,7 +644,15 @@ export class Shelves {
     matrix.decompose(item.model.position, item.model.quaternion, scaleOut);
     item.model.scale.setScalar(scaleOut.x);
     // The spot it would snap to now: that platform glows, with a tick when it changes.
-    const target = item.kind === 'tool' && name ? this.snapTarget(item, name as PickTool) : null;
+    let target = item.kind === 'tool' && name ? this.snapTarget(item, name as PickTool) : null;
+    // A slot once targeted stays targeted until the tool is clearly away from it (1.8 times the drop radius):
+    // as the fingers open the pinch point slides a couple of cm before the pinch reads as open, and the tool
+    // lost its slot in that moment and went back to the shelf (found in the emulator, 2026-11-17).
+    if (!target && holder.target) {
+      item.model.localToWorld(temp.set(0, item.gripMid, 0));
+      const away = this.group.localToWorld(temp2.copy(holder.target.top)).distanceTo(temp);
+      if (away < MENU.shelves.dropRadius * this.stage.boardScale * 1.8) target = holder.target;
+    }
     if (target && target !== holder.target) this.audio.play('readyTick', undefined, 1, 0.05);
     holder.target = target;
   }
@@ -641,6 +678,7 @@ export class Shelves {
     this.holders = this.holders.filter((h) => h !== holder);
     const item = holder.item;
     const target = holder.target;
+    if (import.meta.env.DEV) note(`[shelf] let go ${item.kind}/${item.name} target ${target ? `${target.place.where} ${target.place.i}` : 'none'} open ${holder.openTime.toFixed(2)} lost ${holder.lostTime.toFixed(2)}`);
     this.startGlide(item);
     if (!target || item.kind !== 'tool' || !item.name) return;
     const at = this.group.localToWorld(temp2.copy(target.top));

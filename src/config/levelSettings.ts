@@ -220,7 +220,8 @@ export const LEVEL_SETTINGS: SettingDef[] = [
   { key: 'goblins', group: 'waves', label: 'Goblins in wave 1', kind: 'count', min: 4, max: 40, default: 22 },
   { key: 'growth', group: 'waves', label: 'More each wave', kind: 'range', min: 0, max: 0.6, step: 0.05, default: 0.2, unit: 'percent' },
   { key: 'runners', group: 'waves', label: 'Runners', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.25, unit: 'percent' },
-  { key: 'balloons', group: 'waves', label: 'Balloons', kind: 'count', min: 0, max: 4, default: 1 },
+  // Up to 10 a wave (was 4), so a level can be all about balloons (Sky Pirates). At most BALLOONS.max fly at once; the rest wait their turn.
+  { key: 'balloons', group: 'waves', label: 'Balloons', kind: 'count', min: 0, max: 10, default: 1 },
   { key: 'helmets', group: 'waves', label: 'Helmets', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.35, unit: 'percent' },
   { key: 'shields', group: 'waves', label: 'Shields', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.3, unit: 'percent' },
   { key: 'spears', group: 'waves', label: 'Spears', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.4, unit: 'percent' },

@@ -68,9 +68,11 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
       loops: 0,
       hay: 0,
       bridges: 0,
-      goblins: 16,
+      // 2026-11-17: a balloon level for real: 9 balloons a wave (4 in wave 1), 2 riders each, and a small
+      // ground force (was 16 goblins on the ground and 4 balloons from wave 2, so it played like level 1).
+      goblins: 8,
       runners: 0.2,
-      balloons: 4,
+      balloons: 9,
       helmets: 0.15,
       shields: 0.15,
     },

@@ -18,6 +18,7 @@ import { CustomEditPage } from './customEdit.js';
 import { CustomListPanel } from './customList.js';
 import { MainMenu } from './mainMenu.js';
 import { Shelves, type DisplayModel, type DisplayName } from './shelves.js';
+import { guarded, note } from '../../debug/notes.js';
 
 export type MenuChoice =
   | { kind: 'settings' }
@@ -67,7 +68,10 @@ export class Menu {
     // A tool let go over a stand slot (or back on its shelf spot): the loadout changes and is saved, the
     // tools glide where they belong now, and Fight unlocks once both slots are filled.
     this.shelves.onDrop = (tool, to) => {
-      if (!moveTool(progress, tool, to)) return;
+      if (!moveTool(progress, tool, to)) {
+        note(`[shelf] drop refused: ${tool} to ${to.where} ${to.i}; loadout ${JSON.stringify(progress.loadout)}, shelf ${JSON.stringify(progress.shelf)}, unlockAll ${progress.unlockAll}`);
+        return;
+      }
       saveProgress();
       this.shelves.layout();
       this.campaign.refreshFight();
@@ -134,11 +138,25 @@ export class Menu {
   }
 
   update(hands: HandState[], dt: number, head: Vector3): MenuChoice {
-    this.rail.update(hands, dt);
+    // Each part on its own (2026-11-17: after taps on the campaign cards every button stopped answering while
+    // the world kept moving, the sign of an error thrown each frame before the pages ran). An error in the
+    // rail or the shelves no longer stops the pages, and it is noted on the debug page with where it came from.
+    guarded('menu rail', () => this.rail.update(hands, dt));
     // A hand on the rail grabs nothing on the shelves (one array reused, no garbage each frame).
     this.freeHands.length = 0;
     for (const h of hands) if (!this.rail.isHeldBy(h)) this.freeHands.push(h);
-    this.shelves.update(this.freeHands, dt, head);
+    guarded('menu shelves', () => this.shelves.update(this.freeHands, dt, head));
+    let choice: MenuChoice = null;
+    guarded(`menu page ${this.page}`, () => (choice = this.updatePage(hands, dt)));
+    return choice;
+  }
+
+  /** Debug: the shelf tools' grab points and what each hand is near. */
+  debugShelf(hands: HandState[]): string[] {
+    return this.shelves.debugGrips(hands);
+  }
+
+  private updatePage(hands: HandState[], dt: number): MenuChoice {
     if (this.page === 'main') {
       const choice = this.main.update(hands, dt);
       if (choice === 'campaign') this.showPage('campaign');

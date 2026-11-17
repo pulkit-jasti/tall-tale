@@ -234,7 +234,7 @@ export class EndPanel {
     const extras = this.extras;
     drawTitleBanner(c, won ? 'Victory!' : 'The castle has fallen', w * 0.12, UI_SPACING.top * at.px, w * 0.76, 66, won ? 44 : 34);
     if (extras.subtitle) {
-      const y = top(END_PANEL.subtitleFromTop);
+      const y = top(won ? END_PANEL.subtitleFromTop : END_PANEL.lostSubtitleFromTop);
       c.font = 'bold 22px sans-serif';
       const textWidth = Math.min(w * 0.6, c.measureText(extras.subtitle).width);
       drawLine(c, extras.subtitle, w / 2, y, w * 0.6, 22, UI_COLORS.note);
@@ -268,7 +268,7 @@ export class EndPanel {
     // The line under the stats: a new best, a perfect battle, what the next star needs, or a word of hope.
     const note = this.noteText();
     if (note) {
-      const y = top(won ? (score ? END_PANEL.scoreNoteFromTop : END_PANEL.noteFromTop) : END_PANEL.lostStatsFromTop + 7.6);
+      const y = top(won ? (score ? END_PANEL.scoreNoteFromTop : END_PANEL.noteFromTop) : END_PANEL.lostNoteFromTop);
       drawLine(c, note.text, w / 2, y, w * 0.8, 22, note.color);
       // A new best wears the crown (Kenney Board Game Icons), just left of its words.
       if (won && extras.best) {

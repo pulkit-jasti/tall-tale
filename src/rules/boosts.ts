@@ -120,7 +120,7 @@ export const BOOST_CARDS: BoostCard[] = [
   { id: 'bigAppetite', name: 'Big Appetite', text: 'Eating heals 15% more', icon: 'heart', rare: false, max: 3, apply: (b, s) => (b.heal *= 1 + 0.15 * s) },
   { id: 'quickRebuild', name: 'Quick Rebuild', text: 'Traps come back faster', icon: 'tower', rare: false, max: 3, apply: (b, s) => (b.trapDelay *= 1 - 0.2 * s) },
   { id: 'bigBooms', name: 'Big Booms', text: 'Keg blasts are bigger', icon: 'skull', rare: false, max: 3, apply: (b, s) => (b.kegBlast *= 1 + 0.15 * s) },
-  { id: 'warChief', name: 'War Chief', text: 'One more knight squad at once', icon: 'flag', rare: true, tool: 'horn', max: 1, apply: (b) => (b.squads += 1) },
+  { id: 'warChief', name: 'War Chief', text: 'One more knight squad at once', icon: 'flag', rare: true, tool: 'horn', max: 2, apply: (b) => (b.squads += 1) },
   { id: 'ironKnights', name: 'Iron Knights', text: 'Knights take one more hit', icon: 'shield', rare: true, tool: 'horn', max: 2, apply: (b) => (b.knightHits += 1) },
   { id: 'luckyWheels', name: 'Lucky Wheels', text: 'The potion cart comes much more often', icon: 'award', rare: true, max: 1, apply: (b) => (b.cart *= 3) },
   { id: 'thickWalls', name: 'Thick Walls', text: "The castle's max health +25%", icon: 'crown', rare: true, max: 2, apply: (b, s) => (b.wall *= 1 + 0.25 * s) },

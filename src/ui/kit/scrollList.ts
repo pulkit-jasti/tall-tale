@@ -95,7 +95,14 @@ export class ScrollList implements Control {
     this.hover.position.z = 0.08;
     this.hover.renderOrder = 2;
     this.hover.visible = false;
-    this.group.add(list, this.hover);
+    // The selected row: a see-through gold band with an edge over it, moved on a tap, never drawn into the
+    // list's canvas (2026-11-17: a tap redrew and uploaded the whole tall list canvas, a flicker).
+    this.selectMaterial = new MeshBasicMaterial({ color: L.selectColor, transparent: true, opacity: L.selectOpacity, depthWrite: false, fog: false, toneMapped: false });
+    this.selectBand = new Mesh(new PlaneGeometry(options.width, 1), this.selectMaterial);
+    this.selectBand.position.z = 0.06;
+    this.selectBand.renderOrder = 2;
+    this.selectBand.visible = false;
+    this.group.add(list, this.selectBand, this.hover);
     this.redraw();
     this.place();
   }
@@ -320,10 +327,32 @@ export class ScrollList implements Control {
     this.hoverMaterial.opacity = pressed ? L.pressOpacity : L.hoverOpacity;
   }
 
+  private selectBand: Mesh;
+  private selectMaterial: MeshBasicMaterial;
+  private selectedRow = -1;
+
+  /** Marks a row as selected with the gold band (nothing is drawn). -1: none. */
+  setSelected(row: number): void {
+    this.selectedRow = row;
+    this.place();
+  }
+
+  /** A band over a row, cut to the window (false when the row is out of view). */
+  private band(mesh: Mesh, row: number): void {
+    const { height, rowHeight } = this.options;
+    const top = Math.max(0, row * this.pitch - this.scroll);
+    const bottom = Math.min(height, row * this.pitch - this.scroll + rowHeight);
+    mesh.visible = row >= 0 && bottom > top;
+    if (!mesh.visible) return;
+    mesh.scale.y = bottom - top;
+    mesh.position.y = height / 2 - (top + bottom) / 2;
+  }
+
   /** The window over the canvas, and the hover band over its row (cut to the window). */
   private place(): void {
     const { height, rowHeight } = this.options;
     this.texture.offset.y = (this.content - height - this.scroll) / this.content;
+    this.band(this.selectBand, this.selectedRow);
     if (this.hoverRow < 0) return;
     const top = Math.max(0, this.hoverRow * this.pitch - this.scroll);
     const bottom = Math.min(height, this.hoverRow * this.pitch - this.scroll + rowHeight);

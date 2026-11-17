@@ -18,6 +18,7 @@ import { canvasPlane, canvasTexture } from '../ui/kit/index.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import type { RunStats } from './debugKeys.js';
 import { mark, takeMarks, type PerfMark } from './perfMarks.js';
+import { note } from './notes.js';
 import { PAGE } from './remote.js';
 
 const GOOD = '#7ddf64';
@@ -40,6 +41,7 @@ export class FpsCounter {
   private texture: CanvasTexture;
   /** Frame rate to aim for. The game sets it from the XR session's real rate in VR. */
   target = FPS.target;
+  private sinceSlowNote = 0;
 
   // Live window.
   private frames = 0;
@@ -138,6 +140,13 @@ export class FpsCounter {
   update(delta: number, measure: boolean): void {
     // Marks since the last call belong to the frame that `delta` measured.
     takeMarks(this.frameMarks);
+    // Menu and pause frames are never measured, so each dropped one is noted with what ran before it
+    // (2026-11-17: the home screen's flicker had no record of its cause).
+    this.sinceSlowNote += delta;
+    if (!measure && delta > FPS.missedFactor / this.target && delta < 0.5 && this.sinceSlowNote > 0.3) {
+      this.sinceSlowNote = 0;
+      note(`[slow frame] ${(delta * 1000).toFixed(0)} ms after: ${this.frameMarks.join(', ') || 'nothing marked'}`);
+    }
     this.frames++;
     this.elapsed += delta;
     this.worst = Math.max(this.worst, delta);

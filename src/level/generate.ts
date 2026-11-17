@@ -422,7 +422,9 @@ function planWaves(rng: Random, s: LevelSettings, map: Blueprint, times?: TimeOf
       up.filter((id) => !rising.includes(id)),
     );
     const sending = [...rising, ...others].slice(0, Math.max(rising.length, Math.min(s.campsAtOnce, up.length)));
-    const balloons = w === 1 ? 0 : s.balloons;
+    // Wave 1 gets half (rounded down): a level of 1 balloon still keeps wave 1 plain, a balloon level (Sky
+    // Pirates) has them from the start (2026-11-17: its first wave had none at all).
+    const balloons = w === 1 ? Math.floor(s.balloons / 2) : s.balloons;
     const total = Math.min(maxWaveGoblins(balloons), Math.round(s.goblins * Math.pow(1 + s.growth, w - 1) * D.goblins));
     const runner = Math.round(total * s.runners);
     // v3 Phase 3: the new goblins from wave 2 (wave 1 stays the plain walls), on top of the total.

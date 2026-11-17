@@ -22,6 +22,16 @@ export const PANEL_INK = '#4a3424';
  */
 export const preparedTextures = new Set<Texture>();
 
+/**
+ * Sends a texture to the GPU now (the game sets it: renderer.initTexture). A panel drawn ahead (the campaign
+ * cards, at menu open behind the fade) is then uploaded right there, not on the frame it first shows
+ * (2026-11-17: card taps still flickered, the cards were drawn after the last GPU warm-up).
+ */
+let uploadNow: ((texture: Texture) => void) | null = null;
+export function setTextureUploader(fn: (texture: Texture) => void): void {
+  uploadNow = fn;
+}
+
 export interface PanelOptions {
   /** Size (cm). */
   width: number;
@@ -153,10 +163,37 @@ export class Panel {
     afterDrag(this, () => this.paintNow(draw));
   }
 
-  private paintNow(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
-    const c = this.canvas.getContext('2d')!;
+  /**
+   * A page with several looks (the settings page's tabs, 2026-11-17): each `slot` keeps its own canvas and
+   * texture, and switching shows that slot's at once. It is drawn again only when its `key` (what it shows:
+   * values, states) changed since it was last drawn. A tab switch then draws and uploads nothing.
+   */
+  paintVariant(slot: string, key: string, draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
+    let v = this.variants.get(slot);
+    if (!v) {
+      const canvas = document.createElement('canvas');
+      canvas.width = this.canvas.width;
+      canvas.height = this.canvas.height;
+      const texture = canvasTexture(canvas, this.texture.anisotropy);
+      preparedTextures.add(texture);
+      v = { canvas, texture, key: null };
+      this.variants.set(slot, v);
+    }
+    this.canvas = v.canvas;
+    this.texture = v.texture;
+    (this.board.material as MeshBasicMaterial).map = v.texture;
+    if (v.key === key) return;
+    v.key = key;
+    const target = v;
+    afterDrag(target, () => this.paintNow(draw, target.canvas, target.texture));
+  }
+
+  private variants = new Map<string, { canvas: HTMLCanvasElement; texture: CanvasTexture; key: string | null }>();
+
+  private paintNow(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void, canvas = this.canvas, texture = this.texture): void {
+    const c = canvas.getContext('2d')!;
     c.setTransform(1, 0, 0, 1, 0, 0);
-    c.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    c.clearRect(0, 0, canvas.width, canvas.height);
     // Laid out at layoutWidth, drawn canvasScale times sharper, so text stays sharp further away.
     c.setTransform(this.canvasScale, 0, 0, this.canvasScale, 0, 0);
     const w = this.layoutWidth;
@@ -166,7 +203,8 @@ export class Panel {
       c.fillRect(0, 0, w, h);
     }
     draw(c, w, h);
-    this.texture.needsUpdate = true;
+    texture.needsUpdate = true;
+    uploadNow?.(texture);
   }
 
   /** The board pops in over this long (seconds): it grows with a small overshoot and settles. */

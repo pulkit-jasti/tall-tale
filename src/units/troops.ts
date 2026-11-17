@@ -186,6 +186,8 @@ export class Troop {
     this.root.add(model);
     this.root.visible = false;
     this.mixer = new AnimationMixer(model);
+    // Every clip's action made now (2026-11-17: made on its first use, mid-fight, many at once).
+    for (const clip of clips) if (!this.actions.has(clip.name)) this.actions.set(clip.name, this.mixer.clipAction(clip));
     this.gear = findGearBones(model);
     this.shieldName = spec.gear.find((g) => g === 'roundShield' || g === 'rectShield') ?? null;
     this.handBone = model.getObjectByName('arm-left') ?? null;
@@ -1161,13 +1163,16 @@ export class Troops {
    * mid-battle they dropped frames: the sky and UI flickered (2026-11-17).
    */
   prebuild(): void {
-    const perKind = KNIGHTS.maxField + KNIGHTS.squadMax + GARRISON.archers + GARRISON.guards;
+    // Room for every field knight with two War Chief squads, plus the garrison.
+    const perKind = KNIGHTS.maxField + 2 * KNIGHTS.squadMax + GARRISON.archers + GARRISON.guards;
     for (const kind of KINDS) {
       const template = this.templates.get(kind);
       if (!template) continue;
+      // Archers only stand on the wall (field squads are swordsmen and spearmen).
+      const want = FIELD_KINDS.includes(kind) ? perKind : GARRISON.archers + GARRISON.guards;
       let have = 0;
       for (const t of this.list) if (t.kind === kind) have++;
-      for (; have < perKind; have++) {
+      for (; have < want; have++) {
         const troop = new Troop(kind, template, template.animations);
         this.board.add(troop.root);
         this.list.push(troop);
@@ -1382,7 +1387,7 @@ export class Troops {
     temp.y += 0.01 * TROOPS.height;
     this.audio.play('swordClash', temp, 1);
     this.audio.play('poof', temp, 0.8, 0.05);
-    this.particles.burst(temp, CLASH_SPARKS, 8, 0.2);
+    if (JUICE.gearSparks) this.particles.burst(temp, CLASH_SPARKS, 8, 0.2);
     this.particles.burst(temp, ARCHER_DUST, 8, 0.15);
     this.onCrash(temp);
   }
@@ -1734,6 +1739,7 @@ export class Troops {
   hurt(t: Troop, fromX: number, fromZ: number): boolean {
     const p = t.root.position;
     if (t.shield && t.shieldName) {
+      mark('shield hit');
       t.shield = false;
       setGear(t.gear, t.shieldName, false);
       temp2.set(p.x, p.y + TROOPS.height * 0.5, p.z);
@@ -1754,7 +1760,7 @@ export class Troops {
     this.audio.play('swordClash', this.board.localToWorld(temp.copy(at)), 1, TROOPS.clashGap);
     // A few sparks where the blades meet.
     temp.y += 0.004;
-    this.particles.burst(temp, CLASH_SPARKS, 2, 0.12);
+    if (JUICE.gearSparks) this.particles.burst(temp, CLASH_SPARKS, 2, 0.12);
   }
 
   /** A soldier leaves the board: knocked down (a poof), or home inside the castle. */

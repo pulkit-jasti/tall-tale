@@ -436,15 +436,15 @@
    ],
    "rising": [],
    "counts": {
-    "grunt": 10,
-    "runner": 2,
+    "grunt": 5,
+    "runner": 1,
     "digger": 0,
     "shaman": 0,
     "bomber": 0,
     "archer": 0
    },
    "spawnTime": 60,
-   "balloons": 0,
+   "balloons": 4,
    "gear": {
     "spearShare": 0.4,
     "swordShare": 0.25,
@@ -462,15 +462,15 @@
     "camp2"
    ],
    "counts": {
-    "grunt": 11,
-    "runner": 3,
+    "grunt": 6,
+    "runner": 1,
     "digger": 0,
     "shaman": 0,
     "bomber": 0,
     "archer": 0
    },
    "spawnTime": 60,
-   "balloons": 4,
+   "balloons": 9,
    "gear": {
     "spearShare": 0.4,
     "swordShare": 0.25,
@@ -488,15 +488,15 @@
     "camp3"
    ],
    "counts": {
-    "grunt": 14,
-    "runner": 3,
+    "grunt": 7,
+    "runner": 2,
     "digger": 0,
     "shaman": 0,
     "bomber": 0,
     "archer": 0
    },
    "spawnTime": 60,
-   "balloons": 4,
+   "balloons": 9,
    "gear": {
     "spearShare": 0.4,
     "swordShare": 0.25,
@@ -512,15 +512,15 @@
    ],
    "rising": [],
    "counts": {
-    "grunt": 17,
-    "runner": 4,
+    "grunt": 8,
+    "runner": 2,
     "digger": 0,
     "shaman": 0,
     "bomber": 0,
     "archer": 0
    },
    "spawnTime": 60,
-   "balloons": 4,
+   "balloons": 9,
    "gear": {
     "spearShare": 0.4,
     "swordShare": 0.25,
@@ -578,10 +578,10 @@
    "sunset": true,
    "night": true,
    "difficulty": "easy",
-   "goblins": 16,
+   "goblins": 8,
    "growth": 0.2,
    "runners": 0.2,
-   "balloons": 4,
+   "balloons": 9,
    "helmets": 0.15,
    "shields": 0.15,
    "spears": 0.4,

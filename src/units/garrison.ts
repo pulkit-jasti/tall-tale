@@ -463,6 +463,6 @@ export class Garrison {
   private clash(at: Vector3): void {
     this.audio.play('swordClash', this.board.localToWorld(temp.copy(at)), 1, TROOPS.clashGap);
     temp.y += 0.004;
-    this.particles.burst(temp, CLASH_SPARKS, 2, 0.12);
+    if (JUICE.gearSparks) this.particles.burst(temp, CLASH_SPARKS, 2, 0.12);
   }
 }

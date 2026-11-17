@@ -3,7 +3,7 @@
 // waves, flags, end panel), goblins, troops, triggers, grab and eat,
 // slingshot, food tools, food jar, effects, sky.
 import { createSystem, VisibilityState } from '@iwsdk/core';
-import { Box3, DirectionalLight, Fog, Group, Matrix4, Object3D, Quaternion, Sphere, Vector3, type BufferGeometry, type Mesh, type MeshBasicMaterial, type SkinnedMesh } from 'three';
+import { Box3, DirectionalLight, Fog, Group, Matrix4, Object3D, Quaternion, Sphere, Vector3, WebGLRenderTarget, type BufferGeometry, type Mesh, type MeshBasicMaterial, type SkinnedMesh } from 'three';
 import { mic } from './audio/mic.js';
 import { GameAudio } from './audio/sound.js';
 import {
@@ -36,7 +36,7 @@ import {
   type TimeOfDay,
 } from './config/game.js';
 import { ViewFade } from './ui/viewFade.js';
-import { preparedTextures } from './ui/panel.js';
+import { preparedTextures, setTextureUploader } from './ui/panel.js';
 import type { DebugCommand } from './debug/debugKeys.js';
 import { Battle } from './director/battle.js';
 import { TUTORIAL_WAVES } from './director/tutorial.js';
@@ -287,6 +287,8 @@ export class GameSystem extends createSystem({}) {
   private mapKey: string = MAPS.tutorialKey;
   /** A map is being built: no battle starts, the menu takes no choice. */
   private loading = false;
+  /** How long the menu has waited on a map load (seconds; the safety in tickMenu). */
+  private loadingFor = 0;
   private camps!: RisingCamps;
   /** The Custom Game level being fought (its id), for its name and best stars on the win panel. */
   private customId: string | null = null;
@@ -611,6 +613,11 @@ export class GameSystem extends createSystem({}) {
       // The loadout stand uses the tools' own battle platform, so what is put there is what the battle shows.
       loadTemplate('castle/castle-kit/tower-hexagon-top.glb', { width: TOOL_SPOTS.platformWidth }),
     ]);
+    // A panel drawn ahead goes to the GPU at once (behind a fade), never on the frame it first shows.
+    setTextureUploader((texture) => {
+      mark('texture upload');
+      this.renderer.initTexture(texture);
+    });
     this.menu = new Menu(
       this.stage,
       this.audio,
@@ -828,22 +835,49 @@ export class GameSystem extends createSystem({}) {
    * it is hidden the first frame it is seen.
    */
   private hideLostHandModels(dt: number): void {
-    const adapters = this.input.xr.visualAdapters.hand;
+    const xr = this.input.xr;
+    const rig = this.player;
+    let anyShown = false;
     for (const state of this.hands.hands) {
       const tracked = state.tracked && state.lostTime <= 0;
       const side = state.side as 'left' | 'right';
       this.handSteady[side] = tracked ? this.handSteady[side] + dt : 0;
       const show = this.handSteady[side] >= HANDS.showAfter;
-      const model = adapters[state.side]?.visual?.model;
-      if (!model) continue;
-      if (model.userData.handShown === show) continue;
-      model.userData.handShown = show;
-      model.traverse((o) => {
-        if (show) o.layers.set(0);
-        else o.layers.set(HANDS.hiddenLayer);
-      });
+      if (show) anyShown = true;
+      // 2026-11-17 (the white shapes were still there): not only IWSDK's hand model but everything it hangs on
+      // that hand: its controller model, and whatever sits on the hand's ray, grip and index tip spaces (pointer
+      // rays and cursors that freeze where tracking dropped). A lost hand draws nothing at all.
+      const parts: (Object3D | undefined)[] = [
+        xr.visualAdapters.hand[side]?.visual?.model,
+        xr.visualAdapters.controller[side]?.visual?.model,
+        rig.raySpaces[side],
+        rig.gripSpaces[side],
+        rig.secondaryRaySpaces[side],
+        rig.secondaryGripSpaces[side],
+        rig.indexTipSpaces[side],
+      ];
+      for (const part of parts) {
+        if (!part || part.userData.handShown === show) continue;
+        part.userData.handShown = show;
+        part.traverse((o) => {
+          if (show) o.layers.set(0);
+          else o.layers.set(HANDS.hiddenLayer);
+        });
+      }
     }
+    // Both hands gone for a moment: name anything still drawn near the eyes on the debug page, once, so a
+    // leftover artifact can be found by name (it was guessed at three times).
+    this.bothLostFor = anyShown ? 0 : this.bothLostFor + dt;
+    // Dev server only (it walks the whole scene once).
+    if (import.meta.env.DEV && this.bothLostFor >= 0.6 && !this.nearHeadNoted && this.immersive) {
+      this.nearHeadNoted = true;
+      this.noteNearHead();
+    }
+    if (anyShown) this.nearHeadNoted = false;
   }
+
+  private bothLostFor = 0;
+  private nearHeadNoted = false;
 
   /**
    * Debug (headset test 2026-11-13, a white artifact floating in front of the eyes): every mesh that would be
@@ -1061,8 +1095,11 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** The menu page a battle goes back to: Custom Game's list after one of its levels, else the campaign. */
-  private menuAfterBattle(): 'campaign' | 'customList' {
-    return this.battle.playingLevel ? 'customList' : 'campaign';
+  private menuAfterBattle(): 'main' | 'customList' {
+    // 2026-11-17: campaign levels play their own level files now too, so "playing a level" no longer meant
+    // Custom Game, and Home after a campaign level opened the Custom Game list. Only a Custom Game level goes
+    // back to its list; the campaign, Endless and the rest go to the home screen.
+    return this.customId ? 'customList' : 'main';
   }
 
   /** The loadout's 2 picked hand tools for a battle (the slingshot and the horn are always out). */
@@ -1121,6 +1158,84 @@ export class GameSystem extends createSystem({}) {
    * and on the Quest that dropped frame shows as the sky and UI flickering
    * (headset test 2026-11-17).
    */
+  /** Draws the whole scene once, every object shown and none culled, into a 1x1 target, then puts it all back. */
+  private drawEverythingOnce(): void {
+    const hidden: Object3D[] = [];
+    const culled: Object3D[] = [];
+    this.scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o);
+        o.visible = true;
+      }
+      if (o.frustumCulled) {
+        culled.push(o);
+        o.frustumCulled = false;
+      }
+    });
+    const target = new WebGLRenderTarget(1, 1);
+    const before = this.renderer.getRenderTarget();
+    try {
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.scene, this.camera);
+    } catch (error) {
+      note(`[warm] full draw failed: ${String(error)}`);
+    } finally {
+      this.renderer.setRenderTarget(before);
+      target.dispose();
+      for (const o of hidden) o.visible = false;
+      for (const o of culled) o.frustumCulled = true;
+    }
+  }
+
+  /** The parts the last Render stats listed, for Hide part (debug). */
+  private statParts: Object3D[] = [];
+
+  /**
+   * Debug: what the GPU draws each frame. The last frame's totals, then the 8 heaviest visible parts of the
+   * scene by triangles (the most specific node that still holds most of a heavy branch), numbered for Hide part.
+   */
+  private renderStats(): void {
+    const info = this.renderer.info;
+    note(`[render] last frame: ${info.render.calls} draw calls, ${info.render.triangles} triangles; ${info.programs?.length ?? 0} shaders, ${info.memory.textures} textures, ${info.memory.geometries} geometries`);
+    const cost = new Map<Object3D, { tris: number; calls: number; transparent: number }>();
+    const walk = (o: Object3D): { tris: number; calls: number; transparent: number } => {
+      const c = { tris: 0, calls: 0, transparent: 0 };
+      if (!o.visible) return c;
+      const mesh = o as Mesh;
+      if (mesh.isMesh && mesh.geometry) {
+        const g = mesh.geometry;
+        const per = (g.index ? g.index.count : (g.attributes.position?.count ?? 0)) / 3;
+        const instanced = o as unknown as { isInstancedMesh?: boolean; count?: number };
+        c.tris += per * (instanced.isInstancedMesh ? (instanced.count ?? 1) : 1);
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        c.calls += materials.length;
+        if (materials.some((m) => m.transparent)) c.transparent++;
+      }
+      for (const child of o.children) {
+        const k = walk(child);
+        c.tris += k.tris;
+        c.calls += k.calls;
+        c.transparent += k.transparent;
+      }
+      cost.set(o, c);
+      return c;
+    };
+    const total = walk(this.scene);
+    note(`[render] scene: ${Math.round(total.tris)} triangles, ${total.calls} meshes (${total.transparent} see-through)`);
+    const heavy = [...cost.entries()].filter(([o, c]) => o !== this.scene && c.tris >= total.tris * 0.03);
+    const set = new Set(heavy.map(([o]) => o));
+    // Keep the most specific: drop a node when one child already holds 80% of its triangles.
+    const parts = heavy.filter(([o, c]) => !o.children.some((ch) => set.has(ch) && (cost.get(ch)?.tris ?? 0) >= c.tris * 0.8));
+    parts.sort((a, b) => b[1].tris - a[1].tris);
+    this.statParts = parts.slice(0, 8).map(([o]) => o);
+    this.statParts.forEach((o, i) => {
+      const c = cost.get(o)!;
+      const path: string[] = [];
+      for (let p: Object3D | null = o; p && p !== this.scene && path.length < 3; p = p.parent) path.unshift(p.name || p.type);
+      note(`[render] ${i + 1}. ${path.join(' > ')}: ${Math.round(c.tris)} tris, ${c.calls} meshes, ${c.transparent} see-through`);
+    });
+  }
+
   private warmGpu(): void {
     const startedAt = performance.now();
     mark('warm gpu');
@@ -1134,6 +1249,11 @@ export class GameSystem extends createSystem({}) {
     if (presenting) this.renderer.setRenderTarget(null);
     this.renderer.compile(this.scene, this.camera);
     if (presenting) this.renderer.setRenderTarget(before);
+    // Outside VR (setup, the 2D page): one real draw of everything, hidden things too, into a tiny target
+    // nobody sees. Compiling makes shaders but sends no shapes: a mesh's geometry goes to the GPU the first
+    // time it is drawn, so a hidden model (a card's reward tool, a pooled unit, an effect) still uploaded
+    // mid-game the first time it showed (2026-11-17: campaign card taps flickered). Once drawn, it stays.
+    if (!presenting) this.drawEverythingOnce();
     const seen = new Set<unknown>();
     this.scene.traverse((o) => {
       // A skinned unit's bone texture is made and uploaded the first time it is drawn: for a pooled goblin or
@@ -1428,7 +1548,16 @@ export class GameSystem extends createSystem({}) {
     }
     if (this.swap.shown !== 'menu') return;
     // A map is being built (Fight on a Custom Game level): the menu waits, so nothing is chosen twice.
-    if (this.loading) return;
+    // A safety (2026-11-17, the menu stopped answering): a build never takes this long; if the flag is
+    // stuck the menu answers again, with a note, instead of waiting for a reload.
+    if (this.loading) {
+      this.loadingFor += dt;
+      if (this.loadingFor < 15) return;
+      note('[menu] a map load never finished: the menu answers again');
+      this.loading = false;
+      this.fade.in();
+    }
+    this.loadingFor = 0;
     if (this.menuSettings) {
       // The settings page from the main menu: Back brings the panels again, Measure reach runs the reach check.
       const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
@@ -1512,6 +1641,10 @@ export class GameSystem extends createSystem({}) {
       if (now - this.lastErrorAt > 1000) {
         this.lastErrorAt = now;
         console.error('[game] frame error (the game goes on)', error);
+        // On the debug page too, with where it was thrown (the headset's console cannot be seen).
+        const e = error as Error;
+        const where = e?.stack?.split('\n').find((l) => l.includes('/src/')) ?? '';
+        note(`[error] frame: ${e?.message ?? String(error)} ${where.trim()}`);
       }
     }
   }
@@ -2014,7 +2147,9 @@ export class GameSystem extends createSystem({}) {
       case 'quitToMenu':
         // Out of a battle back to the home screen (the battle is not saved, no stars); a Custom Game level goes back to its list.
         this.resume();
-        this.goToMenu(this.battle.playingLevel ? 'customList' : 'main');
+        // The same rule as the end panel's Menu (2026-11-17: Endless and the campaign play level files too, so
+        // "playing a level" sent them to the Custom Game list).
+        this.goToMenu(this.menuAfterBattle());
         break;
     }
   }
@@ -2065,6 +2200,10 @@ export class GameSystem extends createSystem({}) {
     switch (id) {
       case 'openMenu':
         this.goToMenu('main');
+        break;
+      case 'shelfWhere':
+        for (const line of this.menu.debugShelf(this.hands.hands)) note(line);
+        note(`[shelf] menu state: shown ${this.swap.shown}, loading ${this.loading}, settings ${this.menuSettings}, measuring ${this.menuMeasure}, battle measuring ${this.measuring}, ready ${this.ready}`);
         break;
       case 'openCustom':
         this.goToMenu('customList');
@@ -2165,6 +2304,20 @@ export class GameSystem extends createSystem({}) {
       case 'resetRun':
         this.fps.resetRun();
         break;
+      case 'renderStats':
+        this.renderStats();
+        break;
+      case 'hidePart': {
+        const part = this.statParts[(arg ?? 1) - 1];
+        if (!part) {
+          note('[render] no such part: press Render stats first');
+          break;
+        }
+        part.visible = !part.visible;
+        note(`[render] part ${arg} ${part.name || part.type} now ${part.visible ? 'shown' : 'hidden'}`);
+        this.fps.resetRun();
+        break;
+      }
       case 'autoTest':
         // Only a page in VR runs it, so a laptop tab never measures instead of the headset.
         if (!this.immersive) {

@@ -255,6 +255,9 @@ export class Goblin {
     this.root.add(this.body);
     this.root.visible = false;
     this.mixer = new AnimationMixer(model);
+    // Every clip's action made now (2026-11-17: a pooled goblin made each action, with its interpolants,
+    // the first time it played that clip, many at once when a fight broke out: a dropped frame).
+    for (const clip of clips) if (!this.actions.has(clip.name)) this.actions.set(clip.name, this.mixer.clipAction(clip));
     this.gear = findGearBones(model);
   }
 
@@ -1069,6 +1072,8 @@ export class Goblins {
     if (goblin.hitGrace > 0) return true;
     const piece = armorHit(goblin);
     if (!piece) return false;
+    // The spark seen with the flicker (2026-11-17): marked, so the FPS panel's missed frames name it.
+    mark('armor hit');
     goblin.hitGrace = GOBLIN_GEAR.hitGrace;
     const p = goblin.root.position;
     let dx = p.x - fromX;
@@ -1090,9 +1095,11 @@ export class Goblins {
       temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
       this.debris?.throw('goblinShield', temp2, dx, dz);
     }
-    this.particles?.burst(this.board.localToWorld(temp2), HELMET_SPARKS, 6, 0.2);
+    this.board.localToWorld(temp2);
+    // The spark seen with the flicker (2026-11-17): off while JUICE.gearSparks is false, to test.
+    if (JUICE.gearSparks) this.particles?.burst(temp2, HELMET_SPARKS, 6, 0.2);
     this.audio.play('pebbleHit', temp2, 0.8, 0.05);
-    this.onArmor(goblin, temp2);
+    if (JUICE.gearSparks) this.onArmor(goblin, temp2);
     this.flash(goblin);
     // A grounded goblin hops back, dazed. One in the air or on the wall just reels.
     if (goblin.mode === 'walking' || goblin.mode === 'toWall' || goblin.mode === 'atWall' || goblin.mode === 'fighting' || goblin.mode === 'dazed') {
@@ -1113,12 +1120,14 @@ export class Goblins {
     if (!this.isHittable(goblin)) return false;
     if (!goblin.helmet && !goblin.shield) return false;
     if (goblin.hitGrace > 0) return true;
+    mark('armor hit');
     goblin.hitGrace = GOBLIN_GEAR.hitGrace;
     const p = goblin.root.position;
     temp2.set(p.x, p.y + goblin.stats.height * (goblin.helmet ? 0.95 : 0.5), p.z);
-    this.particles?.burst(this.board.localToWorld(temp2), HELMET_SPARKS, 8, 0.2);
+    this.board.localToWorld(temp2);
+    if (JUICE.gearSparks) this.particles?.burst(temp2, HELMET_SPARKS, 8, 0.2);
     this.audio.play('swatClonk', temp2, 1, 0.05);
-    this.onArmor(goblin, temp2);
+    if (JUICE.gearSparks) this.onArmor(goblin, temp2);
     this.flash(goblin);
     if (goblin.mode === 'walking' || goblin.mode === 'toWall' || goblin.mode === 'atWall' || goblin.mode === 'fighting' || goblin.mode === 'dazed') {
       if (goblin.mode === 'fighting') this.endFight(goblin);

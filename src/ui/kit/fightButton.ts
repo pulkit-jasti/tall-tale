@@ -6,7 +6,7 @@
 import type { CanvasTexture } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
 import { MENU } from '../../config/game.js';
-import { mark } from '../../debug/perfMarks.js';
+import { preparedTextures } from '../panel.js';
 import type { HandState } from '../../player/hands.js';
 import { PokeButton } from '../pokeButton.js';
 import { canvasTexture } from './canvas.js';
@@ -15,17 +15,41 @@ import { drawMenuIcon } from './menuIcons.js';
 
 const INK = '#fff4dc';
 
+/** One face: a sword and "Fight!", or a lock and "Locked". */
+function drawFace(canvas: HTMLCanvasElement, locked: boolean): void {
+  const c = canvas.getContext('2d')!;
+  const w = canvas.width;
+  const h = canvas.height;
+  const icon = h * 0.6;
+  c.font = `bold ${Math.round(h * 0.42)}px sans-serif`;
+  const word = locked ? 'Locked' : 'Fight!';
+  const textW = c.measureText(word).width;
+  const left = (w - (icon + h * 0.2 + textW)) / 2;
+  drawMenuIcon(c, locked ? 'lock' : 'sword', left + icon / 2, h / 2, icon, INK);
+  c.fillStyle = INK;
+  c.textAlign = 'left';
+  c.textBaseline = 'middle';
+  c.fillText(word, left + icon + h * 0.2, h / 2 + 2);
+}
+
 export class FightButton implements Control {
   private button: PokeButton;
-  private canvas = document.createElement('canvas');
-  private texture: CanvasTexture;
+  /** Both faces drawn once (2026-11-17, headset log: each lock change redrew and uploaded the face on a card tap). */
+  private faces: Record<'open' | 'locked', CanvasTexture>;
   private lockedNow: boolean | null = null;
 
   constructor(audio: GameAudio, width: number, height: number) {
-    this.canvas.width = Math.round(width * 40);
-    this.canvas.height = Math.round(height * 40);
-    this.texture = canvasTexture(this.canvas, 4);
-    this.button = new PokeButton(audio, { radius: height / 2, icon: 'sword', box: { width, height, face: this.texture } });
+    const face = (locked: boolean): CanvasTexture => {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(width * 40);
+      canvas.height = Math.round(height * 40);
+      drawFace(canvas, locked);
+      const texture = canvasTexture(canvas, 4);
+      preparedTextures.add(texture);
+      return texture;
+    };
+    this.faces = { open: face(false), locked: face(true) };
+    this.button = new PokeButton(audio, { radius: height / 2, icon: 'sword', box: { width, height, face: this.faces.open } });
     this.setLocked(false);
   }
 
@@ -44,22 +68,7 @@ export class FightButton implements Control {
     this.lockedNow = locked;
     this.button.locked = locked;
     this.button.setColor(locked ? MENU.campaign.lockedColor : MENU.campaign.fightColor);
-    mark('panel redraw');
-    const c = this.canvas.getContext('2d')!;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    c.clearRect(0, 0, w, h);
-    const icon = h * 0.6;
-    c.font = `bold ${Math.round(h * 0.42)}px sans-serif`;
-    const word = locked ? 'Locked' : 'Fight!';
-    const textW = c.measureText(word).width;
-    const left = (w - (icon + h * 0.2 + textW)) / 2;
-    drawMenuIcon(c, locked ? 'lock' : 'sword', left + icon / 2, h / 2, icon, INK);
-    c.fillStyle = INK;
-    c.textAlign = 'left';
-    c.textBaseline = 'middle';
-    c.fillText(word, left + icon + h * 0.2, h / 2 + 2);
-    this.texture.needsUpdate = true;
+    this.button.setFace(locked ? this.faces.locked : this.faces.open);
   }
 
   update(hands: HandState[], dt: number): boolean {

@@ -156,12 +156,44 @@ export class Magnet extends HandTool {
       this.inner.visible = false;
       return;
     }
+    this.assist(hitPoint);
     // Smoothed, so a shaky hand does not make it jitter (snaps on the first frame).
     if (!this.aiming) this.aimAt.copy(hitPoint);
     else this.aimAt.lerp(hitPoint, 1 - Math.exp(-dt / MAGNET.smoothing));
     this.aiming = true;
     this.drawRing();
     this.pull(dt);
+  }
+
+  /**
+   * Aim assist (2026-11-17): the magnet is aimed by the hand alone, which shakes more than the head that aims
+   * the glass. Near a standing bell tower the ring snaps onto it (it must sit there a whole second); near a
+   * goblin still wearing gear it leans part of the way toward it. `at` (board cm) is moved in place.
+   */
+  private assist(at: Vector3): void {
+    const A = MAGNET.assist;
+    const tower = this.triggers?.standingNear('bellTower', at.x, at.z, A.bellRadius) ?? null;
+    if (tower) {
+      tower.center(world);
+      at.x = world.x;
+      at.z = world.z;
+      return;
+    }
+    let best: Goblin | null = null;
+    let bestD = A.goblinRadius;
+    for (const g of this.goblins.list) {
+      if (!this.goblins.isHittable(g) || g.mode === 'riding' || !this.goblins.hasGear(g)) continue;
+      const p = g.root.position;
+      const d = Math.hypot(p.x - at.x, p.z - at.z);
+      if (d < bestD) {
+        bestD = d;
+        best = g;
+      }
+    }
+    if (!best) return;
+    const p = best.root.position;
+    at.x += (p.x - at.x) * A.goblinPull;
+    at.z += (p.z - at.z) * A.goblinPull;
   }
 
   private drawRing(): void {

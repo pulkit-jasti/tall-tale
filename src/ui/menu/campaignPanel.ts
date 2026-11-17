@@ -18,6 +18,7 @@ import type { GameAudio } from '../../audio/sound.js';
 import { MENU, UI_SPACING } from '../../config/game.js';
 import { LEVELS, type LevelEntry, type LevelReward } from '../../config/levels.js';
 import { mark } from '../../debug/perfMarks.js';
+import { uiImage } from '../uiImages.js';
 import type { HandState } from '../../player/hands.js';
 import { isOpen, type PickTool, type Progress } from '../../rules/campaign.js';
 import {
@@ -96,10 +97,10 @@ export class CampaignPanel {
     this.list.group.position.set((C.listLeft + C.listRight) / 2, listY, 0);
     this.list.onSelect = (i) => {
       if (i === this.selected) return;
-      const before = this.selected;
+      mark('card tap');
       this.selected = i;
-      // Only the row left and the row picked are drawn again.
-      this.list.redrawRows([before, i]);
+      // The gold band moves to the row (nothing drawn).
+      this.list.setSelected(i);
       this.showSelected();
     };
     this.panel.root.add(this.list.group);
@@ -126,7 +127,9 @@ export class CampaignPanel {
       const materials = new Set<MeshStandardMaterial>();
       model.traverse((o) => {
         const mesh = o as Mesh;
-        if (mesh.isMesh && !Array.isArray(mesh.material)) materials.add(mesh.material as MeshStandardMaterial);
+        // Only lit materials have an emissive color for the Ready glow (a plain unlit part has none: the
+        // glow threw every frame on it, and the shelves stopped answering on the campaign page, 2026-11-17).
+        if (mesh.isMesh && !Array.isArray(mesh.material) && (mesh.material as MeshStandardMaterial).emissive) materials.add(mesh.material as MeshStandardMaterial);
       });
       this.rewardMaterials.set(model, [...materials]);
       holder.position.set(C.rewardAt[0], C.rewardAt[1], Math.max(size.x, size.z) * scale * 0.5 + 0.4);
@@ -164,8 +167,9 @@ export class CampaignPanel {
     this.panel.popIn(0.25);
     this.selected = 0;
     this.list.scrollToTop();
+    this.list.setSelected(0);
     this.slider.setValue(1);
-    this.list.redraw();
+    // The list is drawn when the stars or open levels change (refresh), not each time the page opens.
     this.showSelected();
     armControls([this.back, this.list, this.slider, this.fight]);
   }
@@ -177,12 +181,16 @@ export class CampaignPanel {
   /** Stars or open levels changed (after a battle): the list and the card again. */
   refresh(): void {
     this.list.redraw();
-    this.showSelected();
+    // Every playable level's card drawn here (menu opening, behind its fade), never on a tap.
+    this.prepareCards();
   }
 
-  /** The loadout changed: only the card (Fight). */
+  /**
+   * The loadout changed: only Fight's state. Nothing drawn on the card depends on the loadout (2026-11-17:
+   * a tool swap on the home screen redrew and uploaded the whole card, even hidden: a flicker).
+   */
   refreshFight(): void {
-    this.showSelected();
+    this.fight.setLocked(!isOpen(this.progress, LEVELS[this.selected].number));
   }
 
   update(hands: HandState[], dt: number): CampaignChoice {
@@ -218,8 +226,9 @@ export class CampaignPanel {
       return;
     }
     const open = isOpen(this.progress, level.number);
-    const selected = i === this.selected;
-    c.fillStyle = selected ? MENU.campaign.selectedColor : open ? 'rgba(255, 248, 228, 0.85)' : 'rgba(200, 190, 170, 0.6)';
+    // Every row drawn the same; the selected one gets the list's gold band on top (no redraw on a tap).
+    const selected = false;
+    c.fillStyle = open ? 'rgba(255, 248, 228, 0.85)' : 'rgba(200, 190, 170, 0.6)';
     c.beginPath();
     c.roundRect(2, 2, w - 4, h - 4, h * 0.18);
     c.fill();
@@ -243,8 +252,24 @@ export class CampaignPanel {
     // Only a locked level locks Fight. With empty tool slots it still says Fight! (so it gets poked), and the poke shows where to put tools.
     this.fight.setLocked(!open);
     for (const [reward, holder] of this.rewards) holder.visible = reward === level.reward;
-    mark('panel redraw');
-    this.panel.paint((c, w, h) => this.draw(c, w, h, level, open));
+    // Each level's card keeps its own image, drawn again only when its stars or lock change: a tap shows the
+    // ready one (2026-11-17: every tap redrew and uploaded the whole 1500 px card, a flicker).
+    this.panel.paintVariant(`level ${level.number}`, `${open} ${this.progress.stars[level.number] ?? 0} ${uiImage('panel') ? 1 : 0}`, (c, w, h) => this.draw(c, w, h, level, open));
+  }
+
+  /**
+   * Draws every level's card now (menu open, behind the fade), so no tap ever draws or uploads one. Only a
+   * card whose stars or lock changed is drawn again. 2026-11-17 headset log: taps on locked levels drew and
+   * uploaded their card on the tap (7 dropped frames in 52 s). Costs about 130 MB of GPU memory for 15 cards.
+   */
+  prepareCards(): void {
+    const shown = this.selected;
+    for (let i = 0; i < LEVELS.length; i++) {
+      this.selected = i;
+      this.showSelected();
+    }
+    this.selected = shown;
+    this.showSelected();
   }
 
   private draw(c: CanvasRenderingContext2D, w: number, h: number, level: LevelEntry, open: boolean): void {

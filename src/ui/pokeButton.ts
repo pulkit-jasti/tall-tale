@@ -191,6 +191,11 @@ export class PokeButton implements Control {
     this.material.color.setHex(color);
   }
 
+  /** A box button's face texture (the tabs swap their ready-made chosen and not-chosen faces). */
+  setFace(texture: CanvasTexture): void {
+    if (this.faceMaterial.map !== texture) this.faceMaterial.map = texture;
+  }
+
   /** Changes the icon on the face (for example Play on the welcome panel, restart on the end panel). */
   setIcon(icon: ButtonIcon): void {
     if (icon === this.icon || this.half) return;

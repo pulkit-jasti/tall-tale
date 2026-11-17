@@ -88,6 +88,9 @@ export type DebugCommand =
   | 'resetSave'
   | 'unlockAll'
   | 'winBattle'
+  | 'shelfWhere'
+  | 'renderStats'
+  | 'hidePart'
   | 'fightLevel';
 
 /** Sections of the laptop debug page, in page order. */
@@ -154,6 +157,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   },
   { id: 'skipWave', group: 'game', icon: '⏩', label: 'Skip wave', does: 'Skip the current wave: its goblins run off and the wave flag climbs' },
   { id: 'openMenu', group: 'menu', icon: '📜', label: 'Open menu', does: 'The battleground sinks and the main menu rises (the shelves and the loadout stand too)' },
+  { id: 'shelfWhere', group: 'menu', icon: '📍', label: 'Where are the shelf tools?', does: 'Notes each shelf tool\'s grab point (world, meters), locked or not, and what each hand is near, to debug grabbing on the home screen' },
   {
     id: 'fightLevel',
     group: 'menu',
@@ -267,6 +271,15 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     icon: '🎙️',
     label: 'Mic panel on/off',
     does: 'Live loudness panel on or off (right of front): the mic level now, the loudest in the last 3 s and since opened, and the horn speak line (HORN.speakLevel). Or add ?mic to the URL',
+  },
+  { id: 'renderStats', group: 'performance', icon: '🔬', label: 'Render stats', does: 'Notes the last frame\'s draw calls and triangles, the shader and texture counts, and the 8 heaviest visible parts of the scene (numbered for Hide part)' },
+  {
+    id: 'hidePart',
+    group: 'performance',
+    icon: '🙈',
+    label: 'Hide part',
+    does: 'Hides (or shows again) part N of the last Render stats list and starts a new measured run, to see what it costs',
+    args: [1, 2, 3, 4, 5, 6, 7, 8],
   },
   { id: 'resetRun', group: 'performance', icon: '⏱️', label: 'New measured run', does: 'Start a new measured run (average FPS, 1% low, missed frames)' },
   { id: 'stress', group: 'performance', icon: '🏋️', label: 'Stress +10', does: 'Stress test: add 10 grunts, above the normal unit cap (starts a new measured run)' },

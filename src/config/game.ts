@@ -1246,7 +1246,8 @@ export const END_PANEL = {
   /** v3 Phase 4: 10.4 taller (was 32) for the score and its breakdown table. */
   // 46.4 since 2026-11-17: at 42.4 the buttons' words ("Next level") sat on the note line ("A perfect defense!").
   winHeight: 46.4,
-  lostHeight: 27,
+  // 34 since 2026-11-17: at 27 the buttons and their words sat over the stats and the note line.
+  lostHeight: 34,
   /** The small buttons beside the big one (Menu, Play again). */
   sideRadius: BUTTON_SIZE.large,
   /** The Kenney icons over the stats (white, tinted) and the divider beside the level's name. */
@@ -1261,8 +1262,14 @@ export const END_PANEL = {
   breakdownFromTop: 22.3,
   breakdownRowGap: 2,
   scoreNoteFromTop: 28.6,
-  /** Lost: no stars, so the stats sit higher. */
-  lostStatsFromTop: 10.4,
+  /**
+   * Lost: no stars, so the stats sit higher. 2026-11-17: each line on its own band, top to bottom: the
+   * banner (to about 6.3), the subtitle (Endless: the waves survived), the stats (icon, number, word), the
+   * note, then the buttons' words and the buttons at the bottom.
+   */
+  lostSubtitleFromTop: 7.5,
+  lostStatsFromTop: 11.6,
+  lostNoteFromTop: 18,
   /** The 3D stars (src/ui/winStars.ts). Sizes in cm (a star's outer radius), times in seconds. */
   stars: {
     fromTop: 10.6,
@@ -2109,6 +2116,9 @@ export const SCROLL_LIST = {
   hoverOpacity: 0.22,
   pressColor: 0x3b2b1f,
   pressOpacity: 0.18,
+  /** The selected row's band (a see-through gold over the row, MENU.campaign.selectedColor's gold). */
+  selectColor: 0xe6b54a,
+  selectOpacity: 0.55,
   pxPerCm: 30,
 };
 
@@ -3092,6 +3102,11 @@ export const MAGNET = {
   smoothing: 0.12,
   /** The ring on the ground (cm radius, about one goblin group) and its colors. */
   ringRadius: 11,
+  /**
+   * Aim assist (2026-11-17, hand aim shakes): within bellRadius cm of a standing bell tower the ring snaps
+   * onto it; within goblinRadius cm of a goblin with gear it moves goblinPull of the way toward it.
+   */
+  assist: { bellRadius: 22, goblinRadius: 14, goblinPull: 0.5 },
   ringColor: 0xd8262a,
   ringInnerColor: 0xe8ecf0,
   /** The inner ring shrinks to the middle again and again (seconds per pull). */
@@ -3635,8 +3650,8 @@ export const TROOPS = {
    * Most soldiers on the board at once (they share the unit budget with the
    * goblins). Tune after the headset test and the stress test with troops.
    */
-  /** v2: field knights (KNIGHTS.maxField, 4 squads of up to 5) plus the wall garrison (6). */
-  max: 26,
+  /** Field knights (KNIGHTS.maxField, 5 squads of 5), 2 more squads from Endless's War Chief, and the wall garrison (6). */
+  max: 41,
   /** The same size as the goblins (grunts 3.9 cm), raised from 2.5 after the step 6 test. */
   height: 3.9,
   speed: 5.5,
@@ -3679,10 +3694,10 @@ export const KNIGHTS = {
    */
   squadMin: 5,
   squadMax: 5,
-  /** Squads at once (a level setting later). v3 2.5: a cap of 3 (was 4), also for the frame budget. */
-  maxSquads: 3,
+  /** Squads at once (a level setting later). 5 since 2026-11-17 (was 3; the developer's plan: 5, more in Endless with War Chief). */
+  maxSquads: 5,
   /** Most field knights at once (maxSquads full squads). */
-  maxField: 15,
+  maxField: 25,
   /**
    * v3 (docs/v3-plan.md 2.5): the horn aimed within boostRadius (cm) of a
    * squad's spot boosts it: its fallen knights come back at once and it
@@ -4485,6 +4500,12 @@ export const BALLOONS = {
  * view (comfort).
  */
 export const JUICE = {
+  /**
+   * The sparks at gear hits (a helmet or shield hit, the swatter's clonk: sparks and the white ring and
+   * star) and where blades clash (soldiers and goblins). Off since 2026-11-17: the developer saw the
+   * flicker come exactly with them. Set true to bring them back once the cause is known.
+   */
+  gearSparks: false,
   /** A goblin that is hit but not knocked out flashes white this long (seconds). */
   hitFlashTime: 0.12,
   hitFlashColor: 0xffffff,

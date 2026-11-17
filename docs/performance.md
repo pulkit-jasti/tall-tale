@@ -90,6 +90,19 @@ All tests: grunts only, standing at the wall and hitting it, player sitting stil
 - Before the 2 missed frames at 60: "nothing marked" (2).
 - **Budget: 50 units.**
 
+### Test 6: 72 Hz, after v3 (2026-11-17, headset, not a stress test)
+
+Measured runs from normal play, read from the debug page (menu frames counted, since the home screen is not paused).
+
+| Where | Length | Avg | 1% low | Missed | Slowest | Top causes |
+|---|---|---|---|---|---|---|
+| Home screen, card taps (before the card fixes) | 52 s | 57.5 | 32 | 1.4% (42) | 43 ms | nothing marked 24, sound 14, card tap 12, panel redraw 7, texture upload 7 |
+| Home screen, card taps (after) | 29 s | 59.3 | 14 | 1.3% (23) | 648 ms (map load) | nothing marked 16, sound 4, panel redraw 4, card tap 2 |
+| Home screen and Sky Pirates battle | 135 s | 53.5 | 21 | 9.5% (687) | 667 ms (map load) | nothing marked 570, sound 59, debug send 47, particles 18 |
+
+- The empty home screen no longer holds 72: every frame got heavier since Test 5 (new visuals, more models). Most drops have nothing marked, so it is the GPU's work per frame, not a single event.
+- Next: Render stats and Hide part on the debug page (Performance section) in a battle, to find the heaviest part, then a new stress test.
+
 ---
 
 ## 4. What we learned
