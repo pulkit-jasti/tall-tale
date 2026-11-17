@@ -56,6 +56,8 @@ export interface LevelSettings {
   /** Goblins come out over this long (seconds). */
   waveLength: number;
   campsAtOnce: number;
+  /** v3 2.7: fog rolls in for the night wave (NIGHT_FOG). */
+  foggyNight: boolean;
   // Rules
   archers: number;
   guards: number;
@@ -172,6 +174,7 @@ export const LEVEL_SETTINGS: SettingDef[] = [
   { key: 'swords', group: 'waves', label: 'Swords', kind: 'range', min: 0, max: 1, step: 0.05, default: 0.25, unit: 'percent' },
   { key: 'waveLength', group: 'waves', label: 'Wave length', kind: 'range', min: 30, max: 90, step: 5, default: 50, unit: 'seconds' },
   { key: 'campsAtOnce', group: 'waves', label: 'Camps at once', kind: 'count', min: 1, max: 5, default: 2 },
+  { key: 'foggyNight', group: 'waves', label: 'Foggy night', kind: 'toggle', default: false },
   // Rules: the battle around the map and the waves.
   { key: 'archers', group: 'rules', label: 'Archers', kind: 'count', min: 0, max: 6, default: 4 },
   { key: 'guards', group: 'rules', label: 'Guards', kind: 'count', min: 0, max: 4, default: 2 },
@@ -205,6 +208,7 @@ export const SETTING_HINTS: Record<SettingKey, string> = {
   swords: 'Strike your soldiers faster',
   waveLength: 'Time over which the goblins come out',
   campsAtOnce: 'Camps sending goblins at the same time',
+  foggyNight: 'Fog hides the far board in the night wave',
   archers: 'Archers on the castle wall',
   guards: 'Guards fighting on the rampart',
   refill: 'How fast lost soldiers come back',
@@ -290,5 +294,6 @@ export function describeSettings(s: LevelSettings): string {
   if (s.shields >= 0.6) extras.push('shields');
   if (s.spears >= 0.6) extras.push('spears');
   if (s.castleHealth < 0.7) extras.push('a damaged castle');
+  if (s.foggyNight) extras.push('a foggy night');
   return [camps, roads, ...extras.slice(0, 1), s.difficulty].join(', ');
 }

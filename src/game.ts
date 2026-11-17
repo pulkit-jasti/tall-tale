@@ -188,6 +188,8 @@ export class GameSystem extends createSystem({}) {
   private nightLights!: NightLights;
   /** A time of day picked on the debug page, until the next battle starts. */
   private timeOverride: TimeOfDay | null = null;
+  /** The debug page's "Night fog on/off" (v3 2.7), held until the next battle starts. */
+  private fogOverride: boolean | null = null;
   /** Battle starts seen so far: a new battle jumps straight to its time of day. */
   private battleStarts = -1;
   private particles!: Particles;
@@ -975,8 +977,6 @@ export class GameSystem extends createSystem({}) {
     this.updateTimeOfDay(dt);
     this.windmill.update(dt);
     updateRoadside(dt);
-    this.fog.near = SKY.fogNear * this.stage.boardScale;
-    this.fog.far = SKY.fogFar * this.stage.boardScale;
     // The empty tool slots hint: the glass sign in front of the eyes and a red arrow at the empty slot, for a few seconds.
     this.slotsHintLeft = this.swap.shown === 'menu' ? Math.max(0, this.slotsHintLeft - dt) : 0;
     const slot = this.slotsHintLeft > 0 ? this.menu.emptySlotWorld(slotAt) : null;
@@ -1293,8 +1293,6 @@ export class GameSystem extends createSystem({}) {
     this.updateTimeOfDay(dt);
     this.windmill.update(dt);
     updateRoadside(dt);
-    this.fog.near = SKY.fogNear * this.stage.boardScale;
-    this.fog.far = SKY.fogFar * this.stage.boardScale;
   }
 
   /**
@@ -1343,9 +1341,14 @@ export class GameSystem extends createSystem({}) {
     const starts = this.battle.starts;
     const fresh = starts !== this.battleStarts;
     this.battleStarts = starts;
-    if (fresh) this.timeOverride = null;
+    if (fresh) {
+      this.timeOverride = null;
+      this.fogOverride = null;
+    }
+    // v3 2.7: a foggy level's night fog (it shows only at night, and changes only between waves).
+    this.dayNight.foggy = this.fogOverride ?? this.battle.foggy;
     this.dayNight.show(this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves), fresh);
-    this.dayNight.update(dt);
+    this.dayNight.update(dt, this.stage.boardScale);
     this.nightLights.update(dt, this.dayNight.lights);
   }
 
@@ -1863,7 +1866,15 @@ export class GameSystem extends createSystem({}) {
         const time = TIMES_OF_DAY[Math.round(arg ?? 1) - 1];
         if (time) this.timeOverride = time;
         break;
-      }    }
+      }
+      case 'nightFog': {
+        // Fog on also turns to night (fog shows only then); both held until the next battle starts.
+        const on = !(this.fogOverride ?? this.battle.foggy);
+        this.fogOverride = on;
+        if (on) this.timeOverride = 'night';
+        break;
+      }
+    }
   }
 }
 

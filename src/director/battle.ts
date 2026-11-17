@@ -197,6 +197,8 @@ export class Battle implements TutorialApi {
    */
   private waves: WavePlan[] = TUTORIAL_WAVES;
   private levelRules: LevelRules | null = null;
+  /** v3 2.7: the level asks for night fog ("Foggy night"). */
+  private foggyNight = false;
   /** The camps that rise at each wave (0 based), for the waves above. */
   private rising: string[][] = risingByWave(TUTORIAL_WAVES);
   /** Each tool's own spot, from when it was built. */
@@ -492,6 +494,7 @@ export class Battle implements TutorialApi {
     this.waves = levelWavePlans(level);
     this.rising = risingByWave(this.waves);
     this.levelRules = level.rules;
+    this.foggyNight = level.meta.settings.foggyNight;
   }
 
   /** The camps that rise later go under the ground now (Fight poked: before the battle rises, so none pops away). */
@@ -504,6 +507,7 @@ export class Battle implements TutorialApi {
     this.waves = TUTORIAL_WAVES;
     this.rising = risingByWave(TUTORIAL_WAVES);
     this.levelRules = null;
+    this.foggyNight = false;
   }
 
   /** True while the waves are a level's (playLevel). */
@@ -1144,6 +1148,16 @@ export class Battle implements TutorialApi {
    */
   get timeWave(): number {
     return Math.max(0, Math.min(this.waves.length - 1, this.inWave ? this.wave : this.wave + 1));
+  }
+
+  /**
+   * v3 2.7: a foggy level wants its fog now (it shows only at night,
+   * DayLook.foggy): while the battle is fought, until the last wave is
+   * cleared. So it rolls in with the night and lifts after.
+   */
+  get foggy(): boolean {
+    const lastCleared = this.wave >= this.waves.length - 1 && !this.inWave;
+    return this.foggyNight && this.canPause && !lastCleared;
   }
 
   endWave(): void {

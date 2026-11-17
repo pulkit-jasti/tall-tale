@@ -1,6 +1,6 @@
 # v3 Plan: Faster, Clearer, Deeper
 
-Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. The rest of Phase 2 and Phases 3 to 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **Next: the developer tests the tools and traps one by one on the headset; then 2.7 and 2.6.** Every step: only `npm run build` with no errors as the check (no typecheck, no tests), update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
+Status: decided with the developer (2026-11-12 to 2026-11-13). **Phase 1 is built** (2026-11-13, branch `feat/v3-upgrades`, build passes, not committed; tested on the headset 2026-11-16; see "Phase 1 as built" below). **Phase 2's 2.0 and 2.5 are done, 2.8 is built** (2026-11-16; "2.0 as built", "2.5 as built", "2.8 as built"; 2.3 was dropped). Finished sections are marked [DONE] in their headings. The rest of Phase 2 and Phases 3 to 5 are not built. **2.2 is built (2026-11-16): every tool** ("2.2 as built: the drum and the pepper ring" and "2.2 as built: the magnet, the glass, sugar cubes and 4 slots"). **2.1's traps are built and 2.8 covers them** (2026-11-16, "2.1 as built: the new traps, and 2.8 finished"; the chicken is a placeholder shape). **2.7 Night fog is built (2026-11-16, "2.7 as built").** **Next: the developer tests the tools, traps and fog on the headset; then 2.6.** Every step: only `npm run build` with no errors as the check (no typecheck, no tests), update its "as built" section and its [DONE] mark, stop with a "Headset check:" list, never commit unless asked. **Phase 2 and 3 redesigned 2026-11-14 to 15:** the magnet (new tool), the drum (replaces the bell), pepper's ground ring, eating heals and the horn on a timer (2.5), 4 free loadout slots, the digger, secret achievements, a score with star ranges (Phase 4), the magnifying glass as a sun garden (sunflower and mushroom) that also burns goblins without helmets, the haystack, the horn's call, boost and free move with a preview of each, traps coming back at random spots during waves, waves as breathers in one battle (2.8), an upside and downside for every tool, and night fog; the seesaw and the brute are out. **Phase 1** (small changes to what exists) comes first. Then **Phase 2** (new environment objects and tools, each working on its own), **Phase 3** (new enemies), **Phase 4** (chains and score, not final) and **Phase 5** (the modes, on hold). The developer decides when to test on the headset.
 
 Where this file disagrees with [v2-plan.md](v2-plan.md), [custom-mode.md](custom-mode.md), [giant-tools.md](giant-tools.md), [enemies.md](enemies.md) or [modes-and-progression.md](modes-and-progression.md), **this file wins**.
 
@@ -514,7 +514,7 @@ Build passes. Not tested on the headset. Not committed. All numbers are start va
 - Bridge: lies along its road over the stream; a pebble drops it and knocks out the goblins on it; goblins take another road; it rebuilds after 25 s.
 - Frame rate on the FPS panel with burning hay and chickens.
 
-### 2.7 Night fog (decided 2026-11-15, to be built and tested before it is final)
+### 2.7 Night fog (decided 2026-11-15) [BUILT, headset test next]
 
 - **A level setting** ("Foggy night", in Custom Game and some campaign levels), only in night waves. Not every night: the last wave is always night, and fog every time would make every level end blind and punish ranged loadouts.
 - **Timing:** the fog rolls in during the breather before the night wave (seen coming) and lifts after. Never mid-wave.
@@ -524,6 +524,26 @@ Build passes. Not tested on the headset. Not committed. All numbers are start va
 - **Balance:** foggy waves send their pushes a little more spread out, so the short warning does not snowball. The slingshot and the magnet still work inside the clear range.
 - **No lantern or other fog-clearing plant** (it would copy Plants vs Zombies, and a clear hole in the fog needs a shader change on every material). One even fog, changed between waves: cheap.
 - Built as a fog field in the night look (`DAY_NIGHT.looks`, blended in `src/world/dayNight.ts`), used only when the level asks for fog.
+
+### 2.7 as built (2026-11-16)
+
+Build passes. Not tested on the headset. Not committed. All numbers are start values in `NIGHT_FOG` (config).
+
+- **The setting:** "Foggy night" on Custom Game's Waves tab (`foggyNight` in `src/config/levelSettings.ts`, off by default; the card says "a foggy night"). The campaign still plays the tutorial waves on one map, so no campaign level has fog yet: turn `foggyNight` on in a level's preset once the level files exist.
+- **How it works:** the scene's existing haze (`SKY.fogNear`, `fogFar`) pulled in close: clear to 1.5 m, gone by 2.5 m (meters for the default board, times `stage.boardScale`, from the eyes). No new shader, no recompile: the fog was always on, only its numbers change. `DayLook.foggy` (1 at night, 0 the rest) says when it shows; `Battle.foggy` says the level wants it (while the battle is fought, until its last wave is cleared). It rolls in with the change to night (the breather before the night wave) over `DAY_NIGHT.changeSeconds`, and lifts the same way when the night wave is cleared or the battle ends. Never mid-wave.
+- **Its look:** a misty night blue (`color`), a little lighter than the night horizon. The sky dome takes that color at the horizon and less up high (`domeHaze`, `domeTop`, `domeHeight`), so the fogged hills meet the sky with no seam; the clouds sink into it too; the stars dim by 75% (`starDim`).
+- **What stays clear:** the tools, the compass, the flags, the signs and every UI piece are `fog: false` or nearer than 1.5 m. Goblins come out of the fog with their night rim.
+- **Not fogged, on purpose for now:** the night lights (village windows, road torches, lanterns) use `fog: false` and additive glow, so far ones still glimmer through the fog, like lights in the mist (they show the roads, never a camp). If they read as wrong on the headset, hide the far ones while foggy.
+- **Balance:** a foggy night wave sends its goblins out over 25% longer (`spreadScale`, in `levelWavePlans`).
+- **Debug:** "Night fog on/off" (sky group) rolls the fog in and turns to night, or lifts it; held until the next battle starts.
+
+**Headset check:** start any battle, press "Night fog on/off".
+- The fog rolls in over about 8 s; the near board is clear, the far board and the camps are gone, and no seam shows between the hills and the sky.
+- Goblins step out of the fog outlined, about 12 s before the wall at grunt speed.
+- The compass, tools, flags and signs stay sharp.
+- The far night lights through the fog: fine, or hide them?
+- Then a Custom Game with "Foggy night" on: the fog comes only in the breather before the last wave, and lifts when it is cleared.
+- Frame rate on the FPS panel in the fog (should not change).
 
 ### 2.6 Secret achievements (decided 2026-11-15, reworked 2026-11-16)
 

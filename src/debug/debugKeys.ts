@@ -67,6 +67,7 @@ export type DebugCommand =
   | 'celebrate'
   | 'nextTime'
   | 'timeOfDay'
+  | 'nightFog'
   | 'openMenu'
   | 'openCustom'
   | 'fightCustom'
@@ -225,6 +226,13 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     label: 'Time of day',
     does: 'Change to this time of day: 1 morning, 2 day, 3 sunset, 4 night (the same change as between waves). Kept until the next battle starts',
     args: [1, 2, 3, 4],
+  },
+  {
+    id: 'nightFog',
+    group: 'sky',
+    icon: '🌫️',
+    label: 'Night fog on/off',
+    does: 'Roll the night fog in (and change to night) or lift it, the same 8 s change as between waves. Kept until the next battle starts',
   },
   { id: 'fps', group: 'performance', icon: '🖥️', label: 'FPS panel on/off', does: 'FPS panel on or off (hidden by default; add ?fps to the URL on the hosted build)' },
   {

@@ -53,7 +53,7 @@ import {
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { DAY_NIGHT, SKY, TIMES_OF_DAY, type DayLook, type TimeOfDay } from '../config/game.js';
+import { DAY_NIGHT, NIGHT_FOG, SKY, TIMES_OF_DAY, type DayLook, type TimeOfDay } from '../config/game.js';
 import type { Random } from '../rules/random.js';
 import { groundHeight } from './hills.js';
 
@@ -338,6 +338,7 @@ export class Sky {
   /** The dome's point colors now, and worked out for each time of day. */
   private domeColor: BufferAttribute;
   private domeLooks = {} as Record<TimeOfDay, Float32Array>;
+  private domeHaze!: Float32Array;
   private sun = new Group();
   private sunBall = skyMaterial({ vertexColors: true });
   private sunRays = skyMaterial({ vertexColors: true });
@@ -362,6 +363,13 @@ export class Sky {
     const position = domeGeometry.getAttribute('position') as BufferAttribute;
     for (const time of TIMES_OF_DAY) this.domeLooks[time] = domeColors(position, DAY_NIGHT.looks[time]);
     this.domeColor = new BufferAttribute(this.domeLooks.morning.slice(), 3);
+    // v3 2.7: how much each dome point takes the night fog's color (full at and below the horizon).
+    this.domeHaze = new Float32Array(position.count);
+    for (let i = 0; i < position.count; i++) {
+      const y = a.fromBufferAttribute(position, i).normalize().y;
+      const up = Math.min(1, Math.max(0, y) / NIGHT_FOG.domeHeight);
+      this.domeHaze[i] = NIGHT_FOG.domeHaze + (NIGHT_FOG.domeTop - NIGHT_FOG.domeHaze) * up;
+    }
     domeGeometry.setAttribute('color', this.domeColor);
     const dome = new Mesh(domeGeometry, skyMaterial({ vertexColors: true, side: BackSide }));
     dome.renderOrder = ORDER.dome;
@@ -529,13 +537,25 @@ export class Sky {
    * colors, where the sun and the moon are and how big, the sun's tint, the
    * stars and the cloud tint. Only called while the time changes.
    */
-  apply(from: TimeOfDay, to: TimeOfDay, t: number): void {
+  apply(from: TimeOfDay, to: TimeOfDay, t: number, haze = 0): void {
     const a0 = DAY_NIGHT.looks[from];
     const a1 = DAY_NIGHT.looks[to];
     const colors = this.domeColor.array as Float32Array;
     const c0 = this.domeLooks[from];
     const c1 = this.domeLooks[to];
     for (let i = 0; i < colors.length; i++) colors[i] = c0[i] + (c1[i] - c0[i]) * t;
+    // v3 2.7: night fog takes the dome toward its color, most at the horizon, so the fogged hills meet the sky.
+    if (haze > 0) {
+      const fog = color.setHex(NIGHT_FOG.color);
+      const w = this.domeHaze;
+      for (let v = 0; v < w.length; v++) {
+        const k = w[v] * haze;
+        const i = v * 3;
+        colors[i] += (fog.r - colors[i]) * k;
+        colors[i + 1] += (fog.g - colors[i + 1]) * k;
+        colors[i + 2] += (fog.b - colors[i + 2]) * k;
+      }
+    }
     this.domeColor.needsUpdate = true;
     this.placeBody(this.sun, lerp(a0.sunAt[0], a1.sunAt[0], t), lerp(a0.sunAt[1], a1.sunAt[1], t), lerp(a0.sunShow, a1.sunShow, t));
     this.placeBody(this.moon, lerp(a0.moonAt[0], a1.moonAt[0], t), lerp(a0.moonAt[1], a1.moonAt[1], t), lerp(a0.moonShow, a1.moonShow, t));
@@ -549,10 +569,12 @@ export class Sky {
     matrix.lookAt(FACE_AT, this.planet.position, UP);
     this.planet.quaternion.setFromRotationMatrix(matrix);
     this.planet.visible = rise > -20;
-    const stars = lerp(a0.stars, a1.stars, t);
+    const stars = lerp(a0.stars, a1.stars, t) * (1 - haze * NIGHT_FOG.starDim);
     this.starMaterial.color.setScalar(stars);
     this.stars.visible = stars > 0.01;
     mixHex(a0.cloudTint, a1.cloudTint, t, this.puffMaterial.color);
+    // v3 2.7: clouds sink into the fog like the high dome (they are never fogged by the scene fog).
+    if (haze > 0) this.puffMaterial.color.lerp(color.setHex(NIGHT_FOG.color), haze * NIGHT_FOG.domeTop);
   }
 
   /** A low cloud around the board, never over the battlefield. Small near, bigger far. */

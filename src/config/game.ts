@@ -4231,6 +4231,8 @@ export interface DayLook {
   planetAt: number;
   /** How bright the night lights are: glowing windows, torches, lanterns (0 = off, 1 = full). */
   lights: number;
+  /** v3 2.7: how much a foggy level's fog (NIGHT_FOG) shows at this time (0 = none, 1 = full). Only the night has it. */
+  foggy: number;
 }
 
 /**
@@ -4282,6 +4284,7 @@ export const DAY_NIGHT = {
       terrainGrey: 0,
       planetAt: -25,
       lights: 0,
+      foggy: 0,
     },
     // Super sunny: a high sun, warm golden light, a soft blue top over a warm orange haze (the fog
     // too, so the air has an orange tint), a wide warm glow, cream clouds. Warmer after the
@@ -4315,6 +4318,7 @@ export const DAY_NIGHT = {
       terrainGrey: 0,
       planetAt: -25,
       lights: 0,
+      foggy: 0,
     },
     // The sun low on the left, deep orange, a warm horizon under a violet-blue top.
     sunset: {
@@ -4342,6 +4346,7 @@ export const DAY_NIGHT = {
       terrainGrey: 0.045,
       planetAt: -25,
       lights: 0.35,
+      foggy: 0,
     },
     // A deep blue night with stars, the moon and the ringed planet rising in front. Darker
     // after the first headset look (it was too bright). The units keep their bright rim and
@@ -4372,8 +4377,36 @@ export const DAY_NIGHT = {
       terrainGrey: 0.21,
       planetAt: 21,
       lights: 1,
+      foggy: 1,
     },
   } satisfies Record<TimeOfDay, DayLook>,
+};
+
+/**
+ * v3 2.7 Night fog (docs/v3-plan.md): a level setting ("Foggy night"). It
+ * rolls in with the change to night, in the breather before the night wave
+ * (DayLook.foggy), and lifts when that wave is cleared or the battle ends.
+ * Never mid-wave. It is the scene fog (the haze over the hills) pulled in
+ * close, so it costs no frame time. Distances in meters for the default
+ * board size (they grow with stage.boardScale), measured from the eyes.
+ * The tools, the compass, the flags and the UI use `fog: false`, and they
+ * are all nearer than `near` anyway. All start values, tune on the headset.
+ */
+export const NIGHT_FOG = {
+  /** Clear up to about the middle ring, gone by `far`: the camps are hidden, a grunt shows about 12 s before the wall. */
+  near: 1.5,
+  far: 2.5,
+  /** The fog's color: a misty night blue, a little lighter than the night horizon so it reads as fog. */
+  color: 0x2b3b5f,
+  /** How much the sky dome takes the fog's color: full at the horizon (so the fogged hills meet it), `domeTop` at the top. */
+  domeHaze: 1,
+  domeTop: 0.45,
+  /** The dome is hazed up to this height (0 = the horizon, 1 = straight up). */
+  domeHeight: 0.6,
+  /** The stars are dimmed by this share in full fog. */
+  starDim: 0.75,
+  /** A foggy night wave sends its goblins out over this much longer, so the short warning does not snowball. */
+  spreadScale: 1.25,
 };
 
 /**

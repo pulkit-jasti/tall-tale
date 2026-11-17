@@ -6,7 +6,9 @@
 // same TutorialApi the battle already gives the tutorial (docs/map.md
 // section 8). The tutorial keeps its own director (src/director/tutorial.ts).
 // No Three.js here, so it can be tested.
+import { NIGHT_FOG } from '../config/game.js';
 import type { Level, LevelWave } from '../level/level.js';
+import { timeOfWave } from '../rules/dayNight.js';
 import type { TutorialApi, TutorialStep, WavePlan } from './tutorial.js';
 
 /** The wave banner's text for a level wave: what comes, and from how many camps. */
@@ -22,11 +24,13 @@ export function waveIntro(wave: LevelWave, index: number, total: number): string
 
 /** A level's waves as the plans the wave spawner reads. */
 export function levelWavePlans(level: Level): WavePlan[] {
+  const total = level.waves.length;
   return level.waves.map((w, i) => ({
-    intro: waveIntro(w, i, level.waves.length),
+    intro: waveIntro(w, i, total),
     camps: [...w.camps],
     counts: { grunt: w.counts.grunt, runner: w.counts.runner },
-    spawnTime: w.spawnTime,
+    // v3 2.7: a foggy night wave sends its groups out more spread, so the short warning does not snowball.
+    spawnTime: level.meta.settings.foggyNight && timeOfWave(i, total) === 'night' ? Math.round(w.spawnTime * NIGHT_FOG.spreadScale) : w.spawnTime,
     balloons: w.balloons,
     rising: [...w.rising],
     gear: { ...w.gear },

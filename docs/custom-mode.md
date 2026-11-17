@@ -59,7 +59,7 @@ Each setting **describes itself**: its type (range, choice, on and off, number, 
 | Group | Settings |
 |---|---|
 | Map | camps (count), camp directions (spread out, opposite, one side), camp distance (range), camp size, junctions (count), road wiggle, crossings and loops, triggers per road (kegs, boulders, trees, and their share) |
-| Waves | goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once |
+| Waves | goblins per wave, how it grows wave to wave, runner share, balloons, the gear share (helmets, shields, spears, swords), spawn rate, how many camps send at once, foggy night (v3 2.7: fog in the night wave) |
 | Rules | garrison size and refill time, the castle's starting health |
 | Difficulty | easy, normal, hard (moves the wave settings together; the skulls on the card) |
 
