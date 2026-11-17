@@ -28,6 +28,12 @@ export type DebugCommand =
   | 'slingShot'
   | 'slingLoad'
   | 'slingGoblin'
+  | 'slingFire'
+  | 'slingKeg'
+  | 'spicyLure'
+  | 'chickensFront'
+  | 'trophiesAll'
+  | 'trophiesForget'
   | 'bowlEmpty'
   | 'bowlFill'
   | 'rechargeTools'
@@ -154,6 +160,8 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'openCustom', group: 'menu', icon: '🛠️', label: 'Open Custom Game', does: 'Go to the Custom Game page (the empty state, or the list of saved levels). A save writes the level summary as a debug note' },
   { id: 'fightCustom', group: 'menu', icon: '⚔️', label: 'Fight newest custom level', does: 'From the menu: load the newest saved Custom Game level\'s map and play its waves (a debug note says how long the map took)' },
   { id: 'resetCustom', group: 'menu', icon: '🗑️', label: 'Forget custom levels', does: 'Delete every saved Custom Game level (the page shows the empty state again)' },
+  { id: 'trophiesAll', group: 'menu', icon: '🏅', label: 'Earn all trophies', does: 'Mark all 16 achievements as earned (the 8 secret abilities and the 8 regular ones): the shelf lights every trophy and shows what each does' },
+  { id: 'trophiesForget', group: 'menu', icon: '❓', label: 'Forget trophies', does: 'Forget every earned achievement (the shelf shows the riddles and goals again; they can be earned again in a real battle)' },
   { id: 'resetSave', group: 'menu', icon: '🧹', label: 'Forget progress', does: 'Forget the saved tutorial, stars, open levels, unlocks and loadout (the next start shows the welcome panel)' },
   { id: 'celebrate', group: 'castle', icon: '🎉', label: 'Celebrate', does: 'Show the wave cleared celebration now (confetti over the castle, soldiers cheer)' },
   { id: 'damageCastle', group: 'castle', icon: '💥', label: 'Damage castle', does: 'Damage the castle by 20 (the red flag slides down)' },
@@ -171,6 +179,8 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'slingShot', group: 'slingshot', icon: '🎯', label: 'Shoot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },
   { id: 'slingLoad', group: 'slingshot', icon: '🪨', label: 'Load pebble', does: 'Put a pebble in the slingshot pouch' },
   { id: 'slingGoblin', group: 'slingshot', icon: '👺', label: 'Load goblin', does: 'Put the goblin nearest the castle in the slingshot pouch (then L shoots it)' },
+  { id: 'slingFire', group: 'slingshot', icon: '🔥', label: 'Load fire pebble', does: 'Night Owl (v3 2.6): a burning pebble in the pouch, as if held in the torch (it burns out in 5 s; Shoot fires it, it lights kegs and haystacks)' },
+  { id: 'slingKeg', group: 'slingshot', icon: '🛢️', label: 'Load flying keg', does: 'Package Deal (v3 2.6): a keg in the pouch, as if pulled in by the magnet (Shoot fires it: a big blast where it lands)' },
   { id: 'bowlEmpty', group: 'slingshot', icon: '🥣', label: 'Empty bowl', does: 'Empty the pebble bowl (the bowl shows Locked until it refills)' },
   { id: 'bowlFill', group: 'slingshot', icon: '🫙', label: 'Fill bowl', does: 'Fill the pebble bowl' },
   { id: 'rechargeTools', group: 'food', icon: '🔋', label: 'Recharge tools', does: 'Every tool is ready at once (its recharge ring full)' },
@@ -190,6 +200,8 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'newTools', group: 'food', icon: '🆕', label: 'Show new tools', does: 'The magnet, magnifying glass and sugar bowl pop onto the left platforms now (the swatter, pepper and drum step aside), without a loadout' },
   { id: 'magnet', group: 'food', icon: '🧲', label: 'Magnet pull', does: 'Magnet: strips the gear off every goblin within 60 cm of the spot 120 cm out in front (starts its 8 s use, 20 s recharge)' },
   { id: 'sugar', group: 'food', icon: '🧊', label: 'Sugar lure', does: 'Sugar cubes: a lure 100 cm out in front; goblins near it stop to eat (uses one cube)' },
+  { id: 'spicyLure', group: 'food', icon: '🌶️', label: 'Spicy sugar lure', does: 'Secret Recipe (v3 2.6): a peppered lure 100 cm out in front; goblins that eat it are seasoned (heal double when eaten, for 8 s)' },
+  { id: 'chickensFront', group: 'food', icon: '🐔', label: 'Chickens in front', does: 'Change of Menu (v3 2.6): three chickens by the wall in front, to pinch and eat (each heals 3 times a goblin)' },
   { id: 'garden', group: 'food', icon: '🌻', label: 'Grow garden', does: 'Magnifying glass: every seed bed grows its plant at once (sunflowers shoot, mushrooms puff)' },
   { id: 'pepperRing', group: 'food', icon: '🔴', label: 'Pepper ring front', does: 'Pepper ring: fill the 3 segments in front of you at once (each lasts 30 s, a quarter used per goblin walking through)' },
   { id: 'horn', group: 'food', icon: '📯', label: 'Blow horn', does: 'Horn: it sounds without hands or a mic and the field knights charge down the road in front of you (30 s recharge)' },
@@ -202,7 +214,7 @@ export const DEBUG_ACTIONS: DebugAction[] = [
     group: 'army',
     icon: '🛢️',
     label: 'Trigger lesson group',
-    does: 'A small group of grunts walks to the powder keg nearest the front and waits beside it until it is set off (what the wave 2 keg lesson does)',
+    does: 'A small group of grunts walks to the boulder nearest the front and waits below it until it is set off (what the wave 2 boulder lesson does)',
   },
   { id: 'triggersReset', group: 'army', icon: '🛢️', label: 'Reset triggers', does: 'Every trigger (keg, boulder, tree) stands ready now, even before its wave' },
   { id: 'triggersFire', group: 'army', icon: '💣', label: 'Set off triggers', does: 'Set off every trigger standing now (keg blast, boulder roll, tree fall)' },

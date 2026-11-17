@@ -39,6 +39,8 @@ export class PepperShaker extends HandTool {
   onHover: (x: number, z: number) => void = () => {};
   /** v3 2.2: pepper lands on a board point (cm) for dt seconds (the pepper ring fills there). */
   onGround: (x: number, z: number, dt: number) => void = () => {};
+  /** v3 2.6: pepper falls from this board point (cm) for dt seconds (Spicy sugar: a sugar cube under it turns spicy). */
+  onSprinkle: (board: Vector3, dt: number) => void = () => {};
 
   constructor(parts: ToolParts) {
     super(
@@ -110,6 +112,7 @@ export class PepperShaker extends HandTool {
     }
     this.stage.boardSpin.worldToLocal(board.copy(at));
     this.onGround(board.x, board.z, dt);
+    this.onSprinkle(board, dt);
     const r2 = radius * radius;
     let count = 0;
     for (const g of this.goblins.list) {

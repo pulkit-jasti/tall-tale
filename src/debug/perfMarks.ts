@@ -23,7 +23,12 @@ export type PerfMark =
   | 'juice'
   | 'time of day'
   | 'map load'
-  | 'horn path';
+  | 'horn path'
+  | 'horn ghosts built'
+  | 'knight boost'
+  | 'night fog'
+  | 'trap back'
+  | 'trophy toast';
 
 const marks = new Set<PerfMark>();
 

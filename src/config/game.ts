@@ -1292,11 +1292,15 @@ export const MENU = {
       lowRadius: 43,
       lowY: 18,
       // Between the front and the left side, like the tools on the right.
-      lowAngles: [-48, -60, -72, -84, -96],
+      // v3 2.6: two even rows of 8 (the regular achievements low, the secret abilities high), 10 degrees apart,
+      // the high row offset by half a step so it never hides behind the low one. The shelf is full: no card.
+      lowAngles: [-42, -52, -62, -72, -82, -92, -102, -112],
       highRadius: 48,
       highY: 30,
-      highAngles: [-54, -66, -78, -90],
-      cardAngle: -104,
+      highAngles: [-47, -57, -67, -77, -87, -97, -107, -117],
+      /** v3 2.6: the "?" over an unfound secret: its size and how far above the trophy's top (cm). */
+      questionSize: 3,
+      questionAbove: 1.2,
     },
     /** Grabbing a shelf thing: a hand closes within this of it (meters at the default board size). */
     grabRadius: 0.07,
@@ -2264,10 +2268,56 @@ export const PEBBLE_THROW = {
 
 /** A goblin loaded into the slingshot instead of a pebble. It costs a meal, so it hits harder. */
 export const GOBLIN_SHOT = {
-  /** Goblins this close to the impact are knocked back, dazed (cm). The goblin hit is knocked out. */
-  splashRadius: 8,
+  /**
+   * v3 2.6 Goblin shot (Fair Trade): where it lands, goblins within
+   * knockRadius (cm) are knocked out, and the ones out to splashRadius are
+   * flung back flingScale times a pebble's knock back, dazed.
+   */
+  knockRadius: 5,
+  splashRadius: 12,
+  flingScale: 1.8,
   /** Spin while flying (radians per second). */
   spin: 14,
+};
+
+/**
+ * v3 2.6 Fire pebble (Night Owl): a torch beside the pebble bowl, lit at
+ * sunset and night only. A pebble held in its flame lightTime seconds catches
+ * fire; shot from the slingshot it lights kegs and haystacks (never plants),
+ * on a goblin it is a normal pebble plus smoke. It burns out burnTime
+ * seconds after lighting if not shot. The torch stands at angleDeg (degrees,
+ * like the tool spots), radius cm out, its flame flameY cm above the board
+ * (in the reach band, listed in reachSpots).
+ */
+export const FIRE_PEBBLE = {
+  angleDeg: 75,
+  radius: 41,
+  flameY: 21,
+  stickColor: 0x6b4a2b,
+  flameColors: [0xff6a1a, 0xffb02a, 0xffe08a],
+  flameSize: 1.6,
+  /** A pinched pebble within this of the flame (meters at the default board) heats up. */
+  lightRadius: 0.045,
+  lightTime: 1,
+  burnTime: 5,
+  /** Flame puffs on a burning pebble this often (seconds). */
+  puffEvery: 0.08,
+  smokeColors: [0x555555, 0x777777, 0x999999],
+};
+
+/**
+ * v3 2.6 Flying keg (Package Deal): a keg the magnet pulled in lands on a
+ * small stand by the pebble bowl (angleDeg, radius, topY cm), in reach.
+ * Pinch it, bring it to the pouch (it clicks in), shoot it: a big blast
+ * where it lands (blastScale times a keg's blast radius).
+ */
+export const FLYING_KEG = {
+  angleDeg: 79,
+  radius: 30,
+  topY: 8,
+  height: 2.6,
+  grabRadius: 0.06,
+  blastScale: 1.4,
 };
 
 /**
@@ -2498,6 +2548,8 @@ export const PEPPER = {
   sneezeTime: 1.2,
   /** A seasoned goblin's colors are multiplied by this (dusty brown). */
   seasonedTint: [0.85, 0.68, 0.55] as [number, number, number],
+  /** v3 2.6: seasoning wears off after this long (seconds), its tint with it (Spicy snack and Spicy sugar alike). */
+  seasonedFor: 8,
   /**
    * Peppered goblins keep sneezing, like an old cartoon: every so often
    * (seconds, from, to) the head jerks forward for sneezeJerkTime with a puff
@@ -2760,6 +2812,13 @@ export const MAGNET = {
   arcEvery: 0.25,
   arcColors: [0xe8ecf0, 0xd8262a, 0xffffff],
   clankColors: [0xe8ecf0, 0xb8c0c8, 0xffd84a],
+  /**
+   * v3 2.6 Package Deal: the ring held on a standing keg (within kegRadius cm
+   * of it) for kegPullTime seconds pulls it in: it lands by the pebble bowl
+   * and the magnet's use window ends.
+   */
+  kegRadius: 6,
+  kegPullTime: 2,
 };
 
 /**
@@ -2789,6 +2848,15 @@ export const SUGAR = {
   feeds: 5,
   /** Crumbs while it is eaten. */
   crumbColors: [0xfaf6ee, 0xf2e6c8, 0xffffff],
+  /**
+   * v3 2.6 Spicy sugar (Secret Recipe): pepper falling on a cube (held, or
+   * a lure on the ground) within pepperRadius cm (flat) for pepperTime
+   * seconds makes it spicy (reddish). Goblins that eat a spicy cube are
+   * seasoned (they heal double when eaten, until it wears off).
+   */
+  pepperRadius: 4,
+  pepperTime: 0.3,
+  spicyColor: 0xe0704a,
 };
 
 /**
@@ -2838,6 +2906,16 @@ export const GLASS = {
   sunColor: 0xffd23f,
   plainColor: 0xffffff,
   smokeColors: [0x777777, 0x999999, 0xbbbbbb],
+  /**
+   * v3 2.6 Sun charge (Bright Idea): by day (morning and day only), the lens
+   * held between the eyes and the sun (within sunConeDeg of the sun's
+   * direction, seen from the head) for sunHold seconds: the next use gets
+   * sunBonus more seconds of beam (12 becomes 16). Once per wave.
+   */
+  sunConeDeg: 14,
+  sunHold: 2,
+  sunBonus: 4,
+  sunSparkle: [0xffd23f, 0xffffff, 0xffb02a],
 };
 
 /**
@@ -2898,6 +2976,12 @@ export const CHICKENS = {
   life: 20,
   viewDeg: 60,
   max: 30,
+  /**
+   * v3 2.6 Chicken dinner (Change of Menu): a chicken can be pinched and
+   * eaten like a goblin; it heals this many times a goblin's heal
+   * (CASTLE_HEALTH.eatHeal). Rare, since the cart is rare.
+   */
+  healScale: 3,
 };
 
 /** The stun of the drum: every goblin on the board stops, dizzy. */
@@ -2994,6 +3078,18 @@ export const TRIGGERS = {
     bellRadius: 2.2,
     bellHeight: 2.8,
     bellColor: 0x8a6a3a,
+    /**
+     * v3 2.6 Ring the bell (Gentle Touch): a slingshot pebble on the bell
+     * rings it (it swings, never falls): goblins on their feet within
+     * ringRadius (cm) of the road under it are dazed ringDaze seconds, and
+     * one dazed so cannot be dazed by it again for ringImmune seconds. No
+     * cooldown on ringing. The pebble's hit area around the bell (cm).
+     */
+    ringRadius: 12,
+    ringDaze: 2.5,
+    ringImmune: 6,
+    ringSwing: 1.4,
+    ringHitRadius: 3.2,
     fallTime: 0.45,
     bounce: 0.8,
     knockRadius: 9,

@@ -127,6 +127,11 @@ export class Menu {
     this.campaign.refresh();
   }
 
+  /** v3 2.6: an achievement was earned or forgotten: the trophies and the counter show it. */
+  refreshTrophies(): void {
+    this.shelves.refreshTrophies();
+  }
+
   update(hands: HandState[], dt: number, head: Vector3): MenuChoice {
     this.rail.update(hands, dt);
     // A hand on the rail grabs nothing on the shelves (one array reused, no garbage each frame).

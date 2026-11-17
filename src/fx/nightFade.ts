@@ -22,6 +22,8 @@ export function setTerrainLook(color: Color, greyShare: number): void {
  * too (fadeAtNight skips those): call it from that material's onBeforeCompile.
  */
 export function applyNightFade(shader: { uniforms: Record<string, { value: unknown }>; fragmentShader: string }): void {
+  // Both uniforms must be bound: an unbound terrainTint reads as black and every terrain pixel turned black.
+  shader.uniforms.terrainTint = tint;
   shader.uniforms.terrainGrey = grey;
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', '#include <common>\nuniform vec3 terrainTint;\nuniform float terrainGrey;')

@@ -9,6 +9,7 @@ import { GameAudio } from './audio/sound.js';
 import {
   BALLOONS,
   BOARD,
+  CASTLE,
   DEBUG,
   FPS,
   GLASS_SIGN,
@@ -61,6 +62,8 @@ import { StressTest } from './debug/stressTest.js';
 import { ToySpawner } from './director/toySpawner.js';
 import { Particles } from './fx/particles.js';
 import { GrabEat } from './player/grabEat.js';
+import { Achievements } from './player/achievements.js';
+import { TrophyToast } from './ui/trophyToast.js';
 import { CompassCrank } from './player/crank.js';
 import { HeightRail } from './player/heightRail.js';
 import { HandTracker } from './player/hands.js';
@@ -170,9 +173,13 @@ export class GameSystem extends createSystem({}) {
   private stun!: StunWave;
   private pepperRing!: PepperRing;
   private magnet!: Magnet;
-  private glass!: Magnifier;
+  /** The magnifying glass (its own name: it shared `glass` with the glass sign, which overwrote it). */
+  private magnifier!: Magnifier;
   private garden!: Garden;
   private chickens!: Chickens;
+  /** v3 2.6: the achievements tracker and the toast that pops up when one is earned. */
+  private achievements!: Achievements;
+  private toast!: TrophyToast;
   private sugar!: SugarBowl;
   private tools: HandTool[] = [];
   private troops!: Troops;
@@ -357,17 +364,19 @@ export class GameSystem extends createSystem({}) {
     this.drum.stunning = () => this.stun.active;
     this.drum.onStrike = (where, seconds) => {
       const stunned = this.stun.stun(seconds, where);
+      // v3 2.6: every goblin the drum touched counts it as a helper (Jack of All Trades).
+      for (const g of this.goblins.list) if (g.stunned > 0 || g.mode === 'rampart') this.goblins.credit(g, 'drum');
       return stunned + this.goblins.knockOffRampart();
     };
     // v3 2.2: the magnet, the magnifying glass (with the sun garden) and the sugar bowl.
     this.magnet = new Magnet(toolParts);
-    this.glass = new Magnifier(toolParts);
-    this.glass.timeOfDay = () => this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves);
+    this.magnifier = new Magnifier(toolParts);
+    this.magnifier.timeOfDay = () => this.timeOverride ?? timeOfWave(this.battle.timeWave, this.battle.totalWaves);
     this.garden = new Garden(this.stage.boardSpin, this.goblins, this.audio, this.particles);
-    this.glass.garden = this.garden;
+    this.magnifier.garden = this.garden;
     this.sugar = new SugarBowl(toolParts);
     this.slingshot.onCubeLanded = (x, y, z) => this.sugar.landAt(x, y, z);
-    this.tools = [this.swatter, this.pepper, this.drum, this.horn, this.magnet, this.glass, this.sugar];
+    this.tools = [this.swatter, this.pepper, this.drum, this.horn, this.magnet, this.magnifier, this.sugar];
     this.troops = new Troops(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 800));
     // The wall garrison (v2): archers and guards on the rampart, run with the troops.
     const garrison = new Garrison(this.stage.boardSpin, this.troops, this.goblins, this.audio, this.particles, createRandom(seed + 810));
@@ -378,7 +387,7 @@ export class GameSystem extends createSystem({}) {
     // Goblins on the rampart hunt the soldiers there, and jump in only when none is left (v2).
     this.goblins.huntAngle = (g) => garrison.nearestSoldierAngle(g);
     this.triggers = new Triggers(this.stage.boardSpin, built.network, this.goblins, this.audio, this.particles, createRandom(seed + 900));
-    this.glass.triggers = this.triggers;
+    this.magnifier.triggers = this.triggers;
     // v3 2.1: the magnet pulls bell tower bells; the potion cart turns goblins into chickens.
     this.magnet.triggers = this.triggers;
     this.chickens = new Chickens(this.stage.boardSpin, this.audio, this.particles, createRandom(seed + 995));
@@ -450,7 +459,7 @@ export class GameSystem extends createSystem({}) {
       goblins: this.goblins,
       spawner: waves,
       slingshot: this.slingshot,
-      tools: { swatter: this.swatter, pepper: this.pepper, drum: this.drum, horn: this.horn, magnet: this.magnet, glass: this.glass, sugar: this.sugar },
+      tools: { swatter: this.swatter, pepper: this.pepper, drum: this.drum, horn: this.horn, magnet: this.magnet, glass: this.magnifier, sugar: this.sugar },
       garden: this.garden,
       troops: this.troops,
       triggers: this.triggers,
@@ -478,8 +487,7 @@ export class GameSystem extends createSystem({}) {
       crank: this.handles,
       setGarrison: (rules) => garrison.setRules(rules),
     });
-    // v3 2.5: eating heals the castle (the battle counts it and heals).
-    this.grabEat.onEat = (goblin) => this.battle.noteEaten(goblin.seasoned);
+    // v3 2.5: eating heals the castle (the battle counts it and heals): set in wireAchievements.
     // Juice hooks: a star and a ring on every knockout, a big hit for blasts and pops.
     this.goblins.onKnockOut = (_goblin, world) => this.juice.knockout(world, this.stage.boardScale);
     this.goblins.onArmor = (_goblin, world) => {
@@ -512,8 +520,11 @@ export class GameSystem extends createSystem({}) {
         return;
       }
       // The path is marked first (the walk the knights will take), then they go.
+      const kind = this.hornAim.kind;
       this.hornAim.markCalled(target);
       if (!this.troops.command(target)) this.hornAim.cancelCalled();
+      // v3 2.6 Commander: call, boost and move in one battle.
+      else if (kind) this.achievements.hornOrder(kind === 'new' ? 'call' : kind);
     };
     // Their crash into the goblins: a hit stop, a ring and a pow star.
     this.troops.onCrash = (world) => {
@@ -523,6 +534,7 @@ export class GameSystem extends createSystem({}) {
     };
     this.grabEat.onGrab = () => this.battle.notePicked();
     this.grabEat.onToss = (_goblin, speed) => this.battle.noteTossed(speed);
+    this.wireAchievements(root);
     // The menus (v2 run 2): display copies of the tools for the shelf and the stand, made before the tools hide,
     // and the trophy model (docs/assets.md) for the achievements shelf.
     const [trophy, platform] = await Promise.all([
@@ -541,7 +553,7 @@ export class GameSystem extends createSystem({}) {
         horn: this.horn.displayModel(),
         slingshot: this.slingshot.displayModel(),
         magnet: this.magnet.displayModel(),
-        glass: this.glass.displayModel(),
+        glass: this.magnifier.displayModel(),
         sugar: this.sugar.displayModel(),
       },
       { trophy, platform },
@@ -611,6 +623,71 @@ export class GameSystem extends createSystem({}) {
     this.placeBoard();
     this.ready = true;
     console.info('[game] ready');
+  }
+
+  /**
+   * v3 2.6: the achievements (docs/v3-plan.md 2.6). The tracker hears what
+   * happens in a battle; the secret abilities' own links (the magnet pulls a
+   * keg to the slingshot, pepper on sugar, the sun for the glass) are here too.
+   */
+  private wireAchievements(root: Object3D): void {
+    const A = new Achievements(this.goblins);
+    this.achievements = A;
+    this.toast = new TrophyToast(root, this.audio, this.particles);
+    A.onUnlock = (id) => {
+      this.toast.show(id);
+      this.menu?.refreshTrophies();
+    };
+    this.goblins.onKnockOutBy = (g, cause) => A.knockedOut(g, cause);
+    // Eating heals (v3 2.5); a seasoned goblin is Acquired Taste, a chicken Change of Menu.
+    this.grabEat.onEat = (goblin) => {
+      this.battle.noteEaten(goblin.seasoned);
+      A.eaten(goblin, goblin.seasoned);
+    };
+    this.grabEat.chickens = this.chickens;
+    this.grabEat.onEatChicken = () => {
+      this.battle.noteChickenEaten();
+      A.chickenEaten();
+    };
+    this.slingshot.onGoblinShot = () => A.goblinShot();
+    this.slingshot.onFireLit = () => A.fireLit();
+    // Package Deal: the magnet pulls a keg to its stand by the bowl; shot, it blows up where it lands.
+    this.magnet.onKegPulled = () => this.slingshot.addKeg();
+    this.slingshot.onKegBlast = (at) => {
+      this.triggers.blastAt(at, this.slingshot.kegBlastRadius, 'slingshot');
+      A.kegBlast();
+    };
+    this.magnet.onStrip = (pieces) => A.gearPulled(pieces);
+    // Bright Idea: the way to the sun from the head.
+    this.magnifier.sunDirection = (out) => {
+      if (!this.sky?.sunWorld(out)) return false;
+      out.sub(headPosition).normalize();
+      return true;
+    };
+    this.magnifier.waveNow = () => this.battle.timeWave;
+    this.magnifier.onSunCharge = () => A.sunCharge();
+    this.triggers.onBellRung = () => A.bellRung();
+    this.triggers.onSetOffBy = (kind, by) => A.trapSetOff(kind, by);
+    // Secret Recipe: pepper falling on a sugar cube makes it spicy.
+    this.pepper.onSprinkle = (at, dt) => this.sugar.pepperAt(at, dt);
+    this.sugar.onSpicyEaten = () => A.spicyEaten();
+    this.pepperRing.onDiggerStopped = () => A.diggerStopped();
+    // Real battles only: a level, Custom Game, a battle after Skip tutorial (never the tutorial's lessons).
+    this.battle.onStarted = (teach) => {
+      A.startBattle(teach ? null : ((this.battle.loadout ?? null) as PickTool[] | null), !teach);
+      this.magnifier.resetSun();
+      this.slingshot.clearExtras();
+      this.toast.clear();
+    };
+    this.battle.onWaveStarted = () => A.waveStarted(this.livePlants());
+    this.battle.onWaveCleared = () => A.waveCleared(this.livePlants());
+  }
+
+  /** v3 2.6 Green Thumb: the plants standing now (each its own object). */
+  private livePlants(): object[] {
+    const out: object[] = [];
+    for (const bed of this.garden.beds) if (bed.plant) out.push(bed.plant);
+    return out;
   }
 
   private get immersive(): boolean {
@@ -720,6 +797,8 @@ export class GameSystem extends createSystem({}) {
    * Menu button.
    */
   private battleOver(won: boolean, share: number): 'menu' | EndExtras {
+    // v3 2.6: Commander and Jack of All Trades are earned on a win.
+    this.achievements.endBattle(won);
     if (this.battle.teaching) {
       if (!won) return { menu: false };
       recordTutorial(progress, true);
@@ -797,6 +876,8 @@ export class GameSystem extends createSystem({}) {
     this.threat.hideArrow();
     this.hornAim.hide();
     this.glass.hide();
+    this.toast.clear();
+    this.achievements.active = false;
     this.battle.stop();
     this.menu.open(page);
     this.swap.toMenu(
@@ -1263,12 +1344,16 @@ export class GameSystem extends createSystem({}) {
     // The horn lesson's "look around" beat: the horn waits for the "blow" sign.
     this.horn.waiting = this.battle.hornWaiting;
     // v3 2.2: the magnifying glass is aimed by the head.
-    this.glass.headPosition.copy(headPosition);
-    this.glass.headForward.copy(headForward);
+    this.magnifier.headPosition.copy(headPosition);
+    this.magnifier.headForward.copy(headForward);
     this.grabEat.update(dt, headPosition, headForward);
     // Sugar cubes are pinched off their bowl by a free hand.
     this.sugar.updateHands(this.hands.hands, (hand) => this.grabEat.handBusy(hand), this.slingshot, dt);
+    // v3 2.6 Night Owl: the torch by the pebble bowl burns at sunset and night only.
+    const timeNow = this.magnifier.timeOfDay();
+    this.slingshot.torchLit = timeNow === 'sunset' || timeNow === 'night';
     this.slingshot.update(dt, headPosition);
+    this.toast.update(dt, headPosition, headForward);
     for (const tool of this.tools) tool.update(dt);
     this.garden.update(unitDt);
     this.chickens.update(unitDt, headPosition, headForward);
@@ -1615,6 +1700,7 @@ export class GameSystem extends createSystem({}) {
       case 'resetSave':
         resetProgress();
         this.menu.refresh();
+        this.menu.refreshTrophies();
         console.info('[debug] saved progress forgotten (the tutorial, stars, unlocks, the loadout)');
         break;
       case 'unlockAll':
@@ -1711,6 +1797,31 @@ export class GameSystem extends createSystem({}) {
       case 'slingGoblin':
         this.slingshot.debugLoadGoblin();
         break;
+      case 'slingFire':
+        this.slingshot.debugLoadFire();
+        break;
+      case 'slingKeg':
+        this.slingshot.debugLoadKeg();
+        break;
+      case 'spicyLure':
+        this.sugar.debugLure(true);
+        break;
+      case 'chickensFront': {
+        // By the wall straight in front (board cm), a little apart.
+        const points = [-6, 0, 6].map((x) => this.stage.boardSpin.worldToLocal(this.stage.boardLift.localToWorld(new Vector3(x, 0, -(CASTLE.wallOut + 4)))));
+        this.chickens.spawn(points);
+        break;
+      }
+      case 'trophiesAll':
+        this.achievements.unlockAll();
+        this.menu.refreshTrophies();
+        console.info('[debug] every achievement earned');
+        break;
+      case 'trophiesForget':
+        this.achievements.forgetAll();
+        this.menu.refreshTrophies();
+        console.info('[debug] every achievement forgotten');
+        break;
       case 'bowlEmpty':
         this.slingshot.debugBowl(false);
         break;
@@ -1753,7 +1864,7 @@ export class GameSystem extends createSystem({}) {
         this.sugar.debugLure();
         break;
       case 'garden':
-        this.glass.debugGrow();
+        this.magnifier.debugGrow();
         break;
       case 'newTraps':
         // v3 2.1: the haystacks, bell tower and bridge stand now, and the potion cart shows.
@@ -1762,10 +1873,10 @@ export class GameSystem extends createSystem({}) {
       case 'newTools':
         // v3 2.2: the magnet, glass and sugar bowl on the left spots now (no loadout needed).
         this.magnet.setSpot(LOADOUT_SPOTS[2]);
-        this.glass.setSpot(LOADOUT_SPOTS[3]);
+        this.magnifier.setSpot(LOADOUT_SPOTS[3]);
         this.sugar.setSpot(TOOL_SPOTS.leftMiddle);
         for (const t of [this.swatter, this.pepper, this.drum]) t.setVisible(false);
-        for (const t of [this.magnet, this.glass, this.sugar]) if (!t.visible) t.appear();
+        for (const t of [this.magnet, this.magnifier, this.sugar]) if (!t.visible) t.appear();
         break;
       case 'horn':
         this.horn.debugBlow();
@@ -1790,9 +1901,10 @@ export class GameSystem extends createSystem({}) {
         this.triggers.setWave(this.battle.totalWaves, true);
         break;
       case 'triggerLesson': {
-        // What the keg lesson does: a small group waits by the keg nearest the front until it is set off.
-        const keg = this.triggers.readyNearest('keg', this.stage.spin);
-        if (keg) this.triggers.baitGroup(keg, TRIGGERS.lesson.group);
+        // What the first trap lesson does (v3 2.6: the boulder, kegs take fire only): a small group waits by the
+        // boulder nearest the front until it is set off.
+        const boulder = this.triggers.readyNearest('boulder', this.stage.spin);
+        if (boulder) this.triggers.baitGroup(boulder, TRIGGERS.lesson.group);
         break;
       }
       case 'triggersFire':

@@ -111,7 +111,8 @@ export class CampaignPanel {
     // A poke on the locked Fight: with empty tool slots, the game shows where to put tools.
     this.panel.root.add(this.fight.group);
     // The reward tools, each sized to rewardHeight and stood on the card.
-    for (const [tool, model] of Object.entries(rewardModels) as [PickTool, Object3D][]) {
+    // The card's rewards are only campaign reward tools (LevelReward), never the horn or the slingshot.
+    for (const [tool, model] of Object.entries(rewardModels) as [Exclude<LevelReward, null>, Object3D][]) {
       const holder = new Group();
       const box = new Box3().setFromObject(model);
       const size = box.getSize(new Vector3());

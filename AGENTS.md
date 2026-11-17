@@ -124,6 +124,7 @@ Four times of day follow the waves (docs/mvp.md, "Day and night cycle"). Anythin
 - **A new troop or enemy material gets the night rim** (`addNightRim` in `src/fx/nightRim.ts`, call it again after cloning a material), so it stands out at night.
 - **New terrain or decor gets the terrain fade** (`fadeAtNight` in `src/fx/nightFade.ts`). Anything built into the board before `fadeAtNight(this.stage.boardSpin)` in `src/game.ts` gets it; anything that glows or is interactive must be added after it, so it keeps its colors.
 - **Night lights are faked**, never real lights: bright unlit colors and additive glows (`src/world/nightLights.ts`). A new glowing thing goes there.
+- **Night fog** (v3 2.7, a level's "Foggy night" setting, `NIGHT_FOG` in config): the scene fog pulled in to 1.5 to 2.5 m for the night wave, blended in `src/world/dayNight.ts` (`DayLook.foggy`, `Battle.foggy`). New board objects and decor keep the material's default `fog: true`, so they hide in it; tools, the compass, flags, signs and UI use `fog: false`. A new unlit sky piece (`fog: false`) must take the fog's color itself, like the dome and the clouds in `Sky.apply`. The one gameplay use of the time of day: a foggy night wave sends its goblins out more spread (`NIGHT_FOG.spreadScale`, in `levelWavePlans`).
 - The time only changes between waves, so a change never costs frame time during a fight. Keep it that way.
 
 ## Development workflow
@@ -145,10 +146,10 @@ When the developer starts a cloud session to build the MVP, these rules replace 
 
 - Work through the build order in docs/mvp.md without stopping to ask, unless a hard rule would be broken or the docs truly do not answer a question.
 - Commit and push to the session's branch after each build step. Never push to `master`. Every push deploys to GitHub Pages automatically (`.github/workflows/deploy.yml`).
-- Before each push, `npm run build` must finish with no errors (no tests: decided 2026-11-16, see Developer preferences). **Never run `npm run typecheck`** (decided 2026-11-11: it costs too many tokens; the build catches what breaks the game).
+- Before each push, `npm run typecheck` (no new errors) and `npm run build` (no errors) must pass (decided 2026-11-17, see Developer preferences; no tests).
 - Use iwsdk-reference and the metavr docs and API tools for every API question, before writing the code.
 - Do not use iwsdk-runtime, browser screenshots, the emulator or the metavr device and performance tools. There is no headset or GPU in the cloud.
-- IWSDK skills (for example `iwsdk-dev`) ask for runtime checks and screenshots. Skip those parts and check with the build and tests instead (never typecheck).
+- IWSDK skills (for example `iwsdk-dev`) ask for runtime checks and screenshots. Skip those parts and check with the type check and the build instead.
 - End each step's commit message with a "Headset check:" list: what to test on the headset and the debug page buttons for it.
 - Stop after step 1 and tell the developer it is ready for a headset test. (MVP build only. For the v2 runs, follow docs/v2-plan.md section 3: commit after every step, stop only at the end of the run.)
 - If anything in docs/ conflicts with these rules, these rules win.
@@ -158,7 +159,7 @@ When the developer starts a cloud session to build the MVP, these rules replace 
 - Do not commit, push or deploy unless the developer explicitly asks.
 - Ask before adding any dependency.
 - Do not run formatters, linters or scripts that were not approved.
-- **Never run `npm run typecheck` or `tsc`** (decided 2026-11-11, to save tokens). **The only check is `npm run build`: it must finish with no errors** (decided 2026-11-16). Never run `npm test` and never write or update tests, unless the developer asks. Known old type errors (`director.test.ts`) and the stale tests stay as they are.
+- **Checks** (decided 2026-11-17, replaces "never typecheck"): after each **major change** (a new feature, a refactor, changes across several files) run `npm run typecheck` and `npm run build`; both must finish with no new errors. After a minor change (a tweak, a value, a one-file fix) run nothing, or only the build. The build alone does not check types: a duplicate field name in `src/game.ts` crashed the game at start and only a type check would have caught it. Report only the errors, never the full output. Never run `npm test` and never write or update tests, unless the developer asks. Known old type errors (`director.test.ts`) and the stale tests stay as they are; ignore them.
 - Never use em dashes or en dashes in code comments, docs or UI text.
 - Keep explanations short and simple. The developer knows React, React Native, Node/Express and Python well, but is new to 3D and VR.
 - No co-author lines in commits or files.

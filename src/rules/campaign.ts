@@ -3,6 +3,7 @@
 // unlocked, and the loadout (the slingshot and the horn fixed, 2 picked).
 // Plain data in, plain data out, no storage and no Three.js here: the save
 // lives in src/player/progress.ts.
+import { ACHIEVEMENT_IDS, type AchievementId } from '../config/achievements.js';
 import { LEVELS, OPEN_FROM_START, TUTORIAL_ENEMIES, type EnemyIcon } from '../config/levels.js';
 
 /** The tools the player picks for the 2 free loadout slots (new tools join this list). */
@@ -42,6 +43,8 @@ export interface Progress {
   unlockAll: boolean;
   /** Tools grabbed once on the shelf (a newly unlocked tool glows until then). */
   toolsSeen: PickTool[];
+  /** v3 2.6: the achievements earned (secret abilities and regular ones). */
+  trophies: AchievementId[];
 }
 
 /** True for an unlocked tool that was never grabbed on the shelf (it glows). */
@@ -62,6 +65,7 @@ export function createProgress(): Progress {
     met: [],
     unlockAll: false,
     toolsSeen: [],
+    trophies: [],
   };
 }
 
@@ -89,6 +93,7 @@ export function parseProgress(raw: unknown): Progress {
   if (Array.isArray(r.open)) for (const n of r.open) if (typeof n === 'number' && LEVELS.some((l) => l.number === n) && !p.open.includes(n)) p.open.push(n);
   if (Array.isArray(r.tools)) p.tools = PICK_TOOLS.filter((t) => (r.tools as unknown[]).map(renamed).includes(t));
   if (Array.isArray(r.toolsSeen)) p.toolsSeen = PICK_TOOLS.filter((t) => (r.toolsSeen as unknown[]).map(renamed).includes(t));
+  if (Array.isArray(r.trophies)) p.trophies = ACHIEVEMENT_IDS.filter((id) => (r.trophies as unknown[]).includes(id));
   if (Array.isArray(r.met)) p.met = TUTORIAL_ENEMIES.filter((e) => (r.met as unknown[]).includes(e));
   if (Array.isArray(r.loadout)) {
     // A save from before v3 2.2 had 2 picks with the slingshot and the horn fixed: they go in front of them.

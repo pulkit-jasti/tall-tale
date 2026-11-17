@@ -136,6 +136,8 @@ Still to try if the frame rate drops, in order of expected gain:
 - **Horn path:** built from saved road heights, no garbage, at most every 0.12 s.
 - **Win screen:** 3 star meshes, only on the end panel.
 
+**New load from night fog (v3 2.7, 2026-11-16, not measured yet):** none expected. It is the scene fog that was always on, with closer numbers (no new shader, no recompile). While it rolls in or lifts (8 s, only between waves) the sky dome's colors are written each frame, like a change of time. Check the FPS panel in a foggy night wave anyway.
+
 If the stress test drops: lower `VILLAGERS.max`, then `NIGHT_LIGHTS.roadTorchMax`, then make the palisades lighter (`camp/survival/fence` instead of the spiked one, or fewer pieces with a bigger `CAMP_LOOK.fencePiece`), then fewer story scenes (`STORY_SPOTS.counts`).
 
 If troops plus enemies still do not fit, use the code-made instanced goblins from [placeholder-shapes.md](placeholder-shapes.md).

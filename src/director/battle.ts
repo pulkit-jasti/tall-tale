@@ -11,6 +11,7 @@ import {
   CALIBRATION,
   CASTLE,
   CASTLE_HEALTH,
+  CHICKENS,
   DEBUG,
   END_PANEL,
   GHOST_HAND,
@@ -211,6 +212,10 @@ export class Battle implements TutorialApi {
   onEnd: (won: boolean, healthShare: number) => 'menu' | EndExtras = () => ({ menu: false });
   /** The end panel's Menu button. */
   onMenu: () => void = () => {};
+  /** v3 2.6: a battle started (`teach`: the tutorial's lessons run), a wave started, a wave was cleared (the achievements). */
+  onStarted: (teach: boolean) => void = () => {};
+  onWaveStarted: () => void = () => {};
+  onWaveCleared: () => void = () => {};
   /** The win panel's Next level button (the game starts the next level). */
   onNext: () => void = () => {};
   /** How long this battle has been fought (seconds, not counting pauses), for the end panel. */
@@ -468,6 +473,7 @@ export class Battle implements TutorialApi {
     };
     this.director = director;
     this.running = true;
+    this.onStarted(teach);
     console.info(
       this.levelRules
         ? `[battle] level started (${this.waves.length} waves)`
@@ -689,9 +695,15 @@ export class Battle implements TutorialApi {
     this.heal(seasoned);
   }
 
+  /** v3 2.6 Chicken dinner: an eaten chicken heals CHICKENS.healScale times a goblin. */
+  noteChickenEaten(): void {
+    this.eatenCount++;
+    this.heal(false, CHICKENS.healScale);
+  }
+
   /** Heals for one eaten goblin (also the debug "Eat heal" action). */
-  heal(seasoned = false): void {
-    const gained = healCastle(this.state, CASTLE_HEALTH.eatHeal * (seasoned ? CASTLE_HEALTH.seasonedHealScale : 1));
+  heal(seasoned = false, scale = 1): void {
+    const gained = healCastle(this.state, CASTLE_HEALTH.eatHeal * scale * (seasoned ? CASTLE_HEALTH.seasonedHealScale : 1));
     if (gained <= 0) return;
     const at = this.parts.flags.clothWorld(healAt);
     this.parts.audio.play('castleHeal', at);
@@ -1135,6 +1147,7 @@ export class Battle implements TutorialApi {
     this.parts.audio.play('waveHorn');
     this.parts.audio.play(last ? 'finalRound' : WAVE_VOICES[index] ?? 'finalRound');
     console.info(`[battle] wave ${index + 1} started`);
+    this.onWaveStarted();
   }
 
   waveCleared(): boolean {
@@ -1169,7 +1182,10 @@ export class Battle implements TutorialApi {
   }
 
   clearWave(): void {
-    if (this.inWave) this.noteWave('cleared');
+    if (this.inWave) {
+      this.noteWave('cleared');
+      this.onWaveCleared();
+    }
     this.inWave = false;
     this.parts.troops.recall();
     clearWave(this.state, CASTLE_HEALTH);
@@ -1427,7 +1443,7 @@ export class Battle implements TutorialApi {
   }
 
   sendPastTrigger(): void {
-    const kind = this.lessonTrigger?.kind ?? 'keg';
+    const kind = this.lessonTrigger?.kind ?? 'boulder';
     if (!this.lessonTrigger?.standing) this.lessonTrigger = this.parts.triggers.readyNearest(kind, this.parts.stage.spin);
     // Only the goblins that are gone (picked up, or knocked out another way) are replaced.
     if (this.lessonTrigger) this.parts.triggers.baitGroup(this.lessonTrigger, TRIGGERS.lesson.group);

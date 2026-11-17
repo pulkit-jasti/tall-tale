@@ -190,7 +190,9 @@ The player's own hands do only two things: pick up goblins and eat them. There i
 ### Eat
 
 1. Bring the held goblin toward the face, like eating a snack (hand within about 22 cm). The goblin pulses. It must not require touching the mouth.
-2. Keep it there for a moment (about 0.2 seconds). It is eaten without letting go. Chomp, gulp, small burp. Every recharging tool's ring jumps forward (v2, [giant-tools.md](giant-tools.md#eating-fills-every-recharge-ring)).
+2. Keep it there for a moment (about 0.2 seconds). It is eaten without letting go. Chomp, gulp, small burp. It heals the castle (v3 2.5: 2% of max health, a seasoned goblin double for the 8 s its seasoning lasts); tools recharge on time only.
+
+- **Chickens** (v3 2.6, Chicken dinner, a secret): a chicken from the potion cart is pinched and eaten the same way, and heals 3 times a goblin. Chickens have no Ready glow (they share one material).
 
 - **No letting go and no head tilt.** In the first headset test, holding a goblin above the face with the head tilted up turned the palm toward the headset, and the pinch opened the Quest menu. Now the palm can face down or sideways the whole time.
 - If the pinch breaks close to the face anyway (tracking loss or the menu gesture), the goblin is still eaten instead of dropped.

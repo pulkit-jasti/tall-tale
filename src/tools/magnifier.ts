@@ -18,7 +18,9 @@
 //       (pants smoke, poof). A helmet stops it, with nothing special shown.
 //     All of it is slower at sunset and slowest at night (never dead).
 //   - Haystacks (2.1): lit like a keg (the sun ring snaps to them too).
-//   - Sun charge (2.6) comes later.
+//   - Sun charge (2.6, a secret ability): by day, the lens held toward the
+//     sun in the sky for GLASS.sunHold gives the next use GLASS.sunBonus more
+//     seconds of beam, once per wave (a sparkle and a chime, no hint).
 import { AdditiveBlending, CylinderGeometry, Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
 import { GLASS, RENDER_ORDER, TOOL_SPOTS, type TimeOfDay } from '../config/game.js';
 import type { Goblin } from '../units/goblins.js';
@@ -61,6 +63,15 @@ export class Magnifier extends HandTool {
   private sunMaterial: MeshBasicMaterial;
   private beamMaterial: MeshBasicMaterial;
   private smokeTimer = 0;
+  /** v3 2.6 Sun charge: set by the game: the way to the sun from the head (world, false when it is not up), and the wave now. */
+  sunDirection: (out: Vector3) => boolean = () => false;
+  waveNow: () => number = () => 0;
+  /** Called when a sun charge is earned (the achievement). */
+  onSunCharge: () => void = () => {};
+  private sunHold = 0;
+  private sunWave = -1;
+  /** The bonus waits for the next use (or goes on the running one). */
+  private sunBonus = false;
 
   constructor(parts: ToolParts) {
     super(
@@ -120,6 +131,7 @@ export class Magnifier extends HandTool {
     const d = toTarget.length();
     const inCone = d > 0 && toTarget.dot(this.headForward) / d > Math.cos((GLASS.coneDeg * Math.PI) / 180);
     this.raised = inCone && d >= GLASS.eyeNear && d <= GLASS.eyeFar;
+    this.checkSun(dt, d);
     // The gaze, into the board, to the ground.
     toBoard(this.stage.boardSpin, this.headPosition, this.headForward, headBoard, lookBoard);
     if (!marchToGround(headBoard, lookBoard, GLASS.maxRange, GLASS.marchStep, hitPoint)) {
@@ -134,6 +146,40 @@ export class Magnifier extends HandTool {
       this.burn = 0;
       this.burnOn = null;
     }
+  }
+
+  /**
+   * v3 2.6 Sun charge: by day, the lens (toTarget: head to lens, `d` long)
+   * held toward the sun for GLASS.sunHold, once per wave: the next use (or
+   * the running one) gets GLASS.sunBonus more seconds of beam.
+   */
+  private checkSun(dt: number, d: number): void {
+    const t = this.timeOfDay();
+    if ((t !== 'morning' && t !== 'day') || this.sunWave === this.waveNow() || d <= 0 || d > GLASS.eyeFar * 2 || !this.sunDirection(world)) {
+      this.sunHold = 0;
+      return;
+    }
+    const toward = (toTarget.x * world.x + toTarget.y * world.y + toTarget.z * world.z) / d;
+    if (toward < Math.cos((GLASS.sunConeDeg * Math.PI) / 180)) {
+      this.sunHold = 0;
+      return;
+    }
+    this.sunHold += dt;
+    if (this.sunHold < GLASS.sunHold) return;
+    this.sunHold = 0;
+    this.sunWave = this.waveNow();
+    if (this.active) this.use.useLeft += GLASS.sunBonus;
+    else this.sunBonus = true;
+    this.particles.burst(lensWorld, GLASS.sunSparkle, 14, 0.08);
+    this.audio.play('lessonDone', lensWorld, 0.8);
+    this.onSunCharge();
+  }
+
+  /** A new battle: the sun charge can be earned again. */
+  resetSun(): void {
+    this.sunWave = -1;
+    this.sunBonus = false;
+    this.sunHold = 0;
   }
 
   private hideAim(): void {
@@ -198,6 +244,11 @@ export class Magnifier extends HandTool {
       this.beam.visible = false;
       return;
     }
+    // v3 2.6: a sun charge earned before this use lengthens it now.
+    if (this.sunBonus && this.active) {
+      this.sunBonus = false;
+      this.use.useLeft += GLASS.sunBonus;
+    }
     const slow = this.slow();
     // The beam from the lens to the aim point, colored by the time of day.
     this.stage.boardSpin.worldToLocal(beamFrom.copy(lensWorld));
@@ -233,7 +284,7 @@ export class Magnifier extends HandTool {
     this.burn += dt / slow;
     this.audio.play('glassSizzle', world, 0.8, 0.4);
     if (a.kind === 'keg' && this.burn >= GLASS.lightTime) {
-      a.keg.setOff();
+      a.keg.setOff('glass');
       this.burnOn = null;
       this.onUse(1);
     } else if (a.kind === 'goblin' && this.burn >= GLASS.burnTime) {
@@ -244,6 +295,7 @@ export class Magnifier extends HandTool {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, GLASS.smokeColors, 8, 0.12);
       this.audio.play('poof', world, 1, 0.05);
+      this.goblins.cause = 'glass';
       this.goblins.kill(g, true);
       this.onUse(1);
     }

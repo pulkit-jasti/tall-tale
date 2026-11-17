@@ -337,6 +337,8 @@ export class Garden {
     this.goblins.worldPosition(g, world);
     this.particles.burst(world, [0xffffff, 0xddd6c8, 0xffd23f], 10);
     this.audio.play('poof', world, 1, 0.05);
+    // v3 2.6: the garden is grown by the magnifying glass, so its knockouts are the glass's.
+    this.goblins.cause = 'glass';
     this.goblins.kill(g, true);
   }
 
@@ -376,6 +378,7 @@ export class Garden {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, [0xffffff, 0xd8a0e8, 0xffd23f], 10);
       this.audio.play('poof', world, 1, 0.05);
+      this.goblins.cause = 'glass';
       this.goblins.kill(g, true);
     }
   }

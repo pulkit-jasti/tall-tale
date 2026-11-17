@@ -7,7 +7,9 @@
 // A placeholder shape (no chicken model yet: docs/v3-plan.md "To do later",
 // docs/placeholder-shapes.md "Chicken"): a white body, a head, a red comb and
 // a yellow beak, one shared set of geometries and materials, pooled.
-// Not built yet: grabbing and eating a chicken (Chicken dinner, 2.6).
+// Chicken dinner (2.6, a secret ability): a chicken can be pinched like a
+// goblin (src/player/grabEat.ts) and held to the mouth to eat it; it heals
+// more than a goblin. Held, it neither wanders nor goes away.
 import { BoxGeometry, ConeGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3, type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { CHICKENS } from '../config/game.js';
@@ -15,8 +17,10 @@ import type { Particles } from '../fx/particles.js';
 import { groundAt } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 
-interface Chicken {
+export interface Chicken {
   root: Group;
+  /** v3 2.6: in the giant's hand. */
+  held: boolean;
   home: Vector3;
   target: Vector3;
   age: number;
@@ -65,7 +69,7 @@ export class Chickens {
     root.add(body, head, comb, beak);
     root.visible = false;
     this.board.add(root);
-    const chicken: Chicken = { root, home: new Vector3(), target: new Vector3(), age: 0, wait: 0, hop: 0, alive: false };
+    const chicken: Chicken = { root, held: false, home: new Vector3(), target: new Vector3(), age: 0, wait: 0, hop: 0, alive: false };
     this.pool.push(chicken);
     return chicken;
   }
@@ -76,6 +80,7 @@ export class Chickens {
       const c = this.pool.find((k) => !k.alive) ?? (this.pool.length < CHICKENS.max ? this.make() : null);
       if (!c) return;
       c.alive = true;
+      c.held = false;
       c.age = 0;
       c.wait = this.rng.range(0.2, 1);
       c.hop = 0;
@@ -94,15 +99,61 @@ export class Chickens {
   clear(): void {
     for (const c of this.pool) {
       c.alive = false;
+      c.held = false;
       c.root.visible = false;
     }
+  }
+
+  /** v3 2.6: the chicken on the board nearest a world point within `radius` (meters) that can be picked up, or null. */
+  nearest(point: Vector3, radius: number): Chicken | null {
+    let best: Chicken | null = null;
+    let bestD = radius;
+    for (const c of this.pool) {
+      if (!c.alive || c.held) continue;
+      this.board.localToWorld(world.copy(c.root.position));
+      world.y += CHICKENS.size * 0.01;
+      const d = world.distanceTo(point);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  /** Picked up: a squawk; it stops wandering. */
+  grab(c: Chicken): void {
+    c.held = true;
+    this.audio.play('chickenCluck', this.board.localToWorld(world.copy(c.root.position)), 1);
+  }
+
+  /** Held: it dangles from the pinch point (world). */
+  holdAt(c: Chicken, pinchWorld: Vector3): void {
+    this.board.worldToLocal(c.root.position.copy(pinchWorld));
+    c.root.position.y -= CHICKENS.size * 1.6;
+    c.root.rotation.z = 0;
+  }
+
+  /** Let go away from the mouth: it lands where it is and wanders from there. */
+  drop(c: Chicken): void {
+    c.held = false;
+    c.home.set(c.root.position.x, 0, c.root.position.z);
+    c.target.copy(c.home);
+    c.wait = 0.5;
+  }
+
+  /** Eaten: gone at once. */
+  eat(c: Chicken): void {
+    c.held = false;
+    c.alive = false;
+    c.root.visible = false;
   }
 
   /** `head` and `forward`: the player's head (world) and the way it looks, so none vanish in view. */
   update(dt: number, head: Vector3, forward: Vector3): void {
     const viewCos = Math.cos((CHICKENS.viewDeg * Math.PI) / 180);
     for (const c of this.pool) {
-      if (!c.alive) continue;
+      if (!c.alive || c.held) continue;
       c.age += dt;
       const p = c.root.position;
       // Old enough and out of view: it goes (shrinking away, unseen).

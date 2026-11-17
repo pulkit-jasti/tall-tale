@@ -21,6 +21,8 @@ import {
   HORN,
   PAUSE,
   PEBBLE_BOWL,
+  FIRE_PEBBLE,
+  FLYING_KEG,
   PEPPER,
   POKE,
   REACH,
@@ -117,6 +119,9 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
     { name: 'height rail (pause, home screen)', radius: HANDLES.radius, y: HANDLES.ringY, rare: true },
     { name: 'slingshot handle', radius: TOOL_SPOTS.slingshot.radius, y: top + SLINGSHOT.handleHeight / 2 },
     { name: 'pebble bowl', radius: PEBBLE_BOWL.radius, y: PEBBLE_BOWL.rimY },
+    // v3 2.6: the fire pebble's torch flame and the flying keg's stand, both by the bowl.
+    { name: 'fire pebble torch', radius: FIRE_PEBBLE.radius, y: FIRE_PEBBLE.flameY },
+    { name: 'flying keg stand', radius: FLYING_KEG.radius, y: FLYING_KEG.topY + FLYING_KEG.height / 2 },
     { name: 'swatter grip', radius: TOOL_SPOTS.leftSide.radius, y: top + (SWATTER.gripFrom + SWATTER.gripTo) / 2 },
     { name: 'pepper grip', radius: TOOL_SPOTS.leftFront.radius, y: top + (PEPPER.gripFrom + PEPPER.gripTo) / 2 },
     { name: 'drum stick', radius: TOOL_SPOTS.leftMiddle.radius, y: top + DRUM.height + 0.2 + (DRUM.gripFrom + DRUM.gripTo) / 2 },

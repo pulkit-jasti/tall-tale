@@ -17,7 +17,9 @@
 //   - Never pulls friendly gear (it only looks at goblins), ignores balloon
 //     riders and goblins in the air. Diggers (Phase 3) carry no gear.
 //   - The bell tower (2.1): the ring held on its bell drops it (Triggers.bellTowerNear).
-//   - Package Deal (pulling a keg in, 2.6) comes later.
+//   - Package Deal (2.6, a secret ability): the ring held on a standing keg
+//     MAGNET.kegPullTime pulls it in (it shakes and glints meanwhile): it
+//     lands by the pebble bowl (onKegPulled) and the use window ends.
 import { Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
 import { MAGNET, RENDER_ORDER, TOOL_SPOTS, TRIGGERS } from '../config/game.js';
 import type { Goblin } from '../units/goblins.js';
@@ -50,6 +52,13 @@ export class Magnet extends HandTool {
   /** v3 2.1: the traps (the bell tower's bell is pulled down), and how long the ring has been on a bell. */
   triggers: Triggers | null = null;
   private bellDwell = 0;
+  /** v3 2.6: how long the ring has been on a keg (seconds), and which keg. */
+  private kegDwell = 0;
+  private kegOn: object | null = null;
+  /** v3 2.6 Package Deal: a keg was pulled in from this world point (the game puts it by the pebble bowl). */
+  onKegPulled: (fromWorld: Vector3) => void = () => {};
+  /** v3 2.6 Iron Grip: a goblin's gear came off: how many pieces. */
+  onStrip: (pieces: number) => void = () => {};
 
   constructor(parts: ToolParts) {
     super(
@@ -84,6 +93,8 @@ export class Magnet extends HandTool {
     this.aiming = false;
     this.dwell.clear();
     this.bellDwell = 0;
+    this.kegDwell = 0;
+    this.kegOn = null;
     this.ring.visible = false;
     this.inner.visible = false;
   }
@@ -145,11 +156,35 @@ export class Magnet extends HandTool {
       if (glint) this.particles.burst(this.stage.boardSpin.localToWorld(tower.bellAt(world)), MAGNET.clankColors, 1, 0.04);
       if (this.bellDwell >= MAGNET.holdTime && this.tryUse()) {
         this.bellDwell = 0;
-        tower.tower.setOff();
+        tower.tower.setOff('magnet');
         this.audio.play('magnetClank', tipsWorld, 1, 0.08);
         this.onUse(1);
       }
     } else this.bellDwell = 0;
+    // v3 2.6 Package Deal: the ring held on a standing keg pulls it in (it ends the use window).
+    const keg = this.triggers?.standingNear('keg', this.aimAt.x, this.aimAt.z, MAGNET.kegRadius) ?? null;
+    if (keg !== this.kegOn) {
+      this.kegOn = keg;
+      this.kegDwell = 0;
+    }
+    if (keg) {
+      any = true;
+      this.kegDwell += dt;
+      keg.center(world);
+      this.stage.boardSpin.localToWorld(world);
+      if (glint) this.particles.burst(world, MAGNET.clankColors, 2, 0.05);
+      if (this.kegDwell >= MAGNET.kegPullTime && this.tryUse()) {
+        this.kegDwell = 0;
+        this.kegOn = null;
+        keg.pullAway();
+        this.particles.burst(world, MAGNET.clankColors, 10, 0.15);
+        this.audio.play('magnetClank', world, 1);
+        this.onKegPulled(world);
+        this.onUse(1);
+        this.finishUse();
+        return;
+      }
+    }
     for (const g of this.goblins.list) {
       const p = g.root.position;
       const inside = this.goblins.isHittable(g) && g.mode !== 'riding' && this.goblins.hasGear(g) && (p.x - this.aimAt.x) ** 2 + (p.z - this.aimAt.z) ** 2 < r2;
@@ -168,7 +203,9 @@ export class Magnet extends HandTool {
       this.dwell.delete(g);
       if (!this.tryUse()) return;
       this.goblins.centerWorld(g, world);
+      const pieces = (g.weapon !== 'none' ? 1 : 0) + (g.helmet ? 1 : 0) + (g.shield ? 1 : 0);
       if (this.goblins.strip(g, MAGNET.stripPause)) {
+        this.onStrip(pieces);
         this.audio.play('magnetClank', world, 1, 0.08);
         this.particles.burst(tipsWorld, MAGNET.clankColors, 6, 0.12);
         this.onUse(1);

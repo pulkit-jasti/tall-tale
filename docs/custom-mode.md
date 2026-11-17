@@ -213,7 +213,7 @@ Redone with the developer (2026-11-16, replaces the 2026-11-11 list). **Only lev
 | 2 | Sky Pirates | "A fleet of balloons is drifting in. Bring them down." | Lots of balloon riders: a slingshot level | Magnet |
 | 3 | Tin Hats | "Someone sold the goblins helmets. Take them back." | Most goblins wear helmets: introduces the magnet | Magnifying glass |
 | 4 | Sun Garden | "A bright day and good soil. Make it bloom." | Many seed beds on a sunny map: introduces the magnifying glass, the sunflower and the mushroom | (open) |
-| 5 | Nightfall | "The sun is setting. They fight better in the dark." | Wave 1 at sunset, waves 2 to 4 at night with night fog, torches and the compass (needs night fog, v3-plan.md 2.7) | (open) |
+| 5 | Nightfall | "The sun is setting. They fight better in the dark." | Wave 1 at sunset, waves 2 to 4 at night with night fog, torches and the compass (night fog is built: v3-plan.md 2.7, the `foggyNight` setting; it shows in every night wave, but today only the last wave is at night, so this level still needs its own times of day) | (open) |
 
 **Locked teasers (6 to 15):** each hints at one new enemy or system; 15 brings it all together.
 

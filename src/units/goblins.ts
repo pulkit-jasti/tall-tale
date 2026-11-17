@@ -35,6 +35,7 @@ import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedba
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
 import type { Step } from '../rules/roadGraph.js';
 import type { Road, RoadNetwork } from '../world/roads.js';
+import type { PickTool } from '../rules/campaign.js';
 
 export type GoblinMode =
   | 'dead'
@@ -190,6 +191,14 @@ export class Goblin {
   dustTimer = 0;
   /** Changes each time this pooled goblin is spawned again, so an arrow in flight knows it is still the same one. */
   serial = 0;
+  /** v3 2.6: the camp (graph node) it came out of, -1 if none (Long Shot). */
+  camp = -1;
+  /** v3 2.6: seasoning left (seconds); it wears off at 0. */
+  seasonedLeft = 0;
+  /** v3 2.6: a bell rung by a pebble cannot daze it again until this runs out (seconds). */
+  bellImmune = 0;
+  /** v3 2.6: when each support tool last touched it (Goblins clock), for Jack of All Trades. */
+  readonly touched = new Map<PickTool, number>();
 
   constructor(
     template: ModelTemplate,
@@ -334,6 +343,33 @@ export class Goblins {
   onArmor: (goblin: Goblin, world: Vector3) => void = () => {};
   /** Called now and then while a climber runs about on the rampart (a wall flash, no damage). */
   onRampartStep: (goblin: Goblin) => void = () => {};
+  /**
+   * v3 2.6: which player tool the next knockout is for (set by the caller
+   * right before kill(goblin, true), cleared by it): null for soldiers,
+   * falls and the like.
+   */
+  cause: PickTool | null = null;
+  /** v3 2.6: a goblin was knocked out (kill with scatter), and by which tool (achievements). */
+  onKnockOutBy: (goblin: Goblin, cause: PickTool | null) => void = () => {};
+
+  /** The goblins' own clock (seconds), for the tool credits. */
+  get clock(): number {
+    return this.time;
+  }
+
+  /** v3 2.6: a support tool touched this goblin now (stripped, lured, peppered, stunned). */
+  credit(goblin: Goblin, tool: PickTool): void {
+    goblin.touched.set(tool, this.time);
+  }
+
+  /** v3 2.6: dazed by a ringing bell for `seconds` (stars, like the drum), unless it was dazed by one just now. Returns true if it was. */
+  stunOne(goblin: Goblin, seconds: number, immuneFor: number): boolean {
+    if (!this.isHittable(goblin) || goblin.bellImmune > 0 || !STUNNABLE.has(goblin.mode)) return false;
+    if (goblin.stunned <= 0) goblin.play('emote-no', true, 1.2);
+    goblin.stunned = Math.max(goblin.stunned, seconds);
+    goblin.bellImmune = immuneFor;
+    return true;
+  }
 
   constructor(
     private board: Object3D,
@@ -493,6 +529,7 @@ export class Goblins {
    */
   strip(goblin: Goblin, pause: number): boolean {
     if (!this.isHittable(goblin) || !this.disarm(goblin)) return false;
+    this.credit(goblin, 'magnet');
     this.pause(goblin, pause, 'emote-no');
     return true;
   }
@@ -595,6 +632,10 @@ export class Goblins {
     mark('goblin spawn');
     goblin.serial++;
     goblin.seasoned = false;
+    goblin.seasonedLeft = 0;
+    goblin.bellImmune = 0;
+    goblin.camp = -1;
+    goblin.touched.clear();
     goblin.paused = 0;
     goblin.confused = 0;
     goblin.setType(type);
@@ -651,6 +692,7 @@ export class Goblins {
     if (!step) return null;
     const goblin = this.obtain(type);
     if (!goblin) return null;
+    goblin.camp = camp;
     goblin.mode = 'walking';
     goblin.offset = this.rng.range(-ROADS.laneJitter, ROADS.laneJitter);
     this.setRoad(goblin, step);
@@ -902,9 +944,12 @@ export class Goblins {
 
   /** Out of the game at once. Goblins keep their poof of particles (made by the caller), no shrink. `scatter`: its gear flies off. */
   kill(goblin: Goblin, scatter = false): void {
+    const cause = this.cause;
+    this.cause = null;
     if (scatter && goblin.root.visible) {
       this.scatterGear(goblin);
       this.onKnockOut(goblin, this.centerWorld(goblin, temp3));
+      this.onKnockOutBy(goblin, cause);
     }
     if (this.aimed === goblin) this.setAimed(null);
     // A hit flash still showing ends here (the update loop skips dead goblins, so it would never fade).
@@ -963,6 +1008,13 @@ export class Goblins {
     out.copy(goblin.root.position);
     out.y += goblin.stats.height * 0.55;
     return this.board.localToWorld(out);
+  }
+
+  /** v3 2.6: the goblin's own camp on the board (cm), or false if it has none (Long Shot). */
+  campPoint(goblin: Goblin, out: Vector3): boolean {
+    if (goblin.camp < 0) return false;
+    this.network.nodePosition(goblin.camp, out);
+    return true;
   }
 
   worldPosition(goblin: Goblin, out: Vector3): Vector3 {
@@ -1040,11 +1092,11 @@ export class Goblins {
    * Bonked by a thrown pebble or a goblin shot splash: a short hop along
    * (dx, dz), then dazed. No damage. A climber is knocked off the wall.
    */
-  knockBack(goblin: Goblin, dx: number, dz: number): void {
+  knockBack(goblin: Goblin, dx: number, dz: number, scale = 1): void {
     if (!this.isHittable(goblin)) return;
     const d = Math.hypot(dx, dz) || 1;
-    goblin.vx = (dx / d) * GOBLIN_RULES.knockSpeed;
-    goblin.vz = (dz / d) * GOBLIN_RULES.knockSpeed;
+    goblin.vx = (dx / d) * GOBLIN_RULES.knockSpeed * scale;
+    goblin.vz = (dz / d) * GOBLIN_RULES.knockSpeed * scale;
     goblin.vy = GOBLIN_RULES.knockHop;
     goblin.mode = 'falling';
     goblin.landAs = 'dazed';
@@ -1064,6 +1116,8 @@ export class Goblins {
   pepper(goblin: Goblin): boolean {
     if (!this.isHittable(goblin) || goblin.seasoned) return false;
     goblin.seasoned = true;
+    goblin.seasonedLeft = PEPPER.seasonedFor;
+    this.credit(goblin, 'pepper');
     goblin.sneezeLeft = PEPPER.sneezeFor;
     this.flash(goblin);
     // It sneezes now (below), and again and again after that (see sneeze()).
@@ -1105,6 +1159,15 @@ export class Goblins {
         if (g.flashTime <= 0) this.applyLook(g);
       }
       if (g.popTime > 0 || g.squash > 0 || g.type === 'runner') this.juice(g, dt);
+      if (g.bellImmune > 0) g.bellImmune -= dt;
+      // v3 2.6: seasoning wears off (its tint with it), so a peppered goblin must be eaten soon.
+      if (g.seasoned && g.mode !== 'held') {
+        g.seasonedLeft -= dt;
+        if (g.seasonedLeft <= 0) {
+          g.seasoned = false;
+          g.applyColor();
+        }
+      }
       // Sneezing (and harmless) for a while after the pepper, then it stops, still seasoned.
       if (g.sneezeLeft > 0) {
         g.sneezeLeft -= dt;

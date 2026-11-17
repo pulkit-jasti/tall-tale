@@ -523,6 +523,13 @@ export class Sky {
   }
 
   /** Puts the sun or the moon at a compass angle and height, facing the player, at a size (0 hides it). */
+  /** v3 2.6 Sun charge: where the sun is (world), or false while it is down or hidden. */
+  sunWorld(out: Vector3): boolean {
+    if (!this.sun.visible || this.sun.position.y <= 0) return false;
+    this.sun.getWorldPosition(out);
+    return true;
+  }
+
   private placeBody(body: Group, angleDeg: number, elevationDeg: number, size: number): void {
     skyDirection(angleDeg, elevationDeg, body.position).multiplyScalar(SKY.sunDistance);
     // Its +z faces the player.

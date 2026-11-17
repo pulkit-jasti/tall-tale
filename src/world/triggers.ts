@@ -42,8 +42,9 @@ import type { Particles } from '../fx/particles.js';
 import { applyAimGlow, applyTouchState } from '../player/feedback.js';
 import type { BlueprintTrigger, TriggerKind } from '../rules/blueprint.js';
 import { boardHeight, degToRad, groundAt, landingHeight, polarX, polarZ } from '../rules/boardMath.js';
+import type { PickTool } from '../rules/campaign.js';
 import type { Random } from '../rules/random.js';
-import type { SlingTarget } from '../tools/slingshot.js';
+import type { SlingHit, SlingTarget } from '../tools/slingshot.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate, type ModelTemplate } from './models.js';
 import type { Road, RoadNetwork } from './roads.js';
@@ -340,6 +341,8 @@ export abstract class Trigger implements SlingTarget {
   readonly assist = TRIGGERS.assist;
   /** v3 2.8: a spare spot: it only stands when a used trap of its kind comes back here. */
   spare = false;
+  /** v3 2.6: the player tool that set it off (null: a debug button), for the achievements' knockout credit. */
+  setBy: PickTool | null = null;
 
   /** Has it stood this battle yet (a blueprint trap shows by its wave only once; after that it comes back on the timer). */
   get seenThisBattle(): boolean {
@@ -423,8 +426,13 @@ export abstract class Trigger implements SlingTarget {
     return this.phase === 'standing';
   }
 
-  onHit(): void {
-    if (this.phase === 'standing') this.setOff();
+  onHit(_by: SlingHit): void {
+    if (this.phase === 'standing') this.setOff('slingshot');
+  }
+
+  /** v3 2.6: a fire pebble lights it (Night Owl): kegs and haystacks, like the magnifying glass. */
+  get lightable(): boolean {
+    return this.phase === 'standing' && (this.kind === 'keg' || this.kind === 'hay');
   }
 
   setAimed(aimed: boolean): void {
@@ -435,15 +443,30 @@ export abstract class Trigger implements SlingTarget {
   }
 
   /** Sets it off: a shot, or a blast nearby. */
-  setOff(): void {
+  setOff(by: PickTool | null = null): void {
     if (this.phase !== 'standing') return;
     mark('trigger');
     this.setAimed(false);
     applyTouchState(this.materials, 'idle');
     this.phase = 'acting';
     this.time = 0;
+    this.setBy = by;
+    this.owner.cause = by;
     this.act();
     this.owner.onSetOff(this);
+  }
+
+  /**
+   * v3 2.6 Package Deal: the magnet pulled it off its spot (no blast). It is
+   * gone at once and comes back on the trap timer at a new spot, like a used one.
+   */
+  pullAway(): void {
+    if (this.phase !== 'standing') return;
+    this.setAimed(false);
+    applyTouchState(this.materials, 'idle');
+    this.phase = 'done';
+    this.root.visible = false;
+    this.owner.comeBackLater(this);
   }
 
   /** A group walks right past it: a strong pulse and a sound from its direction. */
@@ -524,7 +547,10 @@ export abstract class Trigger implements SlingTarget {
     if (this.phase === 'standing') {
       this.stand();
       this.updateCue(dt);
-    } else if (this.phase === 'acting') this.during(dt);
+    } else if (this.phase === 'acting') {
+      this.owner.cause = this.setBy;
+      this.during(dt);
+    }
   }
 
   /** Standing: a little wobble while the slingshot aims at it. */
@@ -555,6 +581,11 @@ class Keg extends Trigger {
     this.materials = ownMaterials(model, TRIGGERS.keg.tint);
     this.root.add(model);
     this.road.pointAt(along, TRIGGERS.keg.side, this.spot);
+  }
+
+  /** v3 2.6: fire only (the magnifying glass, a fire pebble): a plain pebble or a goblin shot does nothing to a keg. */
+  protected get slingable(): boolean {
+    return false;
   }
 
   center(out: Vector3): Vector3 {
@@ -988,6 +1019,10 @@ class BellTower extends Trigger {
   private readonly bell: Mesh;
   private readonly tower = new Group();
   private landed = false;
+  /** v3 2.6: when a pebble last rang it (its own time), and the bell's own target for the slingshot. */
+  private rungAt = -Infinity;
+  private bellMaterial: MeshStandardMaterial;
+  readonly bellTarget: SlingTarget;
 
   constructor(owner: Triggers, wave: number, road: number, along: number, pieces: ModelTemplate[]) {
     super('bellTower', wave, owner, road, along);
@@ -1016,6 +1051,23 @@ class BellTower extends Trigger {
     this.hang.y = this.base.y + top;
     owner.group.add(this.bell);
     this.bell.visible = false;
+    this.bellMaterial = bronze;
+    // v3 2.6 (Gentle Touch): the hanging bell is a slingshot target of its own: a pebble rings it, never drops it.
+    this.bellTarget = {
+      center: (out) => out.copy(this.hang).setY(this.hang.y - B.bellHeight / 2),
+      radius: B.ringHitRadius,
+      assist: TRIGGERS.assist,
+      hittable: () => this.phase === 'standing' && this.root.visible,
+      onHit: () => this.ring(),
+      setAimed: (aimed) => (aimed ? applyAimGlow([this.bellMaterial]) : applyTouchState([this.bellMaterial], 'idle')),
+    };
+  }
+
+  /** v3 2.6: a pebble rang the bell: it swings and bongs, and goblins near the road under it are dazed. */
+  private ring(): void {
+    if (this.phase !== 'standing') return;
+    this.rungAt = this.time;
+    this.owner.ringBell(this.drop, this.hang);
   }
 
   protected get slingable(): boolean {
@@ -1049,7 +1101,10 @@ class BellTower extends Trigger {
     this.root.quaternion.identity();
     this.bell.visible = true;
     this.bell.position.copy(this.hang);
-    this.bell.rotation.set(0, 0, 0);
+    // v3 2.6: rung by a pebble, it swings and settles.
+    const since = this.time - this.rungAt;
+    const swing = TRIGGERS.bellTower.ringSwing;
+    this.bell.rotation.set(0, 0, since >= 0 && since < swing ? Math.sin(since * 16) * 0.45 * (1 - since / swing) : 0);
   }
 
   /** The magnet pulls the bell: it shakes and glints (called while the ring is held on it). */
@@ -1088,6 +1143,7 @@ class BellTower extends Trigger {
   hide(): void {
     super.hide();
     this.bell.visible = false;
+    this.rungAt = -Infinity;
   }
 }
 
@@ -1266,6 +1322,10 @@ export class Triggers {
   readonly group = new Group();
   /** Called whenever a trigger is set off (a shot, a blast, or debug), for the lessons. */
   onSetOffKind: (kind: TriggerKind) => void = () => {};
+  /** v3 2.6: a trigger was set off, and by which player tool (null: debug or a chain with no tool), for Trap Master. */
+  onSetOffBy: (kind: TriggerKind, by: PickTool | null) => void = () => {};
+  /** v3 2.6: the tool whose trap is acting now: its crushes and blasts are credited to it. */
+  cause: PickTool | null = null;
   /** A keg blew up at this world point (juice: a big ring, a star and a hit stop). */
   onBlast: (world: Vector3) => void = () => {};
   private list: Trigger[] = [];
@@ -1373,7 +1433,29 @@ export class Triggers {
 
   /** The things the slingshot can shoot (register each with slingshot.addTarget). */
   get targets(): SlingTarget[] {
-    return this.list;
+    // v3 2.6: each bell tower's hanging bell too (a pebble rings it).
+    const bells = this.list.filter((t): t is BellTower => t instanceof BellTower).map((t) => t.bellTarget);
+    return [...this.list, ...bells];
+  }
+
+  /** v3 2.6: a pebble rang a bell tower's bell (Gentle Touch), with how many goblins it dazed. */
+  onBellRung: (dazed: number) => void = () => {};
+
+  /** v3 2.6: the bell rings: a bong from the bell, and goblins on their feet near the road under it are dazed (not again for a while). */
+  ringBell(drop: Vector3, hang: Vector3): void {
+    const B = TRIGGERS.bellTower;
+    this.board.localToWorld(world.copy(hang));
+    this.audio.play('bell', world, 0.8);
+    this.particles.burst(world, [0xffd23f, 0xffffff], 6, 0.08);
+    const r2 = B.ringRadius * B.ringRadius;
+    let dazed = 0;
+    for (const g of this.goblins.list) {
+      if (!ON_FIELD.has(g.mode)) continue;
+      const p = g.root.position;
+      if ((p.x - drop.x) ** 2 + (p.z - drop.z) ** 2 > r2) continue;
+      if (this.goblins.stunOne(g, B.ringDaze, B.ringImmune)) dazed++;
+    }
+    this.onBellRung(dazed);
   }
 
   /**
@@ -1504,11 +1586,26 @@ export class Triggers {
     // The lesson goblins waiting by it are free to go (or be squashed, or turn back).
     this.goblins.releaseWaiting();
     this.onSetOffKind(trigger.kind);
+    this.onSetOffBy(trigger.kind, trigger.setBy);
     // v3 2.8: it comes back at a new spot after a while, during waves too.
     // v3 2.1: the bridge rebuilds itself in place, the bell tower is once per battle, the cart is rare.
     if (trigger.kind === 'cart') this.rollCart(TRIGGERS.cart.againIn);
     if (NO_SPARES.has(trigger.kind)) return;
     this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay });
+  }
+
+  /** v3 2.6: a trap taken away without being set off (a keg the magnet pulled in) comes back on the usual timer. */
+  comeBackLater(trigger: Trigger): void {
+    if (!NO_SPARES.has(trigger.kind)) this.respawns.push({ kind: trigger.kind, from: trigger, left: TRIGGERS.respawn.delay });
+  }
+
+  /**
+   * v3 2.6: a blast at a board point not from a trap (a flying keg shot from
+   * the slingshot, Package Deal): goblins in `radius` knocked out, credited to `by`.
+   */
+  blastAt(point: Vector3, radius: number, by: PickTool | null): void {
+    this.cause = by;
+    this.explode(point, radius, 0, null);
   }
 
   /** Before the battle, or at its end: every trigger gone, every road open, none waiting to come back. */
@@ -1680,7 +1777,7 @@ export class Triggers {
   // ---- Shared effects (called by the triggers) ----
 
   /** A blast: goblins in `radius` are knocked out, triggers in `chainRadius` are set off. */
-  explode(point: Vector3, radius: number, chainRadius: number, from: Trigger): void {
+  explode(point: Vector3, radius: number, chainRadius: number, from: Trigger | null): void {
     // Its own copy: the caller's vector is a shared scratch one, and reading
     // other triggers' centers into it made every keg on the board blow up.
     const at = blastAt.copy(point);
@@ -1694,7 +1791,7 @@ export class Triggers {
     for (const t of this.list) {
       if (t === from || !t.chainable) continue;
       t.center(temp2);
-      if (temp2.distanceTo(at) < chainRadius) t.setOff();
+      if (temp2.distanceTo(at) < chainRadius) t.setOff(from?.setBy ?? null);
     }
   }
 
@@ -1713,6 +1810,7 @@ export class Triggers {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, POOF_COLORS, 6, 0.15);
       this.audio.play('poof', world, 0.8, 0.04);
+      this.goblins.cause = this.cause;
       this.goblins.kill(g, true);
     }
   }
@@ -1771,6 +1869,7 @@ export class Triggers {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, POOF_COLORS, 6, 0.15);
       this.audio.play('poof', world, 0.8, 0.04);
+      this.goblins.cause = this.cause;
       this.goblins.kill(g, true);
     }
   }

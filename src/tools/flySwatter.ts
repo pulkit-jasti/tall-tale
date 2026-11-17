@@ -157,6 +157,7 @@ export class FlySwatter extends HandTool {
       this.goblins.worldPosition(g, world);
       this.particles.burst(world, SWATTER.splatColors, 10);
       this.audio.play('poof', world, 1, 0.05);
+      this.goblins.cause = 'swatter';
       this.goblins.kill(g, true);
       knocked++;
     }

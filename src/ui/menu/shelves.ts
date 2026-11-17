@@ -16,9 +16,12 @@
 //   grip (HOLD.poses), with a tag (its name and what it does). A locked tool
 //   is a grey silhouette: a grab buzzes and the tag says which level unlocks
 //   it. A newly unlocked tool glows until it is grabbed once.
-//   Achievements shelf (left): 9 trophies (the Kenney trophy model, dimmed
-//   until earned; run 3 gives them riddles), a counter, a "???" tag on grab.
-//   Each shelf ends with a "More coming soon" card.
+//   Achievements shelf (left, v3 2.6): 16 trophies (the Kenney trophy
+//   model) in two even rows: the 8 secret abilities high, the 8 regular
+//   achievements low. Dimmed until earned; an unfound secret has a "?" over
+//   it. A grab shows its tag: a secret's name and riddle, a regular one's
+//   goal, and once earned what it does or taught. A counter above.
+//   The tool shelf ends with a "More coming soon" card.
 //
 // Its own grab code (no goblins or tools in the menu): the same pinch and
 // fist switches as everything else, the same Idle, Ready and Held looks.
@@ -37,6 +40,7 @@ import {
   type Object3D,
 } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
+import { ACHIEVEMENT_LIST, GOALS, SECRETS, type Achievement } from '../../config/achievements.js';
 import { MENU, RENDER_ORDER, TOOLS } from '../../config/game.js';
 import { LEVELS } from '../../config/levels.js';
 import type { Particles } from '../../fx/particles.js';
@@ -70,8 +74,8 @@ export interface DisplayModel {
   turn: ((angleDeg: number, out: Quaternion) => Quaternion) | null;
 }
 
-/** The trophies on the shelf for now (run 3 gives them riddles). */
-export const TROPHY_COUNT = 9;
+/** The trophies on the shelf (v3 2.6: 8 secret abilities and 8 regular achievements). */
+export const TROPHY_COUNT = ACHIEVEMENT_LIST.length;
 
 const TOOL_TAGS: Record<DisplayName, [string, string]> = {
   swatter: ['Fly swatter', 'Swat groups on the wall.'],
@@ -125,6 +129,10 @@ interface Item {
   fromScale: number;
   /** Size while held in a fist (grows from homeScale to 1). */
   heldScale: number;
+  /** v3 2.6: a trophy's achievement, its colors when earned, and its "?" (an unfound secret). */
+  achievement?: Achievement;
+  colors?: number[];
+  question?: Mesh;
 }
 
 interface Holder {
@@ -174,6 +182,9 @@ export class Shelves {
   /** A refused grab shows its tag this long (seconds). */
   private tagLeft = 0;
   private counter: { canvas: HTMLCanvasElement; texture: CanvasTexture };
+  /** The count the counter shows now (-1: not drawn yet), so it redraws only when it changes. */
+  private counted = -1;
+  private trophies: Item[] = [];
   private time = 0;
   /** A tool was let go over a place it may go: the game moves it there (and the one there to where it came from), then calls layout(). */
   onDrop: (tool: PickTool, to: Place) => void = () => {};
@@ -216,26 +227,40 @@ export class Shelves {
       item.model.userData.silhouette = silhouette;
       this.tools.set(name, item);
     }
-    // The achievements shelf (left): trophies on two rows of pedestals, dimmed until earned, a counter above, a card at the end.
+    // The achievements shelf (left, v3 2.6): the regular achievements on the low row, the secret abilities on the
+    // high row, dimmed until earned (refreshTrophies), a "?" over each unfound secret, a counter above.
     const R = S.trophies;
-    const rows: [number[], number, number][] = [
-      [R.lowAngles, R.lowRadius, R.lowY],
-      [R.highAngles, R.highRadius, R.highY],
+    const rows: [Achievement[], number[], number, number][] = [
+      [GOALS, R.lowAngles, R.lowRadius, R.lowY],
+      [SECRETS, R.highAngles, R.highRadius, R.highY],
     ];
-    for (const [angles, radius, y] of rows) {
-      for (const angle of angles) {
+    const questionTexture = this.questionTexture();
+    for (const [list, angles, radius, y] of rows) {
+      list.forEach((achievement, i) => {
+        const angle = angles[i] ?? angles[angles.length - 1];
         this.pedestal(radius, angle, y, R.plank);
         const model = cloneStatic(templates.trophy);
-        const materials = ownMaterials(model, TOOLS.dimShare);
-        this.addItem('trophy', null, { model, materials, gripMid: templates.trophy.size.y * 0.4, lift: 0, turn: null }, spot(radius, angle, y), angle, 1);
-      }
+        const materials = ownMaterials(model, 1);
+        const item = this.addItem('trophy', null, { model, materials, gripMid: templates.trophy.size.y * 0.4, lift: 0, turn: null }, spot(radius, angle, y), angle, 1);
+        item.achievement = achievement;
+        item.colors = materials.map((m) => m.color.getHex());
+        if (achievement.secret) {
+          const q = canvasPlane(questionTexture, R.questionSize, R.questionSize);
+          (q.material as MeshBasicMaterial).depthWrite = false;
+          q.renderOrder = 1;
+          q.position.copy(spot(radius, angle, y + templates.trophy.size.y + R.questionAbove + R.questionSize / 2));
+          q.quaternion.copy(facing(angle));
+          this.group.add(q);
+          item.question = q;
+        }
+        this.trophies.push(item);
+      });
     }
     const midAngle = (R.highAngles[0] + R.highAngles[R.highAngles.length - 1]) / 2;
-    this.counter = this.sign(R.highRadius, midAngle, R.highY + R.height + 6, 16, 5);
-    this.card(R.highRadius, R.cardAngle, R.highY);
+    this.counter = this.sign(R.highRadius, midAngle, R.highY + R.height + R.questionSize + 8, 16, 5);
     // The tag over a held thing.
     this.drawTags();
-    this.tag = canvasPlane(this.tagTextures.get('trophy')!, S.tagWidth, S.tagHeight);
+    this.tag = canvasPlane(this.tagTextures.get(this.trophyKey(this.trophies[0]))!, S.tagWidth, S.tagHeight);
     // On top and never writing depth: a see-through plane that writes depth hid the clouds behind it (they blinked).
     drawOnTop(this.tag, RENDER_ORDER.labels);
     this.tag.visible = false;
@@ -269,7 +294,40 @@ export class Shelves {
         });
       }
     }
-    this.drawCounter(0);
+    this.refreshTrophies();
+  }
+
+  /**
+   * v3 2.6: each trophy's look from the saved achievements: earned ones in
+   * full color, the rest dimmed, a "?" over each unfound secret; the counter
+   * redraws only when the count changed.
+   */
+  refreshTrophies(): void {
+    let earned = 0;
+    for (const item of this.trophies) {
+      const has = !!item.achievement && this.progress.trophies.includes(item.achievement.id);
+      if (has) earned++;
+      item.materials.forEach((m, i) => m.color.setHex(item.colors![i]).multiplyScalar(has ? 1 : TOOLS.dimShare));
+      if (item.question) item.question.visible = !has;
+    }
+    if (earned !== this.counted) {
+      this.counted = earned;
+      this.drawCounter(earned);
+    }
+  }
+
+  /** The tag key of a trophy: its achievement, earned or not. */
+  private trophyKey(item: Item): string {
+    const a = item.achievement;
+    return a ? `trophy|${a.id}|${this.progress.trophies.includes(a.id) ? 1 : 0}` : 'trophy';
+  }
+
+  /** The "?" over an unfound secret (the Kenney question icon), drawn once and shared. */
+  private questionTexture(): CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    drawIconCentered(canvas.getContext('2d')!, 'question', 64, 64, 120, '#7a3fb0');
+    return canvasTexture(canvas, 4);
   }
 
   /** The top of the first empty stand slot (world), or null when both are filled. */
@@ -597,7 +655,7 @@ export class Shelves {
   private showTag(item: Item, seconds: number): void {
     this.tagLeft = seconds;
     this.tagFor = item;
-    const key = item.kind === 'trophy' ? 'trophy' : item.locked ? `${item.name}|locked` : item.name!;
+    const key = item.kind === 'trophy' ? this.trophyKey(item) : item.locked ? `${item.name}|locked` : item.name!;
     const material = this.tag.material as MeshBasicMaterial;
     const texture = this.tagTextures.get(key);
     if (texture && material.map !== texture) material.map = texture;
@@ -610,22 +668,39 @@ export class Shelves {
    */
   private drawTags(): void {
     const S = MENU.shelves;
-    const tags: [string, string, string, boolean][] = [['trophy', '???', 'A riddle comes soon.', false]];
+    const tags: [string, string, string, boolean][] = [];
     for (const name of Object.keys(TOOL_TAGS) as DisplayName[]) {
       tags.push([name, TOOL_TAGS[name][0], TOOL_TAGS[name][1], false]);
       if ((PICK_TOOLS as string[]).includes(name)) tags.push([`${name}|locked`, TOOL_TAGS[name][0], unlockText(name as PickTool), true]);
     }
-    for (const [key, title, line, locked] of tags) {
+    const page = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(S.tagWidth * 40);
       canvas.height = Math.round(S.tagHeight * 40);
       const c = canvas.getContext('2d')!;
+      parchment(c, canvas.width, canvas.height);
+      return [canvas, c];
+    };
+    for (const [key, title, line, locked] of tags) {
+      const [canvas, c] = page();
       const w = canvas.width;
       const h = canvas.height;
-      parchment(c, w, h);
       drawLine(c, title, w / 2, h * 0.34, w * 0.88, h * 0.26, UI_COLORS.ink);
       drawLine(c, line, w / 2, h * 0.68, w * 0.88, h * 0.2, locked ? UI_COLORS.warn : UI_COLORS.note);
       this.tagTextures.set(key, canvasTexture(canvas, 4));
+    }
+    // v3 2.6: each trophy's two tags: before it is earned (a secret's riddle, a regular one's goal) and after.
+    for (const a of ACHIEVEMENT_LIST) {
+      for (const has of [0, 1]) {
+        const [canvas, c] = page();
+        const w = canvas.width;
+        const h = canvas.height;
+        const [first, second] = has ? a.earned : a.hint;
+        drawLine(c, has || !a.secret ? a.name : `? ${a.name} ?`, w / 2, h * 0.27, w * 0.88, h * 0.22, has ? UI_COLORS.ink : a.secret ? '#7a3fb0' : UI_COLORS.ink);
+        drawLine(c, first, w / 2, h * 0.57, w * 0.88, h * 0.17, UI_COLORS.note);
+        drawLine(c, second, w / 2, h * 0.78, w * 0.88, h * 0.17, UI_COLORS.note);
+        this.tagTextures.set(`trophy|${a.id}|${has}`, canvasTexture(canvas, 4));
+      }
     }
   }
 

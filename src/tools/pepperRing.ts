@@ -160,8 +160,12 @@ export class PepperRing {
     const s = this.segments[segmentOf(angle)];
     if (s.amount <= 0) return false;
     this.empty(s);
+    this.onDiggerStopped();
     return true;
   }
+
+  /** v3 2.6 Bless You: the ring stopped a digger (diggers come with Phase 3; this is their hook). */
+  onDiggerStopped: () => void = () => {};
 
   /** A new battle: every segment empty. */
   reset(): void {

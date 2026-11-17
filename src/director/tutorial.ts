@@ -640,26 +640,23 @@ function shootLesson(): TutorialStep {
 }
 
 /**
- * In wave 2, right after the shoot lesson: the triggers, which are all set
- * off with the slingshot. One lesson per kind, keg first, then the boulder,
- * then the tree. Each one brings its kind onto the roads, holds the wave's
+ * In wave 2, right after the shoot lesson: the triggers set off with the
+ * slingshot. One lesson per kind, the boulder first, then the tree (v3 2.6:
+ * kegs take fire only, the magnifying glass or a fire pebble, so they have
+ * no lesson here). Each one brings its kind onto the roads, holds the wave's
  * spawns, and sends a small group of goblins to the one nearest the front,
- * where they wait right in what it does (beside the keg, below the boulder,
- * before the tree) until the player sets it off. So the player can take
- * their time and try as often as they need. Each text says what it does:
- * the keg and the boulder knock goblins out, the tree only blocks the road.
- * Ghost aim dots arc from the pouch to it in every one. Only the first (the
- * keg) also shows the ghost hand: the others are shot the same way.
+ * where they wait right in what it does (below the boulder, before the tree)
+ * until the player sets it off. So the player can take their time and try
+ * as often as they need. Each text says what it does: the boulder knocks
+ * goblins out, the tree only blocks the road. Ghost aim dots arc from the
+ * pouch to it in every one. Only the first (the boulder) also shows the
+ * ghost hand: the tree is shot the same way.
  */
 function triggerLessons(): TutorialStep[] {
   const again = (api: TutorialApi): void => api.sendPastTrigger();
   const kinds: { kind: TriggerKind; text: string; extra: Partial<Hint> }[] = [
-    {
-      kind: 'keg',
-      text: 'Shoot the red barrel. Boom, goblins down!',
-      extra: { demo: 'aimKeg' },
-    },
-    { kind: 'boulder', text: 'Shoot the striped boulder. It rolls over goblins.', extra: {} },
+    // The keg's aim demo (a pull straight back from the lesson's trap) now shows on the boulder.
+    { kind: 'boulder', text: 'Shoot the striped boulder. It rolls over goblins.', extra: { demo: 'aimKeg' } },
     {
       kind: 'tree',
       text: 'Shoot the tree with the red band. It blocks the road.',

@@ -20,6 +20,8 @@ const FILES = {
   check: 'icons/checkmark.png',
   info: 'icons/information.png',
   trophy: 'icons/trophy.png',
+  // v3 2.6: an unfound secret achievement on the shelf.
+  question: 'icons/question.png',
   warning: 'icons/warning.png',
   target: 'icons/target.png',
   returnArrow: 'icons/return.png',

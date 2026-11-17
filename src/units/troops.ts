@@ -1652,6 +1652,8 @@ export class Troops {
     this.goblins.worldPosition(g, temp);
     this.particles.burst(temp, TROOPS.poofColors, 8);
     this.audio.play('poof', temp, 0.8, 0.05);
+    // v3 2.6: a field knight's knockout is the horn's (the garrison's count for nobody).
+    if (t.squad) this.goblins.cause = 'horn';
     this.goblins.kill(g, true);
     this.onKill(g);
     this.cheer(t, JUICE.troopCheerTime);

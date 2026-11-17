@@ -118,13 +118,15 @@ export abstract class HandTool {
   /** Gliding back to the platform: time left (seconds). */
   private returnLeft = 0;
   private touch: TouchState = 'idle';
-  private ready: ToolReady = 'idle';
+  /** The touch look a hand near it asks for (own name: the horn has a `ready` of its own, which overwrote this one). */
+  private touchReady: ToolReady = 'idle';
   private wobble = 0;
   private dimmed = false;
   /** The use and recharge ring on the platform (null for a tool without a platform of its own): one fill, or one per pip. */
-  private ring: Mesh | null = null;
+  /** Own name: the magnet's aim ring was also called `ring` and overwrote this one. */
+  private chargeRing: Mesh | null = null;
   private ringFills: Mesh[] = [];
-  private ringMaterial: MeshBasicMaterial | null = null;
+  private chargeRingMaterial: MeshBasicMaterial | null = null;
   private ringFlash = 0;
   private rope!: Mesh;
   private timerHold = false;
@@ -348,9 +350,12 @@ export abstract class HandTool {
         // The tool's starting colors (not a dimmed or glowing look it had when copied).
         const i = this.materials.indexOf(own);
         if (i >= 0) copy.color.copy(this.baseColors[i]);
-        copy.emissive.setHex(0x000000);
         copies.set(own, copy);
-        materials.push(copy);
+        // Unlit parts (the magnifying glass's lens) have no glow: they keep their look and take no touch states.
+        if (copy.emissive) {
+          copy.emissive.setHex(0x000000);
+          materials.push(copy);
+        }
       }
       mesh.material = copy;
     });
@@ -382,7 +387,7 @@ export abstract class HandTool {
     const x = polarX(this.spot.radius, a);
     const z = polarZ(this.spot.radius, a);
     this.platform.position.set(x, 0, z);
-    this.ring?.parent?.position.set(x, TOOL_SPOTS.platformTop + TOOLS.ring.lift, z);
+    this.chargeRing?.parent?.position.set(x, TOOL_SPOTS.platformTop + TOOLS.ring.lift, z);
     // Around the tool's base, on the platform (a tool that hangs below its handle still stands on its base).
     this.rope.position.set(x, top + 1.5, z);
     this.restPosition.set(x, top + (this.options.restLift ?? 0), z);
@@ -430,14 +435,14 @@ export abstract class HandTool {
     }
     track.visible = false;
     this.root.add(track);
-    this.ring = this.ringFills[0];
-    this.ringMaterial = material;
+    this.chargeRing = this.ringFills[0];
+    this.chargeRingMaterial = material;
   }
 
   /** The ring shows how much is left of a use, or how full the recharge is. Hidden while ready. */
   private updateRing(dt: number): void {
-    const fill = this.ring;
-    const material = this.ringMaterial;
+    const fill = this.chargeRing;
+    const material = this.chargeRingMaterial;
     if (!fill || !material) return;
     const track = fill.parent!;
     const R = TOOLS.ring;
@@ -503,7 +508,7 @@ export abstract class HandTool {
   }
 
   setReady(state: ToolReady): void {
-    this.ready = state;
+    this.touchReady = state;
   }
 
   /** Lets go without using it (board placed again, battle over). */
@@ -676,7 +681,7 @@ export abstract class HandTool {
     this.body.position.copy(this.restPosition);
     this.body.quaternion.copy(this.restQuaternion);
     // Locked: a small wobble after a refused grab, and while a hand is near it.
-    const wobbling = this.wobble > 0 || this.ready === 'locked';
+    const wobbling = this.wobble > 0 || this.touchReady === 'locked';
     this.wobble = Math.max(0, this.wobble - dt);
     if (wobbling) {
       wobbleQuaternion.setFromAxisAngle(UP, Math.sin(this.time * 30) * degToRad(TOOLS.wobbleDeg));
@@ -724,8 +729,8 @@ export abstract class HandTool {
     }
     // The rope only when tied down; recharging shows the ring instead.
     this.rope.visible = this.tiedDown && this.phase === 'resting' && this.returnLeft <= 0;
-    let state: TouchState = this.holder ? 'held' : this.ready;
-    if (this.ready === 'locked' && usable) state = 'ready';
+    let state: TouchState = this.holder ? 'held' : this.touchReady;
+    if (this.touchReady === 'locked' && usable) state = 'ready';
     // The last seconds of a use: blink, so the end is no surprise.
     if (this.active && this.use.useLeft < TOOLS.warnTime && this.useSeconds > TOOLS.warnTime && Math.sin(this.time * 18) > 0) state = 'idle';
     // A new tool glows until grabbed. A hand near it shows Ready instead.
