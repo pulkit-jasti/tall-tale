@@ -59,6 +59,8 @@ Back to [GDD index](GDD.md). Related: [assets.md](assets.md), [giant-tools.md](g
 | Haystack (v3 2.1) | A golden 9-sided cylinder with a darker cone top, beside the road; burns down to a dark burnt patch disc. No pack has a haystack. | 5 cm across, 3.6 cm tall |
 | Bell (bell tower, v3 2.1) | A bronze flared cylinder hanging in the tower's open top (the tower itself is Kenney castle kit pieces). | 4.4 cm across |
 | Stream (rope bridge, v3 2.1) | A flat blue box strip across the road under the bridge (no real water). | 34 cm by 20 cm |
+| Digger mound (v3 Phase 3) | A low brown dirt dome (half sphere, 7 sides, flat shaded), one instanced mesh for all diggers, bobbing a little, with dirt clod particles (`DIGGER`, `src/units/goblinKinds.ts`). Shows only for a digger's last 2.5 s outside the wall. | 3.2 cm across, 0.9 cm tall |
+| Goblin archers' quiver and arrows (v3 Phase 3) | The archers' code quiver and arrows (below) in darker colors: dark brown and grey feathers (`GEAR.pieces.goblinQuiver`, `GOBLIN_ARCHERS`). | As the troops' |
 | Chicken (v3 2.1, placeholder) | A white body sphere, a smaller head sphere, a red comb box and a yellow beak cone; waddles and hops in code. To be replaced by a CC0 model (docs/v3-plan.md, "To do later"). | About 3 cm tall |
 | Pepper ring (v3 2.2) | 8 flat unlit arcs on the ground just outside the wall (52.6 to 63 cm out, 45 degrees each, a small gap between): a faint orange outline under the shaker, solid red-orange when full; plus small red instanced boxes (flecks) piling up as a segment fills. A thin orange arc on the compass lip per peppered segment. | 10 cm wide band |
 | Stun shock ring | A thin flat ring (unlit, transparent) running out across the board from the castle when the drum stuns. | Up to 2.6 m |

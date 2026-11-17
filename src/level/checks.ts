@@ -115,7 +115,9 @@ export function checkLevel(level: Level, settings: LevelSettings): string[] {
 
   // The goblins expected at once stay in the unit budget (docs/performance.md).
   level.waves.forEach((w, i) => {
-    const atOnce = (w.counts.grunt + w.counts.runner) * G.atOnceShare + w.balloons * BALLOONS.riders;
+    const c = w.counts;
+    const extra = (c.digger ?? 0) + (c.shaman ?? 0) + (c.bomber ?? 0) + (c.archer ?? 0);
+    const atOnce = (c.grunt + c.runner + extra) * G.atOnceShare + w.balloons * BALLOONS.riders;
     if (atOnce > G.unitBudget + 1e-6) fail(`wave ${i + 1} may put ${Math.round(atOnce)} goblins on the board (budget ${G.unitBudget})`);
     if (w.camps.length === 0) fail(`wave ${i + 1} has no camp to send from`);
   });

@@ -17,6 +17,11 @@ export const ENEMY_KINDS = {
   grunt: { label: 'Grunts', walker: true },
   runner: { label: 'Runners', walker: true },
   balloon: { label: 'Balloons', walker: false },
+  // v3 Phase 3 (src/units/goblinKinds.ts). The digger tunnels instead of walking the roads.
+  digger: { label: 'Diggers', walker: false },
+  shaman: { label: 'Shamans', walker: true },
+  bomber: { label: 'Bombers', walker: true },
+  archer: { label: 'Goblin archers', walker: true },
 } satisfies Record<string, { label: string; walker: boolean }>;
 
 /** Goblin gear and the setting that sets its share (rules in src/rules/gear.ts). */

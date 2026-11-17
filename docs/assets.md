@@ -27,9 +27,14 @@ All 4 characters share the same rig: 7 bones (`root`, `torso`, `head`, `arm-left
 | Grunt | `characters/mini-dungeon/character-orc.glb` | 3.9 cm tall | Green (own colors) |
 | Runner | `characters/mini-dungeon/character-orc.glb` | 3.35 cm tall | Yellow accent |
 | Goblin sword and shield (v2) | `props/mini-arena/weapon-sword.glb`, `props/mini-dungeon/shield-round.glb` (the soldiers' models, a little smaller) | Merged into the orc's skinned mesh (`GEAR.pieces.goblinSword`, `goblinShield`) | Fly off when knocked off or peppered |
+| Digger (v3 Phase 3) | `character-orc.glb` with `props/survival/tool-shovel.glb` over its shoulder (`GEAR.pieces.diggerShovel`) | 3.6 cm tall | Dirt brown |
+| Shaman (v3 Phase 3) | `character-orc.glb` holding up `town/fantasy-town/lantern.glb` as a staff (`shamanLantern`) | 4.2 cm tall | Purple |
+| Bomber (v3 Phase 3) | `character-orc.glb` with `props/mini-dungeon/barrel.glb` on its back (`bomberKeg`) | 3.9 cm tall | Reddish |
+| Goblin archer (v3 Phase 3) | `character-orc.glb` with `props/mini-forest/weapon-bow.glb` (`goblinBow`) and the code quiver in dark colors (`goblinQuiver`) | 3.75 cm tall | Dark green |
 
 (The climber type is gone in v2: every goblin climbs.)
 
+- **v3 Phase 3 props** (Kenney, CC0, copied 2026-11-17): `tool-shovel.glb` (Survival Kit) into `props/survival/`, `weapon-bow.glb` and `weapon-arrow.glb` (Mini Forest) into `props/mini-forest/` (the arrow is not used yet). Each new goblin carries its own prop on its own gear bone (one template, no extra draw call): shape first, tint second.
 - Goblin types share one model and differ by size, tint and speed (each type has its own color accent, see [enemies.md](enemies.md)). The agent picks the exact tints.
 - **Performance fallback:** 40 to 80 skinned characters may be too slow on Quest 3S. If the frame rate drops, switch goblins to code-made shapes (one InstancedMesh per body part, animated in code). First headset test: about 50 skinned goblins hold 72 Hz, so the fallback is not needed yet. Decide again with troops in step 5 ([performance.md](performance.md)).
 - **Weapons:** attach to the `arm-right` bone. Goblins: `props/mini-arena/weapon-spear.glb` (some goblins bare handed for variety). Troops: `props/mini-arena/weapon-sword.glb`. Target length about 1.5 cm. A weapon is the "gear" that flies off when peppered.

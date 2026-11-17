@@ -15,8 +15,13 @@ import type { RoadNetwork } from '../world/roads.js';
 import type { Goblin, Goblins } from './goblins.js';
 
 interface Group {
-  /** A goblin type, or a balloon with riders (src/units/balloons.ts). */
+  /**
+   * A goblin type, or a balloon with riders (src/units/balloons.ts). v3 Phase
+   * 3: a digger group (one digger) comes out under the ground with no drum.
+   */
   type: GoblinType | 'balloon';
+  /** v3 Phase 3: the type of each member in order (a shaman or a bomber walks in a grunt or runner group). */
+  kinds: GoblinType[];
   /** Graph node index of the camp. */
   camp: number;
   count: number;
@@ -51,6 +56,8 @@ export class WaveSpawner {
   balloonsHeld = false;
   /** Sends one balloon from a camp (graph node). False when it cannot come yet (all balloons out, unit cap). */
   onBalloon: (camp: number) => boolean = () => true;
+  /** v3 Phase 3: one goblin of a type out of a camp (the game sends the new types through src/units/goblinKinds.ts). */
+  spawnKind: (type: GoblinType, camp: number) => Goblin | null = (type, camp) => this.goblins.spawnAtCamp(type, camp);
   private groups: Group[] = [];
   private time = 0;
   private active = false;
@@ -87,19 +94,47 @@ export class WaveSpawner {
     });
     for (const camp of campNodes) this.camps.set(camp, { planned: 0, out: 0 });
     // Split the counts into groups (a small leftover joins the last group), then shuffle them with the seeded random.
-    const sizes: Record<GoblinType, number> = { grunt: WAVES.gruntGroup, runner: WAVES.runnerGroup };
-    const group = (type: GoblinType | 'balloon', count: number): Group => ({ type, camp: -1, count, at: 0, rumbled: false, out: 0, wait: 0, members: [], held: 0 });
+    const sizes: Partial<Record<GoblinType, number>> = { grunt: WAVES.gruntGroup, runner: WAVES.runnerGroup, archer: WAVES.archerGroup };
+    const group = (type: GoblinType | 'balloon', count: number): Group => ({
+      type,
+      kinds: type === 'balloon' ? [] : new Array<GoblinType>(count).fill(type),
+      camp: -1,
+      count,
+      at: 0,
+      rumbled: false,
+      out: 0,
+      wait: 0,
+      members: [],
+      held: 0,
+    });
     for (let k = 0; k < (plan.balloons ?? 0); k++) this.groups.push(group('balloon', 1));
-    for (const type of ['grunt', 'runner'] as GoblinType[]) {
-      let left = plan.counts[type];
+    for (const type of ['grunt', 'runner', 'archer'] as GoblinType[]) {
+      let left = plan.counts[type] ?? 0;
+      const size = sizes[type] ?? WAVES.gruntGroup;
       while (left > 0) {
-        let count = Math.min(sizes[type], left);
-        // Never a lone straggler: 1 or 2 left over walk with this group.
-        if (left - count > 0 && left - count < WAVES.minGroup) count = left;
+        let count = Math.min(size, left);
+        // Never a lone straggler: 1 or 2 left over walk with this group (archers may be a pair).
+        if (left - count > 0 && left - count < Math.min(WAVES.minGroup, size)) count = left;
         left -= count;
         this.groups.push(group(type, count));
       }
     }
+    // v3 Phase 3: a shaman walks at the back of a grunt or runner group, a bomber somewhere in one;
+    // with no such group, each gets its own. A digger comes alone, under the ground.
+    const walkers = this.groups.filter((g) => g.type === 'grunt' || g.type === 'runner');
+    for (const type of ['shaman', 'bomber'] as GoblinType[]) {
+      for (let k = 0; k < (plan.counts[type] ?? 0); k++) {
+        const host = walkers.length > 0 ? walkers[this.rng.int(walkers.length)] : null;
+        if (!host) {
+          this.groups.push(group(type, 1));
+          continue;
+        }
+        if (type === 'shaman') host.kinds.push(type);
+        else host.kinds.splice(1 + this.rng.int(host.kinds.length), 0, type);
+        host.count++;
+      }
+    }
+    for (let k = 0; k < (plan.counts.digger ?? 0); k++) this.groups.push(group('digger', 1));
     for (let i = this.groups.length - 1; i > 0; i--) {
       const j = this.rng.int(i + 1);
       [this.groups[i], this.groups[j]] = [this.groups[j], this.groups[i]];
@@ -133,7 +168,7 @@ export class WaveSpawner {
   /** True while the camp's last group that came out is still on its way in (v3: one group per direction at a time). */
   private campBusy(camp: number, self: Group): boolean {
     for (const g of this.groups) {
-      if (g === self || g.camp !== camp || g.type === 'balloon' || !g.rumbled) continue;
+      if (g === self || g.camp !== camp || g.type === 'balloon' || g.type === 'digger' || !g.rumbled) continue;
       if (g.out < g.count) return true;
       for (const m of g.members) if (onItsWay(m)) return true;
     }
@@ -189,7 +224,7 @@ export class WaveSpawner {
     out.length = 0;
     if (!this.active) return out;
     for (const g of this.groups) {
-      if (g.type === 'balloon' || !g.rumbled || g.out >= g.count || out.includes(g.camp)) continue;
+      if (g.type === 'balloon' || g.type === 'digger' || !g.rumbled || g.out >= g.count || out.includes(g.camp)) continue;
       out.push(g.camp);
     }
     return out;
@@ -213,6 +248,17 @@ export class WaveSpawner {
         if (this.onBalloon(group.camp)) group.out++;
         continue;
       }
+      if (group.type === 'digger') {
+        // v3 Phase 3: no drum and no compass warning: it just starts digging.
+        if (this.time < group.at) continue;
+        const digger = this.spawnKind('digger', group.camp);
+        if (!digger) continue;
+        group.members.push(digger);
+        group.out++;
+        this.camps.get(group.camp)!.out++;
+        this.updateHills();
+        continue;
+      }
       if (!group.rumbled) {
         if (this.time < group.at) continue;
         // v3: the camp's last group is still on its way: this one waits (at most WAVES.holdMax).
@@ -228,7 +274,7 @@ export class WaveSpawner {
       group.wait -= dt * this.rate;
       if (group.wait > 0) continue;
       // At the unit cap the goblin waits in the camp and tries again next frame.
-      const goblin = this.goblins.spawnAtCamp(group.type, group.camp);
+      const goblin = this.spawnKind(group.kinds[group.out] ?? group.type, group.camp);
       if (!goblin) continue;
       group.members.push(goblin);
       group.out++;

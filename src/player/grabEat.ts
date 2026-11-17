@@ -139,8 +139,10 @@ export class GrabEat {
           this.clearHeld(slot);
           continue;
         }
+        // v3 Phase 3: a bomber cannot be eaten (a keg on its back): it is only tossed away.
+        const edible = goblin.type !== 'bomber';
         const mouth = hand.pinchPoint.distanceTo(headPosition);
-        const inZone = mouth < EAT.mouthDistance;
+        const inZone = edible && mouth < EAT.mouthDistance;
         if (inZone && !slot.inEatZone) this.audio.play('readyTick');
         slot.inEatZone = inZone;
         slot.eatTimer = inZone ? slot.eatTimer + dt : 0;
@@ -150,7 +152,7 @@ export class GrabEat {
         const letGo = hand.pinch.ended || !hand.pinch.on;
         // Held near the mouth for a moment: eaten. If the pinch breaks close to
         // the face (tracking or the Quest menu gesture), it is eaten too.
-        if (slot.eatTimer >= EAT.holdTime || (letGo && mouth < EAT.graceDistance)) {
+        if (slot.eatTimer >= EAT.holdTime || (edible && letGo && mouth < EAT.graceDistance)) {
           this.eat(goblin, headPosition, headForward);
           this.clearHeld(slot);
         } else if (letGo) {
@@ -323,7 +325,7 @@ export class GrabEat {
     burstAt.copy(headPosition).addScaledVector(forward, 0.45);
     burstAt.y -= 0.4;
     const goblin = this.goblins.nearestGrabbable(burstAt, 0.6);
-    if (goblin) this.eat(goblin, headPosition, headForward);
+    if (goblin && goblin.type !== 'bomber') this.eat(goblin, headPosition, headForward);
   }
 
   /** Drops anything held (used when the board is placed again). */

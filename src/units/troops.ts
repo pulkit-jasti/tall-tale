@@ -238,13 +238,24 @@ interface Waiting {
   slot: number;
 }
 
-interface Arrow {
+export interface Arrow {
   alive: boolean;
   age: number;
   readonly from: Vector3;
   readonly to: Vector3;
   target: Goblin | null;
   serial: number;
+  /** v3 Phase 3: what a goblin archer's arrow flies at (a garrison soldier), for its own landing code. */
+  payload: unknown;
+}
+
+/** An arrow pool's colors and size (the garrison's ARCHERS, or the goblin archers' darker look). */
+export interface ArrowLook {
+  shaftColor: number;
+  tipColor: number;
+  featherColor: number;
+  streakColor: number;
+  poolSize: number;
 }
 
 /**
@@ -263,7 +274,10 @@ export class Arrows {
   private forward = new Vector3(0, 0, 1);
   private dirty = false;
 
-  constructor(parent: Object3D) {
+  constructor(
+    parent: Object3D,
+    look: ArrowLook = ARCHERS,
+  ) {
     const L = ARCHERS.length;
     const color = new Color();
     const part = (g: BufferGeometry, hex: number): BufferGeometry => {
@@ -281,32 +295,33 @@ export class Arrows {
     const feather = new BoxGeometry(0.04, 0.7, 1.1).translate(0, 0, -L / 2 + 0.55);
     const feather2 = new BoxGeometry(0.7, 0.04, 1.1).translate(0, 0, -L / 2 + 0.55);
     const geometry = mergeGeometries([
-      part(shaft, ARCHERS.shaftColor),
-      part(tip, ARCHERS.tipColor),
-      part(feather, ARCHERS.featherColor),
-      part(feather2, ARCHERS.featherColor),
+      part(shaft, look.shaftColor),
+      part(tip, look.tipColor),
+      part(feather, look.featherColor),
+      part(feather2, look.featherColor),
     ])!;
-    this.mesh = new InstancedMesh(geometry, new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }), ARCHERS.poolSize);
+    this.mesh = new InstancedMesh(geometry, new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }), look.poolSize);
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
     // The streak: a thin bright trail behind the feathers, narrowing to nothing.
     const streak = new ConeGeometry(0.22, ARCHERS.streakLength, 4, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -L / 2 - ARCHERS.streakLength / 2);
     this.streaks = new InstancedMesh(
       streak,
-      new MeshBasicMaterial({ color: ARCHERS.streakColor, transparent: true, opacity: ARCHERS.streakOpacity, depthWrite: false }),
-      ARCHERS.poolSize,
+      new MeshBasicMaterial({ color: look.streakColor, transparent: true, opacity: ARCHERS.streakOpacity, depthWrite: false }),
+      look.poolSize,
     );
     this.streaks.frustumCulled = false;
     this.streaks.visible = false;
-    for (let i = 0; i < ARCHERS.poolSize; i++) {
+    for (let i = 0; i < look.poolSize; i++) {
       this.mesh.setMatrixAt(i, this.hidden);
       this.streaks.setMatrixAt(i, this.hidden);
-      this.list.push({ alive: false, age: 0, from: new Vector3(), to: new Vector3(), target: null, serial: 0 });
+      this.list.push({ alive: false, age: 0, from: new Vector3(), to: new Vector3(), target: null, serial: 0, payload: null });
     }
     parent.add(this.mesh, this.streaks);
   }
 
-  fire(from: Vector3, to: Vector3, target: Goblin): boolean {
+  /** `target`: the goblin it flies at (the garrison's arrows), or null with a `payload` (the goblin archers'). */
+  fire(from: Vector3, to: Vector3, target: Goblin | null, payload: unknown = null): boolean {
     const arrow = this.list.find((a) => !a.alive);
     if (!arrow) return false;
     arrow.alive = true;
@@ -314,7 +329,8 @@ export class Arrows {
     arrow.from.copy(from);
     arrow.to.copy(to);
     arrow.target = target;
-    arrow.serial = target.serial;
+    arrow.serial = target?.serial ?? 0;
+    arrow.payload = payload;
     this.mesh.visible = true;
     this.streaks.visible = true;
     return true;

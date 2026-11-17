@@ -1608,6 +1608,21 @@ export class Triggers {
     this.explode(point, radius, 0, null);
   }
 
+  /**
+   * v3 Phase 3: a bomber's keg blows up at a board point: goblins within
+   * `radius` are knocked out (armor too, like a trap), and standing kegs
+   * within `chainRadius` go off (a keg on its back is fire). Credited to `by`.
+   */
+  bomberBlast(point: Vector3, radius: number, chainRadius: number, by: PickTool | null): void {
+    this.cause = by;
+    this.explode(point, radius, 0, null);
+    for (const t of this.list) {
+      if (t.kind !== 'keg' || !t.chainable) continue;
+      t.center(temp2);
+      if (Math.hypot(temp2.x - point.x, temp2.z - point.z) < chainRadius) t.setOff(by);
+    }
+  }
+
   /** Before the battle, or at its end: every trigger gone, every road open, none waiting to come back. */
   hideAll(): void {
     for (const t of this.list) t.hide();

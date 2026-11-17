@@ -20,7 +20,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { CASTLE, DAY_NIGHT, GARDEN, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
+import { BOMBER, CASTLE, DAY_NIGHT, DIGGER, GARDEN, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
@@ -50,7 +50,11 @@ export type GoblinMode =
   | 'dazed'
   | 'fighting'
   /** Hanging under a balloon (src/units/balloons.ts moves it). */
-  | 'riding';
+  | 'riding'
+  /** v3 Phase 3: a digger under the ground (src/units/goblinKinds.ts moves it). Unseen and untouchable. */
+  | 'tunneling'
+  /** v3 Phase 3: a bomber at the wall with its fuse lit (BOMBER.fuseTime), then the blast. */
+  | 'fuse';
 
 const GRABBABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
   'walking',
@@ -62,6 +66,7 @@ const GRABBABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
   'dazed',
   'fighting',
   'riding',
+  'fuse',
 ]);
 
 /** Modes a stun freezes (a flying goblin keeps flying, and is still stunned when it lands). */
@@ -75,10 +80,20 @@ const STUNNABLE: ReadonlySet<GoblinMode> = new Set<GoblinMode>([
   'dazed',
   'fighting',
   'riding',
+  'fuse',
 ]);
 
 /** Modes where a goblin is near or in the player's hands (never part of a stalemate). */
-const IN_REACH: ReadonlySet<GoblinMode> = new Set<GoblinMode>(['toWall', 'atWall', 'climbing', 'rampart', 'intruder', 'held']);
+const IN_REACH: ReadonlySet<GoblinMode> = new Set<GoblinMode>(['toWall', 'atWall', 'climbing', 'rampart', 'intruder', 'held', 'fuse']);
+
+/** v3 Phase 3: the prop each new goblin type carries (shown only on that type). */
+const TYPE_PROPS: [GearName, GoblinType][] = [
+  ['diggerShovel', 'digger'],
+  ['bomberKeg', 'bomber'],
+  ['goblinBow', 'archer'],
+  ['goblinQuiver', 'archer'],
+  ['shamanLantern', 'shaman'],
+];
 
 const tint = new Color();
 /** Sparks when a helmet is knocked off. */
@@ -199,6 +214,23 @@ export class Goblin {
   bellImmune = 0;
   /** v3 2.6: when each support tool last touched it (Goblins clock), for Jack of All Trades. */
   readonly touched = new Map<PickTool, number>();
+  /** v3 Phase 3: stands still on its road (a shaman or an archer at its post, src/units/goblinKinds.ts). */
+  standing = false;
+  /** v3 Phase 3: an archer that gave up its post (the garrison was empty): it never stops again. A shaman that walked on. */
+  advanced = false;
+  /** v3 Phase 3: its helmet or shield came off (a hit, the magnet): a shaman can give it back. */
+  lostHelmet = false;
+  lostShield = false;
+  /** v3 Phase 3: a bomber's fuse is lit: it blows up when the fuse runs out, or where it lands if tossed. */
+  lit = false;
+  fuseLeft = 0;
+  /** v3 Phase 3: a timer the type's own behavior uses (fuse sparks, the shaman's cast, the digger's clods). */
+  kindTimer = 0;
+  /** v3 Phase 3: a digger's board angle under the ground, and where it stops (cm from the center). */
+  tunnelAngle = 0;
+  tunnelTo = 0;
+  /** v3 Phase 3: an archer's stop on its road (cm from the castle center). */
+  postRadius = 0;
 
   constructor(
     template: ModelTemplate,
@@ -243,6 +275,8 @@ export class Goblin {
     this.type = type;
     this.stats = GOBLINS[type];
     this.body.scale.setScalar(this.stats.height);
+    // v3 Phase 3: only its own type's prop shows (the shovel, the keg, the bow and quiver, the lantern staff).
+    for (const [name, owner] of TYPE_PROPS) setGear(this.gear, name, owner === type);
     this.applyColor();
   }
 
@@ -351,6 +385,15 @@ export class Goblins {
   cause: PickTool | null = null;
   /** v3 2.6: a goblin was knocked out (kill with scatter), and by which tool (achievements). */
   onKnockOutBy: (goblin: Goblin, cause: PickTool | null) => void = () => {};
+  /**
+   * v3 Phase 3: a bomber was knocked out (or a lit one landed): its keg
+   * blows up where it is (src/units/goblinKinds.ts), `cause` the tool that did it.
+   */
+  onBomberBlast: (goblin: Goblin, cause: PickTool | null) => void = () => {};
+  /** v3 Phase 3: a bomber's fuse ran out at the wall: the big wall blast. The goblin is gone after. */
+  onBomberWall: (goblin: Goblin) => void = () => {};
+  /** v3 Phase 3: a bomber reached the wall and lit its fuse. */
+  onFuseLit: (goblin: Goblin) => void = () => {};
 
   /** The goblins' own clock (seconds), for the tool credits. */
   get clock(): number {
@@ -401,7 +444,8 @@ export class Goblins {
   async load(): Promise<void> {
     this.template = await loadTemplate('characters/mini-dungeon/character-orc.glb', { height: 1 }, true);
     // Every goblin carries every gear option, each shown or hidden on its own (src/units/gear.ts).
-    await rigTemplate(this.template, ['goblinSpear', 'goblinSword', 'goblinHelmet', 'goblinShield']);
+    // v3 Phase 3: the new types' props too (TYPE_PROPS), one bone each, no extra draw call.
+    await rigTemplate(this.template, ['goblinSpear', 'goblinSword', 'goblinHelmet', 'goblinShield', ...TYPE_PROPS.map(([name]) => name)]);
     const material = findMaterial(this.template.object);
     if (material) this.baseColor.copy(material.color);
   }
@@ -561,6 +605,7 @@ export class Goblins {
     }
     if (goblin.helmet) {
       goblin.helmet = false;
+      goblin.lostHelmet = true;
       setGear(goblin.gear, 'goblinHelmet', false);
       temp2.set(p.x, p.y + goblin.stats.height * 0.95, p.z);
       this.debris?.throw('goblinHelmet', temp2, -p.z, p.x);
@@ -568,6 +613,7 @@ export class Goblins {
     }
     if (goblin.shield) {
       goblin.shield = false;
+      goblin.lostShield = true;
       setGear(goblin.gear, 'goblinShield', false);
       temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
       this.debris?.throw('goblinShield', temp2, p.z, -p.x);
@@ -638,6 +684,14 @@ export class Goblins {
     goblin.touched.clear();
     goblin.paused = 0;
     goblin.confused = 0;
+    goblin.standing = false;
+    goblin.advanced = false;
+    goblin.lostHelmet = false;
+    goblin.lostShield = false;
+    goblin.lit = false;
+    goblin.fuseLeft = 0;
+    goblin.kindTimer = 0;
+    goblin.body.visible = true;
     goblin.setType(type);
     // Runners need their hands. Grunts carry a spear, a sword or nothing, some wear a helmet or carry a shield.
     if (type === 'grunt') {
@@ -778,6 +832,70 @@ export class Goblins {
     this.audio.play('squeal', this.worldPosition(goblin, temp), 1, 0.1);
   }
 
+  /**
+   * v3 Phase 3: a digger starts under its camp (graph node) and tunnels at
+   * the castle (src/units/goblinKinds.ts moves it), unseen. Null at the unit cap.
+   */
+  spawnDigger(camp: number): Goblin | null {
+    const goblin = this.obtain('digger');
+    if (!goblin) return null;
+    goblin.camp = camp;
+    goblin.mode = 'tunneling';
+    goblin.body.visible = false;
+    this.network.nodePosition(camp, goblin.root.position);
+    goblin.root.position.y = 0;
+    goblin.tunnelAngle = angleOf(goblin.root.position.x, goblin.root.position.z);
+    goblin.play('walk', true, 1);
+    return goblin;
+  }
+
+  /**
+   * v3 Phase 3: a digger breaks out of the ground where it is: a pop up out of
+   * the dirt, then (in the courtyard) an intruder, or (stopped by the pepper
+   * ring, outside the wall) dazed, then it walks to the wall and climbs.
+   */
+  surfaceDigger(goblin: Goblin, inside: boolean): void {
+    if (goblin.mode !== 'tunneling') return;
+    goblin.body.visible = true;
+    goblin.vx = goblin.vz = 0;
+    goblin.vy = DIGGER.popHeight * 6;
+    goblin.mode = 'falling';
+    goblin.landAs = inside ? 'intruder' : 'dazed';
+    goblin.play('jump', false);
+    goblin.popTime = JUICE.spawnPopTime;
+    goblin.root.scale.setScalar(0.01);
+  }
+
+  /** v3 Phase 3: a shaman gives a stripped goblin its helmet (or its shield) back. Returns true if it got something. */
+  regear(goblin: Goblin): boolean {
+    if (!this.isHittable(goblin)) return false;
+    if (goblin.lostHelmet && !goblin.helmet) {
+      goblin.lostHelmet = false;
+      goblin.helmet = true;
+      setGear(goblin.gear, 'goblinHelmet', true);
+      return true;
+    }
+    if (goblin.lostShield && !goblin.shield) {
+      goblin.lostShield = false;
+      goblin.shield = true;
+      setGear(goblin.gear, 'goblinShield', true);
+      return true;
+    }
+    return false;
+  }
+
+  /** v3 Phase 3: true if a shaman could give it something back. */
+  canRegear(goblin: Goblin): boolean {
+    return (goblin.lostHelmet && !goblin.helmet) || (goblin.lostShield && !goblin.shield);
+  }
+
+  /** v3 Phase 3: the goblin walks again after standing at a post (a shaman or an archer moving on). */
+  walkOn(goblin: Goblin): void {
+    goblin.standing = false;
+    goblin.advanced = true;
+    if (goblin.mode === 'walking' && goblin.stunned <= 0 && goblin.paused <= 0) goblin.play(goblin.stats.moveClip, true, goblin.stats.moveClipSpeed, true);
+  }
+
   /** Lets every waiting lesson goblin walk on (the trigger was set off, or the lesson ended). */
   releaseWaiting(): void {
     for (const g of this.list) {
@@ -869,11 +987,13 @@ export class Goblins {
     }
     if (piece === 'helmet') {
       goblin.helmet = false;
+      goblin.lostHelmet = true;
       setGear(goblin.gear, 'goblinHelmet', false);
       temp2.set(p.x, p.y + goblin.stats.height * 0.95, p.z);
       this.debris?.throw('goblinHelmet', temp2, dx, dz);
     } else {
       goblin.shield = false;
+      goblin.lostShield = true;
       setGear(goblin.gear, 'goblinShield', false);
       temp2.set(p.x, p.y + goblin.stats.height * 0.5, p.z);
       this.debris?.throw('goblinShield', temp2, dx, dz);
@@ -950,6 +1070,8 @@ export class Goblins {
       this.scatterGear(goblin);
       this.onKnockOut(goblin, this.centerWorld(goblin, temp3));
       this.onKnockOutBy(goblin, cause);
+      // v3 Phase 3: a bomber knocked out on the road blows up among its own group.
+      if (goblin.type === 'bomber') this.onBomberBlast(goblin, cause);
     }
     if (this.aimed === goblin) this.setAimed(null);
     // A hit flash still showing ends here (the update loop skips dead goblins, so it would never fade).
@@ -1000,7 +1122,8 @@ export class Goblins {
 
   /** Goblins a pebble can hit: everything alive except the ones in the giant's hand. */
   isHittable(goblin: Goblin): boolean {
-    return goblin.mode !== 'dead' && goblin.mode !== 'held';
+    // v3 Phase 3: a digger under the ground is untouchable (only the pepper ring stops it).
+    return goblin.mode !== 'dead' && goblin.mode !== 'held' && goblin.mode !== 'tunneling';
   }
 
   /** Grab point of a goblin (its middle) in world space. */
@@ -1326,6 +1449,8 @@ export class Goblins {
             break;
           }
         }
+        // v3 Phase 3: a shaman or an archer at its post stands still on its road (src/units/goblinKinds.ts).
+        if (g.standing) break;
         g.distance += g.speed * dt * dir;
         // A patrolling lesson goblin turns round at the ends of its stretch.
         if (g.patrolRoad === g.step.road) {
@@ -1366,6 +1491,16 @@ export class Goblins {
           g.play(g.attackRight ? 'attack-melee-right' : 'attack-melee-left', false);
           this.audio.play('wallHit', this.worldPosition(g, temp), 1, GOBLIN_RULES.wallHitSoundGap);
           this.onWallHit(g);
+        }
+        break;
+      }
+      case 'fuse': {
+        // v3 Phase 3: a bomber's fuse burns down (a stun freezes it, above), then the wall blast.
+        g.fuseLeft -= dt;
+        if (g.fuseLeft <= 0) {
+          // Gone first (no poof), so its own blast never catches it and blows it up a second time.
+          this.kill(g);
+          this.onBomberWall(g);
         }
         break;
       }
@@ -1447,6 +1582,16 @@ export class Goblins {
   /** Step 1: bashes the wall for a few seconds, then climbs. */
   private startAttacking(g: Goblin): void {
     this.wallArrivals++;
+    // v3 Phase 3: a bomber never bashes or climbs: it lights its fuse (pinch it now and toss it away).
+    if (g.type === 'bomber') {
+      g.mode = 'fuse';
+      g.lit = true;
+      g.fuseLeft = BOMBER.fuseTime;
+      g.faceCenter();
+      g.play('idle');
+      this.onFuseLit(g);
+      return;
+    }
     g.mode = 'atWall';
     g.timer = this.rng.range(0.1, 0.8);
     g.bashLeft = bashSeconds(GOBLIN_RULES.bashTime, GOBLIN_RULES.bashJitter, this.rng.next());
@@ -1613,6 +1758,11 @@ export class Goblins {
 
   private land(g: Goblin): void {
     g.squash = JUICE.squashTime;
+    // v3 Phase 3: a lit bomber tossed away (or knocked back) blows up where it lands.
+    if (g.lit) {
+      this.kill(g, true);
+      return;
+    }
     if (g.landAs === 'ko') {
       // From a popped balloon: knocked out with a poof (and a little hop of dust).
       this.worldPosition(g, temp);

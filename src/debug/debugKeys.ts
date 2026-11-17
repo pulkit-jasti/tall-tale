@@ -70,6 +70,10 @@ export type DebugCommand =
   | 'popBalloons'
   | 'helmetGrunts'
   | 'armoredGrunts'
+  | 'diggerFront'
+  | 'shamanGroup'
+  | 'bomberGroup'
+  | 'archerGroup'
   | 'celebrate'
   | 'nextTime'
   | 'timeOfDay'
@@ -174,6 +178,10 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   { id: 'popBalloons', group: 'goblins', icon: '💥', label: 'Pop balloons', does: 'Pop every balloon in the air: the riders fall and poof' },
   { id: 'helmetGrunts', group: 'goblins', icon: '⛑️', label: 'Helmet grunts', does: 'Send a group of grunts that all wear helmets (one extra hit from anything but a trigger, the helmet flies off)' },
   { id: 'armoredGrunts', group: 'goblins', icon: '🛡️', label: 'Armored grunts', does: 'Send a group of grunts with helmet, shield and sword (3 hits each: helmet off, then shield off, then out)' },
+  { id: 'diggerFront', group: 'goblins', icon: '⛏️', label: 'Digger in front', does: 'Phase 3: a digger tunnels in from the camp nearest your front (unseen, a dirt mound for its last 2.5 s). Pepper the front segment first and it comes up sneezing outside the wall' },
+  { id: 'shamanGroup', group: 'goblins', icon: '🏮', label: 'Shaman group', does: 'Phase 3: armored grunts with a shaman at the back, from the camp nearest your front. Strip them (magnet, pebbles): the shaman gives helmets and shields back' },
+  { id: 'bomberGroup', group: 'goblins', icon: '🧨', label: 'Bomber group', does: 'Phase 3: grunts with a bomber among them, from the camp nearest your front. Hit it on the road: it blows up its group. At the wall: a 1.5 s fuse, pinch and toss it' },
+  { id: 'archerGroup', group: 'goblins', icon: '🏹', label: 'Goblin archers', does: 'Phase 3: three goblin archers from the camp nearest your front. They stop about 105 cm out and shoot the wall garrison; with the garrison gone they walk in' },
   { id: 'auto', group: 'goblins', icon: '🔁', label: 'Auto spawn on/off', does: 'Extra auto spawning on or off (on top of the waves)' },
   { id: 'clear', group: 'goblins', icon: '🧹', label: 'Remove all', does: 'Remove all goblins' },
   { id: 'slingShot', group: 'slingshot', icon: '🎯', label: 'Shoot', does: 'Slingshot: shoot a pebble (from the pouch or the bowl) at the goblin nearest the front' },

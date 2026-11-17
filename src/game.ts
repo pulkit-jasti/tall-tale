@@ -67,7 +67,7 @@ import { TrophyToast } from './ui/trophyToast.js';
 import { CompassCrank } from './player/crank.js';
 import { HeightRail } from './player/heightRail.js';
 import { HandTracker } from './player/hands.js';
-import { angleOf, degToRad } from './rules/boardMath.js';
+import { angleDelta, angleOf, degToRad } from './rules/boardMath.js';
 import { timeOfWave } from './rules/dayNight.js';
 import { createRandom, type Random } from './rules/random.js';
 import { checkReach } from './rules/reach.js';
@@ -86,6 +86,7 @@ import { Garden } from './world/garden.js';
 import { Chickens } from './units/chickens.js';
 import { StunWave } from './tools/stunWave.js';
 import { Goblins } from './units/goblins.js';
+import { GoblinKinds } from './units/goblinKinds.js';
 import { Troops } from './units/troops.js';
 import { Garrison } from './units/garrison.js';
 import { Villagers } from './units/villagers.js';
@@ -158,6 +159,7 @@ export class GameSystem extends createSystem({}) {
   /** The height rail while paused (v3: the ring is gone from battles, so height moved to pause and the home screen). */
   private pauseRail!: HeightRail;
   private goblins!: Goblins;
+  private kinds!: GoblinKinds;
   private grabEat!: GrabEat;
   private slingshot!: Slingshot;
   private swatter!: FlySwatter;
@@ -392,7 +394,6 @@ export class GameSystem extends createSystem({}) {
     this.magnet.triggers = this.triggers;
     this.chickens = new Chickens(this.stage.boardSpin, this.audio, this.particles, createRandom(seed + 995));
     this.triggers.onChickens = (points) => this.chickens.spawn(points);
-    this.triggers.onClear = () => this.chickens.clear();
     this.balloons = new Balloons(this.stage.boardSpin, this.goblins, this.audio, this.particles, createRandom(seed + 950));
     // v3: the swatter pushes balloons away instead of popping them.
     this.swatter.balloons = this.balloons;
@@ -429,12 +430,36 @@ export class GameSystem extends createSystem({}) {
       }
     };
     this.threat = new ThreatCues(this.stage, this.particles, root);
+    // v3 Phase 3: the digger, the shaman, the bomber and the goblin archers' own behavior.
+    this.kinds = new GoblinKinds(
+      this.stage.boardSpin,
+      this.goblins,
+      this.troops,
+      garrison,
+      this.triggers,
+      this.pepperRing,
+      this.threat,
+      this.particles,
+      this.audio,
+      createRandom(seed + 1010),
+    );
+    this.kinds.damage = (amount) => this.battle.damage(amount);
+    this.triggers.onClear = () => {
+      this.chickens.clear();
+      this.kinds.clear();
+    };
     this.pauseMenu = new PauseMenu(root, this.stage.boardLift, this.audio);
     this.grabEat = new GrabEat(this.hands, this.goblins, this.handles, this.slingshot, this.tools, this.audio, this.particles);
     this.spawner = new ToySpawner(this.goblins, built.network.graph.camps.length, createRandom(seed + 300));
+    // v3 Phase 3: debug goblins come out like wave goblins (a digger under the ground, an archer with its post).
+    this.spawner.spawnKind = (type, campIndex) => {
+      const camps = this.network.graph.camps;
+      if (camps.length > 0) this.kinds.spawn(type, camps[campIndex % camps.length]);
+    };
     this.debugRng = createRandom(seed + 400);
     const waves = new WaveSpawner(this.stage.boardSpin, built.network, this.goblins, built.hills, this.audio, createRandom(seed + 500));
     this.waves = waves;
+    waves.spawnKind = (type, camp) => this.kinds.spawn(type, camp);
     // A wave's balloons float straight in from their camp's direction.
     const campAt = new Vector3();
     waves.onBalloon = (camp) => {
@@ -1111,6 +1136,23 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** The board's middle in the world (for the celebrations). */
+  /** v3 Phase 3 debug: the camp (its place in the camp list) whose direction is nearest the player's front. */
+  private frontCampIndex(): number {
+    const camps = this.network.graph.camps;
+    const at = new Vector3();
+    let best = 0;
+    let bestD = Infinity;
+    camps.forEach((node, i) => {
+      this.network.nodePosition(node, at);
+      const d = Math.abs(angleDelta(this.stage.spin, angleOf(at.x, at.z)));
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
   private boardCenter(): Vector3 {
     return this.stage.boardLift.getWorldPosition(boardAt);
   }
@@ -1332,6 +1374,7 @@ export class GameSystem extends createSystem({}) {
     // Hit stop (juice): on a big hit the units slow to a crawl for a moment. The board, view and hands never do.
     const unitDt = dt * this.juice.timeScale;
     this.goblins.update(unitDt);
+    this.kinds.update(unitDt);
     this.troops.update(unitDt);
     this.villagers.update(unitDt);
     this.balloons.update(unitDt);
@@ -1405,10 +1448,11 @@ export class GameSystem extends createSystem({}) {
       }
       for (const g of this.goblins.list) {
         const mode = g.mode;
-        if (mode === 'dead' || mode === 'held') continue;
+        // v3 Phase 3: a digger under the ground has no wedge (no early warning).
+        if (mode === 'dead' || mode === 'held' || mode === 'tunneling') continue;
         const p = g.root.position;
-        // v3: red while attacking (bashing, climbing, on the rampart, inside), yellow while walking in.
-        const danger = mode === 'atWall' || mode === 'climbing' || mode === 'rampart' || mode === 'intruder';
+        // v3: red while attacking (bashing, climbing, on the rampart, inside, a lit fuse), yellow while walking in.
+        const danger = mode === 'atWall' || mode === 'climbing' || mode === 'rampart' || mode === 'intruder' || mode === 'fuse';
         compass.add(p.x, p.z, danger ? 3 : 2);
       }
     }
@@ -1959,6 +2003,20 @@ export class GameSystem extends createSystem({}) {
       case 'armoredGrunts':
         this.goblins.armoredNext += 3;
         this.spawner.sendGroup('grunt');
+        break;
+      // v3 Phase 3: the new goblins, from the camp nearest the player's front.
+      case 'diggerFront':
+        this.spawner.sendMixed(['digger'], this.frontCampIndex());
+        break;
+      case 'shamanGroup':
+        this.goblins.armoredNext += 4;
+        this.spawner.sendMixed(['grunt', 'grunt', 'grunt', 'grunt', 'shaman'], this.frontCampIndex());
+        break;
+      case 'bomberGroup':
+        this.spawner.sendMixed(['grunt', 'grunt', 'bomber', 'grunt'], this.frontCampIndex());
+        break;
+      case 'archerGroup':
+        this.spawner.sendMixed(['archer', 'archer', 'archer'], this.frontCampIndex());
         break;
       case 'celebrate':
         this.juice.celebrate(false, this.boardCenter(), this.stage.boardScale);

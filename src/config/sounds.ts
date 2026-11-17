@@ -136,7 +136,18 @@ export const SOUNDS = {
   balloonPop: { files: ['372182__supersound23__pop.mp3'], volume: 0.7, positional: true },
   waveHorn: { files: ['539956__adharca__war-horn.wav'], volume: 0.5, positional: false },
   winFanfare: { files: ['99961__cgeffex__medieval-fanfare_neonaeon_tweaked-by-cgeffex.wav'], volume: 0.6, positional: false },
+  // v3 Phase 3: the new goblins (Kenney stand-ins until real files are picked).
+  /** A digger breaks out of the ground. */
+  diggerSurface: { files: ['impact/impactMining_000.ogg', 'impact/impactMining_001.ogg', 'impact/impactMining_002.ogg'], volume: 0.9, positional: true },
+  /** The dirt mound racing toward the wall (soft, repeated). */
+  diggerDig: { files: ['impact/impactMining_000.ogg', 'impact/impactMining_002.ogg'], volume: 0.35, positional: true },
+  /** A bomber's fuse is lit at the wall (a hiss: a knife draw stands in). */
+  bomberFuse: { files: ['rpg/drawKnife1.ogg', 'rpg/drawKnife2.ogg'], volume: 0.8, positional: true },
+  /** A goblin archer looses an arrow. */
+  goblinBowShot: { files: ['interface/pluck_001.ogg', 'interface/pluck_002.ogg'], volume: 0.5, positional: true },
   // Still missing (placeholder chime).
+  /** The shaman puts gear back on a goblin. */
+  shamanCast: { files: [CHIME], volume: 0.55, positional: true },
   cheer: { files: [CHIME], volume: 0.5, positional: false },
   kegBoom: { files: [CHIME], volume: 0.7, positional: true },
   /** A group of goblins walks right past a trigger: "now!" (from its direction). */

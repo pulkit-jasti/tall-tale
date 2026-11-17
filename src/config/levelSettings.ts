@@ -58,6 +58,11 @@ export interface LevelSettings {
   campsAtOnce: number;
   /** v3 2.7: fog rolls in for the night wave (NIGHT_FOG). */
   foggyNight: boolean;
+  /** v3 Phase 3: the new goblins per wave, from wave 2 (0: none). */
+  diggers: number;
+  shamans: number;
+  bombers: number;
+  goblinArchers: number;
   // Rules
   archers: number;
   guards: number;
@@ -175,6 +180,11 @@ export const LEVEL_SETTINGS: SettingDef[] = [
   { key: 'waveLength', group: 'waves', label: 'Wave length', kind: 'range', min: 30, max: 90, step: 5, default: 50, unit: 'seconds' },
   { key: 'campsAtOnce', group: 'waves', label: 'Camps at once', kind: 'count', min: 1, max: 5, default: 2 },
   { key: 'foggyNight', group: 'waves', label: 'Foggy night', kind: 'toggle', default: false },
+  // v3 Phase 3 (the "allowed goblins" list, docs/custom-mode.md section 4): 0 leaves a type out.
+  { key: 'diggers', group: 'waves', label: 'Diggers', kind: 'count', min: 0, max: 4, default: 0 },
+  { key: 'shamans', group: 'waves', label: 'Shamans', kind: 'count', min: 0, max: 3, default: 0 },
+  { key: 'bombers', group: 'waves', label: 'Bombers', kind: 'count', min: 0, max: 4, default: 0 },
+  { key: 'goblinArchers', group: 'waves', label: 'Goblin archers', kind: 'count', min: 0, max: 9, default: 0 },
   // Rules: the battle around the map and the waves.
   { key: 'archers', group: 'rules', label: 'Archers', kind: 'count', min: 0, max: 6, default: 4 },
   { key: 'guards', group: 'rules', label: 'Guards', kind: 'count', min: 0, max: 4, default: 2 },
@@ -209,6 +219,10 @@ export const SETTING_HINTS: Record<SettingKey, string> = {
   waveLength: 'Time over which the goblins come out',
   campsAtOnce: 'Camps sending goblins at the same time',
   foggyNight: 'Fog hides the far board in the night wave',
+  diggers: 'Tunnel in unseen each wave from wave 2',
+  shamans: 'Give stripped goblins their gear back',
+  bombers: 'Carry a keg to blow up your wall',
+  goblinArchers: 'Shoot at your wall guards from the road',
   archers: 'Archers on the castle wall',
   guards: 'Guards fighting on the rampart',
   refill: 'How fast lost soldiers come back',
@@ -295,5 +309,9 @@ export function describeSettings(s: LevelSettings): string {
   if (s.spears >= 0.6) extras.push('spears');
   if (s.castleHealth < 0.7) extras.push('a damaged castle');
   if (s.foggyNight) extras.push('a foggy night');
+  if (s.diggers > 0) extras.push('diggers');
+  if (s.shamans > 0) extras.push('shamans');
+  if (s.bombers > 0) extras.push('bombers');
+  if (s.goblinArchers > 0) extras.push('goblin archers');
   return [camps, roads, ...extras.slice(0, 1), s.difficulty].join(', ');
 }

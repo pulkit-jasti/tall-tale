@@ -21,7 +21,8 @@ export interface WavePlan {
   intro: string;
   /** Camp ids from the blueprint that send enemies this wave. */
   camps: string[];
-  counts: Record<GoblinType, number>;
+  /** Goblins of each type (v3 Phase 3: the new types are left out where there are none). */
+  counts: Partial<Record<GoblinType, number>>;
   /** Groups come out over this long (seconds). The wave itself runs until it is cleared. */
   spawnTime: number;
   /** The tool that appears on its platform in the breather before this wave. */

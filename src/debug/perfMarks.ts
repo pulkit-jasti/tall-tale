@@ -28,7 +28,12 @@ export type PerfMark =
   | 'knight boost'
   | 'night fog'
   | 'trap back'
-  | 'trophy toast';
+  | 'trophy toast'
+  // v3 Phase 3: the new goblins.
+  | 'digger up'
+  | 'shaman cast'
+  | 'bomber blast'
+  | 'goblin volley';
 
 const marks = new Set<PerfMark>();
 

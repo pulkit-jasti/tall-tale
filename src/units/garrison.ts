@@ -128,6 +128,17 @@ export class Garrison {
     return best;
   }
 
+  /**
+   * v3 Phase 3: the soldiers standing on the wall now (not climbing up), into
+   * `out` (reused, no garbage): the goblin archers' targets. Empty when none is up there.
+   */
+  soldiersOnWall(out: Troop[]): Troop[] {
+    out.length = 0;
+    if (!this.active) return out;
+    for (const m of this.slots) if (m && m.troop.mode !== 'climbingUp' && m.troop.mode !== 'dead') out.push(m.troop);
+    return out;
+  }
+
   /** Debug: `n` soldiers on the rampart go down (archers first), to watch the refill climb up. */
   thin(n: number): void {
     for (let i = this.slots.length - 1; i >= 0 && n > 0; i--) {

@@ -16,10 +16,17 @@ export function waveIntro(wave: LevelWave, index: number, total: number): string
   const camps = wave.camps.length;
   const from = camps === 1 ? 'one camp' : `${camps} camps`;
   const what = wave.counts.runner > wave.counts.grunt ? 'Runners are coming' : 'Goblins are coming';
+  // v3 Phase 3: the banner names the new goblins in this wave (except diggers: they are a surprise).
+  const named = [
+    (wave.counts.shaman ?? 0) > 0 ? 'shamans' : '',
+    (wave.counts.bomber ?? 0) > 0 ? 'bombers' : '',
+    (wave.counts.archer ?? 0) > 0 ? 'archers' : '',
+  ].filter(Boolean);
+  const also = named.length === 0 ? '' : ` With ${named.length === 1 ? named[0] : `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`}!`;
   const rise = wave.rising.length === 0 ? '' : wave.rising.length === 1 ? ' A new camp rises!' : ` ${wave.rising.length} new camps rise!`;
   const balloons = wave.balloons > 0 ? ' Watch the sky.' : '';
-  if (index === total - 1) return `Final wave! ${what} from ${from}.${rise}${balloons}`;
-  return `${what} from ${from}.${rise}${balloons}`;
+  if (index === total - 1) return `Final wave! ${what} from ${from}.${also}${rise}${balloons}`;
+  return `${what} from ${from}.${also}${rise}${balloons}`;
 }
 
 /** A level's waves as the plans the wave spawner reads. */
@@ -28,7 +35,15 @@ export function levelWavePlans(level: Level): WavePlan[] {
   return level.waves.map((w, i) => ({
     intro: waveIntro(w, i, total),
     camps: [...w.camps],
-    counts: { grunt: w.counts.grunt, runner: w.counts.runner },
+    counts: {
+      grunt: w.counts.grunt,
+      runner: w.counts.runner,
+      // v3 Phase 3: the new goblins (none in levels saved before them).
+      digger: w.counts.digger ?? 0,
+      shaman: w.counts.shaman ?? 0,
+      bomber: w.counts.bomber ?? 0,
+      archer: w.counts.archer ?? 0,
+    },
     // v3 2.7: a foggy night wave sends its groups out more spread, so the short warning does not snowball.
     spawnTime: level.meta.settings.foggyNight && timeOfWave(i, total) === 'night' ? Math.round(w.spawnTime * NIGHT_FOG.spreadScale) : w.spawnTime,
     balloons: w.balloons,

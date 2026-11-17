@@ -364,10 +364,19 @@ function planWaves(rng: Random, s: LevelSettings, map: Blueprint): LevelWave[] {
     const balloons = w === 1 ? 0 : s.balloons;
     const total = Math.min(maxWaveGoblins(balloons), Math.round(s.goblins * Math.pow(1 + s.growth, w - 1) * D.goblins));
     const runner = Math.round(total * s.runners);
+    // v3 Phase 3: the new goblins from wave 2 (wave 1 stays the plain walls), on top of the total.
+    const extra = w === 1 ? 0 : 1;
     waves.push({
       camps: sending,
       rising,
-      counts: { grunt: total - runner, runner },
+      counts: {
+        grunt: total - runner,
+        runner,
+        digger: s.diggers * extra,
+        shaman: s.shamans * extra,
+        bomber: s.bombers * extra,
+        archer: s.goblinArchers * extra,
+      },
       spawnTime: Math.round(s.waveLength * D.waveLength),
       balloons,
       gear,
@@ -382,6 +391,21 @@ function planRules(s: LevelSettings): LevelRules {
 
 // ---------------------------------------------------------------------------
 // The summary (printed by the command line, a debug note in the game)
+
+/** v3 Phase 3: ", 2 diggers, 1 shaman" for a wave's new goblins (empty with none). */
+function specialsText(w: LevelWave): string {
+  const c = w.counts;
+  const parts = [
+    [c.digger ?? 0, 'digger'],
+    [c.shaman ?? 0, 'shaman'],
+    [c.bomber ?? 0, 'bomber'],
+    [c.archer ?? 0, 'goblin archer'],
+  ] as [number, string][];
+  return parts
+    .filter(([n]) => n > 0)
+    .map(([n, name]) => `, ${n} ${name}${n === 1 ? '' : 's'}`)
+    .join('');
+}
 
 export function summarize(g: Generated): string {
   const { level, stats } = g;
@@ -399,7 +423,7 @@ export function summarize(g: Generated): string {
     `triggers ${m.triggers.length}: ${byKind}`,
     ...level.waves.map(
       (w, i) =>
-        `wave ${i + 1}: ${w.counts.grunt + w.counts.runner} goblins (${w.counts.grunt} grunts, ${w.counts.runner} runners), ${w.balloons} balloons, over ${w.spawnTime} s, from ${w.camps.join(', ')}${w.rising.length ? `; rises: ${w.rising.join(', ')}` : ''}`,
+        `wave ${i + 1}: ${w.counts.grunt + w.counts.runner} goblins (${w.counts.grunt} grunts, ${w.counts.runner} runners${specialsText(w)}), ${w.balloons} balloons, over ${w.spawnTime} s, from ${w.camps.join(', ')}${w.rising.length ? `; rises: ${w.rising.join(', ')}` : ''}`,
     ),
     `rules: ${level.rules.archers} archers, ${level.rules.guards} guards, help every ${level.rules.refillEvery} s, castle ${Math.round(level.rules.startHealth * 100)}%`,
   ];

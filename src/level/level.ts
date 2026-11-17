@@ -15,7 +15,8 @@ export interface LevelWave {
   camps: string[];
   /** Camp ids that rise as this wave starts (docs/custom-mode.md section 7). */
   rising: string[];
-  counts: { grunt: number; runner: number };
+  /** v3 Phase 3: the new types are optional (levels saved before them have none). */
+  counts: { grunt: number; runner: number; digger?: number; shaman?: number; bomber?: number; archer?: number };
   /** Groups come out over this long (seconds); the wave runs until it is cleared. */
   spawnTime: number;
   balloons: number;

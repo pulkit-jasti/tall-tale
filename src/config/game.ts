@@ -652,8 +652,15 @@ export const EAT = {
   burstDown: 0.06,
 };
 
-/** v2: there is no climber type any more, every goblin climbs (docs/v2-plan.md 2.6). */
-export type GoblinType = 'grunt' | 'runner';
+/**
+ * v2: there is no climber type any more, every goblin climbs (docs/v2-plan.md 2.6).
+ * v3 Phase 3 (docs/v3-plan.md): the digger, the shaman, the bomber and the
+ * goblin archer, each with its own look (a prop on its bones and a tint).
+ */
+export type GoblinType = 'grunt' | 'runner' | 'digger' | 'shaman' | 'bomber' | 'archer';
+/** The Phase 3 types (a count each per level wave). */
+export const SPECIAL_GOBLINS = ['digger', 'shaman', 'bomber', 'archer'] as const;
+export type SpecialGoblin = (typeof SPECIAL_GOBLINS)[number];
 
 export interface GoblinStats {
   /** Height (cm). */
@@ -675,6 +682,85 @@ export const GOBLINS: Record<GoblinType, GoblinStats> = {
   // v3 (docs/v3-plan.md 1.1): faster again (grunts 7.5 to 12, about 25 s to the wall; runners 15 to 22), the board stays big.
   grunt: { height: 3.9, speed: 12, climbSpeed: 2, tint: [1, 1, 1], moveClip: 'walk', moveClipSpeed: 1.55 },
   runner: { height: 3.35, speed: 22, climbSpeed: 4, tint: [1.15, 1.05, 0.45], moveClip: 'sprint', moveClipSpeed: 1.55 },
+  // v3 Phase 3: told apart by shape first (shovel, lantern staff, keg on the back, bow), tint second.
+  /** Dirt brown, a shovel over the shoulder. `speed` is its tunneling speed (DIGGER). */
+  digger: { height: 3.6, speed: 14, climbSpeed: 2.5, tint: [0.95, 0.72, 0.5], moveClip: 'walk', moveClipSpeed: 1.6 },
+  /** Purple, a little taller, a lantern staff held up. Slower, so it stays at the back of its group. */
+  shaman: { height: 4.2, speed: 9, climbSpeed: 1.8, tint: [0.95, 0.62, 1.25], moveClip: 'walk', moveClipSpeed: 1.2 },
+  /** Reddish, a keg on its back, a slow heavy walk. */
+  bomber: { height: 3.9, speed: 10, climbSpeed: 0, tint: [1.3, 0.78, 0.62], moveClip: 'walk', moveClipSpeed: 1.25 },
+  /** Dark green, a bow and a quiver. */
+  archer: { height: 3.75, speed: 12, climbSpeed: 2, tint: [0.62, 0.85, 0.62], moveClip: 'walk', moveClipSpeed: 1.55 },
+};
+
+/**
+ * v3 Phase 3 (docs/v3-plan.md, built 2026-11-17): the new goblins' numbers.
+ * Sizes in board cm, times in seconds.
+ */
+export const DIGGER = {
+  /** Tunnels from its camp straight at the castle, this much to either side of the camp's direction (degrees). */
+  spreadDeg: 18,
+  /** The dirt mound shows only for the last part of the trip (seconds before it reaches the wall or the pepper ring). */
+  moundLead: 2.5,
+  /** The mound: a low dirt dome (cm) and how often it throws a few clods. */
+  moundRadius: 1.6,
+  moundHeight: 0.9,
+  moundColor: 0x7a5a3a,
+  clodEvery: 0.12,
+  clodColors: [0x7a5a3a, 0x5c4128, 0x9c7a52],
+  /** Where it comes up in the courtyard (cm from the center). */
+  surfaceMin: 40,
+  surfaceMax: 43.5,
+  /** A dirt burst where it comes up, and the pop up out of the ground. */
+  burstCount: 14,
+  popHeight: 6,
+  /** Most diggers on the board at once (the mound pool). */
+  max: 8,
+};
+
+export const SHAMAN = {
+  /** It stops on its road this far from the castle center (the far zone), and stays while goblins are near it. */
+  stopRadius: 150,
+  /** Goblins within this of it count as its group (it stays with them) and can get gear back. */
+  auraRadius: 40,
+  /** With none of them near it for this long, it walks on and climbs like a grunt. */
+  aloneFor: 3,
+  /** It puts gear back on one stripped goblin this often (helmet first, then shield). */
+  regearEvery: 6,
+  /** A purple sparkle on the goblin that got its gear back, and on the shaman as it casts. */
+  sparkColors: [0xc77dff, 0x9d4edd, 0xf3d9ff],
+};
+
+export const BOMBER = {
+  /** The fuse at the wall (seconds): sparks and a hiss, then the blast. The drum's stun freezes it. */
+  fuseTime: 1.5,
+  /** Fuse sparks this often while lit. */
+  sparkEvery: 0.1,
+  sparkColors: [0xffe066, 0xff9f1c, 0xffffff],
+  /** The blast: goblins this close are knocked out (armor too, like a trap), kegs this close are set off. */
+  blastRadius: 10,
+  chainRadius: 14,
+  /** Knights this close are hurt by it. */
+  knightRadius: 9,
+  /** At the wall: castle damage (CASTLE_HEALTH units; a grunt's wall hit is 0.35). */
+  wallDamage: 8,
+};
+
+export const GOBLIN_ARCHERS = {
+  /** They stop on their road this far from the castle center (the middle zone, past the garrison archers' range). */
+  stopRadius: 105,
+  /** A little jitter so a group does not stand in one line (cm). */
+  stopJitter: 6,
+  /** They loose together this often. */
+  volleyEvery: 3,
+  /** The share of arrows that hit a garrison soldier (a hit is one blow, src/units/troops.ts hurt). */
+  hitChance: 0.35,
+  /** Arrows (the garrison's arrow look, darker feathers). */
+  poolSize: 12,
+  featherColor: 0x3a3a3a,
+  shaftColor: 0x5c3d1e,
+  tipColor: 0x8a8f9e,
+  streakColor: 0xffd8b0,
 };
 
 export const GOBLIN_RULES = {
@@ -824,6 +910,8 @@ export const WAVES = {
    */
   gruntGroup: 5,
   runnerGroup: 4,
+  /** v3 Phase 3: goblin archers come in tight groups of this many (they stop and shoot together). */
+  archerGroup: 3,
   minGroup: 3,
   /** A camp drums this long before its group comes out (seconds); the compass lights it meanwhile. */
   rumbleLead: 3,
@@ -3725,6 +3813,68 @@ export const GEAR = {
       scale: 1.05,
       color: 0x9a9fb2,
       trim: 0x5a5e70,
+    },
+    // v3 Phase 3: each new goblin's own prop (Kenney models, colors matched to the orc's palette).
+    /** The digger's shovel, blade up over its shoulder (Kenney Survival Kit). */
+    diggerShovel: {
+      model: 'props/survival/tool-shovel.glb',
+      bone: 'arm-right',
+      at: RIGHT_HAND,
+      anchor: [0, 0.2, 0],
+      axis: [0, -1, 0],
+      dir: [0.65, 0.65, -0.35],
+      axis2: [0, 0, 1],
+      dir2: R_OUT,
+      scale: 1.9,
+    },
+    /** The bomber's keg, strapped to its back (Kenney Mini Dungeon barrel). */
+    bomberKeg: {
+      model: 'props/mini-dungeon/barrel.glb',
+      bone: 'torso',
+      at: [0, 0.12, -0.2],
+      anchor: [0, 0.24, 0],
+      axis: [0, 1, 0],
+      dir: [0, 1, 0],
+      axis2: [0, 0, 1],
+      dir2: [0, 0, -1],
+      scale: 0.55,
+    },
+    /** The goblin archer's bow (Kenney Mini Forest). */
+    goblinBow: {
+      model: 'props/mini-forest/weapon-bow.glb',
+      bone: 'arm-left',
+      at: LEFT_HAND,
+      anchor: [-0.04, 0.24, 0.1],
+      axis: [0, 1, 0],
+      dir: L_UP,
+      axis2: [0, 0, 1],
+      dir2: [0, 0, 1],
+      scale: 0.9,
+    },
+    goblinQuiver: {
+      shape: 'quiver',
+      bone: 'torso',
+      at: [0.06, 0.1, -0.15],
+      anchor: [0, 0, 0],
+      axis: [0, 1, 0],
+      dir: [-0.35, 0.94, 0],
+      axis2: [0, 0, 1],
+      dir2: [0, 0, -1],
+      scale: 1,
+      color: 0x4a2e18,
+      trim: 0x3a3a3a,
+    },
+    /** The shaman's staff: the Kenney lantern post, held up in its right hand. */
+    shamanLantern: {
+      model: 'town/fantasy-town/lantern.glb',
+      bone: 'arm-right',
+      at: RIGHT_HAND,
+      anchor: [0, 0.5, 0],
+      axis: [0, 1, 0],
+      dir: [0.6, 0.7, 0.3],
+      axis2: [0, 0, 1],
+      dir2: R_OUT,
+      scale: 0.5,
     },
     cap: {
       shape: 'cap',
