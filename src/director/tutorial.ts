@@ -176,6 +176,8 @@ export type MarkerTarget =
   | 'sugarBowl'
   /** The seed bed of the glass lesson. */
   | 'lessonBed'
+  /** The ground just outside the wall in front (the pepper ring). */
+  | 'frontGround'
   /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
   /** The pause button on its stand in front, while it shows. */
@@ -211,6 +213,8 @@ export interface Hint {
   whenDropped?: string;
   /** The hand tool this lesson is about, and the text shown instead while it rests (recharges). */
   tool?: ToolName;
+  /** A second tool that also works during the lesson (sugar shot from the slingshot). */
+  alsoTool?: ToolName;
   whenLocked?: string;
   /** Shown instead when the horn does not listen to the mic (no mic, or the quiet horn setting). */
   whenNoMic?: string;
@@ -375,16 +379,30 @@ export interface TutorialApi {
   triggersSetOff(kind: TriggerKind): number;
   /** How often the player paused (and came back) in this battle. */
   pausedCount(): number;
-  /** The balloon lesson: one balloon floats in right in front and hovers outside the wall until popped. */
-  balloonLesson(): void;
+  /** The balloon lesson: one balloon floats in right in front and hovers outside the wall until popped (`near`: right by the wall, in the swatter's reach). */
+  balloonLesson(near?: boolean): void;
   /** The balloon lesson is over: a balloon still hovering comes on in. */
   endBalloonLesson(): void;
   /** Balloons popped so far. */
   balloonsPopped(): number;
   /** A tool was taught (its lessons done or skipped): the game saves it, so it is never taught again. */
   toolLearned(tool: ToolName): void;
-  /** The glass lesson: a seed bed in front of the player (an empty one, made at the map's load). */
-  showLessonBed(): void;
+  /** The glass lesson: a seed bed of that kind in front of the player (an empty one, made at the map's load). */
+  showLessonBed(kind: 'sunflower' | 'mushroom'): void;
+  /** The horn's move lesson: aiming at a road moves the one squad out instead of calling a new one (on), or back to normal (off). */
+  hornMoveOnly(on: boolean): void;
+  /** Squads moved by the horn so far. */
+  hornMoves(): number;
+  /** Swats that bounced off armor so far. */
+  swatClonks(): number;
+  /** Balloons pushed away by the swatter so far. */
+  balloonPushes(): number;
+  /** Pepper ring segments filled so far. */
+  ringFills(): number;
+  /** Sugar cubes shot from the slingshot that landed so far. */
+  cubesShot(): number;
+  /** True if this battle's map has a trap of this kind (a lesson about it is left out if not). */
+  hasTrap(kind: TriggerKind): boolean;
   /** Plants grown so far (the glass on a seed bed). */
   plantsGrown(): number;
   /** Goblins lured by a sugar cube so far. */
@@ -685,7 +703,6 @@ export function shootLesson(): TutorialStep {
  * ghost hand: the tree is shot the same way.
  */
 function triggerLessons(): TutorialStep[] {
-  const again = (api: TutorialApi): void => api.sendPastTrigger();
   const kinds: { kind: TriggerKind; text: string; extra: Partial<Hint> }[] = [
     // The keg's aim demo (a pull straight back from the lesson's trap) now shows on the boulder.
     { kind: 'boulder', text: 'Shoot the striped boulder. It rolls over goblins.', extra: { demo: 'aimKeg' } },
@@ -695,22 +712,36 @@ function triggerLessons(): TutorialStep[] {
       extra: {},
     },
   ];
-  return kinds.map(({ kind, text, extra }) =>
-    lessonStep(
-      `learn-${kind}`,
-      lesson(text, 'target', 'lessonTrigger', { aimDots: true, ...extra }),
-      (api, since) => api.triggersSetOff(kind) > since,
-      (api) => api.triggersSetOff(kind),
-      {
-        start: (api) => api.startTriggerLesson(kind),
-        end: (api) => api.endTriggerLesson(),
-        fallbacks: [again, again],
-        stuckAfter: TUTORIAL_TIMING.triggerStuckAfter,
-        holdSpawns: true,
-        // Watch the blast, the rolling boulder or the falling tree.
-        afterDone: PAUSE_AFTER.watch,
+  return kinds.map(({ kind, text, extra }) => trapStep(kind, text, { aimDots: true, ...extra }));
+}
+
+/**
+ * One trap lesson: brings its kind onto the roads, a small group of goblins waits right in what it does,
+ * and the lesson is done when it is set off. The slingshot sets off most traps; `extra.tool` names another
+ * (the glass lights kegs and haystacks, the magnet drops the bell tower's bell).
+ */
+export function trapStep(kind: TriggerKind, text: string, extra: Partial<Hint> = {}): TutorialStep {
+  const again = (api: TutorialApi): void => api.sendPastTrigger();
+  return lessonStep(
+    `learn-${kind}`,
+    lesson(text, 'target', 'lessonTrigger', extra),
+    (api, since) => api.triggersSetOff(kind) > since,
+    (api) => api.triggersSetOff(kind),
+    {
+      start: (api) => {
+        api.startTriggerLesson(kind);
+        if (extra.tool) api.holdToolTimer(extra.tool, true);
       },
-    ),
+      end: (api) => {
+        api.endTriggerLesson();
+        if (extra.tool) api.holdToolTimer(extra.tool, false);
+      },
+      fallbacks: [again, again],
+      stuckAfter: TUTORIAL_TIMING.triggerStuckAfter,
+      holdSpawns: true,
+      // Watch the blast, the rolling boulder or the falling tree.
+      afterDone: PAUSE_AFTER.watch,
+    },
   );
 }
 
@@ -845,6 +876,7 @@ export const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     use: 'Beat the drum! Goblins get dizzy and fall off your wall.',
     locked: `The drum is resting. ${RESTING}`,
     bait: 'wall',
+    doneText: 'Dizzy! Strike harder to stun them longer.',
     // Watch the goblins tumble off the wall.
     afterDone: PAUSE_AFTER.watch,
   },
@@ -1024,26 +1056,31 @@ function balloonLessons(): TutorialStep[] {
       },
       timeout: TUTORIAL_TIMING.balloonAfterSeconds,
     },
-    lessonStep(
-      'learn-balloon',
-      lesson('A balloon! Pop it before it drops goblins in.', 'target', 'balloon', {
-        aimDots: true,
-        // On the glass sign, so the balloon in the air stays in view.
-        glass: true,
-      }),
-      (api, since) => api.balloonsPopped() > since,
-      (api) => api.balloonsPopped(),
-      {
-        start: (api) => api.balloonLesson(),
-        end: (api) => api.endBalloonLesson(),
-        // A balloon that got away (riders picked off) comes back.
-        fallbacks: [(api) => api.balloonLesson(), (api) => api.balloonLesson()],
-        holdSpawns: true,
-        // Watch it burst and the riders fall.
-        afterDone: PAUSE_AFTER.finish,
-      },
-    ),
+    balloonStep(),
   ];
+}
+
+/** One balloon floats in right in front and hovers outside the wall until the player pops it. */
+export function balloonStep(): TutorialStep {
+  return lessonStep(
+    'learn-balloon',
+    lesson('A balloon! Pop it before it drops goblins in.', 'target', 'balloon', {
+      aimDots: true,
+      // On the glass sign, so the balloon in the air stays in view.
+      glass: true,
+    }),
+    (api, since) => api.balloonsPopped() > since,
+    (api) => api.balloonsPopped(),
+    {
+      start: (api) => api.balloonLesson(),
+      end: (api) => api.endBalloonLesson(),
+      // A balloon that got away (riders picked off) comes back.
+      fallbacks: [(api) => api.balloonLesson(), (api) => api.balloonLesson()],
+      holdSpawns: true,
+      // Watch it burst and the riders fall.
+      afterDone: PAUSE_AFTER.finish,
+    },
+  );
 }
 
 /** The first wave with balloons (0 based), or -1. */

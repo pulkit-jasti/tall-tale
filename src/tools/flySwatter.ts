@@ -42,6 +42,8 @@ export class FlySwatter extends HandTool {
   balloons: Balloons | null = null;
   /** A swat bounced off armor (the tutorial's swatter wave can count it). */
   onClonk: () => void = () => {};
+  /** Swats that bounced off armor so far (the swatter's first-use lesson waits for one, 2026-11-18). */
+  clonks = 0;
 
   constructor(parts: ToolParts) {
     super(
@@ -189,6 +191,7 @@ export class FlySwatter extends HandTool {
         continue;
       }
       if (this.goblins.clonk(g, front.x, front.z)) {
+        this.clonks++;
         this.onClonk();
         continue;
       }

@@ -4532,6 +4532,8 @@ export const BALLOONS = {
    */
   introRadius: 120,
   lessonWaitAt: 80,
+  /** The swatter's first-use lesson (2026-11-18): the balloon hovers here instead, just outside the wall, in the swatter's reach (check on the headset). */
+  lessonNearAt: 58,
   /** It stops over the courtyard here and drops one rider every dropGap. */
   dropRadius: 43,
   dropGap: 0.6,

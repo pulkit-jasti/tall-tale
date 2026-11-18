@@ -625,6 +625,10 @@ export class Troops {
    */
   /** Set by the game: the horn holds a charge, so a new squad can be called. */
   canCall: () => boolean = () => true;
+  /** The horn's move lesson (2026-11-18): no new squad, so a road aimed at moves the one squad out (free). */
+  lessonMoveOnly = false;
+  /** Squads moved by the horn so far (the move lesson waits for one). */
+  moves = 0;
   /** Set by the game while a blow is carried out: the kind the aim showed wins (the charge is already spent then). */
   callOverride: boolean | null = null;
 
@@ -648,7 +652,7 @@ export class Troops {
     // A new squad only when the horn can pay for one (or none is out yet, so "resting" shows); while it
     // rests, aiming at a road moves the nearest squad there for free (2026-11-17: before, a move only
     // happened at the squad cap, so after one call the knights could not be moved at all).
-    const canCall = this.callOverride ?? (this.canCall() || active.length === 0);
+    const canCall = !this.lessonMoveOnly && (this.callOverride ?? (this.canCall() || active.length === 0));
     // Endless War Chief: one more squad (TROOPS.max has room for it).
     if (canCall && active.length < KNIGHTS.maxSquads + BOOST.squads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField + BOOST.squads * KNIGHTS.squadMax) {
       return legsToWall(graph, this.lengths, target) ? { kind: 'new' } : null;
@@ -684,6 +688,7 @@ export class Troops {
     }
     if (plan.kind === 'move') {
       this.moveSquad(plan.squad, target);
+      this.moves++;
       this.lastCalled = plan.squad;
       this.moveLock = KNIGHTS.moveLockout;
       return 'move';

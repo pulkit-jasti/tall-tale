@@ -147,6 +147,8 @@ export class SugarBowl extends HandTool {
 
   /** A goblin walked off to eat a cube (the first-use lesson waits for one, 2026-11-18). */
   onLured: () => void = () => {};
+  /** Cubes shot from the slingshot that landed so far (the sugar lesson's slingshot step waits for one). */
+  cubesShot = 0;
 
   /** The top of the cube pile (world), for the lesson's marker and ghost hand. */
   pileWorld(out: Vector3): Vector3 {
@@ -155,6 +157,7 @@ export class SugarBowl extends HandTool {
 
   /** A shot cube landed (the slingshot): a lure there (spicy if it was peppered). */
   landAt(x: number, y: number, z: number, spicy = false): void {
+    this.cubesShot++;
     const mesh = this.cube();
     if (spicy) mesh.material = this.spicyMaterial;
     this.addLure(new Vector3(x, y, z), mesh, spicy);

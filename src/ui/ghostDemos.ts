@@ -44,7 +44,9 @@ export type GhostAnchor =
   /** The top of the sugar cube pile in its bowl. */
   | 'sugarBowl'
   /** The first goblin brought for the current lesson (on the wall or the road). */
-  | 'baitGoblin';
+  | 'baitGoblin'
+  /** The ground just outside the wall in front, where the pepper ring lies. */
+  | 'frontGround';
 
 export type Dir = [number, number, number];
 
@@ -321,7 +323,27 @@ export const GHOST_DEMOS = {
       key(3.0, 'baitGoblin', [0, 14, -4], 'fist', HANDLE_GRIP),
     ],
   },
-  /** The magnet stands on the left (the pepper's old spot in the tutorial): the right hand from its side and behind, closes the fist, lifts it. */
+  /**
+   * The pepper ring: grab the pepper, carry it out over the ground just outside the wall in front (high
+   * enough to clear the wall), and shake it there a few times: a strip of pepper fills on the ground.
+   */
+  pepperGround: {
+    hand: 'right',
+    keys: [
+      key(0, 'pepperHandle', [5, 1, -6], 'open', HANDLE_GRIP),
+      key(0.6, 'pepperHandle', [0, 0, 0], 'open', HANDLE_GRIP),
+      key(0.9, 'pepperHandle', [0, 0, 0], 'fist', HANDLE_GRIP),
+      key(1.4, 'pepperHandle', [0, 8, -4], 'fist', HANDLE_GRIP),
+      key(2.2, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+      key(2.4, 'frontGround', [0, 12, -2], 'fist', HANDLE_GRIP),
+      key(2.6, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+      key(2.8, 'frontGround', [0, 12, -2], 'fist', HANDLE_GRIP),
+      key(3.0, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+      key(3.2, 'frontGround', [0, 12, -2], 'fist', HANDLE_GRIP),
+      key(3.4, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+    ],
+  },
+  /** The magnet stands on the left: the right hand from its side and behind, closes the fist, lifts it. */
   magnetGrab: {
     hand: 'right',
     keys: [
