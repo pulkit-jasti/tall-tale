@@ -11,6 +11,7 @@
 // Nothing pops over anything. Redrawn only when something changes.
 import { Group, type Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
+import { UI_FONT } from '../kit/font.js';
 import { BUTTON_SIZE, CUSTOM_GAME, MENU, POKE, UI_SPACING } from '../../config/game.js';
 
 const BUTTON_SIZE_MIN = BUTTON_SIZE.medium;
@@ -217,6 +218,7 @@ export class CustomListPanel {
       this.selected = Math.min(this.selected, this.levels.levels.length - 1);
       this.buildList();
       this.list!.redraw();
+      this.list!.setSelected(this.selected);
     }
     this.showConfirmButtons();
     // Drawn like the settings page: on top, in the page's own order (no flicker on taps). Again after a list rebuild.
@@ -254,7 +256,7 @@ export class CustomListPanel {
     this.list.onSelect = (i) => {
       if (i === this.selected) return;
       this.selected = i;
-      this.list!.redraw();
+      this.list!.setSelected(i);
       this.paint();
     };
     this.listHolder.add(this.list.group);
@@ -308,7 +310,8 @@ export class CustomListPanel {
 
   private paint(): void {
     if (this.emptyPanel.visible) this.emptyPanel.paint((c, w, h) => this.drawEmpty(c, w, h));
-    else if (this.listPanel.visible) this.listPanel.paint((c, w, h) => this.drawList(c, w, h));
+    // Its card changes on every tap: drawn into the texture not shown last frame (Panel.paintSwap).
+    else if (this.listPanel.visible) this.listPanel.paintSwap((c, w, h) => this.drawList(c, w, h));
   }
 
   private drawEmpty(c: CanvasRenderingContext2D, w: number, h: number): void {
@@ -337,18 +340,19 @@ export class CustomListPanel {
   private drawRow(c: CanvasRenderingContext2D, i: number, w: number, h: number): void {
     const level = this.levels.levels[i];
     if (!level) return;
-    const selected = i === this.selected;
+    // Every row drawn the same; the selected one gets the list's gold band on top (no redraw on a tap,
+    // 2026-11-18, like the campaign list).
     const pad = h * 0.18;
-    c.fillStyle = selected ? MENU.campaign.selectedColor : 'rgba(255, 248, 228, 0.85)';
+    c.fillStyle = 'rgba(255, 248, 228, 0.85)';
     c.beginPath();
     c.roundRect(2, 2, w - 4, h - 4, h * 0.18);
     c.fill();
-    c.strokeStyle = selected ? '#8a5a14' : 'rgba(138, 90, 52, 0.35)';
-    c.lineWidth = selected ? 4 : 2;
+    c.strokeStyle = 'rgba(138, 90, 52, 0.35)';
+    c.lineWidth = 2;
     c.stroke();
     drawLine(c, level.name, pad, h * 0.34, w - pad * 2, h * 0.26, UI_COLORS.ink, 'left');
     // The description under the name, whole when it fits, else cut short with "...".
-    c.font = `italic ${Math.round(h * 0.2)}px sans-serif`;
+    c.font = `italic ${Math.round(h * 0.2)}px ${UI_FONT}`;
     c.fillStyle = UI_COLORS.note;
     c.textAlign = 'left';
     c.textBaseline = 'middle';
@@ -395,11 +399,11 @@ export class CustomListPanel {
     y -= 5.2;
     // The description: the player's own, or one made from the settings (wrapped to three lines).
     const description = this.description(this.selected);
-    c.font = 'italic 19px sans-serif';
+    c.font = `italic 19px ${UI_FONT}`;
     wrapText(c, description, width)
       .slice(0, 3)
       .forEach((line, i) => {
-        c.font = 'italic 19px sans-serif';
+        c.font = `italic 19px ${UI_FONT}`;
         c.fillStyle = UI_COLORS.ink;
         c.textAlign = 'left';
         c.textBaseline = 'middle';

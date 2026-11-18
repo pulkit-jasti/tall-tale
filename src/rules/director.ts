@@ -64,6 +64,12 @@ export class Director<C> {
     return this.index >= 0 && this.index < this.steps.length ? this.steps[this.index] : null;
   }
 
+  /** The step after the current one (or the first, before any started), for drawing its sign ahead. Null after the last. */
+  get upcoming(): DirectorStep<C> | null {
+    const next = this.index + 1;
+    return next < this.steps.length ? this.steps[next] : null;
+  }
+
   /**
    * Called from onStepEnd: the next step starts only after this many
    * seconds, so the player gets a breather (time to finish what they were

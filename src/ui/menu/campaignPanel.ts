@@ -15,6 +15,7 @@
 // or loadout.
 import { Box3, Group, Vector3, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
+import { UI_FONT } from '../kit/font.js';
 import { MENU, UI_SPACING } from '../../config/game.js';
 import { LEVELS, type LevelEntry, type LevelReward } from '../../config/levels.js';
 import { mark } from '../../debug/perfMarks.js';
@@ -308,11 +309,11 @@ export class CampaignPanel {
     for (let s = 0; s < 3; s++) drawIconCentered(c, 'skull', half + 17 + s * 40, at.y(y - 2), 32, s < level.skulls ? SKULL_ON : SKULL_OFF);
     y -= 4.4;
     // The twist, in one line of flavor (wrapped).
-    c.font = 'italic 22px sans-serif';
+    c.font = `italic 22px ${UI_FONT}`;
     wrapText(c, level.flavor, width)
       .slice(0, 2)
       .forEach((line, i) => {
-        c.font = 'italic 22px sans-serif';
+        c.font = `italic 22px ${UI_FONT}`;
         c.fillStyle = ink;
         c.textAlign = 'left';
         c.textBaseline = 'middle';

@@ -12,6 +12,7 @@ import { PokeButton } from '../pokeButton.js';
 import { canvasTexture } from './canvas.js';
 import type { Control } from './controls.js';
 import { drawMenuIcon } from './menuIcons.js';
+import { fontSpec } from './font.js';
 
 const INK = '#fff4dc';
 
@@ -21,7 +22,7 @@ function drawFace(canvas: HTMLCanvasElement, locked: boolean): void {
   const w = canvas.width;
   const h = canvas.height;
   const icon = h * 0.6;
-  c.font = `bold ${Math.round(h * 0.42)}px sans-serif`;
+  c.font = fontSpec(Math.round(h * 0.42), true);
   const word = locked ? 'Locked' : 'Fight!';
   const textW = c.measureText(word).width;
   const left = (w - (icon + h * 0.2 + textW)) / 2;

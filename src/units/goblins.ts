@@ -20,7 +20,7 @@ import {
 } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { mark } from '../debug/perfMarks.js';
-import { BOMBER, CASTLE, DAY_NIGHT, DIGGER, GARDEN, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, SUGAR, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
+import { BOMBER, CASTLE, DAY_NIGHT, DIGGER, FEEDBACK, GARDEN, GARRISON, GOBLIN_GEAR, JUICE, GOBLIN_RULES, GOBLINS, KNIGHTS, PEPPER, ROADS, STUN, SUGAR, TROOPS, type GearName, type GoblinStats, type GoblinType } from '../config/game.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { addNightRim } from '../fx/nightRim.js';
 import { createRandom } from '../rules/random.js';
@@ -200,6 +200,8 @@ export class Goblin {
   hunting = false;
   /** A hit flash is showing for this long (seconds). */
   flashTime = 0;
+  /** No new hit flash until this runs out (seconds), so a goblin under many hits never strobes. */
+  flashCool = 0;
   /** Juice: time left of the landing squash, of the pop-in from its camp, and to its next dust puff (seconds). */
   squash = 0;
   popTime = 0;
@@ -307,6 +309,14 @@ export class Goblin {
     }
     action.timeScale = timeScale;
     if (action === this.current && loop && !(restart && (!action.isRunning() || action.getEffectiveWeight() < 0.5))) return;
+    // Switching back to a clip that is still fading out: fade it back in from where it is, never from
+    // weight 0 (a reset there let the total weight dip and the body blended toward its rest pose: a pop).
+    if (action !== this.current && loop && action.isRunning() && action.getEffectiveWeight() > 0) {
+      action.fadeIn(GOBLIN_RULES.fade);
+      if (this.current) this.current.fadeOut(GOBLIN_RULES.fade);
+      this.current = action;
+      return;
+    }
     action.reset();
     action.setLoop(loop ? LoopRepeat : LoopOnce, Infinity);
     action.clampWhenFinished = !loop;
@@ -813,6 +823,7 @@ export class Goblins {
     goblin.foe = null;
     goblin.animDt = 0;
     goblin.flashTime = 0;
+    goblin.flashCool = 0;
     goblin.squash = 0;
     goblin.popTime = 0;
     goblin.rampartWait = GOBLIN_RULES.rampartWait;
@@ -1154,9 +1165,15 @@ export class Goblins {
     }
   }
 
-  /** A short bright flash on a goblin that was hit (juice), back to its touch state after. */
+  /**
+   * A short bright flash on a goblin that was hit (juice), fading out, then back to its touch state.
+   * 2026-11-18: it was a hard white on and off that started again on every hit (each sunflower seed, each
+   * arrow, armor twice), so a goblin under attack strobed. Now it fades, and a new one waits hitFlashGap.
+   */
   flash(goblin: Goblin): void {
+    if (goblin.flashTime > 0 || goblin.flashCool > 0) return;
     goblin.flashTime = JUICE.hitFlashTime;
+    goblin.flashCool = JUICE.hitFlashGap;
     for (const m of goblin.materials) {
       m.emissive.setHex(JUICE.hitFlashColor);
       m.emissiveIntensity = JUICE.hitFlashIntensity;
@@ -1204,6 +1221,12 @@ export class Goblins {
     this.camps = network.graph.camps;
   }
 
+  /** The strength of its touch glow now (a smooth pulse), unless a hit flash shows. */
+  setGlowLevel(goblin: Goblin, level: number): void {
+    if (goblin.flashTime > 0) return;
+    for (const m of goblin.materials) m.emissiveIntensity = level;
+  }
+
   setTouch(goblin: Goblin, state: TouchState): void {
     if (goblin.touch === state) return;
     goblin.touch = state;
@@ -1220,6 +1243,8 @@ export class Goblins {
   }
 
   private applyLook(goblin: Goblin): void {
+    // A hit flash is the top layer: the touch or aim look comes back when it ends (two writers fought before).
+    if (goblin.flashTime > 0) return;
     if (goblin === this.aimed && goblin.touch === 'idle') applyAimGlow(goblin.materials);
     else applyTouchState(goblin.materials, goblin.touch);
   }
@@ -1249,12 +1274,18 @@ export class Goblins {
   }
 
   /** Nearest goblin that can be picked up within `radius` meters of a world point. */
-  nearestGrabbable(point: Vector3, radius: number, exclude: Goblin | null = null): Goblin | null {
+  nearestGrabbable(point: Vector3, radius: number, exclude: Goblin | null = null, prefer: ReadonlySet<Goblin> | null = null): Goblin | null {
     let best: Goblin | null = null;
     let bestDistance = radius;
     for (const g of this.list) {
       if (g === exclude || !GRABBABLE.has(g.mode)) continue;
-      const d = this.centerWorld(g, temp).distanceTo(point);
+      let d = this.centerWorld(g, temp).distanceTo(point);
+      // A goblin already Ready keeps it unless another is clearly nearer, and lets go a little farther out
+      // (2026-11-18: the grey glow swapped between goblins by the hand and blinked at the edge).
+      if (prefer?.has(g)) {
+        if (d >= radius * FEEDBACK.stickOut) continue;
+        d = Math.min(d * FEEDBACK.stickShare, radius * 0.999);
+      }
       if (d < bestDistance) {
         bestDistance = d;
         best = g;
@@ -1381,9 +1412,17 @@ export class Goblins {
       if (g.mode === 'dead') continue;
       this.step(g, dt);
       if (g.hitGrace > 0) g.hitGrace -= dt;
+      if (g.flashCool > 0) g.flashCool -= dt;
       if (g.flashTime > 0) {
         g.flashTime -= dt;
-        if (g.flashTime <= 0) this.applyLook(g);
+        if (g.flashTime <= 0) {
+          g.flashTime = 0;
+          this.applyLook(g);
+        } else {
+          // Fades out smoothly (a hard switch back read as a blink).
+          const k = g.flashTime / JUICE.hitFlashTime;
+          for (const m of g.materials) m.emissiveIntensity = JUICE.hitFlashIntensity * k * k;
+        }
       }
       if (g.popTime > 0 || g.squash > 0 || g.type === 'runner') this.juice(g, dt);
       if (g.bellImmune > 0) g.bellImmune -= dt;
@@ -1413,7 +1452,7 @@ export class Goblins {
         g.mixer.update(g.animDt);
         g.animDt = 0;
       }
-      if (g.stunned > 0 && (g.mode as GoblinMode) !== 'dead' && star < STAR_SLOTS) this.placeStars(g, star++);
+      if (g.stunned > 0 && (g.mode as GoblinMode) !== 'dead' && star < STAR_SLOTS) this.placeStars(g, star++, i);
     }
     for (let i = star; i < STAR_SLOTS; i++) {
       this.stars.setMatrixAt(i * 2, hiddenMatrix);
@@ -1495,11 +1534,12 @@ export class Goblins {
   private starsShown = false;
 
   /** Two dizzy stars circling over a stunned goblin's head. */
-  private placeStars(g: Goblin, slot: number): void {
+  /** `phase`: the goblin's own (its pool index), so its stars never jump when another goblin's stun ends. */
+  private placeStars(g: Goblin, slot: number, phase: number): void {
     const p = g.root.position;
     const top = p.y + g.stats.height * 1.15;
     for (let k = 0; k < 2; k++) {
-      const a = this.time * STUN.starSpeed + k * Math.PI + slot;
+      const a = this.time * STUN.starSpeed + k * Math.PI + phase;
       starMatrix.makeRotationY(a).setPosition(p.x + Math.cos(a) * STUN.starOrbit, top, p.z + Math.sin(a) * STUN.starOrbit);
       this.stars.setMatrixAt(slot * 2 + k, starMatrix);
     }

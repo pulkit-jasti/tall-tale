@@ -46,9 +46,14 @@ export class NumberStepper implements Control {
   }
 
   setValue(value: number): void {
-    this.current = Math.min(this.max, Math.max(this.min, Math.round(value)));
+    const next = Math.min(this.max, Math.max(this.min, Math.round(value)));
+    // The same value (a page opening): nothing to draw (each one redrew its label, all in one frame).
+    if (next === this.current && this.shownOnce) return;
+    this.current = next;
     this.show();
   }
+
+  private shownOnce = false;
 
   update(hands: HandState[], dt: number): void {
     if (this.minus.update(hands, dt)) this.step(-1);
@@ -79,6 +84,7 @@ export class NumberStepper implements Control {
     this.plus.locked = atMax;
     this.minus.setColor(atMin ? PICKERS.offColor : POKE.color);
     this.plus.setColor(atMax ? PICKERS.offColor : POKE.color);
+    this.shownOnce = true;
     this.label.draw((c, w, h) => drawLine(c, `${this.current}`, w / 2, h / 2, w, (PICKERS.numberSize / RIM / 2) * h, UI_COLORS.ink));
   }
 }

@@ -24,6 +24,8 @@ export interface CampSpot {
 }
 
 const TWO_PI = Math.PI * 2;
+/** The ring or slice itself, then the ones on either side (heightAt looks there for the quad holding a point). */
+const NEAR = [0, -1, 1] as const;
 
 /** 0 below `from`, 1 above `to`, smooth in between. */
 export function smooth(from: number, to: number, x: number): number {
@@ -218,11 +220,13 @@ export class Terrain {
     if (a < 0) a += TWO_PI;
     const j = Math.floor((a / TWO_PI) * this.segments);
     // The nudge can move the point into a neighbouring quad.
-    for (const di of [0, -1, 1]) {
-      const i = lo + di;
+    // No arrays made here: it runs for every walking unit every frame (2026-11-18: the garbage it made
+    // brought garbage collection pauses, dropped frames).
+    for (let a = 0; a < 3; a++) {
+      const i = lo + NEAR[a];
       if (i < 0 || i >= last) continue;
-      for (const dj of [0, -1, 1]) {
-        const h = this.inQuad(i, (j + dj + this.segments) % this.segments, x, z);
+      for (let b = 0; b < 3; b++) {
+        const h = this.inQuad(i, (j + NEAR[b] + this.segments) % this.segments, x, z);
         if (h !== null) return h;
       }
     }
@@ -300,8 +304,14 @@ export class Terrain {
   }
 
   private inQuad(i: number, j: number, x: number, z: number): number | null {
-    const t = this.quad(i, j);
-    return this.inTriangle(t[0], t[1], t[2], x, z) ?? this.inTriangle(t[3], t[4], t[5], x, z);
+    // The same two triangles as quad(), worked out inline (quad() makes an array, and this runs very often).
+    const s = this.segments;
+    const a = i * s + j;
+    const b = (i + 1) * s + j;
+    const c = i * s + ((j + 1) % s);
+    const d = (i + 1) * s + ((j + 1) % s);
+    if (this.flip[a] === 0) return this.inTriangle(a, c, b, x, z) ?? this.inTriangle(c, d, b, x, z);
+    return this.inTriangle(a, d, b, x, z) ?? this.inTriangle(a, c, d, x, z);
   }
 
   /** Height inside a triangle at a board point, or null when the point is outside it. */

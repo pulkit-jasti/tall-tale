@@ -71,6 +71,13 @@ export class SugarBowl extends HandTool {
     this.cubeMaterial = flatMaterial(SUGAR.cubeColor);
     this.spicyMaterial = flatMaterial(SUGAR.spicyColor);
     this.cubeGeometry = new BoxGeometry(SUGAR.cubeSize, SUGAR.cubeSize, SUGAR.cubeSize);
+    // A hidden plain and spicy cube, only so the GPU warm-up sends the cube's shape and both materials'
+    // shaders (2026-11-18: the first pinched cube and the first spicy one did that mid-battle).
+    for (const material of [this.cubeMaterial, this.spicyMaterial]) {
+      const warm = new Mesh(this.cubeGeometry, material);
+      warm.visible = false;
+      this.stage.boardSpin.add(warm);
+    }
   }
 
   protected build(): void {
@@ -152,7 +159,10 @@ export class SugarBowl extends HandTool {
   pepperAt(at: Vector3, dt: number): void {
     const r2 = SUGAR.pepperRadius * SUGAR.pepperRadius;
     const under = (p: Vector3): boolean => (p.x - at.x) ** 2 + (p.z - at.z) ** 2 < r2 && p.y < at.y + 1;
-    for (const c of [...this.held, ...this.lures]) {
+    // Both lists walked in turn (a spread of them made two arrays every frame of shaking).
+    const total = this.held.length + this.lures.length;
+    for (let k = 0; k < total; k++) {
+      const c = k < this.held.length ? this.held[k] : this.lures[k - this.held.length];
       if (c.spicy || !under(c.mesh.position)) continue;
       c.pepper += dt;
       if (c.pepper < SUGAR.pepperTime) continue;

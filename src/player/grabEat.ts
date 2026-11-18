@@ -146,9 +146,10 @@ export class GrabEat {
         if (inZone && !slot.inEatZone) this.audio.play('readyTick');
         slot.inEatZone = inZone;
         slot.eatTimer = inZone ? slot.eatTimer + dt : 0;
-        // Near the mouth the goblin pulses white, otherwise it shows Held.
-        const pulse = Math.sin(this.time * 18) > 0;
-        this.goblins.setTouch(goblin, inZone && pulse ? 'ready' : 'held');
+        // Near the mouth the goblin's Ready glow pulses smoothly (a hard on and off read as flicker,
+        // 2026-11-18), otherwise it shows Held.
+        this.goblins.setTouch(goblin, inZone ? 'ready' : 'held');
+        if (inZone) this.goblins.setGlowLevel(goblin, 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(this.time * 18)));
         const letGo = hand.pinch.ended || !hand.pinch.on;
         // Held near the mouth for a moment: eaten. If the pinch breaks close to
         // the face (tracking or the Quest menu gesture), it is eaten too.
@@ -282,7 +283,7 @@ export class GrabEat {
       }
     }
     if (tool) return { kind: 'tool', tool };
-    const goblin = this.goblins.nearestGrabbable(hand.pinchPoint, HANDS.pinchRadius);
+    const goblin = this.goblins.nearestGrabbable(hand.pinchPoint, HANDS.pinchRadius, null, this.readyGoblins);
     // A goblin in pinch range always wins, so reaching for one never grabs the ring.
     if (goblin) return { kind: 'goblin', goblin };
     const chicken = this.chickens?.nearest(hand.pinchPoint, HANDS.pinchRadius) ?? null;

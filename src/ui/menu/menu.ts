@@ -126,7 +126,15 @@ export class Menu {
     this.showPage(this.page);
   }
 
-  /** Something changed outside (the "Unlock all tools" switch): the shelves and the stand show it. */
+  /**
+   * "Unlock all tools" changed: only the shelves and the stand show it. The campaign list and cards never
+   * depend on it (tools only, never levels), and redrawing the whole list there was a flicker (2026-11-18).
+   */
+  refreshTools(): void {
+    this.shelves.layout();
+  }
+
+  /** Progress changed outside (a debug reset): the shelves, the stand, the list and the cards. */
   refresh(): void {
     this.shelves.layout();
     this.campaign.refresh();

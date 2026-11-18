@@ -21,6 +21,7 @@ import { access, hornHearsMic } from '../player/accessSettings.js';
 import { progress } from '../player/progress.js';
 import type { HandState } from '../player/hands.js';
 import {
+  CanvasLabel,
   Switch,
   type Control,
   armControls,
@@ -89,9 +90,15 @@ interface SoundRow {
   label: string;
   slider: Slider;
   y: number;
+  /** The level under the name ("60%", "Off"): a small label of its own, so a slider let go never redraws the page. */
+  note: CanvasLabel;
+  noteText: string;
 }
 
 const CM = 0.01;
+/** The sound levels' labels: where they start after the row icon, and how tall (layout px, like drawSettings). */
+const NOTE_INDENT = 34 + 12;
+const NOTE_HEIGHT = 26;
 
 export class PauseMenu {
   /** World (meters): placed in front of the head, and follows it lazily while open. */
@@ -214,12 +221,21 @@ export class PauseMenu {
       // Just a slider per group: all the way down is off.
       const slider = new Slider(audio, { length: S.sliderLength, steps: SOUND_SETTINGS.steps, value: audio.settings.volume(c.id) });
       add(slider.group, S.sliderX, y, this.tabGroups.sound);
-      // While dragging only the sound follows (no repaint); the number on the panel updates when it is let go.
+      // The level under the row's name, where the page drew it before (drawSettings: 14 layout px under the
+      // row's middle, from just after the icon to just before the control), as its own small label.
+      const noteLeft = S.labelX + NOTE_INDENT / S.pxPerCm;
+      const noteRight = S.sliderX - S.sliderLength / 2 - SLIDER.handleRadius - 1;
+      const note = new CanvasLabel(noteRight - noteLeft, NOTE_HEIGHT / S.pxPerCm, S.pxPerCm * 2);
+      add(note.mesh, (noteLeft + noteRight) / 2, y - 14 / S.pxPerCm, this.tabGroups.sound);
+      note.mesh.position.z = 0.05;
+      const row: SoundRow = { category: c.id, label: c.label, slider, y, note, noteText: '' };
+      // While dragging only the sound follows; the number updates when it is let go (only its small label).
       slider.onChange = (value, final) => {
         audio.settings.setVolume(c.id, value, final);
-        if (final) this.repaintSettings();
+        if (final) this.drawNote(row);
       };
-      this.rows.push({ category: c.id, label: c.label, slider, y });
+      this.rows.push(row);
+      this.drawNote(row);
     });
     // Both tabs drawn now, so the first switch to either draws nothing.
     const shown = this.tab;
@@ -349,11 +365,20 @@ export class PauseMenu {
     // uploaded the whole page, a flicker). Sound: each group's level. Access: whether a mic is on.
     // Whether the icons are in yet too, so a page drawn before they loaded is drawn again once they are.
     const icons = uiImage('panel') ? 'icons' : 'no icons';
-    const key =
-      this.tab === 'sound'
-        ? `${icons} ${this.rows.map((r) => Math.round(this.audio.settings.level(r.category) * 100)).join(',')}`
-        : `${icons} mic ${mic.on}`;
+    // The sound page's levels are labels of their own (drawNote), so that page never changes with them.
+    const key = this.tab === 'sound' ? icons : `${icons} mic ${mic.on}`;
     this.settings.paintVariant(this.tab, key, (c, w, h) => this.drawSettings(c, w, h));
+  }
+
+  /** A sound row's level under its name, redrawn only when it changes (a slider let go). */
+  private drawNote(row: SoundRow): void {
+    const level = this.audio.settings.level(row.category);
+    const text = level <= 0 ? 'Off' : `${Math.round(level * 100)}%`;
+    if (text === row.noteText) return;
+    row.noteText = text;
+    const color = level <= 0 ? UI_COLORS.warn : UI_COLORS.accent;
+    // 20 layout px, like the page's other notes, at the label's canvas scale (2).
+    row.note.draw((c, w, h) => drawLine(c, text, 2, h / 2, w - 4, 40, color, 'left'));
   }
 
   /** The pause button while the battle runs (`enabled`: a battle is on and the Next button is not out). True on the frame it is poked. */
@@ -428,10 +453,8 @@ export class PauseMenu {
       drawLine(c, note, textLeft, y + 14, labelRight - textLeft, 20, noteColor, 'left');
     };
     if (this.tab === 'sound') {
-      for (const row of this.rows) {
-        const level = this.audio.settings.level(row.category);
-        name(SOUND_ICONS[row.category], row.label, row.y, level <= 0 ? 'Off' : `${Math.round(level * 100)}%`, level <= 0 ? UI_COLORS.warn : UI_COLORS.accent);
-      }
+      // The level under each name is its own label (drawNote).
+      for (const row of this.rows) name(SOUND_ICONS[row.category], row.label, row.y, '', UI_COLORS.note);
       return;
     }
     name('hand', 'Your reach', S.firstRowY, 'Measure it again', UI_COLORS.note);

@@ -8,6 +8,7 @@ import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { BOARD, HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
+import { UI_FONT } from './kit/font.js';
 import type { HandState } from '../player/hands.js';
 import { centerAbove, drawIcon, drawLine, drawNineSlice, drawTitleBanner, Panel, StandButton, UI_COLORS, wrapText, type UiImageName } from './kit/index.js';
 
@@ -91,15 +92,31 @@ export class HintSign {
       this.panel.visible = false;
       this.next.show(false);
       this.drawn = '';
+      this.lastContent = null;
       return;
     }
     this.panel.visible = true;
     if (!!content.next !== this.next.visible) this.nextWait = 0;
     this.next.show(!!content.next);
+    // Same as last frame, field by field: no key string made every frame (2026-11-18: garbage).
+    const last = this.lastContent;
+    if (
+      last &&
+      last.kind === content.kind &&
+      last.header === content.header &&
+      last.text === content.text &&
+      last.icon === content.icon &&
+      last.sub === content.sub &&
+      last.done === content.done &&
+      last.next === content.next
+    )
+      return;
+    const lastText = last?.text;
+    this.lastContent = { ...content };
     const key = JSON.stringify(content);
     if (key === this.drawn) return;
     // A new instruction pops in. Ticking the box or a counter change does not.
-    const sameText = this.drawn && JSON.parse(this.drawn).text === content.text;
+    const sameText = this.drawn && lastText === content.text;
     if (!sameText) {
       this.panel.popIn(HINT_SIGN.popTime);
       // A new step: a finger still on Next must not skip it too, and its blink waits again.
@@ -108,7 +125,48 @@ export class HintSign {
       this.next.setBlink(null);
     }
     this.drawn = key;
-    this.draw(content);
+    // A look drawn ahead (prepare) swaps in with nothing drawn or sent to the GPU. Anything else is drawn on
+    // one of two main canvases, taking turns, so the upload never goes into the texture drawn last frame.
+    let slot = key;
+    if (!this.prepared.has(key)) {
+      this.mainTurn = 1 - this.mainTurn;
+      slot = this.mainTurn === 0 ? 'mainA' : 'mainB';
+      mark('hint sign');
+    }
+    this.panel.paintVariant(slot, key, (c, w, h) => this.drawContent(c, w, h, content));
+  }
+
+  private mainTurn = 0;
+  /** What show() got last (a copy), to skip a frame where nothing changed without building a key. */
+  private lastContent: SignContent | null = null;
+  /** Looks drawn ahead (their keys, oldest first), each on its own canvas; at most HINT_SIGN.keep of them. */
+  private prepared = new Set<string>();
+
+  /**
+   * Draws these looks now, each on its own canvas and texture, sent to the GPU at once. Showing one
+   * later only swaps the texture (2026-11-18: each new number of the reach countdown redrew and
+   * uploaded the whole sign, a flicker on the headset).
+   */
+  prepare(contents: SignContent[]): void {
+    for (const content of contents) {
+      const key = JSON.stringify(content);
+      if (this.prepared.has(key)) continue;
+      // Room for it: the oldest look drawn ahead goes (never the one showing).
+      if (this.prepared.size >= HINT_SIGN.keep) {
+        for (const old of this.prepared) {
+          if (old === this.drawn) continue;
+          this.panel.dropVariant(old);
+          this.prepared.delete(old);
+          break;
+        }
+      }
+      this.prepared.add(key);
+      const shown = this.drawn;
+      const showing = this.prepared.has(shown) ? shown : this.mainTurn === 0 ? 'mainA' : 'mainB';
+      this.panel.paintVariant(key, key, (c, w, h) => this.drawContent(c, w, h, content));
+      // Back to what shows now (paintVariant swaps the panel to the slot it drew).
+      if (shown) this.panel.paintVariant(showing, shown, () => {});
+    }
   }
 
   /** The Next button is out (the pause button, on the same spot, steps aside). */
@@ -134,11 +192,6 @@ export class HintSign {
         this.next.setBlink({ color: HINT_SIGN.nextBlinkColor, intensity: HINT_SIGN.nextBlinkIntensity, speed: HINT_SIGN.nextBlinkSpeed });
       }
     }
-  }
-
-  private draw(content: SignContent): void {
-    mark('hint sign');
-    this.panel.paint((c, w, h) => this.drawContent(c, w, h, content));
   }
 
   private drawContent(c: CanvasRenderingContext2D, w: number, h: number, content: SignContent): void {
@@ -170,7 +223,7 @@ export class HintSign {
     let lines: string[];
     // Shrink the text until it fits.
     for (;;) {
-      c.font = `bold ${size}px sans-serif`;
+      c.font = `bold ${size}px ${UI_FONT}`;
       lines = wrapText(c, content.text, w - textLeft - pad - 40);
       if (lines.length * size * 1.2 <= bodyH - 10 || size <= 28) break;
       size -= 2;
@@ -180,7 +233,7 @@ export class HintSign {
     if (content.sub) {
       c.fillStyle = SUB_INK;
       c.textAlign = 'center';
-      c.font = 'bold 30px sans-serif';
+      c.font = `bold 30px ${UI_FONT}`;
       c.fillText(content.sub, w / 2, h - pad - subH / 2 - 4);
     }
   }

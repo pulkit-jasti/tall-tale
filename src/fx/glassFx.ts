@@ -5,6 +5,7 @@
 // target, a soft glow around it, and a bright spot where it lands. Each is one
 // mesh with a tiny shader (no textures, no geometry rebuilt while aiming).
 import { AdditiveBlending, CylinderGeometry, DoubleSide, Mesh, RingGeometry, ShaderMaterial, Color } from 'three';
+import { RENDER_ORDER } from '../config/game.js';
 
 /** A flat ring (lying in the ground's plane) that fills clockwise from 0 to 1. */
 export function progressRing(): { mesh: Mesh; set: (share: number, hex: number) => void } {
@@ -33,6 +34,8 @@ export function progressRing(): { mesh: Mesh; set: (share: number, hex: number) 
   });
   const mesh = new Mesh(new RingGeometry(0.78, 1, 40, 1).rotateX(-Math.PI / 2), material);
   mesh.frustumCulled = false;
+  // Its own draw order (it had none, so it swapped with other see-through things as the head moved).
+  mesh.renderOrder = RENDER_ORDER.glassRing;
   const color = material.uniforms.color.value as Color;
   return {
     mesh,
@@ -135,7 +138,11 @@ export function glassBeam(): { core: Mesh; glow: Mesh; spot: Mesh; set: (hex: nu
       side: DoubleSide,
     }),
   );
-  for (const m of [core, glow, spot]) m.frustumCulled = false;
+  // A fixed draw order, glow then core then spot (none before: see-through parts swapped as the head moved).
+  [glow, core, spot].forEach((m, i) => {
+    m.frustumCulled = false;
+    m.renderOrder = RENDER_ORDER.glassBeam + i * 0.1;
+  });
   const color = uniforms.color.value;
   return {
     core,

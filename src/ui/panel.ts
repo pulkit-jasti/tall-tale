@@ -190,6 +190,29 @@ export class Panel {
 
   private variants = new Map<string, { canvas: HTMLCanvasElement; texture: CanvasTexture; key: string | null }>();
 
+  /**
+   * Redraws the panel into one of two canvases and textures, taking turns (2026-11-18): the upload goes into
+   * the texture not drawn last frame, so the GPU never waits for a frame still using it. For panels whose
+   * content changes on taps (the Custom Game list's card, the hint sign). Use it instead of paint() on that
+   * panel, and only on a panel that never resizes.
+   */
+  paintSwap(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void): void {
+    this.swapTurn = 1 - this.swapTurn;
+    this.paintVariant(this.swapTurn === 0 ? 'swapA' : 'swapB', String(++this.swapCount), draw);
+  }
+
+  private swapTurn = 0;
+  private swapCount = 0;
+
+  /** Frees a look drawn with paintVariant (its canvas and texture), unless it is the one showing. */
+  dropVariant(slot: string): void {
+    const v = this.variants.get(slot);
+    if (!v || v.texture === this.texture) return;
+    v.texture.dispose();
+    preparedTextures.delete(v.texture);
+    this.variants.delete(slot);
+  }
+
   private paintNow(draw: (c: CanvasRenderingContext2D, w: number, h: number) => void, canvas = this.canvas, texture = this.texture): void {
     const c = canvas.getContext('2d')!;
     c.setTransform(1, 0, 0, 1, 0, 0);

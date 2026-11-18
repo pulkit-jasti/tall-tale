@@ -49,7 +49,7 @@ import type { HandState } from '../../player/hands.js';
 import { note } from '../../debug/notes.js';
 import { holdMatrix, type HoldName } from '../../player/hold.js';
 import { degToRad, polarX, polarZ } from '../../rules/boardMath.js';
-import { canMoveTo, PICK_TOOLS, placeOf, SHELF_SPOTS, toolIsNew, toolUnlocked, type PickTool, type Place, type Progress } from '../../rules/campaign.js';
+import { canMoveTo, PICK_TOOLS, placeOf, SHELF_SPOTS, toolUnlocked, type PickTool, type Place, type Progress } from '../../rules/campaign.js';
 import { cloneStatic, type ModelTemplate } from '../../world/models.js';
 import { flatMaterial, post } from '../../world/shapes.js';
 import type { Stage } from '../../world/stage.js';
@@ -373,22 +373,15 @@ export class Shelves {
       }
       this.grab(hand, near, !hand.fist.started);
     }
-    // Looks: held, ready (a hand near), a new tool's glow, idle.
+    // Looks: held, ready (a hand near), idle. No "new tool" glow (the developer, 2026-11-18: with every
+    // tool unlocked from the start the magnet, glass, drum and sugar pulsed on the shelf for no reason).
     this.hovered.clear();
     for (const item of this.hover.values()) this.hovered.add(item);
     for (const item of this.items) {
       let state: TouchState = 'idle';
       if (this.holders.some((h) => h.item === item)) state = 'held';
       else if (this.hovered.has(item) && !item.locked) state = 'ready';
-      const glowing = item.kind === 'tool' && item.name && toolIsNew(this.progress, item.name as PickTool) && state === 'idle';
-      if (glowing) {
-        const pulse = Math.max(0, Math.sin(this.time * Math.PI * 2 * MENU.shelves.newGlow.speed));
-        for (const m of item.materials) {
-          m.emissive.setHex(MENU.shelves.newGlow.color);
-          m.emissiveIntensity = pulse * 0.8;
-        }
-        item.touch = 'idle';
-      } else if (state !== item.touch) {
+      if (state !== item.touch) {
         item.touch = state;
         applyTouchState(item.materials, state);
       }

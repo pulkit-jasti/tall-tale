@@ -41,7 +41,8 @@ export class ThreatCues {
     const depth = CASTLE.wallOut - CASTLE.wallIn;
     const geometry = new BoxGeometry(THREAT.flashWidth, 0.25, depth);
     for (let i = 0; i < THREAT.flashPool; i++) {
-      const material = new MeshBasicMaterial({ color: THREAT.flashColor, transparent: true, opacity: 0, depthWrite: false, fog: false });
+      // Pulled toward the eye in depth: its bottom sat a hair over the wall top and shimmered against it.
+      const material = new MeshBasicMaterial({ color: THREAT.flashColor, transparent: true, opacity: 0, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
       const mesh = new Mesh(geometry, material);
       mesh.visible = false;
       stage.boardSpin.add(mesh);

@@ -50,6 +50,7 @@ import { COMPASS as C, PEPPER_RING } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { post } from '../world/shapes.js';
 import { CanvasLabel, drawIcon } from './kit/index.js';
+import { UI_FONT } from './kit/font.js';
 
 /** Threat levels (v3): none, a camp about to send, goblins walking in, goblins attacking the wall. */
 export type ThreatLevel = 0 | 1 | 2 | 3;
@@ -339,7 +340,7 @@ export class Compass {
         // A skull (Kenney Board Game Icons) in front of the number, so it reads as "goblins left", not a random number.
         const digits = String(left);
         const size = h * (digits.length > 2 ? 0.44 : 0.58);
-        c.font = `bold ${Math.round(size)}px sans-serif`;
+        c.font = `bold ${Math.round(size)}px ${UI_FONT}`;
         const numberWidth = c.measureText(digits).width;
         const headWidth = h * 0.32;
         const gap = h * 0.05;

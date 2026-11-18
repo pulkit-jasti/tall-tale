@@ -33,6 +33,7 @@ import {
   MAGNET,
   HANDS,
   XR,
+  LANDING_VIEW,
   type TimeOfDay,
 } from './config/game.js';
 import { ViewFade } from './ui/viewFade.js';
@@ -57,6 +58,7 @@ import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { ThreatCues } from './ui/threatCues.js';
 import { GlassSign, isTyping, loadUiImages, useKeyboardSession, type GlassBar } from './ui/kit/index.js';
+import { flushAfterDrag } from './ui/kit/controls.js';
 import { customLevels, resetCustomLevels, saveCustomLevels } from './player/customLevels.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
@@ -74,6 +76,7 @@ import { TrophyToast } from './ui/trophyToast.js';
 import { CompassCrank } from './player/crank.js';
 import { HeightRail } from './player/heightRail.js';
 import { HandTracker } from './player/hands.js';
+import { landingHome, landingTime, landingViewOn } from './player/mouseLook.js';
 import { angleDelta, angleOf, degToRad } from './rules/boardMath.js';
 import { campaignLevel } from './level/campaignLevels.js';
 import { makeEndlessLevel } from './level/endless.js';
@@ -123,6 +126,7 @@ import { battleTools, isOpen, LOADOUT_SLOTS, PICK_TOOLS, recordEndless, recordTu
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
 const headForward = new Vector3();
+const parentQuaternion = new Quaternion();
 const toHead = new Vector3();
 const boardAt = new Vector3();
 const slotAt = new Vector3();
@@ -135,6 +139,18 @@ const railFacing = new Vector3();
 const railInverse = new Matrix4();
 /** A camp's spot for the compass. */
 const compassAt = new Vector3();
+
+/** Every line the horn can put on the glass sign (updateGlass), with and without its bar, to draw at setup. */
+function hornGlassTexts(): { text: string; bar: boolean }[] {
+  const texts = ['The horn is resting', 'Wait to move again', 'Look at a road', 'No mic sound: hold it there', 'Lower it, then raise it again', 'Charge!'];
+  for (const verb of ['Call', 'Boost', 'Move']) {
+    texts.push(`${verb}: say "Charge!"`, `${verb}: hold it there`, `${verb}: raise it, say "Charge!"`, `${verb}: raise it in front of you`);
+  }
+  return texts.flatMap((text) => [
+    { text, bar: false },
+    { text, bar: true },
+  ]);
+}
 
 /**
  * Frees an old map's GPU memory: every geometry under `root`, and its
@@ -155,6 +171,14 @@ function disposeTree(root: Object3D, materials: boolean): void {
 let pendingStart: 'browser' | 'vr' | null = null;
 
 /** Called from the start page's button. */
+let readyDone: (() => void) | null = null;
+let readyFailed: ((error: unknown) => void) | null = null;
+/** Settles once the game has built everything (every model, sound and pool): the loading screen waits for it. */
+export const gameReady = new Promise<void>((resolve, reject) => {
+  readyDone = resolve;
+  readyFailed = reject;
+});
+
 export function requestBattleStart(inVr: boolean): void {
   pendingStart = inVr ? 'vr' : 'browser';
 }
@@ -207,6 +231,8 @@ export class GameSystem extends createSystem({}) {
   private nightLights!: NightLights;
   /** A time of day picked on the debug page, until the next battle starts. */
   private timeOverride: TimeOfDay | null = null;
+  /** The 2D start page's look was on last frame (its time of day jumps in and out at once). */
+  private wasLanding = false;
   /** The debug page's "Night fog on/off" (v3 2.7), held until the next battle starts. */
   private fogOverride: boolean | null = null;
   /** Battle starts seen so far: a new battle jumps straight to its time of day. */
@@ -313,7 +339,10 @@ export class GameSystem extends createSystem({}) {
         this.achievements?.flush();
       }
     });
-    void this.setup().catch((error) => console.error('[game] setup failed', error));
+    void this.setup().catch((error) => {
+      console.error('[game] setup failed', error);
+      readyFailed?.(error);
+    });
   }
 
   private async setup(): Promise<void> {
@@ -662,9 +691,12 @@ export class GameSystem extends createSystem({}) {
     this.hornAim.prepare();
     // Every trophy's toast drawn now (it was drawn the frame it was earned).
     this.toast.prepare();
-    this.warmGpu();
+    // The horn's lines on the glass sign, each drawn once (each flip as the look crossed a road redrew it).
+    this.glass.prepare(hornGlassTexts());
     // The empty tool slots hint's red arrow (POINTER.threat's look, flying to the slot once it is in view).
+    // Made before the warm-up (2026-11-18: made after it, its shapes went to the GPU the first time it showed).
     this.slotsArrow = new PointerArrow(root, { ...POINTER.threat, flies: true });
+    this.warmGpu();
     // What sinks into the ground for the menu: the castle, the flags, the ring handle, the tools and their platforms.
     this.swap = new SceneSwap();
     this.swap.addBattle(castle);
@@ -676,7 +708,7 @@ export class GameSystem extends createSystem({}) {
     this.pauseMenu.onUnlockAll = (on) => {
       progress.unlockAll = on;
       saveProgress();
-      this.menu.refresh();
+      this.menu.refreshTools();
     };
     this.battle.onEnd = (won, share) => this.battleOver(won, share);
     // The end panel's Menu button: back to the page the battle was started from.
@@ -722,6 +754,7 @@ export class GameSystem extends createSystem({}) {
     this.placeBoard();
     this.ready = true;
     console.info('[game] ready');
+    readyDone?.();
   }
 
   /**
@@ -935,6 +968,16 @@ export class GameSystem extends createSystem({}) {
   }
 
   private readHead(): void {
+    // The start page's circling camera is not the giant's eyes: use the eyes it keeps.
+    if (!this.immersive && landingHome(headPosition, headQuaternion)) {
+      this.camera.parent?.updateWorldMatrix(true, false);
+      if (this.camera.parent) {
+        headPosition.applyMatrix4(this.camera.parent.matrixWorld);
+        headQuaternion.premultiply(this.camera.parent.getWorldQuaternion(parentQuaternion));
+      }
+      headForward.set(0, 0, -1).applyQuaternion(headQuaternion);
+      return;
+    }
     const head = this.immersive ? this.player.head : this.camera;
     head.updateWorldMatrix(true, false);
     head.getWorldPosition(headPosition);
@@ -1249,11 +1292,14 @@ export class GameSystem extends createSystem({}) {
     if (presenting) this.renderer.setRenderTarget(null);
     this.renderer.compile(this.scene, this.camera);
     if (presenting) this.renderer.setRenderTarget(before);
-    // Outside VR (setup, the 2D page): one real draw of everything, hidden things too, into a tiny target
+    // One real draw of everything, hidden things too, into a tiny target
     // nobody sees. Compiling makes shaders but sends no shapes: a mesh's geometry goes to the GPU the first
     // time it is drawn, so a hidden model (a card's reward tool, a pooled unit, an effect) still uploaded
     // mid-game the first time it showed (2026-11-17: campaign card taps flickered). Once drawn, it stays.
-    if (!presenting) this.drawEverythingOnce();
+    // In VR too (2026-11-18): every map after the first loads inside VR, behind the fade, and compiling alone
+    // left its off-view and hidden parts (decor behind the player, traps, night lights, garden, camps) to
+    // upload the first time they showed, mid-battle. Geometry is shared by every target, so the tiny one does.
+    this.drawEverythingOnce();
     const seen = new Set<unknown>();
     this.scene.traverse((o) => {
       // A skinned unit's bone texture is made and uploaded the first time it is drawn: for a pooled goblin or
@@ -1680,6 +1726,8 @@ export class GameSystem extends createSystem({}) {
     const now = performance.now();
     const gap = this.lastFrameAt > 0 ? (now - this.lastFrameAt) / 1000 : 0;
     this.lastFrameAt = now;
+    // At most one held back canvas redraw a frame, once a drag has ended (src/ui/kit/controls.ts).
+    flushAfterDrag();
     if ((this.blurSeen || gap > PAUSE.autoPauseGap) && immersive && this.battle.canPause && !this.menuPaused) {
       this.pause(this.blurSeen ? 'focus lost' : `no frames ${gap.toFixed(1)} s`);
     }
@@ -1715,7 +1763,8 @@ export class GameSystem extends createSystem({}) {
     this.fps.update(delta, !paused);
     this.micPanel.update(Math.min(delta, 0.1));
     this.heartbeatTimer -= delta;
-    if (this.heartbeatTimer <= 0) {
+    // Only on the dev server (the debug page): the hosted game never builds or sends it.
+    if (import.meta.hot && this.heartbeatTimer <= 0) {
       this.heartbeatTimer = DEBUG.heartbeatEvery;
       sendHeartbeat({
         immersive,
@@ -1948,9 +1997,14 @@ export class GameSystem extends createSystem({}) {
       this.timeOverride = null;
       this.fogOverride = null;
     }
+    // The 2D start page shows its own time of day (random per load, landingTime), and the sky jumps back on entering.
+    const landing = !this.immersive && landingViewOn();
+    const landingChanged = landing !== this.wasLanding;
+    this.wasLanding = landing;
     // v3 2.7: a foggy level's night fog (it shows only at night, and changes only between waves).
-    this.dayNight.foggy = this.fogOverride ?? this.battle.foggy;
-    this.dayNight.show(this.timeOverride ?? this.battle.timeOfDay, fresh);
+    this.dayNight.foggy = landing ? false : (this.fogOverride ?? this.battle.foggy);
+    const time = landing ? landingTime() : (this.timeOverride ?? this.battle.timeOfDay);
+    this.dayNight.show(time, fresh || landingChanged);
     this.dayNight.update(dt, this.stage.boardScale);
     this.nightLights.update(dt, this.dayNight.lights);
   }
@@ -2239,7 +2293,7 @@ export class GameSystem extends createSystem({}) {
       case 'unlockAll':
         progress.unlockAll = !progress.unlockAll;
         saveProgress();
-        this.menu.refresh();
+        this.menu.refreshTools();
         console.info(`[debug] unlock all tools ${progress.unlockAll ? 'on' : 'off'}`);
         break;
       case 'winBattle':

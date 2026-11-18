@@ -48,7 +48,11 @@ export class Chickens {
     private audio: GameAudio,
     private particles: Particles,
     private rng: Random,
-  ) {}
+  ) {
+    // Every chicken made now, hidden, so the GPU warm-up sends their shapes and shaders (2026-11-18: the
+    // first potion cart made them mid-battle).
+    for (let i = 0; i < CHICKENS.max; i++) this.make();
+  }
 
   private make(): Chicken {
     const root = new Group();

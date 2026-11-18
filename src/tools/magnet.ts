@@ -81,7 +81,7 @@ export class Magnet extends HandTool {
     this.ring = new Mesh(new RingGeometry(0.88, 1, 40, 1).rotateX(-Math.PI / 2), this.ringMaterial);
     this.inner = new Mesh(new RingGeometry(0.9, 1, 40, 1).rotateX(-Math.PI / 2), this.innerMaterial);
     this.ring.renderOrder = RENDER_ORDER.stunWave;
-    this.inner.renderOrder = RENDER_ORDER.stunWave;
+    this.inner.renderOrder = RENDER_ORDER.magnetInner;
     this.ring.visible = false;
     this.inner.visible = false;
     this.stage.boardSpin.add(this.ring, this.inner);
@@ -90,7 +90,7 @@ export class Magnet extends HandTool {
     for (let i = 0; i < MAGNET.waveCount; i++) {
       const material = new MeshBasicMaterial({ color: MAGNET.waveColor, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: DoubleSide });
       const wave = new Mesh(new RingGeometry(0.82, 1, 28, 1), material);
-      wave.renderOrder = RENDER_ORDER.stunWave;
+      wave.renderOrder = RENDER_ORDER.magnetWaves;
       this.waves.add(wave);
     }
     this.waves.visible = false;

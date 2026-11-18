@@ -730,6 +730,7 @@ export class Battle implements TutorialApi {
     this.measureTime = 0;
     this.measureDone = 0;
     this.reach.start();
+    this.prepareReachSign('Your size', ICONS.target);
   }
 
   /** Every frame while measuring. Returns true when it is over (measured, or given up without hands). */
@@ -971,6 +972,18 @@ export class Battle implements TutorialApi {
       return;
     }
     this.shownStep = step;
+    // The next step's sign drawn ahead, a moment into this one (a calm frame), so the step change itself
+    // only swaps a texture (2026-11-18: each new instruction and wave banner redrew and uploaded the sign).
+    if (step !== this.prepStep) {
+      this.prepStep = step;
+      this.prepTime = 0;
+    } else if (this.prepTime >= 0) {
+      this.prepTime += dt;
+      if (this.prepTime >= HINT_SIGN.prepareAfter) {
+        this.prepTime = -1;
+        this.prepareUpcoming();
+      }
+    }
     if (!hint) {
       this.shown = null;
       sign.show(null);
@@ -1475,6 +1488,27 @@ export class Battle implements TutorialApi {
 
   startReachCheck(): void {
     this.reach.start();
+    const hint = (this.director?.current as TutorialStep | null)?.hint;
+    if (hint) this.prepareReachSign(hint.header, hint.icon && ICONS[hint.icon], hint.next);
+  }
+
+  /** The step whose sign was last drawn ahead for, and the time into it (-1: done). */
+  private prepStep: TutorialStep | null = null;
+  private prepTime = -1;
+
+  /** The next step's plain sign (its text as it first shows), drawn ahead. Lessons whose text follows the play are left out. */
+  private prepareUpcoming(): void {
+    const hint = (this.director?.upcoming as TutorialStep | null)?.hint;
+    if (!hint || (hint.glass && !hint.next) || hint.hornSteps || hint.watchSteps || hint.reachCheck) return;
+    const text = !hornHearsMic() && hint.whenNoMic ? hint.whenNoMic : hint.text;
+    this.parts.sign.prepare([{ kind: hint.kind, header: hint.header, text, icon: hint.icon && ICONS[hint.icon], next: hint.next }]);
+  }
+
+  /** Every look of the reach check's sign drawn ahead, so the countdown never redraws it (each number was a flicker). */
+  private prepareReachSign(header: string, icon: SignContent['icon'], next?: boolean): void {
+    const texts = ['Hold still.'];
+    for (let s = 1; s <= Math.ceil(CALIBRATION.holdSeconds); s++) texts.push(`Hold it... ${s}`);
+    this.parts.sign.prepare(texts.map((text) => ({ kind: 'lesson', header, text, icon, next })));
   }
 
   /** Done: the board grows (or shrinks) to the player's reach, and the size is saved. */

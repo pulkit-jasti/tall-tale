@@ -101,7 +101,7 @@ Measured runs from normal play, read from the debug page (menu frames counted, s
 | Home screen and Sky Pirates battle | 135 s | 53.5 | 21 | 9.5% (687) | 667 ms (map load) | nothing marked 570, sound 59, debug send 47, particles 18 |
 
 - The empty home screen no longer holds 72: every frame got heavier since Test 5 (new visuals, more models). Most drops have nothing marked, so it is the GPU's work per frame, not a single event.
-- Next: Render stats and Hide part on the debug page (Performance section) in a battle, to find the heaviest part, then a new stress test.
+- Next: Render stats and Hide part on the debug page (Performance section) in a battle, to find the heaviest part, then a new stress test. Measure again after the flicker audit fixes (2026-11-18, below in "What we learned"): fewer "nothing marked" drops are expected from the garbage and debug fixes; the steady per-frame GPU cost is untouched.
 
 ---
 
@@ -113,6 +113,12 @@ Measured runs from normal play, read from the debug page (menu frames counted, s
 - **The rule is strict:** 2 dropped frames in 20 seconds already fails a step. Run the test twice before trusting a budget change.
 - The skinned goblin model is fine for now. The code-made goblin fallback in [assets.md](assets.md) is not needed yet.
 - **Garbage makes far things flicker** (headset test 2026-11-12): the horn's path, rebuilt as the look moved, called the terrain height about 1500 times per rebuild, each call making small arrays. The garbage collection dropped frames, and on the Quest a dropped frame shows as the sun and clouds shaking. Fixed by reading the road's own saved surface (`Road.surfaceAt`, no terrain calls, no garbage) and building the path at most every 0.12 s. Rule: anything rebuilt while the player moves (aim, drag, look) must not allocate in its loops and should be throttled. Its builds are marked `horn path`.
+- **The flicker audit (2026-11-18, docs/v3-plan.md "Eleventh round"):** a read-only sweep of the whole code for anything that can drop a frame, all fixed (not measured on the headset yet). What it taught, as rules:
+  - **Warm up for real in VR.** `warmGpu` used to draw everything once only outside VR, but every map after the first loads inside VR, so off-view and hidden parts uploaded mid-battle the first time they showed. It now draws everything once (hidden things too, none culled) in VR as well, behind the fade. Anything that can show later is built before it: knight banners, chickens, sugar cubes, panel titles, villager actions, the empty slots arrow.
+  - **Shared helpers are the worst garbage makers.** `Terrain.heightAt` made arrays on every call, and three's `getTangentAt` (used by `Road.pointAt` and `directionAt`) makes two vectors per call; both run for every walking unit every frame. Both are garbage free now. The horn's road search reads the road's saved surface instead of walking the curve (about 1,000 curve points a frame before).
+  - **Small uploads still stall.** Even a tiny label's redraw dropped a frame, since the GPU waits for the frame still using that texture. Labels take turns between two textures, with no mipmaps; see docs/controls-and-ui.md "Never redraw into the texture shown last frame".
+  - **Debug code must not run in the hosted game:** the heartbeat formatted every note's time with a new formatter every 2 s, and the FPS counter sorted up to 4,320 frame times every 0.5 s, both unmarked ("nothing marked" drops). Now they run only on the dev server or while the FPS panel shows.
+  - **Not every flicker is a dropped frame:** the goblin hit flash strobed (hard white, restarted on every hit), glows jumped between goblins, a 0.08 hit stop looked like a frozen frame, and flat ground pieces shimmered with a 0.01 m near plane (now 0.05). See docs/controls-and-ui.md "Interaction feedback".
 - **A one-frame slip must not rebuild things:** the horn's spot used to drop the moment the look slid off a road for a frame, which rebuilt the path and redrew the glass sign's canvas each time. A short grace (`HORN_AIM.loseAfter`) stopped it. Same idea as the slider rule (never redraw a canvas while dragging).
 
 ---
@@ -121,7 +127,7 @@ Measured runs from normal play, read from the debug page (menu frames counted, s
 
 **Not measured since build step 1.** The next run is the stress test with troops (step 7). Everything added since then is listed below, so a drop can be traced.
 
-Already done: goblins and soldiers over 150 cm from the center update their animation every other frame (`TROOPS.farAnimFrom`), and grab and eat no longer makes a new Set every frame.
+Already done: goblins and soldiers over 300 cm from the center update their animation every other frame (`TROOPS.farAnimFrom`, was 150 until 2026-11-18: most of the board's units animated at half rate and their limbs juddered; lower it again if the CPU is the limit), and grab and eat no longer makes a new Set every frame.
 
 Still to try if the frame rate drops, in order of expected gain:
 

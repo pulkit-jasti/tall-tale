@@ -217,6 +217,13 @@ export class Troop {
     }
     action.timeScale = timeScale;
     if (action === this.current && loop) return;
+    // Back to a clip still fading out: fade it in from where it is (a reset to weight 0 dipped the pose).
+    if (loop && action.isRunning() && action.getEffectiveWeight() > 0) {
+      action.fadeIn(GOBLIN_RULES.fade);
+      if (this.current) this.current.fadeOut(GOBLIN_RULES.fade);
+      this.current = action;
+      return;
+    }
     action.reset();
     action.setLoop(loop ? LoopRepeat : LoopOnce, Infinity);
     action.clampWhenFinished = !loop;
@@ -557,13 +564,14 @@ export class Troops {
   roadPointNear(x: number, z: number): { point: RoadPoint; distance: number } {
     let road = 0;
     let best = Infinity;
-    this.network.roads.forEach((r, i) => {
-      const d = r.distanceTo(x, z);
+    const roads = this.network.roads;
+    for (let i = 0; i < roads.length; i++) {
+      const d = roads[i].distanceTo(x, z);
       if (d < best) {
         best = d;
         road = i;
       }
-    });
+    }
     return { point: { road, along: this.network.roads[road].nearestAlong(x, z) }, distance: best };
   }
 
@@ -1178,6 +1186,14 @@ export class Troops {
         this.list.push(troop);
       }
     }
+    // Every field knight's banner made now, hidden (2026-11-18: each was built the first time its knight
+    // carried one, mid-battle, with new shapes and materials sent to the GPU then).
+    for (const t of this.list) {
+      if (t.banner || !FIELD_KINDS.includes(t.kind)) continue;
+      t.banner = knightBanner();
+      t.banner.visible = false;
+      t.root.add(t.banner);
+    }
     if (!this.warmBanner) {
       this.warmBanner = knightBanner();
       this.warmBanner.visible = false;
@@ -1657,7 +1673,8 @@ export class Troops {
     const dz = q.z - p.z;
     const gap = Math.hypot(dx, dz);
     const reach = TROOP_KINDS[t.kind].engageRange * 0.6;
-    if (gap > reach) {
+    // A gap before it walks again, so a goblin right at the edge never flips it between walk and idle each frame.
+    if (gap > (t.closing ? reach : reach * KNIGHTS.closeAgain)) {
       // Safety net (headset test: knights ran in place next to a goblin, neither fighting): one that does not
       // reach its goblin in time gives up on it for a while, and the goblin carries on.
       t.closeTime += dt;

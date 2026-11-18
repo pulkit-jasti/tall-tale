@@ -145,8 +145,9 @@ export class GearDebris {
               kind.pool.hide(i);
               continue;
             }
-          } else if (p.position.y <= ground && p.velocity.y < 0) {
-            p.position.y = ground;
+          } else if (p.position.y <= ground + GOBLIN_GEAR.restLift && p.velocity.y < 0) {
+            // A little above the ground, so a flat shield never lies in its plane and shimmers against it.
+            p.position.y = ground + GOBLIN_GEAR.restLift;
             // One small bounce, then it lies flat.
             if (-p.velocity.y > 90) {
               p.velocity.y *= -0.3;

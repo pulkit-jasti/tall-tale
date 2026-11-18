@@ -158,7 +158,9 @@ export class FpsCounter {
     this.frames = 0;
     this.elapsed = 0;
     this.worst = 0;
-    if (this.runFrames > 0) this.updateLow();
+    // The 1% low sorts the recent frame times: only when someone reads it (the panel shows, or the dev
+    // server's debug page). It ran every half second in the hosted game too, unmarked (2026-11-18).
+    if (this.runFrames > 0 && (this.mesh.visible || import.meta.hot)) this.updateLow();
     // The canvas upload to the GPU can cause a hitch, so redraw rarely and
     // only when the text changed.
     this.drawTimer -= FPS.refresh;
@@ -185,7 +187,8 @@ export class FpsCounter {
     this.timesNext = (this.timesNext + 1) % this.times.length;
     this.timesCount = Math.min(this.timesCount + 1, this.times.length);
     this.reportTimer += delta;
-    if (this.reportTimer >= FPS.reportEvery) {
+    // Reports only go to the dev server's debug page: the hosted game never builds them.
+    if (import.meta.hot && this.reportTimer >= FPS.reportEvery) {
       this.reportTimer = 0;
       this.onReport(this.stats(false));
     }

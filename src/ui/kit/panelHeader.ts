@@ -13,6 +13,8 @@ import { flatMaterial } from '../../world/shapes.js';
 import { PokeButton } from '../pokeButton.js';
 import { canvasTexture } from './canvas.js';
 import { afterDrag, armControls, type Control } from './controls.js';
+import { fontSpec } from './font.js';
+import { preparedTextures } from '../panel.js';
 
 const PX = 40;
 
@@ -77,7 +79,7 @@ export class PanelHeader implements Control {
       return;
     }
     const c = this.canvas.getContext('2d')!;
-    c.font = `bold ${Math.round(H.textSize * PX)}px sans-serif`;
+    c.font = fontSpec(Math.round(H.textSize * PX), true);
     const textW = c.measureText(title).width / PX;
     this.width = Math.max(H.minWidth, textW + H.pad * 2);
     // The plate: a dark edge slab and the colored plate on it, both rounded. The old ones are kept (made).
@@ -100,13 +102,15 @@ export class PanelHeader implements Control {
       canvas.width = Math.round(width * PX);
       canvas.height = Math.round(H.height * PX);
       const ctx = canvas.getContext('2d')!;
-      ctx.font = `bold ${Math.round(H.textSize * PX)}px sans-serif`;
+      ctx.font = fontSpec(Math.round(H.textSize * PX), true);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = H.ink;
       ctx.fillText(title, canvas.width / 2, canvas.height / 2 + 2);
       this.canvas = canvas;
       this.texture = canvasTexture(canvas, 4);
+      // Sent to the GPU at the warm-up even while another title shows.
+      preparedTextures.add(this.texture);
       this.made.set(title, { edge, body, texture: this.texture, width });
       if (this.title === title) (this.face.material as MeshBasicMaterial).map = this.texture;
     });

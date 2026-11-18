@@ -16,7 +16,12 @@ export function note(text: string): void {
   if (import.meta.env.DEV) console.info(text);
   notes.unshift({ at: Date.now(), text });
   if (notes.length > MAX_NOTES) notes.length = MAX_NOTES;
+  notesText = null;
 }
+
+/** One shared time format (a new one on each call was slow on the Quest), and the notes' text, made again only after a new note. */
+const clock = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+let notesText: string | null = null;
 
 /** When each guarded part last noted an error (ms), so one failing every frame notes once a few seconds. */
 const lastError = new Map<string, number>();
@@ -41,5 +46,6 @@ export function guarded(part: string, run: () => void): void {
 
 /** The last notes, newest first, one per line. */
 export function recentNotes(): string {
-  return notes.map((n) => `${new Date(n.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ${n.text}`).join('\n');
+  if (notesText === null) notesText = notes.map((n) => `${clock.format(n.at)} ${n.text}`).join('\n');
+  return notesText;
 }

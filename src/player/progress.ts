@@ -2,17 +2,23 @@
 // localStorage key, no backend. The rules are in src/rules/campaign.ts; this
 // only reads and writes them. A private window (no storage) still plays, it
 // just forgets on reload.
-import { createProgress, fixPlaces, parseProgress, type Progress } from '../rules/campaign.js';
+import { createProgress, fixPlaces, parseProgress, PICK_TOOLS, type Progress } from '../rules/campaign.js';
 
 const STORAGE_KEY = 'tallTale.progress';
 
 function load(): Progress {
+  let p: Progress;
   try {
     const text = localStorage.getItem(STORAGE_KEY);
-    return text ? parseProgress(JSON.parse(text)) : createProgress();
+    p = text ? parseProgress(JSON.parse(text)) : createProgress();
   } catch {
-    return createProgress();
+    p = createProgress();
   }
+  // Every visit starts with an empty stand and every tool on the shelf (the developer, 2026-11-18).
+  // Within a visit the picks stay, so a battle's end goes back to the same loadout.
+  p.loadout = p.loadout.map(() => null);
+  p.shelf = [...PICK_TOOLS];
+  return p;
 }
 
 /** The one saved progress of the page. Change it through the rules, then call save(). */

@@ -13,6 +13,7 @@ import { preparedTextures } from '../panel.js';
 import { PokeButton } from '../pokeButton.js';
 import { canvasTexture } from './canvas.js';
 import type { Control } from './controls.js';
+import { fontSpec } from './font.js';
 
 interface Tab {
   button: PokeButton;
@@ -102,7 +103,7 @@ function drawTab(canvas: HTMLCanvasElement, label: string, on: boolean): void {
   const w = canvas.width;
   const h = canvas.height;
   c.clearRect(0, 0, w, h);
-  c.font = `bold ${Math.round(h * 0.44)}px sans-serif`;
+  c.font = fontSpec(Math.round(h * 0.44), true);
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = on ? TABS.onInk : TABS.offInk;

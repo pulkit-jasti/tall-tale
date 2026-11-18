@@ -99,6 +99,10 @@ export class NightLights {
     transparent: true,
     depthWrite: false,
     blending: AdditiveBlending,
+    // Pulled toward the eye in depth, so the pools never fight the ground and the road (their edge crawled).
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
   });
   private glows: InstancedMesh;
   private glowMaterial = facingGlowMaterial();
@@ -174,21 +178,23 @@ export class NightLights {
       const pool = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
       this.pools = new InstancedMesh(pool, this.poolMaterial, roadTorches.length);
       this.pools.frustumCulled = false;
-      this.poolSpots = roadTorches.map((t) => ({ at: new Vector3(t.at.x, t.at.y + 0.4, t.at.z), turn: new Quaternion().setFromAxisAngle(UP, t.yaw) }));
-      this.placePools(1);
+      this.poolSpots = roadTorches.map((t) => ({ at: new Vector3(t.at.x, t.at.y + 1, t.at.z), turn: new Quaternion().setFromAxisAngle(UP, t.yaw) }));
+      this.placePools(true);
       this.pools.visible = false;
       board.add(this.pools);
     }
   }
 
   /** Each pool at its torch, stretched along the road, its size wobbling with the flame (`wobble` per torch, 1 = still). */
-  private placePools(wobbleAt: number | ((i: number) => number)): void {
+  /** `still`: every pool at rest size; else each wobbles with its torch. A plain loop: it runs every frame at night (no garbage). */
+  private placePools(still: boolean): void {
     if (!this.pools) return;
-    this.poolSpots.forEach((spot, i) => {
-      const w = typeof wobbleAt === 'number' ? wobbleAt : wobbleAt(this.castleTorches + i);
+    for (let i = 0; i < this.poolSpots.length; i++) {
+      const spot = this.poolSpots[i];
+      const w = still ? 1 : this.wobble(this.castleTorches + i);
       const s = L.roadPoolSize * (1 + L.roadPoolFlicker * (w - 1) / L.flicker);
-      this.pools!.setMatrixAt(i, matrix.compose(spot.at, spot.turn, size.set(s * L.roadPoolStretch, 1, s)));
-    });
+      this.pools.setMatrixAt(i, matrix.compose(spot.at, spot.turn, size.set(s * L.roadPoolStretch, 1, s)));
+    }
     this.pools.instanceMatrix.needsUpdate = true;
   }
 
@@ -205,17 +211,18 @@ export class NightLights {
     }
     if (level <= 0.01) return;
     this.time += dt;
-    this.torches.forEach((p, i) => {
+    for (let i = 0; i < this.torches.length; i++) {
+      const p = this.torches[i];
       const w = this.wobble(i);
       const flame = L.torchFlame * w * Math.min(1, level * 1.5);
       // It twists slowly as it flickers, so the side tongues dance (each torch its own way).
       twist.setFromAxisAngle(UP, this.time * 1.3 + i * 2.1 + (w - 1) * 3);
       this.flames.setMatrixAt(i, matrix.compose(p, twist, size.set(flame, flame * (1 + 0.3 * (w - 1)), flame)));
       if (i < this.castleTorches) this.glows.setMatrixAt(i, matrix.compose(p, still, size.setScalar(L.torchGlowSize * (0.85 + 0.15 * w))));
-    });
+    }
     this.flames.instanceMatrix.needsUpdate = true;
     this.glows.instanceMatrix.needsUpdate = true;
-    this.placePools((i) => this.wobble(i));
+    this.placePools(false);
   }
 
   /** A torch's flicker now (1 = still): two waves at their own pace per torch, so no two flicker alike. */
