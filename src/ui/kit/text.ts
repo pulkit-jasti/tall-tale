@@ -3,6 +3,7 @@
 // labels that must read on any background.
 import { PANEL_INK } from '../panel.js';
 import { drawBanner, fitFont } from '../uiImages.js';
+import { UI_FONT } from './font.js';
 
 export const UI_COLORS = {
   /** The dark brown ink on the parchment. */
@@ -22,7 +23,7 @@ export const UI_COLORS = {
 /** A title on a hanging banner (x, top, width, height in layout pixels), shrunk to fit it, at most `size` px. */
 export function drawTitleBanner(c: CanvasRenderingContext2D, title: string, x: number, top: number, width: number, height: number, size: number): void {
   drawBanner(c, x, top, width, height);
-  drawLine(c, title, x + width / 2, top + height * 0.45, width - 40, size, UI_COLORS.bannerText);
+  drawLine(c, title, x + width / 2, top + height * 0.45, width - 40, size, UI_COLORS.bannerText, 'center', true);
 }
 
 /** One line of bold text centered on its middle height, at most `size` px and shrunk to fit `maxWidth`. */
@@ -35,11 +36,13 @@ export function drawLine(
   size: number,
   color: string = UI_COLORS.ink,
   align: CanvasTextAlign = 'center',
+  /** Fredoka (DISPLAY_FONT) instead of the plain font: big titles only. */
+  display = false,
 ): void {
   c.textAlign = align;
   c.textBaseline = 'middle';
   c.fillStyle = color;
-  fitFont(c, text, maxWidth, size);
+  fitFont(c, text, maxWidth, size, size * 0.5, display);
   c.fillText(text, x, y);
 }
 
@@ -56,7 +59,7 @@ export function truncate(c: CanvasRenderingContext2D, text: string, maxWidth: nu
 
 /** Bold text with a dark outline (`size` px, outline `outline` share of it), centered on (x, y). */
 export function drawOutlined(c: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, fill: string, outline = 0.1, outlineColor = UI_COLORS.outline): void {
-  c.font = `bold ${Math.round(size)}px sans-serif`;
+  c.font = `bold ${Math.round(size)}px ${UI_FONT}`;
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.lineJoin = 'round';

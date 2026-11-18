@@ -24,6 +24,7 @@ import { canvasTexture } from './canvas.js';
 import type { Control } from './controls.js';
 import { CanvasLabel } from './label.js';
 import { UI_COLORS } from './text.js';
+import { UI_FONT } from './font.js';
 
 export interface TextFieldOptions {
   width: number;
@@ -241,7 +242,7 @@ export class TextField implements Control {
     }
     const pad = h * 0.3;
     const empty = this.text.length === 0;
-    c.font = `${empty ? 'italic ' : 'bold '}${Math.round(h * 0.36)}px sans-serif`;
+    c.font = `${empty ? 'italic ' : 'bold '}${Math.round(h * 0.36)}px ${UI_FONT}`;
     c.textAlign = 'left';
     c.textBaseline = 'middle';
     c.fillStyle = empty ? UI_COLORS.note : UI_COLORS.ink;
@@ -254,7 +255,7 @@ export class TextField implements Control {
       c.fillRect(x, h * 0.24, Math.max(3, h * 0.05), h * 0.52);
     }
     // The count, small at the right end.
-    c.font = `${Math.round(h * 0.24)}px sans-serif`;
+    c.font = `${Math.round(h * 0.24)}px ${UI_FONT}`;
     c.textAlign = 'right';
     c.fillStyle = UI_COLORS.note;
     c.fillText(`${this.text.length}/${this.options.maxLength}`, w - pad * 0.6, h / 2 + 1);
@@ -264,7 +265,7 @@ export class TextField implements Control {
   private paintMessage(): void {
     this.message.draw((c, w, h) => {
       if (!this.note) return;
-      c.font = `bold ${Math.round(h * 0.56)}px sans-serif`;
+      c.font = `bold ${Math.round(h * 0.56)}px ${UI_FONT}`;
       c.textAlign = 'left';
       c.textBaseline = 'middle';
       c.fillStyle = this.note.warn ? UI_COLORS.warn : UI_COLORS.note;

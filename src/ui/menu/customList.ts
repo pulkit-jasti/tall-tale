@@ -11,6 +11,7 @@
 // Nothing pops over anything. Redrawn only when something changes.
 import { Group, type Object3D } from 'three';
 import type { GameAudio } from '../../audio/sound.js';
+import { UI_FONT } from '../kit/font.js';
 import { BUTTON_SIZE, CUSTOM_GAME, MENU, POKE, UI_SPACING } from '../../config/game.js';
 
 const BUTTON_SIZE_MIN = BUTTON_SIZE.medium;
@@ -348,7 +349,7 @@ export class CustomListPanel {
     c.stroke();
     drawLine(c, level.name, pad, h * 0.34, w - pad * 2, h * 0.26, UI_COLORS.ink, 'left');
     // The description under the name, whole when it fits, else cut short with "...".
-    c.font = `italic ${Math.round(h * 0.2)}px sans-serif`;
+    c.font = `italic ${Math.round(h * 0.2)}px ${UI_FONT}`;
     c.fillStyle = UI_COLORS.note;
     c.textAlign = 'left';
     c.textBaseline = 'middle';
@@ -395,11 +396,11 @@ export class CustomListPanel {
     y -= 5.2;
     // The description: the player's own, or one made from the settings (wrapped to three lines).
     const description = this.description(this.selected);
-    c.font = 'italic 19px sans-serif';
+    c.font = `italic 19px ${UI_FONT}`;
     wrapText(c, description, width)
       .slice(0, 3)
       .forEach((line, i) => {
-        c.font = 'italic 19px sans-serif';
+        c.font = `italic 19px ${UI_FONT}`;
         c.fillStyle = UI_COLORS.ink;
         c.textAlign = 'left';
         c.textBaseline = 'middle';

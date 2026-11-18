@@ -8,6 +8,7 @@ import { type Object3D } from 'three';
 import type { GameAudio } from '../audio/sound.js';
 import { BOARD, HINT_SIGN, POKE } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
+import { UI_FONT } from './kit/font.js';
 import type { HandState } from '../player/hands.js';
 import { centerAbove, drawIcon, drawLine, drawNineSlice, drawTitleBanner, Panel, StandButton, UI_COLORS, wrapText, type UiImageName } from './kit/index.js';
 
@@ -170,7 +171,7 @@ export class HintSign {
     let lines: string[];
     // Shrink the text until it fits.
     for (;;) {
-      c.font = `bold ${size}px sans-serif`;
+      c.font = `bold ${size}px ${UI_FONT}`;
       lines = wrapText(c, content.text, w - textLeft - pad - 40);
       if (lines.length * size * 1.2 <= bodyH - 10 || size <= 28) break;
       size -= 2;
@@ -180,7 +181,7 @@ export class HintSign {
     if (content.sub) {
       c.fillStyle = SUB_INK;
       c.textAlign = 'center';
-      c.font = 'bold 30px sans-serif';
+      c.font = `bold 30px ${UI_FONT}`;
       c.fillText(content.sub, w / 2, h - pad - subH / 2 - 4);
     }
   }

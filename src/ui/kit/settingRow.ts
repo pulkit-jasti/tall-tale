@@ -29,6 +29,7 @@ import type { ScrollItem } from './scrollArea.js';
 import { drawLine, UI_COLORS } from './text.js';
 import { wrapText } from '../uiImages.js';
 import { TextField } from './textField.js';
+import { UI_FONT } from './font.js';
 
 export type RowSpec =
   | { kind: 'count'; min: number; max: number; value: number }
@@ -53,14 +54,14 @@ function nameLabel(text: string, hint: string, width: number, height: number): C
       return;
     }
     // The hint in a regular weight, wrapped to at most two lines (never shrunk to fit).
-    c.font = `${Math.round(R.hintSize * px)}px sans-serif`;
+    c.font = `${Math.round(R.hintSize * px)}px ${UI_FONT}`;
     const lines = wrapText(c, hint, w - 4).slice(0, 2);
     const lineH = R.hintSize * 1.15 * px;
     // The name and the hint sit together in the middle of the label.
     const total = R.nameSize * px + R.hintGap * px + lines.length * lineH;
     const top = (h - total) / 2;
     drawLine(c, text, 2, top + (R.nameSize * px) / 2, w - 4, R.nameSize * px, UI_COLORS.ink, 'left');
-    c.font = `${Math.round(R.hintSize * px)}px sans-serif`;
+    c.font = `${Math.round(R.hintSize * px)}px ${UI_FONT}`;
     c.fillStyle = UI_COLORS.note;
     c.textAlign = 'left';
     c.textBaseline = 'middle';

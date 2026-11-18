@@ -66,7 +66,7 @@ Stage 1 is a pass/fail check that the project fits the theme and uses the requir
 
 1. A playable build. For IWSDK this is a hosted link (GitHub Pages or Vercel).
 2. A demo video under 3 minutes on YouTube or Vimeo. Lead with the best footage. Judges may stop at 3 minutes.
-3. The Devpost form: name, 140-character tagline, track, division, description (inspiration, how it was built, future plans, under about 500 words), how hand interactions work, target launch date.
+3. The Devpost form: name, 140-character tagline, track, division, description (inspiration, how it was built, future plans, under about 500 words), how hand interactions work, target launch date. The form also asks which Meta VR capabilities were used and what excites you about the future of VR. All answers are written (2026-11-17): the description in the Notion page "Tall tale - Devpost writeup", the extra questions in the Devpost form, and the player wiki in "Tall Tale - Wiki". What is left is listed in docs/v3-plan.md ("Before submitting").
 
 ### Prizes we are aiming for
 

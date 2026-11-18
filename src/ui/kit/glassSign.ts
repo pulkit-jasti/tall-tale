@@ -17,6 +17,7 @@ import { drawNineSlice, fitFont, wrapText } from '../uiImages.js';
 import { canvasPlane, canvasTexture } from './canvas.js';
 import { drawOnTop } from './onTop.js';
 import { UI_COLORS } from './text.js';
+import { UI_FONT } from './font.js';
 
 /** The bar: `share` filled (0 to 1), a white line at `line` (0 to 1, none if null), gold when `over`. */
 export interface GlassBar {
@@ -145,7 +146,7 @@ export class GlassSign {
     let size = GLASS_SIGN.fontPx;
     let lines: string[] = [];
     for (; size >= GLASS_SIGN.fontPx * 0.6; size -= 2) {
-      c.font = `bold ${size}px sans-serif`;
+      c.font = `bold ${size}px ${UI_FONT}`;
       lines = wrapText(c, text, maxWidth);
       if (lines.length <= 2) break;
     }

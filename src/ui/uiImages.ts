@@ -8,6 +8,7 @@
 // they are big enough (panels, the banner, the 100 px game icons).
 import { drawMenuIcon } from './kit/menuIcons.js';
 import { ACTION_ICONS, drawActionIcon, type ActionIcon } from './kit/actionIcons.js';
+import { fontSpec } from './kit/font.js';
 
 const FILES = {
   panel: 'rpg/panel_beige.png',
@@ -219,10 +220,10 @@ export function drawBanner(c: CanvasRenderingContext2D, x: number, y: number, w:
   c.restore();
 }
 
-/** Sets the largest bold font, from `size` down to `minSize`, that fits `text` in `maxWidth`. */
-export function fitFont(c: CanvasRenderingContext2D, text: string, maxWidth: number, size: number, minSize = size * 0.5): void {
+/** Sets the largest bold font (or Fredoka, `display`), from `size` down to `minSize`, that fits `text` in `maxWidth`. */
+export function fitFont(c: CanvasRenderingContext2D, text: string, maxWidth: number, size: number, minSize = size * 0.5, display = false): void {
   for (let s = size; s >= minSize; s -= 2) {
-    c.font = `bold ${s}px sans-serif`;
+    c.font = fontSpec(s, display);
     if (c.measureText(text).width <= maxWidth) return;
   }
 }

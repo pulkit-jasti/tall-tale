@@ -5186,3 +5186,46 @@ export const MOUSE_LOOK = {
   /** Field of view change per scroll wheel step (degrees). */
   fovPerWheelStep: 3,
 };
+
+/**
+ * The 2D start page's background (src/player/mouseLook.ts): while the start
+ * page shows, the camera sits above the castle and slowly circles it, looking
+ * across the board, instead of sitting at the giant's eyes. It starts facing
+ * the sun. The sky shows one of `times`, picked at random on each page load
+ * (landingTime in src/player/mouseLook.ts, read by src/game.ts updateTimeOfDay),
+ * and jumps back to the battle's time on entering. Meters, measured from the
+ * board's center. Only before VR; the headset drives the camera in VR, and the
+ * giant's real eye position is kept for the board.
+ */
+export const LANDING_VIEW = {
+  /** The times of day the start page picks from on each load (no noon: its flat light looked plain). */
+  times: ['morning', 'sunset', 'night'] as TimeOfDay[],
+  /** Camera distance from the board's center, along the ground (on the side away from the sun). */
+  distance: 1.1,
+  /** Camera height above the board. */
+  height: 0.6,
+  /** The point it looks at: this far past the center, toward the sun... */
+  lookAhead: 1.8,
+  /** ...and this high above the board (higher shows more sky and the sun). */
+  lookHeight: 0.35,
+  /** Seconds for one full circle round the castle. */
+  turnSeconds: 120,
+};
+
+/** The loading screen (index.html, src/index.ts): shown until every asset is loaded and the shaders are compiled. */
+export const LOADING = {
+  /** Tips that take turns under the bar. */
+  tips: [
+    'Eating goblins is the only way to heal your castle.',
+    'Pinch the knob on the compass and circle your hand to turn the board.',
+    'Stop goblins far from the castle for bonus points.',
+    'Pull helmets off with the magnet, then burn them with the magnifying glass.',
+    'Shake pepper on the ground outside the wall to stop diggers.',
+  ],
+  /** Seconds each tip shows. */
+  tipSeconds: 3.5,
+  /** Frames rendered behind the loading screen after warming up, before it fades. */
+  settleFrames: 3,
+  /** Seconds for the loading screen to fade out. */
+  fadeSeconds: 0.6,
+};

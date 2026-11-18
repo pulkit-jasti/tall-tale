@@ -11,6 +11,7 @@ import { ENDLESS, UI_SPACING } from '../config/game.js';
 import type { HandState } from '../player/hands.js';
 import type { BoostCard } from '../rules/boosts.js';
 import type { PickTool } from '../rules/campaign.js';
+import { UI_FONT } from './kit/font.js';
 import { armControls, drawIconCentered, drawLine, drawTitleBanner, Panel, panelMap, PokeButton, UI_COLORS, uiCenterY, wrapText, type UiImageName } from './kit/index.js';
 
 const P = ENDLESS.panel;
@@ -128,7 +129,7 @@ export class BoostPicker {
         const x = at.x(this.columnX(i, width));
         drawIconCentered(c, o.icon, x, top(8.5), 46, o.rare ? P.rareColor : UI_COLORS.accent);
         drawLine(c, o.name, x, top(12.2), column * 0.9, 22, o.rare ? P.rareColor : UI_COLORS.ink);
-        c.font = 'bold 16px sans-serif';
+        c.font = `bold 16px ${UI_FONT}`;
         wrapText(c, o.text, column * 0.86)
           .slice(0, 3)
           .forEach((line, k) => drawLine(c, line, x, top(14.6) + k * 20, column * 0.9, 16, UI_COLORS.note));

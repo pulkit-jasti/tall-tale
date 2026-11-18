@@ -9,58 +9,205 @@
     <link rel="icon" href="data:," />
     <title>Tall Tale</title>
     <style>
+      /* Fredoka (SIL Open Font License, public/fonts/OFL.txt), latin subset, weights 400 to 700. */
+      @font-face {
+        font-family: 'Fredoka';
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url('./fonts/fredoka-latin.woff2') format('woff2');
+      }
+      #start-page button {
+        font-family: inherit;
+      }
       #start-page {
         position: fixed;
         inset: 0;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        gap: 18px;
-        background: rgba(30, 44, 30, 0.82);
+        justify-content: flex-end;
+        gap: 24px;
+        /* Clear at the top so the live board shows, darker at the bottom behind the text. */
+        background: linear-gradient(
+          to bottom,
+          rgba(20, 30, 20, 0) 0%,
+          rgba(20, 30, 20, 0.1) 35%,
+          rgba(20, 30, 20, 0.6) 65%,
+          rgba(20, 30, 20, 0.88) 100%
+        );
         color: #f6f1e2;
-        font-family: system-ui, sans-serif;
+        font-family: 'Fredoka', system-ui, sans-serif;
         z-index: 10;
         text-align: center;
-        padding: 16px;
+        padding: 16px 16px 6vh;
+        box-sizing: border-box;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
       }
       #start-page h1 {
         margin: 0;
-        font-size: 56px;
+        font-size: clamp(44px, 9vw, 76px);
         letter-spacing: 1px;
+      }
+      .logo {
+        display: block;
+        width: min(560px, 82vw);
+        height: auto;
+        filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.45));
       }
       #start-page p {
         margin: 0;
-        max-width: 520px;
+        max-width: 560px;
         line-height: 1.4;
       }
-      #enter-vr {
+      #start-page .tagline {
+        max-width: 470px;
+        font-size: clamp(18px, 2.4vw, 21px);
+        font-weight: 500;
+        line-height: 1.5;
+        letter-spacing: 0.2px;
+        color: #fff3d6;
+        margin-bottom: 4px;
+      }
+      /* One step of the start page shows at a time: Get started, the mic, Enter VR. */
+      .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        animation: step-in 0.35s ease-out;
+      }
+      .step[hidden] {
+        display: none;
+      }
+      @keyframes step-in {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .step .note {
+        font-size: 16px;
+        opacity: 0.92;
+      }
+      .main-button {
         font-size: 26px;
         padding: 16px 44px;
         border: none;
         border-radius: 14px;
         background: #f2c14e;
         color: #2b2412;
-        font-weight: 700;
+        font-weight: 600;
+        letter-spacing: 0.5px;
         cursor: pointer;
+        box-shadow: 0 4px 0 #b8872a, 0 8px 20px rgba(0, 0, 0, 0.35);
+        text-shadow: none;
       }
-      #enter-vr:disabled {
+      .main-button:active {
+        transform: translateY(2px);
+        box-shadow: 0 2px 0 #b8872a, 0 4px 12px rgba(0, 0, 0, 0.35);
+      }
+      .main-button:disabled {
         opacity: 0.6;
         cursor: wait;
       }
-      #mic-status {
-        font-size: 15px;
+      .link-button {
+        border: none;
+        background: none;
+        color: #f6f1e2;
+        font-size: 16px;
+        text-decoration: underline;
+        cursor: pointer;
         opacity: 0.85;
+        padding: 6px 10px;
+      }
+
+      /* The loading screen: over everything until the game is built and warmed up. */
+      #loading {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        padding: 16px;
+        box-sizing: border-box;
+        background: radial-gradient(circle at 50% 40%, #3a5636 0%, #1e2c1e 70%);
+        color: #f6f1e2;
+        font-family: 'Fredoka', system-ui, sans-serif;
+        text-align: center;
+        transition: opacity 0.6s ease;
+      }
+      #loading.done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #loading .title {
+        font-size: clamp(44px, 9vw, 76px);
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+      }
+      #loading .bar {
+        width: min(420px, 80vw);
+        height: 18px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.35);
+        border: 2px solid rgba(246, 241, 226, 0.35);
+        overflow: hidden;
+      }
+      #loading .fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: linear-gradient(to bottom, #ffd772, #f2c14e 55%, #c99632);
+        transition: width 0.3s ease;
+      }
+      #loading .status {
+        font-size: 15px;
+        opacity: 0.8;
+        margin: 0;
+      }
+      #loading .tip {
+        font-size: 17px;
+        max-width: 520px;
+        min-height: 2.8em;
+        margin: 0;
+        line-height: 1.4;
+        transition: opacity 0.3s ease;
       }
     </style>
   </head>
   <body style="margin: 0">
     <div id="scene-container"></div>
     <div id="start-page">
-      <h1>Tall Tale</h1>
-      <p>You are a giant in the middle of a tiny castle. Pinch the goblins that climb your wall and eat them, and use your giant tools to help your army.</p>
-      <button id="enter-vr" disabled>Loading...</button>
-      <p id="mic-status"></p>
+      <h1><img class="logo" src="./ui/logo.png" alt="Tall Tale" /></h1>
+      <p class="tagline">Sit inside a tiny battle as a giant. Pinch goblins, eat them, and turn the war with giant tools.</p>
+      <div class="step" id="step-intro">
+        <button class="main-button" id="get-started">Get started</button>
+      </div>
+      <div class="step" id="step-mic" hidden>
+        <p class="note">Raise your war horn and shout "Charge!" to call your knights. The game only listens for how loud you are. Nothing is recorded or sent anywhere.</p>
+        <button class="main-button" id="allow-mic">Allow microphone</button>
+        <button class="link-button" id="skip-mic">Play without it</button>
+      </div>
+      <div class="step" id="step-enter" hidden>
+        <p class="note" id="mic-status"></p>
+        <p class="note" id="vr-hint" hidden>For the full game, open this page in the Meta Quest browser.</p>
+        <button class="main-button" id="enter-vr">Enter VR</button>
+      </div>
+    </div>
+    <div id="loading">
+      <div class="title"><img class="logo" src="./ui/logo.png" alt="Tall Tale" /></div>
+      <div class="bar"><div class="fill" id="loading-fill"></div></div>
+      <p class="status" id="loading-status">Loading the kingdom...</p>
+      <p class="tip" id="loading-tip"></p>
     </div>
     <script type="module" src="/src/index.ts"></script>
   </body>

@@ -11,6 +11,7 @@ import { PokeButton } from '../pokeButton.js';
 import { drawActionIcon, type ActionIcon } from './actionIcons.js';
 import { canvasTexture } from './canvas.js';
 import type { Control } from './controls.js';
+import { fontSpec } from './font.js';
 
 export class ActionButton implements Control {
   private button: PokeButton;
@@ -27,7 +28,7 @@ export class ActionButton implements Control {
     const w = this.canvas.width;
     const h = this.canvas.height;
     const size = h * 0.62;
-    c.font = `bold ${Math.round(h * 0.4)}px sans-serif`;
+    c.font = fontSpec(Math.round(h * 0.4), true);
     const textW = c.measureText(word).width;
     const left = (w - (size + h * 0.15 + textW)) / 2;
     c.save();

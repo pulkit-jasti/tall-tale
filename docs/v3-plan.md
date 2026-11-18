@@ -1110,6 +1110,23 @@ Type check and build pass. Not tested on the headset.
   - **The Phase 3 goblins:** the shaman's cast (`shamanCast`, the chime), the bomber's fuse hiss (`bomberFuse`, a knife draw), the digger breaking out and digging (`diggerSurface`, `diggerDig`, Kenney mining impacts), the goblin bow (`goblinBowShot`, a pluck). The bomber's blast shares `kegBoom` (the chime).
 - [ ] **The shaman's lantern glows at night** (Phase 3): today it only has the goblins' night rim. A moving glow would go in `src/world/nightLights.ts`.
 
+## Before submitting (the developer, 2026-11-17)
+
+**Writeup status (2026-11-17): done and locked.** "Tall tale - Devpost writeup" in Notion holds the tagline and the description. The four extra form questions (Meta VR capabilities, hand interactions, the future of VR, target launch date Q1 2027 on the Horizon Store, free) are answered straight in the Devpost form. "Tall Tale - Wiki" (Home plus 12 pages) is the player guide, kept neutral (help, not pitch). The bug and feedback form is made (one required question, an optional email). Still to do in the writeup:
+
+- [ ] Add the links: demo video, wiki (Basics table and top of the description) and the feedback form.
+- [ ] Add the gameplay screenshots and the thumbnails (real footage only).
+- [ ] Name the assets made with Claude in the Licenses section, or cut that line.
+- [ ] Check the "steady 72 fps" claim in a real battle on the headset, or soften it.
+- [ ] If a feature changes before the deadline (new tutorials, accessibility wins), update the writeup and wiki to match.
+
+- [ ] **Tutorials for every tool:** the tutorial does not teach the drum, magnet, magnifying glass or sugar cubes yet. Build a lesson for each (ghost hand demo, short lines, smallest steps, following "Ghost hand demos" in AGENTS.md), then test each on the headset.
+- [ ] **Test the digger:** it never showed up in a playtest. Spawn it from the debug page and check it tunnels, surfaces in the courtyard and shows red on the compass.
+- [ ] **Finish every sound:** no sound may stay on `chime.mp3` (the full list is in "To do later" above). Every sound gets a real file, listed in `public/audio/README.md`.
+- [ ] **Check every Freesound license:** open each file's Freesound page (the number in its name), note its license and author in `public/audio/README.md`, add a credit for CC BY files, and replace any non commercial (NC) file. The Devpost writeup says each one is credited in the repo.
+- [ ] **Add the MIT `LICENSE` file** (the developer adds it). The Devpost writeup says the code is MIT.
+- [ ] **Explore more quick accessibility wins:** small features that are easy to build and test fast (for example a bigger text option, a high contrast mode, captions or icons for important sounds, a left handed layout, adjustable eat distance or hold time). List the ideas, build the cheapest useful ones, test each on the headset, and add them to the writeup's Accessibility section.
+
 ## Open
 
 - Final tempo numbers (headset).

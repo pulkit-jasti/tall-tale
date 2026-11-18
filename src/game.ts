@@ -33,6 +33,7 @@ import {
   MAGNET,
   HANDS,
   XR,
+  LANDING_VIEW,
   type TimeOfDay,
 } from './config/game.js';
 import { ViewFade } from './ui/viewFade.js';
@@ -74,6 +75,7 @@ import { TrophyToast } from './ui/trophyToast.js';
 import { CompassCrank } from './player/crank.js';
 import { HeightRail } from './player/heightRail.js';
 import { HandTracker } from './player/hands.js';
+import { landingHome, landingTime, landingViewOn } from './player/mouseLook.js';
 import { angleDelta, angleOf, degToRad } from './rules/boardMath.js';
 import { campaignLevel } from './level/campaignLevels.js';
 import { makeEndlessLevel } from './level/endless.js';
@@ -123,6 +125,7 @@ import { battleTools, isOpen, LOADOUT_SLOTS, PICK_TOOLS, recordEndless, recordTu
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
 const headForward = new Vector3();
+const parentQuaternion = new Quaternion();
 const toHead = new Vector3();
 const boardAt = new Vector3();
 const slotAt = new Vector3();
@@ -155,6 +158,14 @@ function disposeTree(root: Object3D, materials: boolean): void {
 let pendingStart: 'browser' | 'vr' | null = null;
 
 /** Called from the start page's button. */
+let readyDone: (() => void) | null = null;
+let readyFailed: ((error: unknown) => void) | null = null;
+/** Settles once the game has built everything (every model, sound and pool): the loading screen waits for it. */
+export const gameReady = new Promise<void>((resolve, reject) => {
+  readyDone = resolve;
+  readyFailed = reject;
+});
+
 export function requestBattleStart(inVr: boolean): void {
   pendingStart = inVr ? 'vr' : 'browser';
 }
@@ -207,6 +218,8 @@ export class GameSystem extends createSystem({}) {
   private nightLights!: NightLights;
   /** A time of day picked on the debug page, until the next battle starts. */
   private timeOverride: TimeOfDay | null = null;
+  /** The 2D start page's look was on last frame (its time of day jumps in and out at once). */
+  private wasLanding = false;
   /** The debug page's "Night fog on/off" (v3 2.7), held until the next battle starts. */
   private fogOverride: boolean | null = null;
   /** Battle starts seen so far: a new battle jumps straight to its time of day. */
@@ -313,7 +326,10 @@ export class GameSystem extends createSystem({}) {
         this.achievements?.flush();
       }
     });
-    void this.setup().catch((error) => console.error('[game] setup failed', error));
+    void this.setup().catch((error) => {
+      console.error('[game] setup failed', error);
+      readyFailed?.(error);
+    });
   }
 
   private async setup(): Promise<void> {
@@ -722,6 +738,7 @@ export class GameSystem extends createSystem({}) {
     this.placeBoard();
     this.ready = true;
     console.info('[game] ready');
+    readyDone?.();
   }
 
   /**
@@ -935,6 +952,16 @@ export class GameSystem extends createSystem({}) {
   }
 
   private readHead(): void {
+    // The start page's circling camera is not the giant's eyes: use the eyes it keeps.
+    if (!this.immersive && landingHome(headPosition, headQuaternion)) {
+      this.camera.parent?.updateWorldMatrix(true, false);
+      if (this.camera.parent) {
+        headPosition.applyMatrix4(this.camera.parent.matrixWorld);
+        headQuaternion.premultiply(this.camera.parent.getWorldQuaternion(parentQuaternion));
+      }
+      headForward.set(0, 0, -1).applyQuaternion(headQuaternion);
+      return;
+    }
     const head = this.immersive ? this.player.head : this.camera;
     head.updateWorldMatrix(true, false);
     head.getWorldPosition(headPosition);
@@ -1948,9 +1975,14 @@ export class GameSystem extends createSystem({}) {
       this.timeOverride = null;
       this.fogOverride = null;
     }
+    // The 2D start page shows its own time of day (random per load, landingTime), and the sky jumps back on entering.
+    const landing = !this.immersive && landingViewOn();
+    const landingChanged = landing !== this.wasLanding;
+    this.wasLanding = landing;
     // v3 2.7: a foggy level's night fog (it shows only at night, and changes only between waves).
-    this.dayNight.foggy = this.fogOverride ?? this.battle.foggy;
-    this.dayNight.show(this.timeOverride ?? this.battle.timeOfDay, fresh);
+    this.dayNight.foggy = landing ? false : (this.fogOverride ?? this.battle.foggy);
+    const time = landing ? landingTime() : (this.timeOverride ?? this.battle.timeOfDay);
+    this.dayNight.show(time, fresh || landingChanged);
     this.dayNight.update(dt, this.stage.boardScale);
     this.nightLights.update(dt, this.dayNight.lights);
   }

@@ -34,6 +34,7 @@ import {
   uiCenterY,
 } from './kit/index.js';
 import { WinStars } from './winStars.js';
+import { UI_FONT } from './kit/font.js';
 
 export type EndKind = 'welcome' | 'won' | 'lost';
 /** What was poked: the main button (Play, Play again), Skip tutorial (welcome only), Menu, or Next level. */
@@ -235,7 +236,7 @@ export class EndPanel {
     drawTitleBanner(c, won ? 'Victory!' : 'The castle has fallen', w * 0.12, UI_SPACING.top * at.px, w * 0.76, 66, won ? 44 : 34);
     if (extras.subtitle) {
       const y = top(won ? END_PANEL.subtitleFromTop : END_PANEL.lostSubtitleFromTop);
-      c.font = 'bold 22px sans-serif';
+      c.font = `bold 22px ${UI_FONT}`;
       const textWidth = Math.min(w * 0.6, c.measureText(extras.subtitle).width);
       drawLine(c, extras.subtitle, w / 2, y, w * 0.6, 22, UI_COLORS.note);
       // A Fantasy UI Borders divider on both sides of the name.
@@ -272,7 +273,7 @@ export class EndPanel {
       drawLine(c, note.text, w / 2, y, w * 0.8, 22, note.color);
       // A new best wears the crown (Kenney Board Game Icons), just left of its words.
       if (won && extras.best) {
-        c.font = 'bold 22px sans-serif';
+        c.font = `bold 22px ${UI_FONT}`;
         const half = Math.min(w * 0.8, c.measureText(note.text).width) / 2;
         drawIcon(c, 'crown', w / 2 - half - 34, y - 14, 28, GOLD);
       }
@@ -296,7 +297,7 @@ export class EndPanel {
       const x = lefts[column];
       const y = rowY(index);
       const pointsText = points === undefined ? '' : `+${points}`;
-      c.font = `bold ${size}px sans-serif`;
+      c.font = `bold ${size}px ${UI_FONT}`;
       const pointsWidth = pointsText ? c.measureText(pointsText).width + 8 : 0;
       drawLine(c, name, x, y, cell - pointsWidth, size, UI_COLORS.note, 'left');
       if (pointsText) drawLine(c, pointsText, x + cell, y, pointsWidth, size, UI_COLORS.ink, 'right');
