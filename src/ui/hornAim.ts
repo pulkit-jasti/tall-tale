@@ -216,7 +216,8 @@ export class HornAim {
     const poolGeometry = new CircleGeometry(1, 28);
     fadeAlongY(poolGeometry, true);
     poolGeometry.rotateX(-Math.PI / 2);
-    this.poolMaterial = new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: AdditiveBlending, color: HORN_AIM.color });
+    // Pulled toward the eye in depth (polygonOffset) so it never fights the ground or the road under it.
+    this.poolMaterial = new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: AdditiveBlending, color: HORN_AIM.color, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
     this.pool = new Mesh(poolGeometry, this.poolMaterial);
     this.pool.visible = false;
     stage.boardSpin.add(this.pool);
@@ -827,7 +828,7 @@ export class HornAim {
       if (!this.hasShown) this.shown.copy(probe);
       else this.shown.lerp(probe, 1 - Math.exp(-dt / HORN_AIM.glide));
       this.hasShown = true;
-      this.pool.position.set(this.shown.x, groundAt(this.shown.x, this.shown.z) + 0.3, this.shown.z);
+      this.pool.position.set(this.shown.x, groundAt(this.shown.x, this.shown.z) + 1, this.shown.z);
       this.pool.scale.setScalar(HORN_AIM.poolRadius);
       this.poolMaterial.opacity = HORN_AIM.poolOpacity * (1 - HORN_AIM.poolPulse + HORN_AIM.poolPulse * Math.sin(this.time * 4));
       // On a road: the soft pool. Off it: the clear ring and the arrow to the nearest road instead.

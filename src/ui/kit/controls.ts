@@ -73,12 +73,16 @@ export function afterDrag(owner: object, draw: () => void): void {
   waiting.set(owner, draw);
 }
 
-/** Runs the held back redraws (the drag ended). Also safe to call every frame: it does nothing while dragging or when none wait. */
+/**
+ * Runs a held back redraw (the drag ended): one per call, so several never bunch up in one frame
+ * (2026-11-18: letting go of a slider ran them all at once, a flicker). The game calls it every frame
+ * (GameSystem's tick), so the rest follow on the next frames. Does nothing while dragging or when none wait.
+ */
 export function flushAfterDrag(): void {
   if (waiting.size === 0 || isDragging()) return;
-  const draws = [...waiting.values()];
-  waiting.clear();
-  for (const draw of draws) draw();
+  const [owner, draw] = waiting.entries().next().value as [object, () => void];
+  waiting.delete(owner);
+  draw();
 }
 
 /** A control's new touch look (emissive only), with a tick when a finger first comes near. Returns the new state. */

@@ -15,6 +15,9 @@ import { flatMaterial } from './shapes.js';
 const up = new Vector3(0, 1, 0);
 const tangent = new Vector3();
 const side = new Vector3();
+const scratch = new Vector3();
+const tangentA = new Vector3();
+const tangentB = new Vector3();
 
 export class Road {
   readonly curve: CatmullRomCurve3;
@@ -59,7 +62,7 @@ export class Road {
     const u = Math.min(1, Math.max(0, distance / this.length));
     this.curve.getPointAt(u, out);
     if (offset !== 0) {
-      this.curve.getTangentAt(u, tangent);
+      this.tangentAt(u, tangent);
       side.crossVectors(tangent, up).normalize();
       out.addScaledVector(side, offset);
     }
@@ -73,7 +76,19 @@ export class Road {
   /** Direction of travel at a distance along the road. */
   directionAt(distance: number, out: Vector3): Vector3 {
     const u = Math.min(1, Math.max(0, distance / this.length));
-    return this.curve.getTangentAt(u, out);
+    return this.tangentAt(u, out);
+  }
+
+  /**
+   * The curve's direction at `u` (0 to 1 along its length), like three's getTangentAt but with no garbage:
+   * three's makes two new points per call, and this runs for every walking unit every frame (2026-11-18).
+   */
+  private tangentAt(u: number, out: Vector3): Vector3 {
+    const t = this.curve.getUtoTmapping(u, u * this.length);
+    const delta = 0.0001;
+    this.curve.getPoint(Math.max(0, t - delta), tangentA);
+    this.curve.getPoint(Math.min(1, t + delta), tangentB);
+    return out.copy(tangentB).sub(tangentA).normalize();
   }
 
   /**
@@ -167,11 +182,30 @@ export class Road {
 
   /** Distance along the road (cm) of the road point nearest a board point (found in 1 cm steps, for setup only). */
   nearestAlong(x: number, z: number): number {
-    const p = new Vector3();
+    const p = scratch;
+    const steps = Math.ceil(this.length);
+    let from = 0;
+    let to = steps;
+    // Once the road is built (the horn aims every frame, 2026-11-18): the nearest saved surface point first,
+    // then 1 cm steps only around it, not along the whole road.
+    const s = this.surface;
+    if (s) {
+      let bestSeg = 0;
+      let bestSeg2 = Infinity;
+      for (let i = 0; i <= s.segments; i++) {
+        const d2 = (s.cx[i] - x) ** 2 + (s.cz[i] - z) ** 2;
+        if (d2 < bestSeg2) {
+          bestSeg2 = d2;
+          bestSeg = i;
+        }
+      }
+      const cm = this.length / s.segments;
+      from = Math.max(0, Math.floor((bestSeg - 1) * cm));
+      to = Math.min(steps, Math.ceil((bestSeg + 1) * cm));
+    }
     let best = Infinity;
     let at = 0;
-    const steps = Math.ceil(this.length);
-    for (let i = 0; i <= steps; i++) {
+    for (let i = from; i <= to; i++) {
       this.curve.getPointAt(i / steps, p);
       const d = Math.hypot(p.x - x, p.z - z);
       if (d < best) {
@@ -185,7 +219,13 @@ export class Road {
   /** Shortest distance from a board point to this road's center line (cm, flat). */
   distanceTo(x: number, z: number): number {
     let best = Infinity;
-    const p = new Vector3();
+    // Once built: the saved surface's center points (about 4 cm apart), no curve math and no garbage.
+    const s = this.surface;
+    if (s) {
+      for (let i = 0; i <= s.segments; i++) best = Math.min(best, Math.hypot(s.cx[i] - x, s.cz[i] - z));
+      return best;
+    }
+    const p = scratch;
     const steps = Math.ceil(this.length / 4);
     for (let i = 0; i <= steps; i++) {
       this.curve.getPointAt(i / steps, p);

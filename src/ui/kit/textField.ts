@@ -23,6 +23,7 @@ import { PokeButton } from '../pokeButton.js';
 import { canvasTexture } from './canvas.js';
 import type { Control } from './controls.js';
 import { CanvasLabel } from './label.js';
+import { preparedTextures } from '../panel.js';
 import { UI_COLORS } from './text.js';
 import { UI_FONT } from './font.js';
 
@@ -85,6 +86,9 @@ export class TextField implements Control {
   private button: PokeButton;
   private canvas = document.createElement('canvas');
   private texture: CanvasTexture;
+  private textures: [CanvasTexture, CanvasTexture];
+  /** What the face shows now (text, typing, length), so a paint with nothing new draws nothing. */
+  private painted = '';
   private message: CanvasLabel;
   private text = '';
   private note: { text: string; warn: boolean } | null = null;
@@ -99,7 +103,11 @@ export class TextField implements Control {
     const F = TEXT_FIELD;
     this.canvas.width = Math.round(options.width * 40);
     this.canvas.height = Math.round(options.height * 40);
-    this.texture = canvasTexture(this.canvas, 4);
+    // Two textures of the canvas, taking turns, so a redraw never goes into the one drawn last frame (2026-11-18).
+    this.textures = [canvasTexture(this.canvas, 4), canvasTexture(this.canvas, 4)];
+    preparedTextures.add(this.textures[0]);
+    preparedTextures.add(this.textures[1]);
+    this.texture = this.textures[0];
     // Thin (TEXT_FIELD.depth), so it hardly stands out of the panel and never hides the line above it.
     this.button = new PokeButton(audio, { radius: options.height / 2, depth: F.depth, icon: 'edit', box: { width: options.width, height: options.height, face: this.texture, plain: true } });
     this.button.setColor(F.color);
@@ -224,6 +232,9 @@ export class TextField implements Control {
   }
 
   private paint(): void {
+    const key = `${this.typing}|${this.text}`;
+    if (key === this.painted) return;
+    this.painted = key;
     mark('panel redraw');
     const c = this.canvas.getContext('2d')!;
     const w = this.canvas.width;
@@ -259,7 +270,10 @@ export class TextField implements Control {
     c.textAlign = 'right';
     c.fillStyle = UI_COLORS.note;
     c.fillText(`${this.text.length}/${this.options.maxLength}`, w - pad * 0.6, h / 2 + 1);
+    // Into the other texture, then shown.
+    this.texture = this.texture === this.textures[0] ? this.textures[1] : this.textures[0];
     this.texture.needsUpdate = true;
+    this.button.setFace(this.texture);
   }
 
   private paintMessage(): void {

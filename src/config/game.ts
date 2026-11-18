@@ -1577,8 +1577,6 @@ export const MENU = {
     tagWidth: 16,
     tagHeight: 5.5,
     tagAbove: 9,
-    /** A new tool on the shelf glows until it is grabbed once. */
-    newGlow: { color: 0xffd76a, speed: 1.2 },
   },
   /**
    * The loadout stand: 4 pedestals on the right, the front row (nearer and
@@ -1863,8 +1861,16 @@ export const RENDER_ORDER = {
   menu: 3,
   ghost: 5,
   ghostGlow: 6,
+  /** The knockout rings and pow stars (src/fx/juice.ts), each its own order so see-through pieces never swap. */
+  juiceRings: 7,
+  juiceStars: 8,
   labels: 20,
   stunWave: 30,
+  /** The magnet's rings and waves (above stunWave, each its own), and the glass's beam parts and fill ring. */
+  magnetInner: 30.1,
+  magnetWaves: 30.2,
+  glassBeam: 31,
+  glassRing: 31.5,
   /** The horn's aim beam (src/ui/hornAim.ts). */
   hornAim: 32,
   /** The glass sign in front of the eyes (src/ui/kit/glassSign.ts). */
@@ -2180,6 +2186,10 @@ export const POKE = {
  * above the board).
  */
 export const HINT_SIGN = {
+  /** Looks kept drawn ahead (the reach countdown, the next step's sign), each on its own canvas; the oldest goes past this. */
+  keep: 10,
+  /** The next step's sign is drawn ahead this long after a step starts (seconds), in a calm moment, not on the step change. */
+  prepareAfter: 1.2,
   radius: 62,
   /** Bottom edge above the board (was 12, which covered the front of the board; 48 felt too high). It only covers the far edge of the board. */
   y: 43,
@@ -2340,6 +2350,9 @@ export const FEEDBACK = {
   /** Glow on the enemy the slingshot is about to hit (not a touch state). */
   aimed: 0xd23c28,
   aimedIntensity: 0.8,
+  /** A goblin already Ready counts as this share of its distance (so another must be clearly nearer to take it), and stays Ready out to this times the pinch radius. */
+  stickShare: 0.8,
+  stickOut: 1.2,
 };
 
 /**
@@ -2471,6 +2484,8 @@ export const SLINGSHOT = {
 
 /** Slingshot aim assist (docs/giant-tools.md "Slingshot aim assist"). Strengths are tuned in playtests. */
 export const AIM_ASSIST = {
+  /** The target glowing now counts its cone angle as this share, so another must be clearly better to take the glow (no jumping in a crowd). */
+  stickShare: 0.7,
   /** 1. The shot uses the average pull of this window before the release (seconds)... */
   steadyWindow: 0.1,
   /** ...skipping this last bit, while the fingers already open. */
@@ -2485,7 +2500,7 @@ export const AIM_ASSIST = {
   markerColor: 0xffffff,
   markerOpacity: 0.35,
   /** Lifted this far above the ground so it never flickers into it (cm). */
-  markerLift: 0.2,
+  markerLift: 0.6,
   /** Prediction step for the dots and the target glow (seconds). */
   traceStep: 1 / 60,
   /**
@@ -2569,14 +2584,42 @@ export const FIRE_PEBBLE = {
   flameY: 21,
   stickColor: 0x6b4a2b,
   flameColors: [0xff6a1a, 0xffb02a, 0xffe08a],
-  // 2.3 times bigger, like the castle torches (2026-11-17).
-  flameSize: 3.6,
+  // 2.3 times bigger, like the castle torches (2026-11-17), then 30% smaller with them (2026-11-18).
+  flameSize: 2.52,
   /** A pinched pebble within this of the flame (meters at the default board) heats up. */
   lightRadius: 0.045,
   lightTime: 1,
   burnTime: 5,
-  /** Flame puffs on a burning pebble this often (seconds). */
-  puffEvery: 0.08,
+  /** Embers off a burning pebble this often (seconds). */
+  puffEvery: 0.12,
+  /**
+   * The fire on a burning pebble (src/fx/pebbleFire.ts, 2026-11-18): the
+   * torches' layered flame and a warm additive glow. Flames made at setup
+   * (slots); flame size at full strength (cm, its height about 1.3 times
+   * that, times stretch), how far up it sits (share of its size); the glow
+   * (cm across, color, strength). While a pebble heats in the torch a small
+   * flame grows on it (catchFrom to catchTo of full); lit, it pops popOver
+   * past full over popTime, and shrinks away in its last fadeTime seconds.
+   */
+  burning: {
+    slots: 4,
+    flameSize: 1.9,
+    stretch: 1.15,
+    rise: 0.6,
+    flicker: 0.18,
+    flickerSpeed: 11,
+    glowSize: 6.5,
+    glowColor: 0xff8a2a,
+    glowStrength: 0.85,
+    catchFrom: 0.2,
+    catchTo: 0.7,
+    popOver: 0.6,
+    popTime: 0.35,
+    fadeTime: 1,
+    /** Sparks when it catches: how many and how fast (m/s). */
+    igniteSparks: 18,
+    igniteSpeed: 0.09,
+  },
   smokeColors: [0x555555, 0x777777, 0x999999],
 };
 
@@ -3670,8 +3713,8 @@ export const TROOPS = {
   /** Sword clash sound at most this often (seconds). */
   clashGap: 0.3,
   poofColors: [0xffffff, 0xc9d4e8, 0x8aa0c8],
-  /** Units farther than this from the center (cm) update their animation every other frame. */
-  farAnimFrom: 150,
+  /** Units farther than this from the center (cm) update their animation every other frame. 300, was 150 (2026-11-18: most of the board's units animated at half rate and their limbs juddered). */
+  farAnimFrom: 300,
 };
 
 /**
@@ -3750,6 +3793,8 @@ export const KNIGHTS = {
   /** The horn lesson's goblins stop this far out in front of the squad's spot (cm along the road), waiting to be fought. */
   lessonHoldOut: 6,
   closeGiveUp: 4,
+  /** A knight that reached its goblin walks again only once the gap is this times its reach (no walk and idle flip at the edge). */
+  closeAgain: 1.15,
   ignoreTime: 3,
   /** A knight in a moving mode that has not moved for this long is put where it was going (seconds, the run-in-place watchdog). */
   stuckTime: 2,
@@ -3898,6 +3943,8 @@ export const HORN_AIM = {
  * degrees, seconds.
  */
 export const GLASS_SIGN = {
+  /** Texts kept drawn, each on its own texture, so showing one again draws nothing (src/ui/kit/glassSign.ts). */
+  keep: 40,
   distance: 0.6,
   /** Above the look's center by this much (degrees). */
   aboveDeg: 9,
@@ -4423,6 +4470,8 @@ export const GOBLIN_GEAR = {
   flyUp: 70,
   spin: 14,
   restTime: 1.2,
+  /** Lying gear rests this far above the ground (cm, over the road's lift), so it never shimmers against it. */
+  restLift: 1,
   poolSize: 10,
 };
 
@@ -4506,8 +4555,9 @@ export const JUICE = {
    * flicker come exactly with them. Set true to bring them back once the cause is known.
    */
   gearSparks: false,
-  /** A goblin that is hit but not knocked out flashes white this long (seconds). */
-  hitFlashTime: 0.12,
+  /** A goblin that is hit but not knocked out flashes white, fading out over this long (seconds); no new flash for hitFlashGap after one starts. */
+  hitFlashTime: 0.18,
+  hitFlashGap: 0.45,
   hitFlashColor: 0xffffff,
   hitFlashIntensity: 0.9,
   /** A soldier cheers (arms up) this long after knocking a goblin out, and every soldier this long when a wave is won (seconds). */
@@ -4518,7 +4568,8 @@ export const JUICE = {
    * the units run at this share of speed for this long (seconds). The board,
    * the view and the hands never slow down.
    */
-  hitStopScale: 0.08,
+  // 0.4, was 0.08 (2026-11-18): a near freeze of every unit looked just like a dropped frame in the headset.
+  hitStopScale: 0.4,
   hitStopTime: 0.07,
   /** This many knockouts in one frame count as a big hit. */
   multiKill: 3,
@@ -4986,8 +5037,8 @@ export const NIGHT_LIGHTS = {
   torchRadius: 44.2,
   torchHeight: 8.4,
   torchStick: 3,
-  // 2.3 times bigger (2026-11-17: the new layered flame read well but too small).
-  torchFlame: 3.2,
+  // 2.3 times bigger (2026-11-17: the new layered flame read well but too small), then 30% smaller (2026-11-18: too big at night).
+  torchFlame: 2.24,
   torchStickColor: 0x6b4a2b,
   /** The flame from its base to its tip. */
   /** The flame (2026-11-17, layered): a deep red-orange outer shell, orange, and a pale yellow core tip. */

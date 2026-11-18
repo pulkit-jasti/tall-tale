@@ -16,6 +16,7 @@ import { mark } from '../../debug/perfMarks.js';
 import { drawNineSlice, fitFont, wrapText } from '../uiImages.js';
 import { canvasPlane, canvasTexture } from './canvas.js';
 import { drawOnTop } from './onTop.js';
+import { preparedTextures } from '../panel.js';
 import { UI_COLORS } from './text.js';
 import { UI_FONT } from './font.js';
 
@@ -44,6 +45,13 @@ export class GlassSign {
   private line: Mesh;
   private drawnKey = '';
   private placed = false;
+  private plane: Mesh;
+  /**
+   * Each text drawn once on its own canvas and texture, kept (2026-11-18: the horn's text flips between a
+   * few lines as the look crosses roads, and each flip redrew and uploaded the sign, a flicker). Showing one
+   * again only swaps the texture. The oldest goes past GLASS_SIGN.keep.
+   */
+  private drawn = new Map<string, CanvasTexture>();
   /** The bar's share as shown: rises at once, falls back slowly, so a short blow reads. */
   private shown = 0;
 
@@ -54,7 +62,8 @@ export class GlassSign {
     this.canvas.height = HEIGHT;
     this.context = this.canvas.getContext('2d')!;
     this.texture = canvasTexture(this.canvas);
-    this.holder.add(canvasPlane(this.texture, width, height));
+    this.plane = canvasPlane(this.texture, width, height);
+    this.holder.add(this.plane);
     // The bar: a dark track, the fill growing from its left end, the line it must pass.
     const track = new Mesh(new PlaneGeometry(bar.width, bar.height), new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, fog: false, toneMapped: false }));
     const fillGeometry = new PlaneGeometry(1, bar.height * 0.8);
@@ -125,9 +134,42 @@ export class GlassSign {
     this.holder.updateMatrixWorld(true);
   }
 
-  /** The glass and the text. Only when the text changes. */
+  /** Draws these texts now (setup, before the GPU warm-up), so their first showing only swaps a texture. */
+  prepare(entries: { text: string; bar: boolean }[]): void {
+    const shown = (this.plane.material as MeshBasicMaterial).map;
+    for (const { text, bar } of entries) this.draw(text, bar);
+    (this.plane.material as MeshBasicMaterial).map = shown;
+  }
+
+  /** The glass and the text: a kept texture for it if there is one, else drawn now and kept. */
   private draw(text: string, withBar: boolean): void {
+    const key = `${text}|${withBar}`;
+    const material = this.plane.material as MeshBasicMaterial;
+    let texture = this.drawn.get(key);
+    if (texture) {
+      material.map = texture;
+      return;
+    }
     mark('panel redraw');
+    // Room for a new one: the oldest kept one goes (never the one showing).
+    if (this.drawn.size >= GLASS_SIGN.keep) {
+      for (const [old, t] of this.drawn) {
+        if (t === material.map) continue;
+        t.dispose();
+        preparedTextures.delete(t);
+        this.drawn.delete(old);
+        break;
+      }
+    }
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = WIDTH;
+    this.canvas.height = HEIGHT;
+    this.context = this.canvas.getContext('2d')!;
+    texture = canvasTexture(this.canvas);
+    preparedTextures.add(texture);
+    this.drawn.set(key, texture);
+    this.texture = texture;
+    material.map = texture;
     const c = this.context;
     const w = WIDTH;
     const h = HEIGHT;

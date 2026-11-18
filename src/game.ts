@@ -58,6 +58,7 @@ import { GhostHand } from './ui/ghostHand.js';
 import { HintSign } from './ui/hintSign.js';
 import { ThreatCues } from './ui/threatCues.js';
 import { GlassSign, isTyping, loadUiImages, useKeyboardSession, type GlassBar } from './ui/kit/index.js';
+import { flushAfterDrag } from './ui/kit/controls.js';
 import { customLevels, resetCustomLevels, saveCustomLevels } from './player/customLevels.js';
 import { WaveSpawner } from './units/waveSpawner.js';
 import { Flags } from './world/flags.js';
@@ -138,6 +139,18 @@ const railFacing = new Vector3();
 const railInverse = new Matrix4();
 /** A camp's spot for the compass. */
 const compassAt = new Vector3();
+
+/** Every line the horn can put on the glass sign (updateGlass), with and without its bar, to draw at setup. */
+function hornGlassTexts(): { text: string; bar: boolean }[] {
+  const texts = ['The horn is resting', 'Wait to move again', 'Look at a road', 'No mic sound: hold it there', 'Lower it, then raise it again', 'Charge!'];
+  for (const verb of ['Call', 'Boost', 'Move']) {
+    texts.push(`${verb}: say "Charge!"`, `${verb}: hold it there`, `${verb}: raise it, say "Charge!"`, `${verb}: raise it in front of you`);
+  }
+  return texts.flatMap((text) => [
+    { text, bar: false },
+    { text, bar: true },
+  ]);
+}
 
 /**
  * Frees an old map's GPU memory: every geometry under `root`, and its
@@ -678,9 +691,12 @@ export class GameSystem extends createSystem({}) {
     this.hornAim.prepare();
     // Every trophy's toast drawn now (it was drawn the frame it was earned).
     this.toast.prepare();
-    this.warmGpu();
+    // The horn's lines on the glass sign, each drawn once (each flip as the look crossed a road redrew it).
+    this.glass.prepare(hornGlassTexts());
     // The empty tool slots hint's red arrow (POINTER.threat's look, flying to the slot once it is in view).
+    // Made before the warm-up (2026-11-18: made after it, its shapes went to the GPU the first time it showed).
     this.slotsArrow = new PointerArrow(root, { ...POINTER.threat, flies: true });
+    this.warmGpu();
     // What sinks into the ground for the menu: the castle, the flags, the ring handle, the tools and their platforms.
     this.swap = new SceneSwap();
     this.swap.addBattle(castle);
@@ -692,7 +708,7 @@ export class GameSystem extends createSystem({}) {
     this.pauseMenu.onUnlockAll = (on) => {
       progress.unlockAll = on;
       saveProgress();
-      this.menu.refresh();
+      this.menu.refreshTools();
     };
     this.battle.onEnd = (won, share) => this.battleOver(won, share);
     // The end panel's Menu button: back to the page the battle was started from.
@@ -1276,11 +1292,14 @@ export class GameSystem extends createSystem({}) {
     if (presenting) this.renderer.setRenderTarget(null);
     this.renderer.compile(this.scene, this.camera);
     if (presenting) this.renderer.setRenderTarget(before);
-    // Outside VR (setup, the 2D page): one real draw of everything, hidden things too, into a tiny target
+    // One real draw of everything, hidden things too, into a tiny target
     // nobody sees. Compiling makes shaders but sends no shapes: a mesh's geometry goes to the GPU the first
     // time it is drawn, so a hidden model (a card's reward tool, a pooled unit, an effect) still uploaded
     // mid-game the first time it showed (2026-11-17: campaign card taps flickered). Once drawn, it stays.
-    if (!presenting) this.drawEverythingOnce();
+    // In VR too (2026-11-18): every map after the first loads inside VR, behind the fade, and compiling alone
+    // left its off-view and hidden parts (decor behind the player, traps, night lights, garden, camps) to
+    // upload the first time they showed, mid-battle. Geometry is shared by every target, so the tiny one does.
+    this.drawEverythingOnce();
     const seen = new Set<unknown>();
     this.scene.traverse((o) => {
       // A skinned unit's bone texture is made and uploaded the first time it is drawn: for a pooled goblin or
@@ -1707,6 +1726,8 @@ export class GameSystem extends createSystem({}) {
     const now = performance.now();
     const gap = this.lastFrameAt > 0 ? (now - this.lastFrameAt) / 1000 : 0;
     this.lastFrameAt = now;
+    // At most one held back canvas redraw a frame, once a drag has ended (src/ui/kit/controls.ts).
+    flushAfterDrag();
     if ((this.blurSeen || gap > PAUSE.autoPauseGap) && immersive && this.battle.canPause && !this.menuPaused) {
       this.pause(this.blurSeen ? 'focus lost' : `no frames ${gap.toFixed(1)} s`);
     }
@@ -1742,7 +1763,8 @@ export class GameSystem extends createSystem({}) {
     this.fps.update(delta, !paused);
     this.micPanel.update(Math.min(delta, 0.1));
     this.heartbeatTimer -= delta;
-    if (this.heartbeatTimer <= 0) {
+    // Only on the dev server (the debug page): the hosted game never builds or sends it.
+    if (import.meta.hot && this.heartbeatTimer <= 0) {
       this.heartbeatTimer = DEBUG.heartbeatEvery;
       sendHeartbeat({
         immersive,
@@ -2271,7 +2293,7 @@ export class GameSystem extends createSystem({}) {
       case 'unlockAll':
         progress.unlockAll = !progress.unlockAll;
         saveProgress();
-        this.menu.refresh();
+        this.menu.refreshTools();
         console.info(`[debug] unlock all tools ${progress.unlockAll ? 'on' : 'off'}`);
         break;
       case 'winBattle':

@@ -26,12 +26,30 @@ import { flatMaterial } from '../world/shapes.js';
 import { canvasTexture } from './kit/canvas.js';
 import { canDrag, changeTouch, endDrag, takeDrag, type Control } from './kit/controls.js';
 import { drawOutlined } from './kit/text.js';
+import { preparedTextures } from './panel.js';
 
 export interface SwitchOptions {
   on: boolean;
 }
 
 const local = new Vector3();
+
+/** The two words every switch shows, drawn once and shared (sent to the GPU at the warm-up with the switches). */
+const words: { on: CanvasTexture | null; off: CanvasTexture | null } = { on: null, off: null };
+function wordTexture(on: boolean): CanvasTexture {
+  const key = on ? 'on' : 'off';
+  let texture = words[key];
+  if (!texture) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    drawOutlined(canvas.getContext('2d')!, on ? 'On' : 'Off', 128, 68, 78, '#ffffff', 0.12);
+    texture = canvasTexture(canvas, 4);
+    preparedTextures.add(texture);
+    words[key] = texture;
+  }
+  return texture;
+}
 
 export class Switch implements Control {
   /** Place and turn this group. Its +z is the switch's face. */
@@ -42,8 +60,6 @@ export class Switch implements Control {
   private trackMaterial: MeshStandardMaterial;
   private knob: Mesh;
   private knobMaterial: MeshStandardMaterial;
-  private labelCanvas = document.createElement('canvas');
-  private labelTexture: CanvasTexture;
   private label: Mesh;
   /** Where the knob is now, from 0 (left, off) to 1 (right, on): it follows the finger, or springs to its side. */
   private knobAt: number;
@@ -78,13 +94,10 @@ export class Switch implements Control {
       cap.position.set((side * straight) / 2, 0, S.depth / 2);
       this.group.add(cap);
     }
-    // The word on the track, on the side away from the knob.
-    this.labelCanvas.width = 256;
-    this.labelCanvas.height = 128;
-    this.labelTexture = canvasTexture(this.labelCanvas, 4);
+    // The word on the track, on the side away from the knob: one of two shared pictures, swapped (never redrawn).
     this.label = new Mesh(
       new PlaneGeometry(S.height * 2, S.height),
-      new MeshBasicMaterial({ map: this.labelTexture, transparent: true, fog: false, toneMapped: false }),
+      new MeshBasicMaterial({ map: wordTexture(this.on), transparent: true, fog: false, toneMapped: false }),
     );
     this.label.position.z = S.depth + 0.03;
     this.group.add(this.label);
@@ -227,10 +240,8 @@ export class Switch implements Control {
   private show(snap: boolean): void {
     const S = SWITCH;
     this.trackMaterial.color.setHex(this.on ? S.onColor : S.offColor);
-    const c = this.labelCanvas.getContext('2d')!;
-    c.clearRect(0, 0, this.labelCanvas.width, this.labelCanvas.height);
-    drawOutlined(c, this.on ? 'On' : 'Off', 128, 68, 78, '#ffffff', 0.12);
-    this.labelTexture.needsUpdate = true;
+    // 2026-11-18: each toggle redrew and uploaded its own canvas (a flicker); now the ready picture swaps in.
+    (this.label.material as MeshBasicMaterial).map = wordTexture(this.on);
     // The word sits on the side away from the knob.
     this.label.position.x = (this.on ? -1 : 1) * (S.width / 2 - S.height * 0.95);
     if (snap) {

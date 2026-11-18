@@ -96,7 +96,8 @@ export class PepperRing {
       const center = i * STEP;
       // A flat arc on the ground. RingGeometry's angle 90 degrees is straight ahead (-z) once laid flat;
       // turning it by -center points it at the segment.
-      const material = new MeshBasicMaterial({ color: R.outlineColor, transparent: true, opacity: 0, depthWrite: false, side: DoubleSide, toneMapped: false, fog: false });
+      // Pulled toward the eye in depth, so the strips never fight the ground under them (shimmer).
+      const material = new MeshBasicMaterial({ color: R.outlineColor, transparent: true, opacity: 0, depthWrite: false, side: DoubleSide, toneMapped: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
       const strip = new Mesh(new RingGeometry(R.inner, R.outer, 10, 1, Math.PI / 2 - STEP / 2 + gap / 2, STEP - gap).rotateX(-Math.PI / 2), material);
       const y = groundAt(polarX(mid, center), polarZ(mid, center));
       strip.position.y = y + R.lift;
@@ -228,11 +229,12 @@ export class PepperRing {
       // The look: full (blinking at the end), or an outline while filling or under the shaker.
       const m = s.material;
       if (s.amount > 0) {
-        const blinkOff = s.left < R.blinkTime && Math.sin(this.time * Math.PI * 2 * R.blinkHz) < 0;
-        s.strip.visible = !blinkOff;
+        // Running out: it fades in and out smoothly (it was hidden and shown, a hard blink that read as flicker).
+        const blink = s.left < R.blinkTime ? 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(this.time * Math.PI * 2 * R.blinkHz)) : 1;
+        s.strip.visible = true;
         m.color.setHex(R.fullColor);
         // Paler as it is breathed in.
-        m.opacity = R.fullOpacity * (0.45 + 0.55 * s.amount);
+        m.opacity = R.fullOpacity * (0.45 + 0.55 * s.amount) * blink;
       } else if (s.fill > 0 || i === this.hover) {
         s.strip.visible = true;
         m.color.setHex(R.outlineColor);

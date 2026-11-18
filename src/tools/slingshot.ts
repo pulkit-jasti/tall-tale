@@ -73,6 +73,7 @@ import { Goblin, type Goblins } from '../units/goblins.js';
 import { cloneStatic, InstancedPool, loadTemplate, type ModelTemplate } from '../world/models.js';
 import { flatMaterial, pebbleBowl, post, slingshotBand, slingshotFrame, slingshotPouch } from '../world/shapes.js';
 import { flameGeometry } from '../world/nightLights.js';
+import { PebbleFire } from '../fx/pebbleFire.js';
 import type { Stage } from '../world/stage.js';
 
 export type SlingEvent = 'grabbed' | 'pebbleTaken' | 'loaded' | 'shot';
@@ -403,7 +404,13 @@ export class Slingshot {
     this.buildTorch();
     this.buildKegStand();
     this.stage.boardLift.add(this.root, this.frame);
+    this.fire = new PebbleFire(this.stage.boardLift);
   }
+
+  /** v3 2.6: the flames on burning pebbles (in the hand, the pouch and in flight). */
+  private fire!: PebbleFire;
+  /** The handle's "grab me" pulse is showing (its look is put back when it stops). */
+  private beckonShown = false;
 
   /**
    * v3 2.6 Night Owl: a torch on a stick beside the bowl (the castle torches'
@@ -605,6 +612,10 @@ export class Slingshot {
         transparent: true,
         opacity: AIM_ASSIST.markerOpacity,
         depthWrite: false,
+        // Pulled toward the eye in depth, so it never fights the ground it lies on (shimmer).
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -4,
       }),
     );
     this.marker.visible = false;
@@ -840,13 +851,21 @@ export class Slingshot {
 
   update(dt: number, headWorld: Vector3): void {
     this.time += dt;
+    this.fire.begin(dt);
     this.head.copy(headWorld);
     this.stage.boardLift.worldToLocal(this.head);
     this.updateBowl(dt);
     this.updateFrame(dt);
     // Glow until grabbed. A hand near the handle shows Ready instead.
+    // A smooth pulse of the Ready glow, never a hard on and off (2026-11-18: that read as flicker).
     if (this.beckon && this.handleTouch === 'idle') {
-      applyTouchState(this.woodMaterials, Math.sin(this.time * 6) > 0 ? 'ready' : 'idle');
+      if (!this.beckonShown) applyTouchState(this.woodMaterials, 'ready');
+      this.beckonShown = true;
+      const pulse = 0.5 + 0.5 * Math.sin(this.time * 6);
+      for (const m of this.woodMaterials) if (m.emissive) m.emissiveIntensity = pulse;
+    } else if (this.beckonShown) {
+      this.beckonShown = false;
+      applyTouchState(this.woodMaterials, this.handleTouch);
     }
     this.updateHandPebbles(dt);
     this.updateTorch(dt);
@@ -885,6 +904,7 @@ export class Slingshot {
     this.updateBands();
     this.placePouchGoblin();
     this.updatePebbles(dt);
+    this.fire.end();
   }
 
   private updateBowl(dt: number): void {
@@ -1002,15 +1022,17 @@ export class Slingshot {
    * catches fire; a burning one throws off flames and burns out after a while.
    */
   private heatHandPebble(p: HandPebble, dt: number): void {
+    // The pebble's middle (its mesh sits at its bottom).
+    const middle = this.stage.boardLift.localToWorld(temp3.copy(p.mesh.position).setY(p.mesh.position.y + this.pebbleHeight / 2));
     if (p.fire > 0) {
       p.fire -= dt;
       if (p.fire <= 0) {
         p.fire = 0;
         p.heat = 0;
-        this.particles.burst(this.stage.boardLift.localToWorld(temp2.copy(p.mesh.position)), FIRE_PEBBLE.smokeColors, 4, 0.04);
+        this.particles.burst(middle, FIRE_PEBBLE.smokeColors, 6, 0.04);
         return;
       }
-      this.flames(this.stage.boardLift.localToWorld(temp2.copy(p.mesh.position)), dt);
+      this.flames(middle, dt, PebbleFire.burnStrength(p.fire));
       return;
     }
     if (!this.torchLit || !this.torch.visible) {
@@ -1020,22 +1042,25 @@ export class Slingshot {
     this.stage.boardLift.localToWorld(this.flameLocal(temp2));
     if (p.hand.pinchPoint.distanceTo(temp2) > FIRE_PEBBLE.lightRadius * this.stage.boardScale) {
       p.heat = Math.max(0, p.heat - dt);
-      return;
-    }
-    p.heat += dt;
+    } else p.heat += dt;
+    // Catching: a small flame grows on the pebble while it heats, and dies down if it leaves the flame.
+    const B = FIRE_PEBBLE.burning;
+    if (p.heat > 0) this.fire.show(middle, B.catchFrom + (B.catchTo - B.catchFrom) * Math.min(1, p.heat / FIRE_PEBBLE.lightTime));
     if (p.heat < FIRE_PEBBLE.lightTime) return;
     p.fire = FIRE_PEBBLE.burnTime;
-    this.particles.burst(temp2, FIRE_PEBBLE.flameColors, 10, 0.06);
-    this.audio.play('hayBurn', temp2, 0.8);
+    // It catches: a burst of sparks from the pebble and the flame pops up big (PebbleFire.burnStrength).
+    this.particles.burst(middle, FIRE_PEBBLE.flameColors, B.igniteSparks, B.igniteSpeed);
+    this.audio.play('hayBurn', middle, 0.8);
     this.onFireLit();
   }
 
-  /** Flame puffs from a burning pebble (world point), now and then. */
-  private flames(at: Vector3, dt: number): void {
+  /** A burning pebble's fire (world point of its middle): its flame this frame, and embers now and then. */
+  private flames(at: Vector3, dt: number, strength = 1): void {
+    this.fire.show(at, strength);
     this.flamePuff -= dt;
     if (this.flamePuff > 0) return;
     this.flamePuff = FIRE_PEBBLE.puffEvery;
-    this.particles.burst(at, FIRE_PEBBLE.flameColors, 1, 0.02);
+    this.particles.burst(at, FIRE_PEBBLE.flameColors, 1, 0.03);
   }
 
   /** v3 2.6: the torch shows only while lit (sunset and night), its flame flickering; a burning pebble in the pouch burns down. */
@@ -1047,7 +1072,7 @@ export class Slingshot {
     }
     if (this.pouchFire > 0) {
       this.pouchFire = Math.max(0, this.pouchFire - dt);
-      if (this.pouchFire > 0) this.flames(this.pouchWorld(temp2), dt);
+      if (this.pouchFire > 0) this.flames(this.pouchWorld(temp2), dt, PebbleFire.burnStrength(this.pouchFire));
       else this.particles.burst(this.pouchWorld(temp2), FIRE_PEBBLE.smokeColors, 4, 0.04);
     }
   }
@@ -1282,8 +1307,11 @@ export class Slingshot {
     const range = Math.hypot(trace.point.x - origin.x, trace.point.z - origin.z);
     let best: Target | null = null;
     let bestAngle = degToRad(AIM_ASSIST.coneDeg);
+    // The goblin aimed at now keeps the glow unless another is clearly better (2026-11-18: in a crowd the
+    // red glow jumped between goblins frame to frame, a flicker).
+    const keep = AIM_ASSIST.stickShare;
     for (const g of this.goblins.list) {
-      const angle = this.coneAngle(g, origin, velocity, range);
+      const angle = this.coneAngle(g, origin, velocity, range) * (g === this.aimTarget ? keep : 1);
       if (angle < bestAngle) {
         bestAngle = angle;
         best = g;
@@ -1291,7 +1319,7 @@ export class Slingshot {
     }
     if (things) {
       for (const t of this.things) {
-        const angle = this.coneAngle(t, origin, velocity, range);
+        const angle = this.coneAngle(t, origin, velocity, range) * (t === this.aimTarget ? keep : 1);
         if (angle < bestAngle) {
           bestAngle = angle;
           best = t;
@@ -1544,6 +1572,8 @@ export class Slingshot {
       quaternion.setFromAxisAngle(UP, pebble.age * 12);
       matrix.makeRotationFromQuaternion(quaternion).setPosition(p.x, p.y - this.pebbleHeight / 2, p.z);
       this.pool.set(i, matrix);
+      // v3 2.6: a burning pebble flies with its flame on.
+      if (pebble.fire && pebble.rest < 0) this.fire.show(this.stage.boardSpin.localToWorld(temp2.copy(p)), 1);
     }
     this.pool.commit();
   }

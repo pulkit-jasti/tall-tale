@@ -14,6 +14,7 @@ import { PokeButton } from '../pokeButton.js';
 import { canvasTexture } from './canvas.js';
 import { afterDrag, armControls, type Control } from './controls.js';
 import { fontSpec } from './font.js';
+import { preparedTextures } from '../panel.js';
 
 const PX = 40;
 
@@ -108,6 +109,8 @@ export class PanelHeader implements Control {
       ctx.fillText(title, canvas.width / 2, canvas.height / 2 + 2);
       this.canvas = canvas;
       this.texture = canvasTexture(canvas, 4);
+      // Sent to the GPU at the warm-up even while another title shows.
+      preparedTextures.add(this.texture);
       this.made.set(title, { edge, body, texture: this.texture, width });
       if (this.title === title) (this.face.material as MeshBasicMaterial).map = this.texture;
     });

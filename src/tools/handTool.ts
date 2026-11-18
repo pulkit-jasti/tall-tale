@@ -23,7 +23,7 @@
 // a use while it is held.
 import { Color, Group, Matrix4, Mesh, MeshBasicMaterial, Quaternion, RingGeometry, Vector3, type MeshStandardMaterial } from 'three';
 import type { GameAudio } from '../audio/sound.js';
-import { HOLD, TOOL_SPOTS, TOOLS } from '../config/game.js';
+import { FEEDBACK, HOLD, TOOL_SPOTS, TOOLS } from '../config/game.js';
 import { BOOST } from '../rules/boosts.js';
 import { popIn, shrinkAway } from '../fx/ease.js';
 import type { Particles } from '../fx/particles.js';
@@ -746,19 +746,34 @@ export abstract class HandTool {
     this.rope.visible = this.tiedDown && this.phase === 'resting' && this.returnLeft <= 0;
     let state: TouchState = this.holder ? 'held' : this.touchReady;
     if (this.touchReady === 'locked' && usable) state = 'ready';
-    // The last seconds of a use: blink, so the end is no surprise.
-    if (this.active && this.use.useLeft < TOOLS.warnTime && this.useSeconds > TOOLS.warnTime && Math.sin(this.time * 18) > 0) state = 'idle';
-    // A new tool glows until grabbed. A hand near it shows Ready instead.
-    if (this.beckon && state === 'idle' && Math.sin(this.time * 6) > 0) state = 'ready';
-    // Just recharged: a few quick glowing pulses.
-    if (this.readyFlash > 0 && state === 'idle' && Math.sin(this.time * 14) > 0) state = 'ready';
+    // Smooth pulses, never a hard on and off (2026-11-18: those read as flicker). -1: a steady look.
+    let pulse = -1;
+    if (this.active && this.use.useLeft < TOOLS.warnTime && this.useSeconds > TOOLS.warnTime) {
+      // The last seconds of a use: the glow fades in and out, so the end is no surprise.
+      pulse = 0.5 + 0.5 * Math.sin(this.time * 18);
+    } else if (state === 'idle' && (this.beckon || this.readyFlash > 0)) {
+      // A tool to grab glows (a hand near it shows Ready instead); just recharged: a few quicker pulses.
+      state = 'ready';
+      pulse = 0.5 + 0.5 * Math.sin(this.time * (this.readyFlash > 0 ? 14 : 6));
+    }
     // Quiet during another lesson: only held shows.
-    if (this.quiet && !this.holder) state = 'idle';
+    if (this.quiet && !this.holder) {
+      state = 'idle';
+      pulse = -1;
+    }
     if (state !== this.touch) {
       this.touch = state;
       applyTouchState(this.materials, state);
     }
+    if (pulse >= 0 || this.pulsing) {
+      const full = state === 'held' ? FEEDBACK.heldIntensity : 1;
+      for (const m of this.materials) if (m.emissive) m.emissiveIntensity = pulse >= 0 ? full * pulse : full;
+      this.pulsing = pulse >= 0;
+    }
   }
+
+  /** The glow's strength is being pulsed (set back to full when it stops). */
+  private pulsing = false;
 
   // ---- Helpers ----
 

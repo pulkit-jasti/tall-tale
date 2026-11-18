@@ -216,8 +216,9 @@ export class Juice {
     private rng: Random,
   ) {
     const ring = new RingGeometry(0.4, 0.5, 24);
-    this.rings = new Pool(parent, ring, JUICE.ringPool, true, 5);
-    this.stars = new Pool(parent, starGeometry(), JUICE.starPool, false, 6);
+    // Their own draw orders (they shared the ghost hands' 5 and 6, so which drew first flipped as the head moved).
+    this.rings = new Pool(parent, ring, JUICE.ringPool, true, RENDER_ORDER.juiceRings);
+    this.stars = new Pool(parent, starGeometry(), JUICE.starPool, false, RENDER_ORDER.juiceStars);
     const scrap = new PlaneGeometry(1, 0.6);
     this.confetti = new Pool(parent, scrap, JUICE.confettiPool, false, 4);
     // Confetti is opaque paper: no additive glow, but still fades at the end.

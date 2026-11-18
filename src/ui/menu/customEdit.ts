@@ -96,6 +96,10 @@ export class CustomEditPage {
     const root = this.panel.root;
     // The title ("New level" or "Edit level") and Back float over the panel; the tabs and Save under it.
     this.back = new PanelHeader(audio, 'New level', { back: true });
+    // Both titles made now, before the GPU warm-up (2026-11-18: "Edit level" built its plate and texture the
+    // first time a level was edited).
+    this.back.setTitle('Edit level');
+    this.back.setTitle('New level');
     this.back.placeAbove(E.height);
     // Under the panel: the tabs from its left edge, Save at its right edge, on one line.
     const lineY = -E.height / 2 - TABS.below - TABS.height / 2;

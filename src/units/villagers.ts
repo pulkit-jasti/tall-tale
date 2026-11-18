@@ -36,6 +36,11 @@ class Villager {
     model.scale.setScalar(VILLAGERS.height);
     this.root.add(model);
     this.mixer = new AnimationMixer(model);
+    // The clips it plays, their actions made now (2026-11-18: made the first time each played, like goblins once were).
+    for (const name of ['walk', 'idle', 'interact-right', 'pick-up']) {
+      const clip = AnimationClip.findByName(clips, name);
+      if (clip) this.actions.set(name, this.mixer.clipAction(clip));
+    }
   }
 
   play(name: string, loop = true): void {
