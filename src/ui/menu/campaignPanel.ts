@@ -5,8 +5,8 @@
 // headset). Each row is a card with the number, the name and the best stars
 // (or a lock), the selected one gold. Right: the selected level's card in
 // one padded column: the level and its name, two labeled blocks (Best stars,
-// Difficulty skulls), the flavor, the reward (a small turning copy of the
-// tool, so it is clear without knowing its name), and the rectangular Fight
+// Difficulty skulls), the flavor, the suggested tool (a small turning copy of
+// the tool, so it is clear without knowing its name), and the rectangular Fight
 // button. Fight is locked only on a locked level (the reason under it). With
 // a tool slot empty it still says Fight!, and a poke asks the game for the empty slots hint
 // (a glass sign and a red arrow, not on this card). Back (top left) goes to
@@ -17,7 +17,8 @@ import { Box3, Group, Vector3, type Mesh, type MeshStandardMaterial, type Object
 import type { GameAudio } from '../../audio/sound.js';
 import { UI_FONT } from '../kit/font.js';
 import { MENU, UI_SPACING } from '../../config/game.js';
-import { LEVELS, type LevelEntry, type LevelReward } from '../../config/levels.js';
+import { LEVELS, type LevelEntry } from '../../config/levels.js';
+import { TOOL_TAGS } from './shelves.js';
 import { mark } from '../../debug/perfMarks.js';
 import { uiImage } from '../uiImages.js';
 import type { HandState } from '../../player/hands.js';
@@ -49,8 +50,6 @@ const CARD_DIVIDER = 'rgba(138, 90, 52, 0.6)';
 /** The list's entries: every level, then the "More coming soon" row. */
 const ENTRIES = LEVELS.length + 1;
 
-const TOOL_NAMES: Record<string, string> = { swatter: 'Fly swatter', pepper: 'Pepper shaker', drum: 'Drum', mystery: '???' };
-
 export class CampaignPanel {
   private panel: Panel;
   private back: PanelHeader;
@@ -59,8 +58,8 @@ export class CampaignPanel {
   private fight: FightButton;
   /** The selected level (index into LEVELS). */
   private selected = 0;
-  /** The small turning copy of each reward tool on the card (only the selected level's shows). */
-  private rewards = new Map<LevelReward, Group>();
+  /** The small turning copy of each suggested tool on the card (only the selected level's shows). */
+  private rewards = new Map<PickTool, Group>();
   private spin = 0;
 
   constructor(
@@ -114,9 +113,8 @@ export class CampaignPanel {
     this.fight.group.position.set(C.fightAt[0], C.fightAt[1], 0);
     // A poke on the locked Fight: with empty tool slots, the game shows where to put tools.
     this.panel.root.add(this.fight.group);
-    // The reward tools, each sized to rewardHeight and stood on the card.
-    // The card's rewards are only campaign reward tools (LevelReward), never the horn or the slingshot.
-    for (const [tool, model] of Object.entries(rewardModels) as [Exclude<LevelReward, null>, Object3D][]) {
+    // The suggested tools (every pick tool), each sized to rewardHeight and stood on the card.
+    for (const [tool, model] of Object.entries(rewardModels) as [PickTool, Object3D][]) {
       const holder = new Group();
       const box = new Box3().setFromObject(model);
       const size = box.getSize(new Vector3());
@@ -145,21 +143,21 @@ export class CampaignPanel {
   }
 
   /**
-   * The reward tool on the card right now (its small copy, whose world pose
+   * The suggested tool on the card right now (its small copy, whose world pose
    * the shelves' grab code copies), or null. The shelves let the player grab
    * it: a full-size copy comes into the hand (no effects run, it is only to
    * look at and swing), and the card's copy hides meanwhile (`showOnCard`).
    */
   rewardShown(): { tool: PickTool; model: Object3D; materials: MeshStandardMaterial[]; showOnCard: (on: boolean) => void } | null {
     if (!this.panel.visible) return null;
-    const reward = LEVELS[this.selected].reward;
-    const holder = reward ? this.rewards.get(reward) : undefined;
-    if (!holder || !reward || reward === 'mystery') return null;
+    const tool = LEVELS[this.selected].suggested;
+    const holder = this.rewards.get(tool);
+    if (!holder) return null;
     const model = holder.children[0];
-    return { tool: reward, model, materials: this.rewardMaterials.get(model) ?? [], showOnCard: (on) => (model.visible = on) };
+    return { tool, model, materials: this.rewardMaterials.get(model) ?? [], showOnCard: (on) => (model.visible = on) };
   }
 
-  /** Each reward copy's materials (its Ready glow when a hand comes near). */
+  /** Each suggested tool copy's materials (its Ready glow when a hand comes near). */
   private rewardMaterials = new Map<Object3D, MeshStandardMaterial[]>();
 
   /** Opens on level 1, selected, at the top of the list (never empty). */
@@ -197,7 +195,7 @@ export class CampaignPanel {
   update(hands: HandState[], dt: number): CampaignChoice {
     if (!this.panel.visible) return null;
     this.panel.update(dt);
-    // The reward tool turns slowly, so its shape reads from every side.
+    // The suggested tool turns slowly, so its shape reads from every side.
     this.spin += dt * Math.PI * 2 * MENU.campaign.rewardSpin;
     for (const holder of this.rewards.values()) if (holder.visible) holder.rotation.y = this.spin;
     if (this.back.update(hands, dt)) return { kind: 'back' };
@@ -252,7 +250,7 @@ export class CampaignPanel {
     const open = isOpen(this.progress, level.number);
     // Only a locked level locks Fight. With empty tool slots it still says Fight! (so it gets poked), and the poke shows where to put tools.
     this.fight.setLocked(!open);
-    for (const [reward, holder] of this.rewards) holder.visible = reward === level.reward;
+    for (const [tool, holder] of this.rewards) holder.visible = tool === level.suggested;
     // Each level's card keeps its own image, drawn again only when its stars or lock change: a tap shows the
     // ready one (2026-11-17: every tap redrew and uploaded the whole 1500 px card, a flicker).
     this.panel.paintVariant(`level ${level.number}`, `${open} ${this.progress.stars[level.number] ?? 0} ${uiImage('panel') ? 1 : 0}`, (c, w, h) => this.draw(c, w, h, level, open));
@@ -319,14 +317,14 @@ export class CampaignPanel {
         c.textBaseline = 'middle';
         c.fillText(line, left, at.y(y - i * 1.8));
       });
-    // The reward: its label, the tool turning beside its name (the model stands at rewardAt), or "???".
-    if (level.reward) {
+    // The suggested tool: its label, the tool turning beside its name (the model stands at rewardAt).
+    {
       const [rx, ry] = C.rewardAt;
-      const rewardY = at.y(ry + C.rewardHeight / 2 + 1);
-      drawIconCentered(c, 'award', left + 11, rewardY, 20, UI_COLORS.note);
-      drawLine(c, 'Reward', left + 26, rewardY, width - 26, 19, UI_COLORS.note, 'left');
-      const nameX = level.reward === 'mystery' ? left : at.x(rx + C.rewardHeight / 2 + 1.4);
-      drawLine(c, TOOL_NAMES[level.reward], nameX, at.y(ry), right - nameX, 26, UI_COLORS.accent, 'left');
+      const labelY = at.y(ry + C.rewardHeight / 2 + 1);
+      drawIconCentered(c, 'wrench', left + 11, labelY, 20, UI_COLORS.note);
+      drawLine(c, 'Suggested tool', left + 26, labelY, width - 26, 19, UI_COLORS.note, 'left');
+      const nameX = at.x(rx + C.rewardHeight / 2 + 1.4);
+      drawLine(c, TOOL_TAGS[level.suggested][0], nameX, at.y(ry), right - nameX, 26, UI_COLORS.accent, 'left');
     }
     // A locked level: why, under Fight (empty tool slots are shown by the glass sign instead, when Fight is poked).
     if (!open) {

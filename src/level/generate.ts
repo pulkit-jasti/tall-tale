@@ -427,18 +427,19 @@ function planWaves(rng: Random, s: LevelSettings, map: Blueprint, times?: TimeOf
     const balloons = w === 1 ? Math.floor(s.balloons / 2) : s.balloons;
     const total = Math.min(maxWaveGoblins(balloons), Math.round(s.goblins * Math.pow(1 + s.growth, w - 1) * D.goblins));
     const runner = Math.round(total * s.runners);
-    // v3 Phase 3: the new goblins from wave 2 (wave 1 stays the plain walls), on top of the total.
-    const extra = w === 1 ? 0 : 1;
+    // v3 Phase 3: the new goblins from wave 2 (wave 1 stays the plain walls), on top of the total,
+    // growing each wave after (LEVEL_GEN.specialGrowth).
+    const extra = w === 1 ? 0 : 1 + G.specialGrowth * (w - 2);
     waves.push({
       camps: sending,
       rising,
       counts: {
         grunt: total - runner,
         runner,
-        digger: s.diggers * extra,
-        shaman: s.shamans * extra,
-        bomber: s.bombers * extra,
-        archer: s.goblinArchers * extra,
+        digger: Math.round(s.diggers * extra),
+        shaman: Math.round(s.shamans * extra),
+        bomber: Math.round(s.bombers * extra),
+        archer: Math.round(s.goblinArchers * extra),
       },
       spawnTime: Math.round(s.waveLength * D.waveLength),
       balloons,

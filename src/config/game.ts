@@ -1367,7 +1367,7 @@ export const ENDLESS = {
   startCamps: 2,
   riseEvery: 2,
   /** Goblins in wave n (1 based): first x (1 + growth)^(n-1) + perWave x (n-1), capped by the unit budget. */
-  goblins: { first: 14, growth: 0.05, perWave: 2 },
+  goblins: { first: 17, growth: 0.05, perWave: 2.5 },
   /** Camps sending at once: first, one more every `every` waves, up to max. */
   campsAtOnce: { first: 1, every: 3, max: 5 },
   /** Runner share: from, rising this much a wave, up to. */
@@ -1656,6 +1656,11 @@ export const LEVEL_GEN = {
   unitBudget: 100,
   /** Of a wave's goblins, about this share is on the board at once (they come out over the wave and walk in). */
   atOnceShare: 0.75,
+  /**
+   * The new goblins (diggers, shamans, bombers, goblin archers) grow each wave: wave 2 brings the level's
+   * count, each later wave this share more (0.5: x1, x1.5, x2 in a 4 wave level), rounded. Wave 1 has none.
+   */
+  specialGrowth: 0.5,
   /** Rising camps: share of the camps up from the start, by difficulty (the rest rise in the later waves). */
   startCamps: { easy: 0.34, normal: 0.5, hard: 0.67 },
   /** The potion cart's hidden spots when a level has the cart (the "Potion cart" setting). */

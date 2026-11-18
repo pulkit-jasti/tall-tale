@@ -10,7 +10,7 @@ import { LEVELS, OPEN_FROM_START, TUTORIAL_ENEMIES, type EnemyIcon } from '../co
 /** v3 2.2: every tool is a pick now (4 free slots; the slingshot and the horn are no longer fixed). */
 export type PickTool = 'slingshot' | 'horn' | 'swatter' | 'pepper' | 'drum' | 'magnet' | 'glass' | 'sugar';
 export const PICK_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper', 'drum', 'magnet', 'glass', 'sugar'];
-/** Unlocked from the start: the tools the tutorial teaches. The others are campaign rewards (src/config/levels.ts: magnet, glass, drum, sugar) or "Unlock all tools". */
+/** Unlocked from the start: the tools the tutorial teaches. The others open with "Unlock all tools" (on by default; levels give no tool rewards since 2026-11-18). */
 export const STARTING_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper'];
 
 /** The number of loadout slots (v3 2.2). */
@@ -146,9 +146,6 @@ export function recordWin(p: Progress, level: number, stars: number): boolean {
   p.stars[level] = Math.max(p.stars[level] ?? 0, stars);
   const entry = LEVELS.find((l) => l.number === level);
   for (const enemy of entry?.enemies ?? []) if (!p.met.includes(enemy)) p.met.push(enemy);
-  // Its tool reward is unlocked (it glows on the shelf until grabbed).
-  const reward = entry?.reward;
-  if (isPick(reward) && !p.tools.includes(reward)) p.tools.push(reward);
   const next = level + 1;
   if (!LEVELS.some((l) => l.number === next) || p.open.includes(next)) return false;
   p.open.push(next);

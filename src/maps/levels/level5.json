@@ -695,8 +695,8 @@
    ],
    "rising": [],
    "counts": {
-    "grunt": 15,
-    "runner": 5,
+    "grunt": 19,
+    "runner": 7,
     "digger": 0,
     "shaman": 0,
     "bomber": 0,
@@ -721,12 +721,12 @@
     "camp3"
    ],
    "counts": {
-    "grunt": 18,
-    "runner": 6,
-    "digger": 0,
-    "shaman": 0,
-    "bomber": 0,
-    "archer": 0
+    "grunt": 23,
+    "runner": 8,
+    "digger": 2,
+    "shaman": 1,
+    "bomber": 2,
+    "archer": 3
    },
    "spawnTime": 50,
    "balloons": 1,
@@ -747,12 +747,12 @@
     "camp4"
    ],
    "counts": {
-    "grunt": 22,
-    "runner": 7,
-    "digger": 0,
-    "shaman": 0,
-    "bomber": 0,
-    "archer": 0
+    "grunt": 28,
+    "runner": 9,
+    "digger": 3,
+    "shaman": 2,
+    "bomber": 3,
+    "archer": 5
    },
    "spawnTime": 50,
    "balloons": 1,
@@ -771,12 +771,12 @@
    ],
    "rising": [],
    "counts": {
-    "grunt": 26,
-    "runner": 9,
-    "digger": 0,
-    "shaman": 0,
-    "bomber": 0,
-    "archer": 0
+    "grunt": 34,
+    "runner": 11,
+    "digger": 4,
+    "shaman": 2,
+    "bomber": 4,
+    "archer": 6
    },
    "spawnTime": 50,
    "balloons": 1,
@@ -837,7 +837,7 @@
    "sunset": true,
    "night": true,
    "difficulty": "normal",
-   "goblins": 20,
+   "goblins": 26,
    "growth": 0.2,
    "runners": 0.25,
    "balloons": 1,
@@ -848,10 +848,10 @@
    "waveLength": 50,
    "campsAtOnce": 2,
    "foggyNight": true,
-   "diggers": 0,
-   "shamans": 0,
-   "bombers": 0,
-   "goblinArchers": 0,
+   "diggers": 2,
+   "shamans": 1,
+   "bombers": 2,
+   "goblinArchers": 3,
    "archers": 4,
    "guards": 2,
    "refill": 15,

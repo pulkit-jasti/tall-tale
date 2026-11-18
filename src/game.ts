@@ -662,8 +662,10 @@ export class GameSystem extends createSystem({}) {
         sugar: this.sugar.displayModel(),
       },
       { trophy, platform },
-      // Separate copies for the campaign card's reward (a small turning tool).
+      // Separate copies for the campaign card's suggested tool (a small turning tool).
       {
+        slingshot: this.slingshot.displayModel().model,
+        horn: this.horn.displayModel().model,
         swatter: this.swatter.displayModel().model,
         pepper: this.pepper.displayModel().model,
         drum: this.drum.displayModel().model,
@@ -671,8 +673,10 @@ export class GameSystem extends createSystem({}) {
         glass: this.magnifier.displayModel().model,
         sugar: this.sugar.displayModel().model,
       },
-      // And full-size copies to hold when a reward is grabbed off the card.
+      // And full-size copies to hold when a suggested tool is grabbed off the card.
       {
+        slingshot: this.slingshot.displayModel(),
+        horn: this.horn.displayModel(),
         swatter: this.swatter.displayModel(),
         pepper: this.pepper.displayModel(),
         drum: this.drum.displayModel(),
