@@ -56,6 +56,7 @@ import { legsToPoint, legsToWall, reverseLegs, type Leg, type RoadPoint } from '
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
 import type { Road, RoadNetwork } from '../world/roads.js';
 import { knightBanner } from '../world/shapes.js';
+import { poolGroup, updateMatricesNow } from '../world/skipHidden.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { strikeEvery, troopHitsToDown } from '../rules/gear.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
@@ -125,7 +126,8 @@ export interface Squad {
 export type HornPlan = { kind: 'new' } | { kind: 'boost'; squad: Squad } | { kind: 'move'; squad: Squad };
 
 export class Troop {
-  readonly root = new Group();
+  /** Skips its matrix updates while hidden (a pooled soldier, src/world/skipHidden.ts). */
+  readonly root = poolGroup();
   readonly mixer: AnimationMixer;
   private actions = new Map<string, AnimationAction>();
   private current: AnimationAction | null = null;
@@ -1286,7 +1288,7 @@ export class Troops {
     }
     t.banner.visible = true;
     // Fresh matrices (it just moved to the gate), so the first frame is already in the hand.
-    t.root.updateMatrixWorld(true);
+    updateMatricesNow(t.root);
     this.holdBanner(t);
   }
 

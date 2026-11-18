@@ -982,8 +982,6 @@ export const RISING_CAMPS = {
  * Only looked at, never touched. In boardLift (cm): it rises with the board, never turns.
  */
 export const COMPASS = {
-  /** The goblins-left number redraws at most this often (seconds): each redraw uploads its canvas. */
-  textEvery: 0.4,
   /**
    * Straight in front, this far out and this high (cm: the dish's floor),
    * tipped this much toward the player (degrees). Was 31.5 out, 2 up and
@@ -1996,13 +1994,17 @@ export const PAUSE = {
   // The tab row made it taller (39.8 cm), so UI_ZONE grew a little and the rows are 4.4 cm apart.
   settings: {
     // 29 tall (was 39.8): the title and Back float over it (HEADER), the tabs (Access first, then Sound) under it (TABS).
+    // 2026-11-18: 34 (was 29), so a sixth Access row (Reset tool lessons) fits with the same gaps.
     width: 52,
-    height: 29,
+    height: 34,
     pxPerCm: 15,
     /** Measure reach, in the Access tab (smaller, so the bell switch below keeps its gap). */
     reachRadius: BUTTON_SIZE.medium,
     labelX: -23.8,
-    firstRowY: 10.4,
+    /** The Access tab's first row (6 rows, accessRowGap apart, centered on the page). */
+    firstRowY: 13,
+    /** The Sound tab's first row (5 rows, rowGap apart, centered on the page). */
+    soundFirstRowY: 8.8,
     rowGap: 4.4,
     /**
      * The Access tab's rows (Measure reach, Quiet horn, Reset table, Unlock all tools): farther apart,
@@ -2195,6 +2197,11 @@ export const HINT_SIGN = {
   keep: 10,
   /** The next step's sign is drawn ahead this long after a step starts (seconds), in a calm moment, not on the step change. */
   prepareAfter: 1.2,
+  /**
+   * Off (2026-11-18): drawing the next step's sign ahead made a new full size canvas and GPU texture
+   * mid-play each step (and freed an old one), a bigger stall than the one redraw it saved at the step change.
+   */
+  prepareAhead: false,
   radius: 62,
   /** Bottom edge above the board (was 12, which covered the front of the board; 48 felt too high). It only covers the far edge of the board. */
   y: 43,
@@ -3341,6 +3348,12 @@ export const GARDEN = {
   side: 9,
   gap: 35,
   step: 12,
+  /**
+   * The glass's first-use lesson (2026-11-18): an empty bed of the map within lessonNearDeg of the front is
+   * used, else a spare bed made with the map shows lessonRadius cm out in front (close, so it is easy to see).
+   */
+  lessonNearDeg: 35,
+  lessonRadius: 90,
   bedRadius: 3.2,
   bedColor: 0x5a3d26,
   /** Beam seconds to grow (by day) and to heal fully. */
@@ -3718,8 +3731,12 @@ export const TROOPS = {
   /** Sword clash sound at most this often (seconds). */
   clashGap: 0.3,
   poofColors: [0xffffff, 0xc9d4e8, 0x8aa0c8],
-  /** Units farther than this from the center (cm) update their animation every other frame. 300, was 150 (2026-11-18: most of the board's units animated at half rate and their limbs juddered). */
-  farAnimFrom: 300,
+  /**
+   * Units farther than this from the center (cm) update their animation every other frame. Back to 150
+   * (2026-11-18): 300 animated almost every unit every frame, which left no room in the frame, so every
+   * small action (a sound, a few particles, a redraw) dropped a frame and the sky flickered.
+   */
+  farAnimFrom: 150,
 };
 
 /**
@@ -4555,11 +4572,18 @@ export const BALLOONS = {
  */
 export const JUICE = {
   /**
+   * TEMPORARY flicker test (2026-11-18): true turns off every hit and knockout effect: the pow stars and
+   * rings, hit stops, particle bursts (all of them), gear flying off, the white hit flash and the dizzy
+   * stars. Set back to false after the headset test.
+   */
+  effectsOff: false,
+  /**
    * The sparks at gear hits (a helmet or shield hit, the swatter's clonk: sparks and the white ring and
    * star) and where blades clash (soldiers and goblins). Off since 2026-11-17: the developer saw the
-   * flicker come exactly with them. Set true to bring them back once the cause is known.
+   * flicker come exactly with them. Back on 2026-11-18: the flicker's causes were the hidden objects'
+   * matrix updates and the compass number's redraw (headset profile), not the sparks.
    */
-  gearSparks: false,
+  gearSparks: true,
   /** A goblin that is hit but not knocked out flashes white, fading out over this long (seconds); no new flash for hitFlashGap after one starts. */
   hitFlashTime: 0.18,
   hitFlashGap: 0.45,

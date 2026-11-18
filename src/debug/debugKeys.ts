@@ -87,6 +87,8 @@ export type DebugCommand =
   | 'resetCustom'
   | 'resetSave'
   | 'unlockAll'
+  | 'resetLessons'
+  | 'skipLessons'
   | 'winBattle'
   | 'shelfWhere'
   | 'renderStats'
@@ -168,6 +170,14 @@ export const DEBUG_ACTIONS: DebugAction[] = [
   },
   { id: 'winBattle', group: 'menu', icon: '🏆', label: 'Win battle', does: 'Win the battle now, with the castle health as it is (a campaign level saves its stars)' },
   { id: 'unlockAll', group: 'menu', icon: '🔓', label: 'Unlock all tools', does: 'Flip the "Unlock all tools" setting (the drum can be put on the loadout stand)' },
+  {
+    id: 'resetLessons',
+    group: 'menu',
+    icon: '🎓',
+    label: 'Reset tool lessons',
+    does: 'Forget which tools were taught: every tool on the stand gets its first-use lesson before the next battle (like the setting)',
+  },
+  { id: 'skipLessons', group: 'game', icon: '⏭️', label: 'Skip tool lessons', does: 'Skip the first-use tool lessons left (each tool counts as taught) and start the battle' },
   { id: 'openCustom', group: 'menu', icon: '🛠️', label: 'Open Custom Game', does: 'Go to the Custom Game page (the empty state, or the list of saved levels). A save writes the level summary as a debug note' },
   { id: 'fightCustom', group: 'menu', icon: '⚔️', label: 'Fight newest custom level', does: 'From the menu: load the newest saved Custom Game level\'s map and play its waves (a debug note says how long the map took)' },
   { id: 'startEndless', group: 'menu', icon: '♾️', label: 'Start Endless', does: 'From the menu: a new Endless run on a fresh random map with the loadout as it is (a debug note gives its seed)' },

@@ -245,11 +245,13 @@ export class Juice {
 
   /** A short freeze of the battle on a big hit. */
   hitStop(seconds: number = JUICE.hitStopTime): void {
+    if (JUICE.effectsOff) return;
     this.stopLeft = Math.max(this.stopLeft, seconds);
   }
 
   /** A flat shock ring where something hit (world point, meters). `upright`: facing the player instead of lying flat. */
   ring(at: Vector3, size: number, hex: number = JUICE.ringColor, upright = false): void {
+    if (JUICE.effectsOff) return;
     mark('juice');
     const item = this.rings.take(at, JUICE.ringTime * (0.7 + size * 2), size, hex);
     item.spin = upright ? 1 : 0;
@@ -257,6 +259,7 @@ export class Juice {
 
   /** A comic pow star facing the player. */
   pow(at: Vector3, size: number, hex: number = JUICE.starColor): void {
+    if (JUICE.effectsOff) return;
     mark('juice');
     const item = this.stars.take(at, JUICE.starTime, size, hex);
     item.spin = this.rng.range(-0.6, 0.6);

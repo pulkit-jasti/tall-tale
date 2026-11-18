@@ -75,7 +75,7 @@ export class Drum extends HandTool {
       DRUM.restLeanDeg,
       DRUM.radius + 0.6,
       // The stick stands in the drum, on its skin.
-      { restLift: DRUM.height + 0.2 },
+      { restLift: DRUM.height + 0.55 },
     );
   }
 
@@ -161,7 +161,7 @@ export class Drum extends HandTool {
   displayModel(): ReturnType<HandTool['displayModel']> {
     const shown = super.displayModel();
     const copy = drum().group;
-    copy.position.y = -(DRUM.height + 0.2);
+    copy.position.y = -(DRUM.height + 0.55);
     shown.model.add(copy);
     copy.traverse((o) => {
       const mesh = o as Mesh;

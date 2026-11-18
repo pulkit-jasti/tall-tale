@@ -9,7 +9,7 @@ import {
   Object3D,
   Vector3,
 } from 'three';
-import { PARTICLES } from '../config/game.js';
+import { JUICE, PARTICLES } from '../config/game.js';
 import { mark } from '../debug/perfMarks.js';
 import type { Random } from '../rules/random.js';
 
@@ -48,6 +48,7 @@ export class Particles {
 
   /** A small burst at a world position. */
   burst(at: Vector3, colors: number[], count = 12, speed = PARTICLES.speed): void {
+    if (JUICE.effectsOff) return;
     mark('particles');
     for (let n = 0; n < count; n++) {
       const i = this.next;

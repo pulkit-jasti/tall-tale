@@ -5,7 +5,7 @@
 // math in board space (cm), a short rest on the ground, then the shared
 // shrink away.
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
-import { GOBLIN_GEAR, GOBLIN_RULES, MAGNET, type GearName } from '../config/game.js';
+import { GOBLIN_GEAR, GOBLIN_RULES, JUICE, MAGNET, type GearName } from '../config/game.js';
 import { landingHeight } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import { gearTemplate } from '../units/gear.js';
@@ -67,6 +67,7 @@ export class GearDebris {
 
   /** A piece flies off from a board point (cm), away along (dx, dz) and up. */
   throw(name: GearName, at: Vector3, dx: number, dz: number, toMagnet = false): void {
+    if (JUICE.effectsOff) return;
     const kind = this.kinds.get(name);
     if (!kind) return;
     mark('gear debris');

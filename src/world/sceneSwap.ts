@@ -7,6 +7,7 @@
 import type { Object3D } from 'three';
 import { MENU } from '../config/game.js';
 import { easeInOut } from '../fx/ease.js';
+import { skipWhenHidden } from './skipHidden.js';
 
 export type SceneShown = 'battle' | 'toMenu' | 'menu' | 'toBattle';
 
@@ -21,6 +22,8 @@ class Sinker {
   /** `toggle`: hidden while sunk. Off for things whose showing is someone else's job (the tools: the battle shows them). */
   add(o: Object3D, toggle = true): void {
     this.items.push({ o, baseY: o.position.y, toggle });
+    // Hidden while sunk: no matrix updates then (the home screen's set during a battle, src/world/skipHidden.ts).
+    if (toggle) skipWhenHidden(o);
   }
 
   set(share: number): void {

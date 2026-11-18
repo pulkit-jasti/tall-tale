@@ -13,8 +13,11 @@ import type { GearShares } from '../rules/gear.js';
 import { risingByWave } from './levelDirector.js';
 import type { GhostDemoName } from '../ui/ghostDemos.js';
 
-/** v2: the horn replaces the megaphone. v3 2.2: the drum replaces the bell. */
-export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'horn' | 'drum';
+/** v2: the horn replaces the megaphone. v3 2.2: the drum replaces the bell; the magnet, glass and sugar have lessons too (2026-11-18). */
+export type ToolName = 'slingshot' | 'swatter' | 'pepper' | 'horn' | 'drum' | 'magnet' | 'glass' | 'sugar';
+
+/** The hand a lesson asks for. */
+export type Hand = 'left' | 'right';
 
 export interface WavePlan {
   /** Shown on the wave banner when the wave starts. */
@@ -79,7 +82,8 @@ export const TUTORIAL_WAVES: WavePlan[] = [
     camps: ['campEast', 'campSouth', 'campWest'],
     counts: { grunt: 20, runner: 8 },
     spawnTime: 50,
-    newTool: 'pepper',
+    // 2026-11-18: the magnet replaced the pepper (the pepper gets its own first-use lesson).
+    newTool: 'magnet',
     balloons: 3,
   },
 ];
@@ -166,6 +170,12 @@ export type MarkerTarget =
   | 'pepperHandle'
   | 'hornHandle'
   | 'drumHandle'
+  | 'magnetHandle'
+  | 'glassHandle'
+  /** The top of the sugar cube pile in its bowl. */
+  | 'sugarBowl'
+  /** The seed bed of the glass lesson. */
+  | 'lessonBed'
   /** The keg, boulder or tree of the current trigger lesson. */
   | 'lessonTrigger'
   /** The pause button on its stand in front, while it shows. */
@@ -208,6 +218,8 @@ export interface Hint {
   demoNoMic?: GhostDemoName;
   /** A ghost hand loops this demonstration next to the target. */
   demo?: GhostDemoName;
+  /** The demo is played with the other hand, mirrored (a loadout tool on the other side from its demo's). */
+  mirror?: boolean;
   /** Info steps: they wait for the "Next" button on the sign. */
   next?: boolean;
   /** The reach check: the sign shows its countdown while the arm is out. */
@@ -246,7 +258,7 @@ export interface TutorialStep extends DirectorStep<TutorialApi> {
 }
 
 /** Pauses after a lesson is done, by what the player is doing then (seconds). */
-const PAUSE_AFTER = {
+export const PAUSE_AFTER = {
   /** Watch what they just set off (a blast, a charge, a fall). */
   watch: 2.5,
   /** Finish a move still going (a ring drag) or see the result land. */
@@ -286,8 +298,8 @@ export interface TutorialApi {
   keepLessonGoblin(dt: number): void;
   /** Every frame of a tool lesson: the lesson's goblins are topped up shortly after any are gone (`armored` as in baitForTool). */
   keepBait(dt: number, armored: boolean): void;
-  /** Every frame of the shoot lesson: the moving target is topped up shortly after it is gone. */
-  keepMovingBait(dt: number): void;
+  /** Every frame of the shoot lesson: the moving target is topped up shortly after it is gone (`armored` as in baitMoving). */
+  keepMovingBait(dt: number, armored?: boolean): void;
   /** Where the horn lesson is: not held, aiming (no road spot yet), a spot (raise it), raised in front of the face with a spot. */
   hornState(): 'idle' | 'aim' | 'lift' | 'blow';
   /** The horn lesson's last beat: a few goblins walk down the road into the squad just called. False without a squad. */
@@ -346,8 +358,11 @@ export interface TutorialApi {
   sendPastTrigger(): void;
   /** The trigger lesson is over: the goblins still waiting walk on. */
   endTriggerLesson(): void;
-  /** The shoot lesson: a few goblins walk back and forth on the road in front, a moving target (topped up when called again). */
-  baitMoving(): void;
+  /**
+   * The shoot lesson: a few goblins walk back and forth on the road in front, a moving target (topped up when
+   * called again). `armored`: with helmets, shields and weapons (the magnet lesson).
+   */
+  baitMoving(armored?: boolean): void;
   /**
    * A tool's use lesson: a few goblins wait still on the wall in front,
    * harmless, until it is used (topped up when called again). `armored`:
@@ -366,9 +381,22 @@ export interface TutorialApi {
   endBalloonLesson(): void;
   /** Balloons popped so far. */
   balloonsPopped(): number;
+  /** A tool was taught (its lessons done or skipped): the game saves it, so it is never taught again. */
+  toolLearned(tool: ToolName): void;
+  /** The glass lesson: a seed bed in front of the player (an empty one, made at the map's load). */
+  showLessonBed(): void;
+  /** Plants grown so far (the glass on a seed bed). */
+  plantsGrown(): number;
+  /** Goblins lured by a sugar cube so far. */
+  goblinsLured(): number;
+  /**
+   * The first-use tool lessons are over: their goblins go with a poof, the lesson bed goes, the tools are
+   * ready. Before wave 1 also everything the lessons counted (the score, eaten, time), so the battle starts clean.
+   */
+  endToolLessons(): void;
 }
 
-const lesson = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Partial<Hint> = {}): Hint => ({
+export const lesson = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Partial<Hint> = {}): Hint => ({
   kind: 'lesson',
   header: '',
   text,
@@ -387,7 +415,7 @@ const banner = (text: string, icon: HintIcon, marker?: MarkerTarget, extra: Part
 });
 
 /** A lesson: waits for the player to do one thing. Counts are read when it starts. */
-function lessonStep(
+export function lessonStep(
   id: string,
   hint: Hint,
   done: (api: TutorialApi, since: number) => boolean,
@@ -576,11 +604,12 @@ const keepGoblin = (api: TutorialApi, dt: number): void => api.keepLessonGoblin(
  */
 const fromToolShown = (): number => 0;
 
-function slingshotLessons(): TutorialStep[] {
+/** `intro` starts the grab lesson's text (the tutorial: the wave just cleared; a first-use lesson: a new tool). */
+export function slingshotLessons(intro = 'Wave cleared!'): TutorialStep[] {
   return [
     lessonStep(
       'learn-sling-grab',
-      lesson('Wave cleared! A slingshot. Grab it with your left hand.', 'grab', 'slingHandle', {
+      lesson(`${intro} A slingshot. Grab it with your left hand.`, 'grab', 'slingHandle', {
         demo: 'slingGrab',
       }),
       (api, since) => api.slingCount('grabbed') > since,
@@ -612,7 +641,7 @@ function slingshotLessons(): TutorialStep[] {
  * and the shot bends to it. If stuck, a pebble goes into the pouch and
  * missing goblins are replaced.
  */
-function shootLesson(): TutorialStep {
+export function shootLesson(): TutorialStep {
   const help = (api: TutorialApi): void => {
     api.helpWithTool('slingshot');
     api.baitMoving();
@@ -685,25 +714,33 @@ function triggerLessons(): TutorialStep[] {
   );
 }
 
-type FoodTool = Exclude<ToolName, 'slingshot'>;
+export type FoodTool = Exclude<ToolName, 'slingshot'>;
 
 /** The line every resting tool shows (v3: tools recharge on time only; eating fills only the horn). */
-const RESTING = 'It is ready again when its ring is full.';
+export const RESTING = 'It is ready again when its ring is full.';
 
 /** Each hand tool: where its handle is, the ghost hand demo for grabbing it, and its use lesson. */
 interface FoodToolLesson {
-  /** The hand it is grabbed with: across from the side its platform is on (AGENTS.md, "Opposite hand"). */
-  hand: 'left' | 'right';
+  /**
+   * The hand it is grabbed with on its home spot: across from the side its platform is on (AGENTS.md,
+   * "Opposite hand"). Its demos are made for this hand; a loadout tool on the other side gets them mirrored.
+   */
+  hand: Hand;
   marker?: MarkerTarget;
   grabDemo?: GhostDemoName;
   useDemo?: GhostDemoName;
+  /** Where the use lesson's marker points. Unset: the waiting goblins, or the tool itself for a demo in the hand (horn, drum). */
+  useMarker?: MarkerTarget;
   use: string;
   locked: string;
   /** The horn when it does not listen to the mic (no mic, or the quiet horn setting): its use text. */
   noMic?: { use: string };
-  /** The use lesson brings goblins to wait on the wall in front (not for the horn: it sends knights down a road). */
-  bait?: boolean;
-  /** The pepper lesson's goblins wear helmets and shields and carry weapons, so the disarm shows. */
+  /**
+   * The use lesson brings goblins: 'wall' a few wait still on the wall in front, 'road' one walks back and
+   * forth on the road in front (the magnet: middle range). None for the horn: it sends knights down a road.
+   */
+  bait?: 'wall' | 'road';
+  /** The lesson's goblins wear helmets and shields and carry weapons (the magnet, so the pull shows). */
   armored?: boolean;
   /** One line on what the tool is for, in its grab lesson. */
   about?: string;
@@ -721,7 +758,7 @@ interface FoodToolLesson {
   strict?: boolean;
 }
 
-const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
+export const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
   swatter: {
     hand: 'right',
     marker: 'swatterHandle',
@@ -729,18 +766,54 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     // v3: a 10 s use window, and armor stops it (learned by doing: the clonk).
     use: 'Swat goblins on your wall! Swat fast, and helmets stop it.',
     locked: `The swatter is resting. ${RESTING}`,
-    bait: true,
+    bait: 'wall',
     afterDone: PAUSE_AFTER.finish,
   },
+  // 2026-11-18: no longer in the tutorial; its first-use lesson shakes it over goblins, then eats a sneezing one.
   pepper: {
     hand: 'right',
     marker: 'pepperHandle',
     grabDemo: 'pepperGrab',
-    use: 'Shake pepper on them. They sneeze and stop hitting! Then eat a sneezing one.',
+    useDemo: 'pepperShake',
+    useMarker: 'baitGoblin',
+    about: ' Goblins it falls on sneeze and stop hitting.',
+    use: 'Shake the pepper over the goblins on your wall.',
     locked: `The pepper is resting. ${RESTING}`,
-    bait: true,
-    armored: true,
+    bait: 'wall',
+    doneText: 'Achoo! They sneeze and stop hitting.',
     afterDone: PAUSE_AFTER.finish,
+  },
+  // 2026-11-18: the magnet replaced the pepper in the tutorial (wave 4). One goblin in armor walks on the road in front.
+  magnet: {
+    hand: 'right',
+    marker: 'magnetHandle',
+    grabDemo: 'magnetGrab',
+    useDemo: 'magnetPoint',
+    useMarker: 'baitGoblin',
+    about: ' It pulls armor off goblins.',
+    use: 'Point the magnet at the goblin on the road. Hold it there.',
+    locked: `The magnet is resting. ${RESTING}`,
+    bait: 'road',
+    armored: true,
+    doneText: 'Clank! Its armor is gone.',
+    afterDone: PAUSE_AFTER.finish,
+  },
+  // The glass and sugar have their own use lessons (src/director/toolLessons.ts); these are their grab lessons.
+  glass: {
+    hand: 'right',
+    marker: 'glassHandle',
+    grabDemo: 'glassGrab',
+    about: ' It grows plants and burns goblins.',
+    use: 'Raise the glass in front of your eyes.',
+    locked: `The glass is resting. ${RESTING}`,
+  },
+  sugar: {
+    hand: 'right',
+    marker: 'sugarBowl',
+    grabDemo: 'sugarPinch',
+    about: ' Goblins stop to eat them.',
+    use: 'Drop a cube on your wall, next to the goblins.',
+    locked: `The sugar is resting. ${RESTING}`,
   },
   horn: {
     hand: 'left',
@@ -771,7 +844,7 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
     useDemo: 'drumStrike',
     use: 'Beat the drum! Goblins get dizzy and fall off your wall.',
     locked: `The drum is resting. ${RESTING}`,
-    bait: true,
+    bait: 'wall',
     // Watch the goblins tumble off the wall.
     afterDone: PAUSE_AFTER.watch,
   },
@@ -784,20 +857,34 @@ const FOOD_TOOL_LESSONS: Record<FoodTool, FoodToolLesson> = {
  * horn fills only by eating).
  */
 function toolGrabLesson(tool: FoodTool, first: boolean, beforeFirstWave: boolean, midWave = false): TutorialStep {
-  const { marker, grabDemo, about } = FOOD_TOOL_LESSONS[tool];
-  const { hand } = FOOD_TOOL_LESSONS[tool];
   const how = first ? ' After a use it rests a while.' : '';
   const intro = midWave ? 'Well eaten!' : beforeFirstWave ? 'A tool for you!' : 'Wave cleared!';
-  // The hand across from the tool's side (see AGENTS.md, "Opposite hand"), as the ghost hand shows.
-  const say = (name: string): string => `${intro} Here is ${name}.${about ?? ''}${how} Grab it with your ${hand} hand.`;
+  return grabLesson(tool, `${intro} Here is ${TOOL_NAMES[tool]}.${FOOD_TOOL_LESSONS[tool].about ?? ''}${how}`, FOOD_TOOL_LESSONS[tool].hand, true);
+}
+
+/**
+ * Grab a hand tool (for sugar: pinch a cube off its bowl). `say` comes before "Grab it with your ... hand".
+ * `show`: the tool appears with the lesson (the tutorial); a loadout tool already stands there and glows.
+ * `hand`: the hand across from the tool's side (AGENTS.md, "Opposite hand"); the demo is mirrored when it
+ * is not the hand the demo was made for.
+ */
+export function grabLesson(tool: FoodTool, say: string, hand: Hand, show: boolean, more: Pick<TutorialStep, 'start' | 'tick'> = {}): TutorialStep {
+  const { marker, grabDemo } = FOOD_TOOL_LESSONS[tool];
+  const mirror = hand !== FOOD_TOOL_LESSONS[tool].hand;
+  const how = tool === 'sugar' ? `Pinch a cube with your ${hand} hand.` : `Grab it with your ${hand} hand.`;
   return lessonStep(
     `learn-${tool}-grab`,
-    lesson(say(TOOL_NAMES[tool]), 'grab', marker, { demo: grabDemo }),
+    lesson(`${say} ${how}`, tool === 'sugar' ? 'pinch' : 'grab', marker, { demo: grabDemo, mirror }),
     (api, since) => api.toolGrabbed(tool) > since,
-    // Counts from when the tool appeared, like the slingshot lessons.
-    fromToolShown,
+    // Counts from when the tool appeared, like the slingshot lessons; a loadout tool from the lesson's start.
+    show ? fromToolShown : (api) => api.toolGrabbed(tool),
     {
-      start: (api) => api.showTool(tool),
+      start: (api) => {
+        if (show) api.showTool(tool);
+        else api.hintTool(tool);
+        more.start?.(api);
+      },
+      tick: more.tick,
       fallbacks: [(api) => api.hintTool(tool)],
       // It is in the hand: how to use it comes right away.
       afterDone: 0,
@@ -813,45 +900,62 @@ function toolGrabLesson(tool: FoodTool, first: boolean, beforeFirstWave: boolean
  * brings a goblin in reach. It waits until the tool is used (Skip tutorial
  * is the way out).
  */
-function toolLesson(tool: FoodTool): TutorialStep {
+export function toolLesson(tool: FoodTool, hand: Hand = FOOD_TOOL_LESSONS[tool].hand, countFromStart = false): TutorialStep {
   const text = FOOD_TOOL_LESSONS[tool];
-  // The pepper lesson is about what pepper is for: it is done once a peppered goblin is eaten.
-  const pepper = tool === 'pepper';
+  const armored = text.armored ?? false;
+  // The lesson's goblins: still on the wall in front, or walking on the road in front.
+  const bring = (api: TutorialApi): void => {
+    if (text.bait === 'wall') api.baitForTool(armored);
+    else if (text.bait === 'road') api.baitMoving(armored);
+  };
+  // The horn's lines name the hand to grab it with: the other one when it stands on the other side.
+  const hornSteps = text.hornSteps && hand !== text.hand ? { ...text.hornSteps, idle: text.hornSteps.idle.replace(text.hand, hand) } : text.hornSteps;
   return lessonStep(
     `learn-${tool}`,
-    // The marker points at the waiting goblins, or for the horn and bell at the tool itself (their demo is in the hand).
-    lesson(text.use, 'target', text.useDemo ? text.marker : 'baitGoblin', {
+    // The marker points at the waiting goblins, or for the horn and drum at the tool itself (their demo is in the hand).
+    lesson(text.use, 'target', text.useMarker ?? (text.useDemo ? text.marker : 'baitGoblin'), {
       tool,
       whenLocked: text.locked,
       demo: text.useDemo,
+      mirror: hand !== text.hand,
       whenNoMic: text.noMic?.use,
       doneText: text.doneText,
-      hornSteps: text.hornSteps,
+      hornSteps,
       // The horn is aimed by gaze: its text follows the look (the glass sign), so it is never missed.
       glass: !!text.hornSteps,
     }),
     // Only doing it ends the lesson (no wave clear: its goblins are always topped up, see tick).
-    pepper ? (api, since) => api.pepperedEaten() > since : (api, since) => api.toolUses(tool) > since,
-    // The horn counts only a blow made during this lesson.
-    pepper ? (api) => api.pepperedEaten() : text.strict ? (api) => api.toolUses(tool) : fromToolShown,
+    (api, since) => api.toolUses(tool) > since,
+    // The horn counts only a blow made during this lesson; so does every first-use lesson (`countFromStart`).
+    text.strict || countFromStart ? (api) => api.toolUses(tool) : fromToolShown,
     {
       start: (api) => {
         api.holdToolTimer(tool, true);
-        // A few goblins come just for this lesson and wait on the wall in front, harmless, until the tool is used.
-        if (text.bait) api.baitForTool(text.armored ?? false);
+        // A few goblins come just for this lesson and wait for the player, harmless, until the tool is used.
+        bring(api);
       },
       end: (api) => {
         api.holdToolTimer(tool, false);
         api.releaseBait();
       },
-      fallbacks: [(api) => api.hintTool(tool), (api) => (text.bait ? api.baitForTool(text.armored ?? false) : api.hintTool(tool))],
+      fallbacks: [(api) => api.hintTool(tool), (api) => (text.bait ? bring(api) : api.hintTool(tool))],
       // Goblins eaten or knocked out another way come back soon, so there is always one to use the tool on.
-      tick: text.bait ? (api, dt) => api.keepBait(dt, text.armored ?? false) : undefined,
+      tick:
+        text.bait === 'wall'
+          ? (api, dt) => api.keepBait(dt, armored)
+          : text.bait === 'road'
+            ? (api, dt) => api.keepMovingBait(dt, armored)
+            : undefined,
       // The wave waits while the player learns: only the lesson's goblins are out.
       holdSpawns: true,
       afterDone: text.afterDone,
     },
   );
+}
+
+/** A tool's lessons are done: the game saves it as learned (no sign, no time). */
+export function learnedStep(tool: ToolName): TutorialStep {
+  return { id: `learned-${tool}`, start: (api) => api.toolLearned(tool), done: () => true, timeout: 0 };
 }
 
 /**
@@ -861,7 +965,7 @@ function toolLesson(tool: FoodTool): TutorialStep {
  * the player deals with it). The wave waits meanwhile. On the glass sign, so
  * the player keeps watching the fight.
  */
-function squadFightStep(): TutorialStep {
+export function squadFightStep(): TutorialStep {
   // First the player watches the knights reach their spot; only then do the goblins appear near it and walk in.
   let sent = false;
   let waited = 0;
@@ -947,12 +1051,15 @@ export function firstBalloonWave(waves: WavePlan[] = TUTORIAL_WAVES): number {
   return waves.findIndex((w) => (w.balloons ?? 0) > 0);
 }
 
-const TOOL_NAMES: Record<ToolName, string> = {
+export const TOOL_NAMES: Record<ToolName, string> = {
   slingshot: 'the slingshot',
   swatter: 'the fly swatter',
   pepper: 'the pepper shaker',
   horn: 'your war horn',
   drum: 'the drum',
+  magnet: 'the magnet',
+  glass: 'the magnifying glass',
+  sugar: 'sugar cubes',
 };
 
 /**
@@ -1036,7 +1143,10 @@ export function buildTutorialSteps(
       steps.push(toolLesson(wave.newTool));
       // The first time the knights are out: goblins come at them, and the player watches them win.
       if (wave.newTool === 'horn') steps.push(squadFightStep());
-    } else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolLesson(wave.newTool));
+      steps.push(learnedStep(wave.newTool));
+    } else if (has(wave.newTool) && wave.newTool !== 'slingshot') steps.push(toolLesson(wave.newTool), learnedStep(wave.newTool));
+    // The slingshot is learned once its balloon lesson is done (2026-11-18: saved, so it gets no first-use lesson).
+    if (wave.newTool === 'slingshot' && has('slingshot')) steps.push(learnedStep('slingshot'));
     // The first wave a camp rises in (the tutorial's wave 2): once its lessons are done, what the new camp is and
     // where it shows on the compass. Not earlier: the slingshot is taught by actions only, with no Next button
     // before the first shot. No new goblins while it shows.

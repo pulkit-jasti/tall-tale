@@ -57,7 +57,10 @@ const SOUND_ICONS: Record<SoundCategory, UiImageName> = {
 };
 const ROW_ICON_TINT = '#8a5a34';
 
-export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart' | 'skipTutorial' | 'quitToMenu';
+export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart' | 'skipTutorial' | 'skipLessons' | 'quitToMenu' | 'resetLessons';
+
+/** Which battle the pause panel is for: the tutorial (Skip tutorial), a battle (Menu), or a battle in its first-use tool lessons (Skip lessons and Menu). */
+export type PauseMode = 'teaching' | 'battle' | 'lessons';
 
 /**
  * The main page's buttons, and when each shows. Settings opens the settings
@@ -66,14 +69,19 @@ export type PauseAction = 'resume' | 'resetTable' | 'measureReach' | 'restart' |
  * the home screen, v2 run 2) in every other battle. The panel sizes itself
  * to the buttons that show (Panel.resize, rowPanelWidth).
  */
-const BUTTONS: { action: PauseAction | 'settings'; icon: ButtonIcon; label: string; when: 'always' | 'teaching' | 'battle' }[] = [
+const BUTTONS: { action: PauseAction | 'settings'; icon: ButtonIcon; label: string; when: 'always' | PauseMode }[] = [
   { action: 'resume', icon: 'play', label: 'Resume', when: 'always' },
   // Reset table lives in the settings now (Access tab), with Measure reach.
   { action: 'settings', icon: 'settings', label: 'Settings', when: 'always' },
   { action: 'restart', icon: 'restart', label: 'Restart', when: 'always' },
   { action: 'skipTutorial', icon: 'skip', label: 'Skip tutorial', when: 'teaching' },
+  // 2026-11-18: the first-use tool lessons before a battle can be skipped (each tool counts as taught).
+  { action: 'skipLessons', icon: 'skip', label: 'Skip lessons', when: 'lessons' },
   { action: 'quitToMenu', icon: 'home', label: 'Menu', when: 'battle' },
 ];
+
+/** The buttons a mode shows: Menu shows in every battle that is not the tutorial. */
+const showsIn = (when: 'always' | PauseMode, mode: PauseMode): boolean => when === 'always' || when === mode || (when === 'battle' && mode === 'lessons');
 
 /** The settings' categories, as tabs along the top of the page. */
 type SettingsTab = 'sound' | 'access';
@@ -108,8 +116,8 @@ export class PauseMenu {
   private pauseButton: StandButton;
   private buttonTopPx = 0;
   private open = false;
-  /** The tutorial runs (Skip tutorial shows) or not (Menu shows); null before the first show. */
-  private teaching: boolean | null = null;
+  /** The battle the buttons are laid out for (PauseMode); null before the first show. */
+  private mode: PauseMode | null = null;
   /** The buttons that show now (indexes into BUTTONS), left to right. */
   private shown: number[] = [];
   /** The settings page: measure reach again, and the sound groups' volumes. */
@@ -121,6 +129,8 @@ export class PauseMenu {
   private reach: PokeButton;
   /** Reset table, in the Access tab under Quiet horn. */
   private table: PokeButton;
+  /** Reset tool lessons (2026-11-18), the Access tab's last row: every tool's first-use lesson runs again. */
+  private lessons: PokeButton;
   private rows: SoundRow[] = [];
   /** The settings' categories: the floating tabs, and a group with each one's controls (only the chosen one shows). */
   private tab: SettingsTab = 'access';
@@ -147,9 +157,9 @@ export class PauseMenu {
     this.follow = new LazyFollow(this.holder, { ...PAUSE.follow, recenter: 0.12 });
     // Right in front of the eyes, never too high or too low (UI_ZONE).
     this.panel = new Panel(this.holder, { width, height, radius, centerY: uiCenterY(height, tiltDeg), tiltDeg, layoutWidth: Math.round(width * 15), canvasScale: 2 });
-    // Both widths it takes (the tutorial's buttons and a battle's) made now, so the first pause makes nothing new.
-    for (const teaching of [true, false]) {
-      const count = BUTTONS.filter((b) => b.when === 'always' || (b.when === 'teaching') === teaching).length;
+    // Every width it takes (the tutorial's buttons, a battle's, a battle's lessons') made now, so the first pause makes nothing new.
+    for (const mode of ['teaching', 'battle', 'lessons'] as PauseMode[]) {
+      const count = BUTTONS.filter((b) => showsIn(b.when, mode)).length;
       this.panel.prepareSize(rowPanelWidth(count, PAUSE.panel.buttonGap, buttonRadius * POKE.rimScale, buttonMargin, PAUSE.panel.minWidth), height);
     }
     const rim = buttonRadius * POKE.rimScale;
@@ -161,7 +171,7 @@ export class PauseMenu {
       this.buttons.push(button);
     }
     this.buttonTopPx = panelMap(width, height, this.panel.layoutWidth, this.panel.layoutHeight).y(buttonY + rim);
-    this.layoutButtons(false);
+    this.layoutButtons('battle');
     // The settings page, on its own panel at the same spot (a little bigger).
     const S = PAUSE.settings;
     this.settings = new Panel(this.holder, {
@@ -216,8 +226,11 @@ export class PauseMenu {
       access.setSnapTurn(on);
       this.repaintSettings();
     };
+    // Reset tool lessons (2026-11-18): one button for every tool, the game forgets which tools were taught.
+    this.lessons = new PokeButton(audio, { radius: S.reachRadius, icon: 'restart' });
+    add(this.lessons.group, controlLeft + S.reachRadius * POKE.rimScale, S.firstRowY - 5 * S.accessRowGap, this.tabGroups.access);
     SOUND_CATEGORIES.forEach((c, i) => {
-      const y = S.firstRowY - i * S.rowGap;
+      const y = S.soundFirstRowY - i * S.rowGap;
       // Just a slider per group: all the way down is off.
       const slider = new Slider(audio, { length: S.sliderLength, steps: SOUND_SETTINGS.steps, value: audio.settings.volume(c.id) });
       add(slider.group, S.sliderX, y, this.tabGroups.sound);
@@ -270,13 +283,13 @@ export class PauseMenu {
    * Opens the panel in front of the head, at the same spot from the eyes as
    * the end panel (sized with the board, so it matches the player's reach).
    */
-  /** `teaching`: the tutorial runs, so Skip tutorial is on the panel (else Menu is). */
-  show(head: Vector3, forward: Vector3, boardScale: number, teaching = false): void {
+  /** `mode`: the tutorial runs (Skip tutorial), a battle (Menu), or a battle's tool lessons (Skip lessons and Menu). */
+  show(head: Vector3, forward: Vector3, boardScale: number, mode: PauseMode = 'battle'): void {
     this.open = true;
     this.settingsOnly = false;
     this.fixed = false;
     this.pauseButton.show(false);
-    this.layoutButtons(teaching);
+    this.layoutButtons(mode);
     this.follow.snap(head, forward, BOARD.eyeToBoard * boardScale, CM * boardScale);
     this.showPage('main');
   }
@@ -285,11 +298,11 @@ export class PauseMenu {
    * Only the buttons for this battle show, spread evenly, and the panel takes
    * the width they need (never a gap where a hidden one was).
    */
-  private layoutButtons(teaching: boolean): void {
-    if (teaching === this.teaching) return;
-    this.teaching = teaching;
+  private layoutButtons(mode: PauseMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
     const P = PAUSE.panel;
-    this.shown = BUTTONS.flatMap((b, i) => (b.when === 'always' || (b.when === 'teaching') === teaching ? [i] : []));
+    this.shown = BUTTONS.flatMap((b, i) => (showsIn(b.when, mode) ? [i] : []));
     this.buttons.forEach((button, i) => (button.group.visible = this.shown.includes(i)));
     this.shown.forEach((i, k) => (this.buttons[i].group.position.x = rowX(k, this.shown.length, P.buttonGap)));
     this.panel.resize(rowPanelWidth(this.shown.length, P.buttonGap, P.buttonRadius * POKE.rimScale, P.buttonMargin, P.minWidth), P.height);
@@ -356,7 +369,7 @@ export class PauseMenu {
 
   /** The controls of the tab that shows. */
   private tabControls(): Control[] {
-    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table, this.unlockSwitch, this.snapSwitch];
+    return this.tab === 'sound' ? this.rows.map((r) => r.slider) : [this.reach, this.bellSwitch, this.table, this.unlockSwitch, this.snapSwitch, this.lessons];
   }
 
   private repaintSettings(): void {
@@ -427,6 +440,7 @@ export class PauseMenu {
     }
     if (this.reach.update(hands, dt)) return 'measureReach';
     if (this.table.update(hands, dt)) return 'resetTable';
+    if (this.lessons.update(hands, dt)) return 'resetLessons';
     this.bellSwitch.update(hands, dt);
     this.unlockSwitch.update(hands, dt);
     this.snapSwitch.update(hands, dt);
@@ -462,6 +476,7 @@ export class PauseMenu {
     name('rotate', 'Table', S.firstRowY - 2 * S.accessRowGap, 'Put it back in place', UI_COLORS.note);
     name('unlocked', 'Unlock all tools', S.firstRowY - 3 * S.accessRowGap, 'Tools only, not levels', UI_COLORS.note);
     name('next', 'Snap turning', S.firstRowY - 4 * S.accessRowGap, `Turn in ${BOARD_TURN.snapDeg} degree steps`, UI_COLORS.note);
+    name('returnArrow', 'Tool lessons', S.firstRowY - 5 * S.accessRowGap, 'Teach every tool again', UI_COLORS.note);
   }
 
   private draw(c: CanvasRenderingContext2D, w: number): void {

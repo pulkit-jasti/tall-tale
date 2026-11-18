@@ -33,6 +33,7 @@ import type { Particles } from '../fx/particles.js';
 import type { Random } from '../rules/random.js';
 import { applyAimGlow, applyTouchState, type TouchState } from '../player/feedback.js';
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
+import { poolGroup } from '../world/skipHidden.js';
 import type { Step } from '../rules/roadGraph.js';
 import type { Road, RoadNetwork } from '../world/roads.js';
 import type { PickTool } from '../rules/campaign.js';
@@ -101,7 +102,8 @@ const HELMET_SPARKS = [0xffffff, 0xd8dbe6, 0xffd84a];
 const KO_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 
 export class Goblin {
-  readonly root = new Group();
+  /** Skips its matrix updates while hidden (a pooled goblin, src/world/skipHidden.ts). */
+  readonly root = poolGroup();
   readonly body = new Group();
   readonly materials: MeshStandardMaterial[] = [];
   readonly mixer: AnimationMixer;
@@ -1171,7 +1173,7 @@ export class Goblins {
    * arrow, armor twice), so a goblin under attack strobed. Now it fades, and a new one waits hitFlashGap.
    */
   flash(goblin: Goblin): void {
-    if (goblin.flashTime > 0 || goblin.flashCool > 0) return;
+    if (JUICE.effectsOff || goblin.flashTime > 0 || goblin.flashCool > 0) return;
     goblin.flashTime = JUICE.hitFlashTime;
     goblin.flashCool = JUICE.hitFlashGap;
     for (const m of goblin.materials) {
@@ -1452,7 +1454,7 @@ export class Goblins {
         g.mixer.update(g.animDt);
         g.animDt = 0;
       }
-      if (g.stunned > 0 && (g.mode as GoblinMode) !== 'dead' && star < STAR_SLOTS) this.placeStars(g, star++, i);
+      if (!JUICE.effectsOff && g.stunned > 0 && (g.mode as GoblinMode) !== 'dead' && star < STAR_SLOTS) this.placeStars(g, star++, i);
     }
     for (let i = star; i < STAR_SLOTS; i++) {
       this.stars.setMatrixAt(i * 2, hiddenMatrix);

@@ -450,14 +450,16 @@ export function warHorn(): { group: Group; materials: MeshStandardMaterial[]; mo
  */
 export function drum(): { group: Group; skin: Mesh } {
   const { radius: r, height: h, sides, rimHeight: rim } = DRUM;
-  const body = new Mesh(new CylinderGeometry(r, r, h, sides), flatMaterial(DRUM.bodyColor));
+  // Open ended: no lids of its own, so nothing sits in the same plane as the gold bands' lids (they fought and flickered).
+  const body = new Mesh(new CylinderGeometry(r, r, h, sides, 1, true), flatMaterial(DRUM.bodyColor));
   body.position.y = h / 2;
   const gold = flatMaterial(DRUM.rimColor);
   const bottom = new Mesh(new CylinderGeometry(r * 1.06, r * 1.06, rim, sides), gold);
   bottom.position.y = rim / 2;
   const top = new Mesh(new CylinderGeometry(r * 1.06, r * 1.06, rim, sides), gold);
   top.position.y = h - rim / 2;
-  const skin = new Mesh(new CylinderGeometry(r * 0.96, r * 0.96, 0.2, sides), flatMaterial(DRUM.skinColor));
+  // Covers the whole top and stands 5 mm proud, its lower part hidden in the top band, so a strike's dip never sinks it below the band.
+  const skin = new Mesh(new CylinderGeometry(r * 0.99, r * 0.99, 0.9, sides), flatMaterial(DRUM.skinColor));
   skin.position.y = h + 0.05;
   const group = new Group();
   group.add(body, bottom, top, skin);

@@ -1,6 +1,6 @@
 # Level Generator, Custom Game and the Campaign Levels (next)
 
-> **Mostly current (2026-11-16).** Stale bits: the bell is now the drum (still the level 3 reward), and every map also gets seed beds (v3 2.2, `src/world/garden.ts`) and the new traps (v3 2.1: haystacks, a bell tower, a rope bridge, potion cart spots; `addExtraTraps` in `src/world/triggers.ts`) when it is built. They are not Custom Game settings yet. Where they disagree, [v3-plan.md](v3-plan.md) wins.
+> **Mostly current (2026-11-16).** Stale bits: the bell is now the drum, levels give no tool rewards (2026-11-18: each card shows a suggested tool instead, section 10), and every map also gets seed beds (v3 2.2, `src/world/garden.ts`) and the new traps (v3 2.1: haystacks, a bell tower, a rope bridge, potion cart spots; `addExtraTraps` in `src/world/triggers.ts`) when it is built. They are not Custom Game settings yet. Where they disagree, [v3-plan.md](v3-plan.md) wins.
 
 Status: decided with the developer (2026-11-11). **First part done and tested on the headset (2026-11-11):** the generator, its command line, the new UI kit parts and the Custom Game menu (section 12). **Next: the wave director and the map loading** (build order steps 4 and 5, section 11; the handoff for them is section 13). Where it disagrees with [map.md](map.md) section 8 or [modes-and-progression.md](modes-and-progression.md), this file wins. [v2-plan.md](v2-plan.md) still wins over this file.
 
@@ -31,7 +31,7 @@ A level file holds both kinds of settings, plus the result:
 
 - **Campaign levels are frozen files**: each made once from a fixed seed and its settings, checked on the headset, saved in the repo. Tuning the generator later never changes a finished level (the file is the level, not the seed).
 - **Custom Game levels** are made from the player's settings when they are saved, and kept in localStorage with their name, seed and settings (section 8).
-- The menu's level entries (`src/config/levels.ts`: name, flavor, skulls, reward) point at their level file.
+- The menu's level entries (`src/config/levels.ts`: name, flavor, skulls, suggested tool) point at their level file.
 
 ---
 
@@ -207,15 +207,15 @@ All of them follow the kit's rules: Idle, Ready, Held and Locked looks with a so
 
 Redone with the developer (2026-11-16, replaces the 2026-11-11 list). **Only levels 1 to 5 are built and playable;** 6 to 15 are locked teasers with a name and a card description only (not built, so they may promise things that do not exist yet). Every level uses rising camps. Every battle already moves through the day with its waves (morning, day, sunset, night; docs/mvp.md "Day and night cycle"), so each level ends with one night wave.
 
-**Playable (1 to 5):** each of 3 to 5 shows off one new system, the most visual ones early (judges play only 10 to 15 minutes). Beating a level unlocks the tool the next one teaches.
+**Playable (1 to 5):** each of 3 to 5 shows off one new system, the most visual ones early (judges play only 10 to 15 minutes). Winning gives no tool (2026-11-18, tool rewards removed): every tool opens with "Unlock all tools" (on by default), and each card shows a suggested tool, the one that answers its twist.
 
-| # | Name | Card description | Twist | Unlocks |
+| # | Name | Card description | Twist | Suggested tool |
 |---|---|---|---|---|
-| 1 | First Watch | "A quiet morning. One camp stirs, then another behind you." | None: the walls, eating, rising camps, and turning to face the second camp (it rises behind the player) | |
-| 2 | Sky Pirates | "A fleet of balloons is drifting in. Bring them down." | Lots of balloon riders: a slingshot level | Magnet |
-| 3 | Tin Hats | "Someone sold the goblins helmets. Take them back." | Most goblins wear helmets: introduces the magnet | Magnifying glass |
-| 4 | Sun Garden | "A bright day and good soil. Make it bloom." | Many seed beds on a sunny map: introduces the magnifying glass, the sunflower and the mushroom | (open) |
-| 5 | Nightfall | "The sun is setting. They fight better in the dark." | Wave 1 at sunset, waves 2 to 4 at night with night fog, torches and the compass (night fog is built: v3-plan.md 2.7, the `foggyNight` setting; it shows in every night wave, but today only the last wave is at night, so this level still needs its own times of day) | (open) |
+| 1 | First Watch | "A quiet morning. One camp stirs, then another behind you." | None: the walls, eating, rising camps, and turning to face the second camp (it rises behind the player) | Fly swatter |
+| 2 | Sky Pirates | "A fleet of balloons is drifting in. Bring them down." | Lots of balloon riders: a slingshot level | Slingshot |
+| 3 | Tin Hats | "Someone sold the goblins helmets. Take them back." | Most goblins wear helmets: introduces the magnet | Magnet |
+| 4 | Sun Garden | "A bright day and good soil. Make it bloom." | Many seed beds on a sunny map: introduces the magnifying glass, the sunflower and the mushroom | Magnifying glass |
+| 5 | Nightfall | "The sun is setting. They fight better in the dark." | Wave 1 at sunset, waves 2 to 4 at night with night fog, torches and the compass (night fog is built: v3-plan.md 2.7, the `foggyNight` setting; it shows in every night wave, but today only the last wave is at night, so this level still needs its own times of day) | Drum |
 
 **Locked teasers (6 to 15):** each hints at one new enemy or system; 15 brings it all together.
 
@@ -234,7 +234,7 @@ Redone with the developer (2026-11-16, replaces the 2026-11-11 list). **Only lev
 
 - **Levels 1 to 5 are open from the start**; 6 to 15 show as locked.
 - **Built (2026-11-16):** levels 1 to 5 are level files made by `npm run gen -- --campaign` from `src/level/presets.ts`, played from their own maps; the cards in `src/config/levels.ts` match the tables above. Not tuned on the headset yet.
-- **Open:** what levels 4 and 5 unlock (start values: 4 the drum, 5 sugar cubes, so every tool can be earned).
+- **Suggested tools** (2026-11-18): `suggested` in `src/config/levels.ts`; the locked teasers have one too (6 pepper, 7 and 8 slingshot, 9 horn, 10 glass, 11 drum, 12 sugar, 13 drum, 14 sugar, 15 horn).
 - The card text in `src/config/levels.ts` (name, flavor, enemies) is updated to match these tables when the levels are built.
 
 ---
@@ -318,7 +318,7 @@ Build order steps 4 and 5 (section 11), then make Custom Game's Fight play a sav
 
 ## 14. Open
 
-- Which levels unlock which future tools (only the bell at level 3 is decided).
+- ~~Which levels unlock which future tools~~ Decided 2026-11-18: none, levels give no tool rewards (section 10).
 - ~~Saving Custom Game levels: how many, and how they are named~~ Decided 2026-11-11: up to 20, named with the system keyboard (section 8).
 - Whether the settings page's tabs switch to the new floating rectangular tabs too.
 - What Share does (a placeholder for now; the direction is in section 12, third headset look: a link with the level packed in, a QR code, Web Launch).
