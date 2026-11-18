@@ -41,7 +41,7 @@ Many docs are records of older plans. Read only what the task needs, from the "C
 - docs/audio.md (early sound plan; the sound mapping is `public/audio/README.md`)
 - docs/GDD.md (an old index; this list replaces it)
 - docs/mvp.md, everything except its "Tutorial director" section (the MVP build order and scope)
-- The "Status" list and the "History" section of README.md, and the mockup `maps/castle-3d.html`
+- The "Status" list and the "History" section of PROJECT.md (the old README, moved 2026-11-18; README.md is now a short public overview), and the mockup `maps/castle-3d.html`
 
 When a doc moves between the lists (for example a new plan replaces v3), update this section.
 

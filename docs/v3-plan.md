@@ -1153,7 +1153,7 @@ Type check and build pass. Not tested on the headset.
 - [ ] **Test the digger:** it never showed up in a playtest. Spawn it from the debug page and check it tunnels, surfaces in the courtyard and shows red on the compass.
 - [ ] **Finish every sound:** no sound may stay on `chime.mp3` (the full list is in "To do later" above). Every sound gets a real file, listed in `public/audio/README.md`.
 - [ ] **Check every Freesound license:** open each file's Freesound page (the number in its name), note its license and author in `public/audio/README.md`, add a credit for CC BY files, and replace any non commercial (NC) file. The Devpost writeup says each one is credited in the repo.
-- [ ] **Add the MIT `LICENSE` file** (the developer adds it). The Devpost writeup says the code is MIT.
+- [x] **Add the MIT `LICENSE` file** (added 2026-11-18, with a list of the third party asset licenses). The Devpost writeup says the code is MIT.
 - [ ] **Explore more quick accessibility wins:** small features that are easy to build and test fast (for example a bigger text option, a high contrast mode, captions or icons for important sounds, a left handed layout, adjustable eat distance or hold time). List the ideas, build the cheapest useful ones, test each on the headset, and add them to the writeup's Accessibility section.
 
 ## Open
