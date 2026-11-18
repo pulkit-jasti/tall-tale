@@ -21,6 +21,7 @@ import {
   GOBLIN_GEAR,
   BALLOONS,
   LOADOUT_SPOTS,
+  PEPPER_RING,
   TOOL_SPOTS,
   TOOLS,
   TRIGGERS,
@@ -31,7 +32,7 @@ import type { Particles } from '../fx/particles.js';
 import type { HandState } from '../player/hands.js';
 import { ReachCheck } from '../player/reachCheck.js';
 import { clearWave, createBattle, damageCastle, healCastle, healthShare, loseCastle, type BattleState } from '../rules/battle.js';
-import { angleDelta, angleOf, degToRad, polarX, polarZ } from '../rules/boardMath.js';
+import { angleDelta, angleOf, degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import { wallHitDamage } from '../rules/gear.js';
 import { BattleScore, type ScoreParts, type ScoreSource } from '../rules/score.js';
 import { Director } from '../rules/director.js';
@@ -39,6 +40,9 @@ import type { Random } from '../rules/random.js';
 import type { HandToolName, HandTool, ToolSpot } from '../tools/handTool.js';
 import type { SlingEvent, Slingshot } from '../tools/slingshot.js';
 import type { PepperRing } from '../tools/pepperRing.js';
+import type { SugarBowl } from '../tools/sugarBowl.js';
+import type { FlySwatter } from '../tools/flySwatter.js';
+import { buildToolLessons, type LessonContext } from './toolLessons.js';
 import type { Garden } from '../world/garden.js';
 import type { StunWave } from '../tools/stunWave.js';
 import type { Troops } from '../units/troops.js';
@@ -70,6 +74,7 @@ import {
   buildTutorialSteps,
   TUTORIAL_TIMING,
   TUTORIAL_WAVES,
+  type Hand,
   type HintIcon,
   type HornSteps,
   type MarkerTarget,
@@ -81,7 +86,7 @@ import {
 
 const POOF_COLORS = [0xffffff, 0xddd6c8, 0xb8b0a0];
 /** Tools that are built so far. The tutorial leaves out lessons for the others. */
-const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'drum'];
+const BUILT_TOOLS: ToolName[] = ['slingshot', 'swatter', 'pepper', 'horn', 'drum', 'magnet', 'glass', 'sugar'];
 const noTools = (): Record<HandToolName, number> => ({ swatter: 0, pepper: 0, drum: 0, horn: 0, magnet: 0, glass: 0, sugar: 0 });
 /** The hand tools with a home spot of their own (the tutorial's, and a debug battle without a loadout). */
 const TUTORIAL_HAND_TOOLS: HandToolName[] = ['swatter', 'pepper', 'drum', 'horn'];
@@ -92,6 +97,9 @@ const MARKER_TOOL: Partial<Record<MarkerTarget, ToolName>> = {
   pepperHandle: 'pepper',
   hornHandle: 'horn',
   drumHandle: 'drum',
+  magnetHandle: 'magnet',
+  glassHandle: 'glass',
+  sugarBowl: 'sugar',
   slingHandle: 'slingshot',
   bowl: 'slingshot',
   pouch: 'slingshot',
@@ -236,6 +244,16 @@ export class Battle implements TutorialApi {
   private fightTime = 0;
   /** The welcome panel's Skip tutorial (the game: to the menu). */
   onSkip: () => void = () => this.skipTutorial();
+  /**
+   * First-use tool lessons (2026-11-18): the game says which tools still need theirs (never taught), and
+   * saves each one taught (or skipped). A loadout battle teaches its new tools before wave 1.
+   */
+  needsLesson: (tool: ToolName) => boolean = () => false;
+  onToolLearned: (tool: ToolName) => void = () => {};
+  /** True from the first first-use lesson until they are over (their goblins are poofed, not let go). */
+  private toolLessonsOn = false;
+  /** Goblins lured by a sugar cube in this battle. */
+  private luredCount = 0;
   /** The reach check at the start (only until the player's reach is known). */
   private reach = new ReachCheck();
   /** True once the board was sized to this player (saved in the browser). */
@@ -317,6 +335,7 @@ export class Battle implements TutorialApi {
       tool.onGrab = () => this.toolGrabCount[tool.name]++;
     }
     parts.triggers.onSetOffKind = (kind) => this.triggerCount[kind]++;
+    (parts.tools.sugar as SugarBowl).onLured = () => this.luredCount++;
     // A tick on each second of the reach check's countdown.
     this.reach.onTick = () => parts.audio.play('readyTick');
     this.loadBoardScale();
@@ -469,12 +488,21 @@ export class Battle implements TutorialApi {
     this.extraUsed = 0;
     this.extraTools = [];
     const breather = this.endlessBreather;
-    const steps =
+    const waveSteps =
       this.endless && breather
         ? buildEndlessSteps(this.waves, breather, ENDLESS.pickTime, ENDLESS.bannerTime)
         : this.levelRules
           ? buildLevelSteps(this.waves)
           : buildTutorialSteps(BUILT_TOOLS, this.waves, from, !this.reachKnown, teach);
+    // 2026-11-18: a loadout battle first teaches the tools on its stand that were never taught, one after
+    // another, on this map, with nothing else running. Then the board is cleared and wave 1 starts as usual.
+    this.luredCount = 0;
+    this.parts.garden.grown = 0;
+    const lessonTools = picks ? picks.filter((t) => this.needsLesson(t)) : [];
+    const lessons = buildToolLessons(lessonTools, this.lessonContext());
+    this.toolLessonsOn = lessons.length > 0;
+    if (this.toolLessonsOn) console.info(`[lessons] first-use lessons: ${lessonTools.join(', ')}`);
+    const steps = [...lessons, ...waveSteps];
     const director = new Director<TutorialApi>(steps, this);
     director.onStepEnd = (id, how, time, fallbacks) => {
       console.info(`[director] ${id}: ${how} after ${time.toFixed(1)} s, ${fallbacks} fallbacks`);
@@ -562,6 +590,41 @@ export class Battle implements TutorialApi {
     }
     this.extraTools.push(name);
     this.parts.audio.play('lessonDone');
+    // 2026-11-18: a tool never taught gets its first-use lessons now, before the next wave.
+    if (this.director && this.needsLesson(name)) {
+      this.director.insertAfterCurrent(buildToolLessons([name], this.lessonContext()));
+      this.toolLessonsOn = true;
+      console.info(`[lessons] first-use lessons: ${name}`);
+    }
+  }
+
+  /** What the first-use lessons are built for: the hand for each tool, the tools on the stand, the map's traps. */
+  private lessonContext(): LessonContext {
+    return {
+      handFor: (t) => this.handFor(t),
+      onStand: (t) => this.stand.includes(t as HandToolName | 'slingshot'),
+      hasTrap: (kind) => this.hasTrap(kind),
+    };
+  }
+
+  /** The hand a tool is grabbed with: across from the side it stands on (the slingshot is always on the right). */
+  private handFor(tool: ToolName): Hand {
+    if (tool === 'slingshot') return 'left';
+    return this.parts.tools[tool].spotNow.angleDeg > 0 ? 'left' : 'right';
+  }
+
+  /** True while first-use tool lessons run (the pause panel offers Skip lessons then). */
+  get inToolLessons(): boolean {
+    return this.running && this.toolLessonsOn;
+  }
+
+  /** Skip lessons (pause panel): every lesson left is skipped (each tool counts as taught), and the battle goes on. */
+  skipToolLessons(): void {
+    const director = this.director;
+    if (!director || !this.toolLessonsOn) return;
+    // Each skip ends a step (its end runs: bait let go, timers back) or starts the next (a "learned" step saves
+    // its tool); the step that ends the lessons turns toolLessonsOn off as it starts.
+    for (let guard = 0; guard < 200 && this.toolLessonsOn && !director.finished; guard++) director.skip();
   }
 
   /** The tools on the board now: the loadout, plus Endless's new ones. */
@@ -873,8 +936,8 @@ export class Battle implements TutorialApi {
       // No soldiers come out while something is taught: the lesson needs goblins, and the soldiers would knock them out first.
       const step = (this.director?.current ?? null) as TutorialStep | null;
       this.parts.troops.held = step?.hint?.kind === 'lesson';
-      // In the tutorial every horn call sends a full squad, so its fights are won.
-      this.parts.troops.fullSquads = this.teach;
+      // In the tutorial (and the horn's first-use lesson) every horn call sends a full squad, so its fights are won.
+      this.parts.troops.fullSquads = this.teach || this.toolLessonsOn;
       this.quietTools(step);
       // No new goblins while any are inside the castle (v2): the player has to deal with the intruders first.
       // And none at all while a lesson runs: only the lesson's own goblins are out (headset test: other goblins confused).
@@ -919,13 +982,15 @@ export class Battle implements TutorialApi {
     const hint = step?.hint;
     const lesson = hint?.kind === 'lesson';
     const focus = hint?.tool ?? (hint?.marker ? MARKER_TOOL[hint.marker] : undefined);
+    // A second tool can work too (a sugar cube shot from the slingshot).
+    const also = hint?.alsoTool;
     for (const tool of Object.values(this.parts.tools)) {
-      const locked = lesson && tool.name !== focus;
+      const locked = lesson && tool.name !== focus && tool.name !== also;
       if (locked && !tool.quiet) tool.release();
       tool.quiet = locked;
     }
     const sling = this.parts.slingshot;
-    const slingLocked = lesson && focus !== 'slingshot';
+    const slingLocked = lesson && focus !== 'slingshot' && also !== 'slingshot';
     if (slingLocked && !sling.locked) sling.release();
     sling.locked = slingLocked;
   }
@@ -977,7 +1042,7 @@ export class Battle implements TutorialApi {
     if (step !== this.prepStep) {
       this.prepStep = step;
       this.prepTime = 0;
-    } else if (this.prepTime >= 0) {
+    } else if (HINT_SIGN.prepareAhead && this.prepTime >= 0) {
       this.prepTime += dt;
       if (this.prepTime >= HINT_SIGN.prepareAfter) {
         this.prepTime = -1;
@@ -1049,7 +1114,8 @@ export class Battle implements TutorialApi {
   /** Loops the step's ghost hand demo next to its target, out of the way of the player's own hand. */
   private updateGhost(dt: number, demo: GhostDemoName | undefined, hands: HandState[], head: Vector3): void {
     const { ghost } = this.parts;
-    ghost.play(demo);
+    // A loadout tool on the other side from its demo's: the other hand, mirrored.
+    ghost.play(demo, !!(this.director?.current as TutorialStep | null)?.hint?.mirror);
     if (!demo) return;
     view.head.copy(head);
     this.parts.slingshot.shotDirection(view.shot);
@@ -1133,6 +1199,24 @@ export class Battle implements TutorialApi {
         return this.parts.tools.drum.handleWorld(out);
       case 'hornHandle':
         return this.parts.tools.horn.handleWorld(out);
+      case 'magnetHandle':
+        return this.parts.tools.magnet.handleWorld(out);
+      case 'glassHandle':
+        return this.parts.tools.glass.handleWorld(out);
+      case 'sugarBowl':
+        return (this.parts.tools.sugar as SugarBowl).pileWorld(out);
+      case 'lessonBed': {
+        const bed = this.parts.garden.lessonBed;
+        if (!bed) return null;
+        return bed.group.localToWorld(out.set(0, 2, 0));
+      }
+      case 'frontGround': {
+        // The middle of the pepper ring's band, straight in front, on the ground.
+        const r = (PEPPER_RING.inner + PEPPER_RING.outer) / 2;
+        const x = polarX(r, stage.spin);
+        const z = polarZ(r, stage.spin);
+        return stage.boardSpin.localToWorld(out.set(x, groundAt(x, z), z));
+      }
       case 'slingHandle':
         return slingshot.partWorld('handle', out);
       case 'bowl':
@@ -1607,11 +1691,13 @@ export class Battle implements TutorialApi {
   }
 
   endTriggerLesson(): void {
+    // A first-use lesson's goblins go with a poof (let go before a wave, they would attack the castle).
+    if (this.toolLessonsOn) this.poofAll();
     this.parts.goblins.releaseWaiting();
   }
 
-  baitMoving(): void {
-    this.parts.bait.patrol(this.parts.stage.spin);
+  baitMoving(armored = false): void {
+    this.parts.bait.patrol(this.parts.stage.spin, armored);
   }
 
   baitForTool(armored = false): void {
@@ -1648,7 +1734,7 @@ export class Battle implements TutorialApi {
     this.baitForTool(armored);
   }
 
-  keepMovingBait(dt: number): void {
+  keepMovingBait(dt: number, armored = false): void {
     if (this.parts.bait.first()) {
       this.missingFor = 0;
       return;
@@ -1656,7 +1742,7 @@ export class Battle implements TutorialApi {
     this.missingFor += dt;
     if (this.missingFor < TUTORIAL_TIMING.respawnAfter) return;
     this.missingFor = 0;
-    this.baitMoving();
+    this.baitMoving(armored);
   }
 
   hornState(): 'idle' | 'aim' | 'lift' | 'blow' {
@@ -1697,22 +1783,114 @@ export class Battle implements TutorialApi {
   }
 
   releaseBait(): void {
+    // First-use lessons come before a wave: their goblins go with a poof (let go, they would attack the castle).
+    if (this.toolLessonsOn) this.poofBait();
     this.parts.bait.release();
+  }
+
+  /** The lesson's goblins on the board run off with a poof (not one in the hand). */
+  private poofBait(): void {
+    const { goblins, particles, audio, bait } = this.parts;
+    for (const g of bait.all()) {
+      if (!goblins.isHittable(g)) continue;
+      goblins.centerWorld(g, temp);
+      particles.burst(temp, POOF_COLORS, 4, 0.15);
+      audio.play('poof', temp, 0.6, 0.08);
+      goblins.kill(g);
+    }
+  }
+
+  toolLearned(tool: ToolName): void {
+    this.onToolLearned(tool);
+  }
+
+  showLessonBed(kind: 'sunflower' | 'mushroom'): void {
+    this.parts.garden.showLessonBed(this.parts.stage.spin, kind);
+  }
+
+  hornMoveOnly(on: boolean): void {
+    this.parts.troops.lessonMoveOnly = on;
+  }
+
+  hornMoves(): number {
+    return this.parts.troops.moves;
+  }
+
+  swatClonks(): number {
+    return (this.parts.tools.swatter as FlySwatter).clonks;
+  }
+
+  balloonPushes(): number {
+    return this.parts.balloons.pushes;
+  }
+
+  ringFills(): number {
+    return this.parts.pepperRing.fills;
+  }
+
+  cubesShot(): number {
+    return (this.parts.tools.sugar as SugarBowl).cubesShot;
+  }
+
+  hasTrap(kind: TriggerKind): boolean {
+    return this.parts.triggers.hasKind(kind);
+  }
+
+  plantsGrown(): number {
+    return this.parts.garden.grown;
+  }
+
+  goblinsLured(): number {
+    return this.luredCount;
+  }
+
+  endToolLessons(): void {
+    this.toolLessonsOn = false;
+    const { garden, troops, tools } = this.parts;
+    this.parts.bait.release();
+    this.squadFoes = [];
+    this.lessonTrigger = null;
+    troops.lessonMoveOnly = false;
+    garden.hideLessonBed();
+    // The horn lesson's knights march home; every tool is ready for the fight.
+    troops.recall();
+    for (const tool of Object.values(tools)) {
+      tool.timerHeld = false;
+      if (tool.recharging) tool.rechargeNow();
+    }
+    // Before wave 1: a clean start, as if the lessons never happened (their goblins, plants, pepper, castle
+    // damage, the score, eaten and time). In Endless between waves only the lesson's own things go.
+    this.poofAll();
+    this.parts.balloons.clear();
+    if (this.wave >= 0) return;
+    // The traps the lessons brought out (or used) go; wave 1 puts the map's traps out as usual.
+    this.parts.triggers.hideAll();
+    garden.reset();
+    this.parts.pepperRing.reset();
+    this.parts.stun.reset();
+    this.state = this.newState();
+    this.eatenCount = this.pepperedEatenCount = this.pickedCount = this.tossedCount = this.slingHits = 0;
+    this.fightTime = 0;
+    this.score.reset();
+    console.info('[lessons] over: the battle starts');
   }
 
   triggersSetOff(kind: TriggerKind): number {
     return this.triggerCount[kind];
   }
 
-  balloonLesson(): void {
+  balloonLesson(near = false): void {
     const { balloons, stage, rng } = this.parts;
     // One balloon right in front of the player (the board angle in front now). It floats in and hovers outside the wall until popped.
+    // `near` (the swatter's lesson, 2026-11-18): it hovers right by the wall, in the swatter's reach.
     if (balloons.nearest(stage.spin)) return;
-    balloons.spawn(stage.spin + degToRad(rng.range(-6, 6)), BALLOONS.introRadius, BALLOONS.lessonWaitAt);
+    balloons.spawn(stage.spin + degToRad(rng.range(-6, 6)), BALLOONS.introRadius, near ? BALLOONS.lessonNearAt : BALLOONS.lessonWaitAt);
   }
 
   endBalloonLesson(): void {
-    this.parts.balloons.releaseWaiting();
+    // A first-use lesson's balloon goes (let go, it would drop its riders into the castle before a wave).
+    if (this.toolLessonsOn) this.parts.balloons.clear();
+    else this.parts.balloons.releaseWaiting();
   }
 
   balloonsPopped(): number {

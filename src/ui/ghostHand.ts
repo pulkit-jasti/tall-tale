@@ -30,7 +30,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GHOST_HAND, RENDER_ORDER } from '../config/game.js';
 import { holdTilt, type HoldName } from '../player/hold.js';
 import { gltfUrl } from '../world/models.js';
-import { GHOST_DEMOS, type Dir, type GhostAnchor, type GhostDemo, type GhostDemoName, type GhostKey, type GhostPose } from './ghostDemos.js';
+import { GHOST_DEMOS, mirrorDemo, type Dir, type GhostAnchor, type GhostDemo, type GhostDemoName, type GhostKey, type GhostPose } from './ghostDemos.js';
 
 type Side = 'left' | 'right';
 
@@ -269,12 +269,18 @@ const TOOL_HANDLES: Partial<Record<GhostAnchor, HoldName>> = {
   pepperHandle: 'pepper',
   drumHandle: 'drum',
   hornHandle: 'horn',
+  magnetHandle: 'magnet',
+  glassHandle: 'glass',
 };
+
+/** Mirrored demos, made once each on first use (plain data, nothing for the GPU). */
+const MIRRORED = new Map<GhostDemoName, GhostDemo>();
 
 export class GhostHand {
   private models: Partial<Record<Side, GhostModel>> = {};
   private demo: GhostDemo | null = null;
   private demoName: GhostDemoName | null = null;
+  private mirrored = false;
   private time = 0;
   /** Fades out while the player's own hand is at the target. */
   private presence = 1;
@@ -292,12 +298,19 @@ export class GhostHand {
     );
   }
 
-  /** Starts a demo (or none). The same demo keeps its place in the loop. */
-  play(name: GhostDemoName | null | undefined): void {
+  /** Starts a demo (or none), `mirror`: with the other hand. The same demo keeps its place in the loop. */
+  play(name: GhostDemoName | null | undefined, mirror = false): void {
     const next = name ?? null;
-    if (next === this.demoName) return;
+    if (next === this.demoName && mirror === this.mirrored) return;
     this.demoName = next;
-    this.demo = next ? GHOST_DEMOS[next] : null;
+    this.mirrored = mirror;
+    let demo: GhostDemo | null = next ? GHOST_DEMOS[next] : null;
+    if (demo && next && mirror) {
+      const made = MIRRORED.get(next) ?? mirrorDemo(demo);
+      MIRRORED.set(next, made);
+      demo = made;
+    }
+    this.demo = demo;
     this.time = 0;
     for (const model of Object.values(this.models)) model.root.visible = false;
   }

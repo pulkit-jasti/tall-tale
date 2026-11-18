@@ -1542,6 +1542,12 @@ export class Triggers {
   /** v3 2.1: the new traps (haystacks, bell tower, bridge, cart) are on in this battle (set by the battle: a loadout battle). */
   extrasOn = false;
 
+  /** True if this map has a trap of a kind for this battle (a first-use lesson for it is left out if not, 2026-11-18). */
+  hasKind(kind: TriggerKind): boolean {
+    if (!this.extrasOn && EXTRA_KINDS.has(kind)) return false;
+    return this.list.some((t) => t.kind === kind && !t.spare);
+  }
+
   /** Brings every hidden trigger of one kind onto the roads now (its lesson), with a poof. Spare spots stay empty. */
   revealKind(kind: TriggerKind): void {
     for (const t of this.list) if (t.kind === kind && t.hiddenNow && !t.spare) t.reset(Infinity);

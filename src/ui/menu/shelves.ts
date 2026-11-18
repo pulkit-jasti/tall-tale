@@ -42,7 +42,6 @@ import {
 import type { GameAudio } from '../../audio/sound.js';
 import { ACHIEVEMENT_LIST, GOALS, SECRETS, type Achievement } from '../../config/achievements.js';
 import { MENU, RENDER_ORDER, TOOLS } from '../../config/game.js';
-import { LEVELS } from '../../config/levels.js';
 import type { Particles } from '../../fx/particles.js';
 import { applyTouchState, type TouchState } from '../../player/feedback.js';
 import type { HandState } from '../../player/hands.js';
@@ -78,7 +77,8 @@ export interface DisplayModel {
 /** The trophies on the shelf (v3 2.6: 8 secret abilities and 8 regular achievements). */
 export const TROPHY_COUNT = ACHIEVEMENT_LIST.length;
 
-const TOOL_TAGS: Record<DisplayName, [string, string]> = {
+/** Each tool's name and one line (the shelf tags; the campaign card uses the names too). */
+export const TOOL_TAGS: Record<DisplayName, [string, string]> = {
   swatter: ['Fly swatter', 'Swat groups on the wall.'],
   pepper: ['Pepper shaker', 'Pepper the ground by the wall.'],
   drum: ['Drum', 'Stuns every goblin.'],
@@ -92,11 +92,8 @@ const POOF = [0xffffff, 0xf2c230, 0xddd6c8];
 /** v3 2.2: no fixed tools on the stand any more: all 4 slots are free. */
 const FIXED: DisplayName[] = [];
 
-/** Which level unlocks a tool (its reward), as the locked tag says it. */
-function unlockText(tool: PickTool): string {
-  const level = LEVELS.find((l) => l.reward === tool);
-  return level ? `Beat level ${level.number} to unlock` : 'Unlocks in the campaign';
-}
+/** What a locked tool's tag says (levels give no tool rewards: only the setting opens it). */
+const UNLOCK_TEXT = 'Turn on Unlock all tools';
 
 /** A place a tool can be put: where its top is (menu group cm), the angle it faces from, and the materials that glow. */
 interface Spot {
@@ -702,7 +699,7 @@ export class Shelves {
     const tags: [string, string, string, boolean][] = [];
     for (const name of Object.keys(TOOL_TAGS) as DisplayName[]) {
       tags.push([name, TOOL_TAGS[name][0], TOOL_TAGS[name][1], false]);
-      if ((PICK_TOOLS as string[]).includes(name)) tags.push([`${name}|locked`, TOOL_TAGS[name][0], unlockText(name as PickTool), true]);
+      if ((PICK_TOOLS as string[]).includes(name)) tags.push([`${name}|locked`, TOOL_TAGS[name][0], UNLOCK_TEXT, true]);
     }
     const page = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
       const canvas = document.createElement('canvas');

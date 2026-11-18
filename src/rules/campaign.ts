@@ -10,8 +10,11 @@ import { LEVELS, OPEN_FROM_START, TUTORIAL_ENEMIES, type EnemyIcon } from '../co
 /** v3 2.2: every tool is a pick now (4 free slots; the slingshot and the horn are no longer fixed). */
 export type PickTool = 'slingshot' | 'horn' | 'swatter' | 'pepper' | 'drum' | 'magnet' | 'glass' | 'sugar';
 export const PICK_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper', 'drum', 'magnet', 'glass', 'sugar'];
-/** Unlocked from the start: the tools the tutorial teaches. The others are campaign rewards (src/config/levels.ts: magnet, glass, drum, sugar) or "Unlock all tools". */
-export const STARTING_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'pepper'];
+/**
+ * Unlocked from the start: the tools the tutorial teaches (the magnet replaced the pepper there, 2026-11-18).
+ * The others open with "Unlock all tools" (on by default; levels give no tool rewards since 2026-11-18).
+ */
+export const STARTING_TOOLS: PickTool[] = ['slingshot', 'horn', 'swatter', 'magnet'];
 
 /** The number of loadout slots (v3 2.2). */
 export const LOADOUT_SLOTS = 4;
@@ -49,6 +52,24 @@ export interface Progress {
   trophies: AchievementId[];
   /** Endless mode's best run (the highest score, and the waves it survived), or null before the first run. */
   endlessBest: { score: number; waves: number } | null;
+  /**
+   * Tools the player has been taught (2026-11-18): by the tutorial, or by a
+   * tool's own first-use lesson before a battle. A tool not in it gets its
+   * lesson the first time it is on the stand. "Reset tool lessons" empties it.
+   */
+  learned: PickTool[];
+}
+
+/** The tools on a stand that still need their first-use lesson, in stand order. */
+export function toolsToLearn(p: Progress, stand: readonly string[]): PickTool[] {
+  return PICK_TOOLS.filter((t) => stand.includes(t) && !p.learned.includes(t)).sort((a, b) => stand.indexOf(a) - stand.indexOf(b));
+}
+
+/** A tool was taught (or its lesson skipped). Returns true if it is new. */
+export function markLearned(p: Progress, tool: PickTool): boolean {
+  if (p.learned.includes(tool)) return false;
+  p.learned.push(tool);
+  return true;
 }
 
 /** True for an unlocked tool that was never grabbed on the shelf (it glows). */
@@ -73,6 +94,7 @@ export function createProgress(): Progress {
     toolsSeen: [],
     trophies: [],
     endlessBest: null,
+    learned: [],
   };
 }
 
@@ -108,6 +130,7 @@ export function parseProgress(raw: unknown): Progress {
   if (Array.isArray(r.open)) for (const n of r.open) if (typeof n === 'number' && LEVELS.some((l) => l.number === n) && !p.open.includes(n)) p.open.push(n);
   if (Array.isArray(r.tools)) p.tools = PICK_TOOLS.filter((t) => (r.tools as unknown[]).map(renamed).includes(t));
   if (Array.isArray(r.toolsSeen)) p.toolsSeen = PICK_TOOLS.filter((t) => (r.toolsSeen as unknown[]).map(renamed).includes(t));
+  if (Array.isArray(r.learned)) p.learned = PICK_TOOLS.filter((t) => (r.learned as unknown[]).map(renamed).includes(t));
   if (Array.isArray(r.trophies)) p.trophies = ACHIEVEMENT_IDS.filter((id) => (r.trophies as unknown[]).includes(id));
   const best = r.endlessBest as { score?: unknown; waves?: unknown } | null | undefined;
   if (best && typeof best.score === 'number' && typeof best.waves === 'number' && best.score >= 0) p.endlessBest = { score: Math.round(best.score), waves: Math.round(best.waves) };
@@ -146,9 +169,6 @@ export function recordWin(p: Progress, level: number, stars: number): boolean {
   p.stars[level] = Math.max(p.stars[level] ?? 0, stars);
   const entry = LEVELS.find((l) => l.number === level);
   for (const enemy of entry?.enemies ?? []) if (!p.met.includes(enemy)) p.met.push(enemy);
-  // Its tool reward is unlocked (it glows on the shelf until grabbed).
-  const reward = entry?.reward;
-  if (isPick(reward) && !p.tools.includes(reward)) p.tools.push(reward);
   const next = level + 1;
   if (!LEVELS.some((l) => l.number === next) || p.open.includes(next)) return false;
   p.open.push(next);

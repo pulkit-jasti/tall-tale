@@ -158,6 +158,8 @@ export class Balloons {
   hold = false;
   /** Balloons popped since the game started (the balloon lesson counts them). */
   pops = 0;
+  /** Balloons pushed away by the swatter so far (its first-use lesson waits for one). */
+  pushes = 0;
 
   /** The balloon lesson is over: a balloon still hovering comes on in. */
   releaseWaiting(): void {
@@ -285,6 +287,7 @@ export class Balloons {
   push(balloon: Balloon): boolean {
     if (!balloon.hittable() || balloon.phase === 'leave' || balloon.pushLeft > 0) return false;
     balloon.pushLeft = BALLOONS.pushTime;
+    this.pushes++;
     // One that was dropping riders floats off and has to come in again.
     if (balloon.phase === 'drop') balloon.phase = 'approach';
     this.board.localToWorld(temp.copy(balloon.position));

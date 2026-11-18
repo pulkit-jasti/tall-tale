@@ -77,6 +77,8 @@ export function segmentOf(angle: number): number {
 }
 
 export class PepperRing {
+  /** Segments filled so far (the pepper's first-use lesson waits for one, 2026-11-18). */
+  fills = 0;
   private segments: Segment[] = [];
   private flecks: InstancedMesh;
   private hover = -1;
@@ -183,6 +185,7 @@ export class PepperRing {
   }
 
   private fillUp(s: Segment): void {
+    this.fills++;
     s.fill = 0;
     s.amount = 1;
     s.left = R.lastTime * BOOST.pepperLast;

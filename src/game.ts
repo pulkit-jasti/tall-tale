@@ -121,7 +121,7 @@ import { SceneSwap } from './world/sceneSwap.js';
 import { loadTemplate } from './world/models.js';
 import { Menu } from './ui/menu/menu.js';
 import { progress, resetProgress, saveProgress } from './player/progress.js';
-import { battleTools, isOpen, LOADOUT_SLOTS, PICK_TOOLS, recordEndless, recordTutorial, recordWin, starsFor, toolUnlocked, type PickTool } from './rules/campaign.js';
+import { battleTools, isOpen, LOADOUT_SLOTS, markLearned, PICK_TOOLS, recordEndless, recordTutorial, recordWin, starsFor, toolUnlocked, type PickTool } from './rules/campaign.js';
 
 const headPosition = new Vector3();
 const headQuaternion = new Quaternion();
@@ -662,8 +662,10 @@ export class GameSystem extends createSystem({}) {
         sugar: this.sugar.displayModel(),
       },
       { trophy, platform },
-      // Separate copies for the campaign card's reward (a small turning tool).
+      // Separate copies for the campaign card's suggested tool (a small turning tool).
       {
+        slingshot: this.slingshot.displayModel().model,
+        horn: this.horn.displayModel().model,
         swatter: this.swatter.displayModel().model,
         pepper: this.pepper.displayModel().model,
         drum: this.drum.displayModel().model,
@@ -671,8 +673,10 @@ export class GameSystem extends createSystem({}) {
         glass: this.magnifier.displayModel().model,
         sugar: this.sugar.displayModel().model,
       },
-      // And full-size copies to hold when a reward is grabbed off the card.
+      // And full-size copies to hold when a suggested tool is grabbed off the card.
       {
+        slingshot: this.slingshot.displayModel(),
+        horn: this.horn.displayModel(),
         swatter: this.swatter.displayModel(),
         pepper: this.pepper.displayModel(),
         drum: this.drum.displayModel(),
@@ -715,6 +719,14 @@ export class GameSystem extends createSystem({}) {
     this.battle.onMenu = () => this.goToMenu(this.menuAfterBattle());
     this.battle.onNext = () => this.nextLevel();
     this.battle.onSkip = () => this.skipToMenu();
+    // 2026-11-18: first-use tool lessons. A tool is taught once (by the tutorial or its own lesson), saved on the device.
+    this.battle.needsLesson = (tool) => (PICK_TOOLS as string[]).includes(tool) && !progress.learned.includes(tool as PickTool);
+    this.battle.onToolLearned = (tool) => {
+      if ((PICK_TOOLS as string[]).includes(tool) && markLearned(progress, tool as PickTool)) {
+        saveProgress();
+        console.info(`[lessons] ${tool} learned`);
+      }
+    };
     // Every tool waits for its wave, so the slingshot is hidden until the tutorial brings it.
     this.slingshot.setVisible(false);
     for (const tool of this.tools) tool.setVisible(false);
@@ -1615,6 +1627,8 @@ export class GameSystem extends createSystem({}) {
       } else if (action === 'resetTable') {
         this.stage.height = 0;
         this.placeBoard();
+      } else if (action === 'resetLessons') {
+        this.resetToolLessons();
       } else if (!this.pauseMenu.isOpen) {
         this.menuSettings = false;
         this.menu.showPanels();
@@ -1828,6 +1842,8 @@ export class GameSystem extends createSystem({}) {
         // The board placed again; the settings page stays open.
         this.stage.height = 0;
         this.placeBoard();
+      } else if (action === 'resetLessons') {
+        this.resetToolLessons();
       } else if (!this.pauseMenu.isOpen) {
         this.titleSettings = false;
         this.endPanel.showAgain();
@@ -1836,7 +1852,10 @@ export class GameSystem extends createSystem({}) {
     }
     if (this.menuPaused) {
       // Shown here, not when pausing: auto-pause happens while the head pose is unknown (Quest menu).
-      if (!this.pauseMenu.isOpen) this.pauseMenu.show(headPosition, headForward, this.stage.boardScale, this.battle.teaching);
+      if (!this.pauseMenu.isOpen) {
+        const mode = this.battle.teaching ? 'teaching' : this.battle.inToolLessons ? 'lessons' : 'battle';
+        this.pauseMenu.show(headPosition, headForward, this.stage.boardScale, mode);
+      }
       const action = this.pauseMenu.update(dt, this.hands.hands, headPosition, headForward);
       // v3 (docs/v3-plan.md 1.7): the height rail shows while paused (never in a wave or a breather).
       this.pauseRail.group.visible = this.menuPaused;
@@ -2172,6 +2191,14 @@ export class GameSystem extends createSystem({}) {
     console.info('[game] resumed');
   }
 
+  /** Reset tool lessons (settings, 2026-11-18): every tool's first-use lesson runs again, the next time it is on the stand. */
+  private resetToolLessons(): void {
+    progress.learned = [];
+    saveProgress();
+    this.audio.play('lessonDone');
+    console.info('[lessons] reset: every tool is taught again');
+  }
+
   private pauseAction(action: PauseAction): void {
     switch (action) {
       case 'resume':
@@ -2197,6 +2224,14 @@ export class GameSystem extends createSystem({}) {
         // v2 run 2: out of the tutorial into the menu (a player is never stuck in the tutorial).
         this.resume();
         this.skipToMenu();
+        break;
+      case 'skipLessons':
+        // 2026-11-18: the first-use tool lessons left are skipped (saved as taught); the battle goes on.
+        this.resume();
+        this.battle.skipToolLessons();
+        break;
+      case 'resetLessons':
+        this.resetToolLessons();
         break;
       case 'quitToMenu':
         // Out of a battle back to the home screen (the battle is not saved, no stars); a Custom Game level goes back to its list.
@@ -2295,6 +2330,12 @@ export class GameSystem extends createSystem({}) {
         saveProgress();
         this.menu.refreshTools();
         console.info(`[debug] unlock all tools ${progress.unlockAll ? 'on' : 'off'}`);
+        break;
+      case 'resetLessons':
+        this.resetToolLessons();
+        break;
+      case 'skipLessons':
+        this.battle.skipToolLessons();
         break;
       case 'winBattle':
         this.battle.winNow();

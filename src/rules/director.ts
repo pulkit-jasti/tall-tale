@@ -125,6 +125,14 @@ export class Director<C> {
     }
   }
 
+  /**
+   * New steps right after the current one (Endless: a tool picked in a
+   * breather gets its first-use lessons before the next wave).
+   */
+  insertAfterCurrent(steps: DirectorStep<C>[]): void {
+    this.steps.splice(this.index + 1, 0, ...steps);
+  }
+
   /** Moves on to the next step right away (debug: skip). */
   skip(): void {
     if (this.index < 0) this.begin(0);

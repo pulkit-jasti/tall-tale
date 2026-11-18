@@ -21,7 +21,7 @@ import { GARDEN } from '../config/game.js';
 import { BOOST } from '../rules/boosts.js';
 import type { Particles } from '../fx/particles.js';
 import { applyTouchState, type TouchState } from '../player/feedback.js';
-import { groundAt } from '../rules/boardMath.js';
+import { angleDelta, angleOf, degToRad, groundAt, polarX, polarZ } from '../rules/boardMath.js';
 import type { Random } from '../rules/random.js';
 import type { Goblin, Goblins } from '../units/goblins.js';
 import { cloneStatic, loadTemplate, type ModelTemplate } from './models.js';
@@ -84,6 +84,17 @@ export class Garden {
   private freeSeeds: Mesh[] = [];
   /** Seconds since start (the idle sway). */
   private clock = 0;
+  /** Plants grown so far (the glass's first-use lesson waits for one). */
+  grown = 0;
+  /**
+   * The glass's first-use lesson (2026-11-18): an empty sunflower bed and an empty mushroom bed made with the
+   * map, hidden (so nothing new reaches the GPU mid-battle), put in front of the player when the lesson asks
+   * and taken away after.
+   */
+  private spares: Bed[] = [];
+  /** The bed the glass lesson points at now (a bed of the map near the front, or the spare), or null. */
+  lessonBed: Bed | null = null;
+  private network: RoadNetwork | null = null;
 
   private recycle(mesh: Mesh): void {
     mesh.visible = false;
@@ -122,9 +133,21 @@ export class Garden {
 
   /** New beds for a map: beside its roads, GARDEN.from to GARDEN.to cm out, clear of trap spots and each other. */
   place(network: RoadNetwork, keepClear: { x: number; z: number }[], rng: Random, count: number = GARDEN.beds): void {
+    this.hideLessonBed();
     for (const bed of this.beds) bed.group.removeFromParent();
     this.beds.length = 0;
+    for (const bed of this.spares) bed.group.removeFromParent();
+    this.spares = [];
+    this.network = network;
     this.clearShots();
+    // The lesson's spare beds, built now behind the map's fade (out of the list until a lesson shows one).
+    for (const kind of ['sunflower', 'mushroom'] as PlantKind[]) {
+      this.addBed(kind, new Vector3(0, 0, GARDEN.from));
+      const bed = this.beds.pop();
+      if (!bed) continue;
+      bed.group.visible = false;
+      this.spares.push(bed);
+    }
     const candidates: Vector3[] = [];
     const ahead = new Vector3();
     network.roads.forEach((road) => {
@@ -230,6 +253,59 @@ export class Garden {
     });
   }
 
+  /**
+   * The glass lesson: a bed of `kind` in front of the player (`front`: the board angle in front, radians).
+   * An empty bed of the map near the front if there is one (lessonNearDeg), else the spare one, put
+   * lessonRadius cm out in front, a little to the side if a road or another bed is there.
+   */
+  showLessonBed(front: number, kind: PlantKind): Bed | null {
+    if (this.lessonBed?.kind === kind && !this.lessonBed.plant) return this.lessonBed;
+    const near = degToRad(GARDEN.lessonNearDeg);
+    let best: Bed | null = null;
+    let bestAngle = near;
+    for (const bed of this.beds) {
+      const a = Math.abs(angleDelta(front, angleOf(bed.position.x, bed.position.z)));
+      if (bed.kind === kind && a < bestAngle && !bed.plant) {
+        best = bed;
+        bestAngle = a;
+      }
+    }
+    const spare = this.spares.find((b) => b.kind === kind);
+    if (!best && spare && !this.beds.includes(spare)) {
+      const bed = spare;
+      const r = GARDEN.lessonRadius;
+      const clear = (p: Vector3): boolean =>
+        (!this.network || !this.onRoad(p, this.network)) && this.beds.every((b) => Math.hypot(b.position.x - p.x, b.position.z - p.z) > GARDEN.bedRadius * 4);
+      for (let k = 0; k < 12; k++) {
+        // 0, +6, -6, +12, -12... degrees from the front.
+        const angle = front + degToRad(6 * Math.ceil(k / 2) * (k % 2 === 0 ? -1 : 1));
+        bed.position.set(polarX(r, angle), 0, polarZ(r, angle));
+        if (clear(bed.position)) break;
+      }
+      bed.position.y = groundAt(bed.position.x, bed.position.z);
+      bed.group.position.copy(bed.position);
+      bed.group.visible = true;
+      this.beds.push(bed);
+      best = bed;
+    }
+    this.lessonBed = best;
+    return best;
+  }
+
+  /** The lessons are over: the spare beds go again (a map bed stays, emptied by the battle's reset). */
+  hideLessonBed(): void {
+    this.lessonBed = null;
+    for (const bed of this.spares) {
+      const i = this.beds.indexOf(bed);
+      if (i < 0) continue;
+      if (bed.plant) this.wilt(bed);
+      bed.grow = 0;
+      bed.sprout.visible = false;
+      this.beds.splice(i, 1);
+      bed.group.visible = false;
+    }
+  }
+
   /** The bed nearest a board point within `radius` cm (flat), or null. */
   nearestBed(x: number, z: number, radius: number): Bed | null {
     let best: Bed | null = null;
@@ -319,6 +395,7 @@ export class Garden {
     bed.life = GARDEN.life;
     bed.timer = bed.kind === 'sunflower' ? GARDEN.fireEvery : GARDEN.puffEvery;
     bed.touch = 'idle';
+    this.grown++;
     this.particles.burst(bed.group.localToWorld(world.set(0, 3, 0)), [0x6bbf3a, 0xffd23f, 0xffffff], 10, 0.1);
     this.audio.play('plantPop', world, 1, 0.1);
   }
@@ -335,6 +412,7 @@ export class Garden {
 
   /** A new battle: every bed empty. */
   reset(): void {
+    this.hideLessonBed();
     for (const bed of this.beds) {
       if (bed.plant) this.wilt(bed);
       bed.grow = 0;

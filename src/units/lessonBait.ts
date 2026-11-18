@@ -69,7 +69,7 @@ export class LessonBait {
    * Grunts walking back and forth on the stretch of road nearest a spot in
    * front of the player, a moving target. Tops up to LESSON_BAIT.patrolCount.
    */
-  patrol(front: number): void {
+  patrol(front: number, armored = false): void {
     const { patrolCount, patrolRadius, patrolHalf, approach } = LESSON_BAIT;
     const have = this.alive().filter((g) => g.patrolRoad >= 0).length;
     if (have >= patrolCount) return;
@@ -98,11 +98,18 @@ export class LessonBait {
       // They come in from the camp side, a few cm apart, and turn round at the ends of the stretch.
       const g = this.goblins.spawnBefore('grunt', roadIndex, dir, dir === 1 ? from : to, approach + i * 7, lane);
       if (!g) continue;
+      // The magnet lesson (2026-11-18): a helmet, a shield and a weapon to pull off.
+      if (armored) g.setGear(i % 2 === 0 ? 'spear' : 'sword', true, true);
       g.patrolRoad = roadIndex;
       g.patrolFrom = from;
       g.patrolTo = to;
       this.list.push(g);
     }
+  }
+
+  /** Every bait goblin still in the game (the first-use lessons poof them instead of letting them go on). */
+  all(): readonly Goblin[] {
+    return this.alive();
   }
 
   /** The lesson is over: they go on as usual (climbers run and jump in, walkers head for the wall). */

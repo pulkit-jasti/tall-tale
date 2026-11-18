@@ -38,18 +38,20 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   Quaternion,
   RingGeometry,
   Shape,
   ShapeGeometry,
   Vector2,
   Vector3,
+  type CanvasTexture,
   type Object3D,
 } from 'three';
 import { COMPASS as C, PEPPER_RING } from '../config/game.js';
 import { degToRad, polarX, polarZ } from '../rules/boardMath.js';
 import { post } from '../world/shapes.js';
-import { CanvasLabel, drawIcon } from './kit/index.js';
+import { CanvasLabel, canvasTexture, drawIcon } from './kit/index.js';
 import { UI_FONT } from './kit/font.js';
 
 /** Threat levels (v3): none, a camp about to send, goblins walking in, goblins attacking the wall. */
@@ -64,6 +66,17 @@ const color = new Color();
 const colors = C.levelColors.map((c) => new Color(c));
 const tentIdle = new Color(C.tentColor);
 const tentSending = new Color(C.tentSendingColor);
+
+/**
+ * The goblins-left digits (2026-11-18): 0 to 9 drawn once, side by side on one canvas; each digit on the
+ * boss is a small plane showing its cell (a texture offset: nothing redrawn or sent to the GPU). Redrawing
+ * the number's canvas on each knockout made the whole view blink on the Quest (headset test: with label
+ * redraws off, the blink was gone). Cell size and font size (atlas pixels), and the most digits shown.
+ */
+const DIGIT_CELL_W = 64;
+const DIGIT_CELL_H = 96;
+const DIGIT_FONT = 72;
+const MAX_DIGITS = 3;
 
 export class Compass {
   readonly group = new Group();
@@ -82,6 +95,11 @@ export class Compass {
   private campSending: boolean[] = [];
   private label: CanvasLabel;
   private shownText = '';
+  /** The digit planes (on the label) and their atlas copies; the widest digit (atlas px); the number shown (undefined: none yet). */
+  private digits: Mesh[] = [];
+  private digitMaps: CanvasTexture[] = [];
+  private digitAdvance = 0;
+  private shownLeft: number | null | undefined = undefined;
   private time = 0;
   /** sin and cos of the board's spin this frame (board points turn into the player's frame). */
   private sin = 0;
@@ -126,6 +144,7 @@ export class Compass {
     this.label = new CanvasLabel(C.textWidth, C.textHeight, 48);
     this.label.mesh.rotation.x = -Math.PI / 2;
     this.label.mesh.position.set(0, this.faceY + C.bossHeight + 0.02, 0);
+    this.buildDigits();
     const bossTop = new Mesh(new CircleGeometry(C.bossRadius * 0.94, 32).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: C.faceColor, fog: false }));
     bossTop.position.y = this.faceY + C.bossHeight + 0.01;
     // The needle: a flat gold diamond from the boss's edge toward straight ahead, a little above the face.
@@ -295,21 +314,76 @@ export class Compass {
     this.tentOutlines.instanceMatrix.needsUpdate = true;
     this.tents.instanceMatrix.needsUpdate = true;
     if (this.tents.instanceColor) this.tents.instanceColor.needsUpdate = true;
-    // The number redraws its canvas (and uploads it) at most every COMPASS.textEvery seconds (audit 2026-11-17:
-    // it redrew on every spawn and knockout, many uploads a second in a big fight). A wave change shows at once.
-    this.textWait = Math.max(0, this.textWait - dt);
-    if (this.textWait <= 0 || wave !== this.shownWave) {
-      const before = this.shownText;
-      this.text(wave, total, left);
-      if (this.shownText !== before) {
-        this.textWait = C.textEvery;
-        this.shownWave = wave;
-      }
+    // The canvas (the skull, the tick, the wave dots) redraws only on a wave change or a new digit count;
+    // the number itself only moves the ready-drawn digits (2026-11-18: a redraw on each knockout blinked).
+    this.text(wave, total, left);
+    this.showNumber(left);
+  }
+
+  /** The digits 0 to 9 on one canvas, and MAX_DIGITS planes showing cells of it (made at setup). */
+  private buildDigits(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = DIGIT_CELL_W * 10;
+    canvas.height = DIGIT_CELL_H;
+    const c = canvas.getContext('2d')!;
+    c.font = `bold ${DIGIT_FONT}px ${UI_FONT}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.lineJoin = 'round';
+    // The same outline as the old number (its width was 0.05 of the label for a 0.58 font).
+    c.lineWidth = DIGIT_FONT * 0.086;
+    c.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    c.fillStyle = C.numberColor;
+    for (let d = 0; d < 10; d++) {
+      const x = d * DIGIT_CELL_W + DIGIT_CELL_W / 2;
+      c.strokeText(String(d), x, DIGIT_CELL_H / 2);
+      c.fillText(String(d), x, DIGIT_CELL_H / 2);
+      this.digitAdvance = Math.max(this.digitAdvance, c.measureText(String(d)).width);
+    }
+    const atlas = canvasTexture(canvas, 4);
+    const geometry = new PlaneGeometry(DIGIT_CELL_W, DIGIT_CELL_H);
+    for (let k = 0; k < MAX_DIGITS; k++) {
+      // A copy of the atlas: the same picture and GPU texture, its own offset (which cell shows).
+      const map = atlas.clone();
+      map.repeat.set(1 / 10, 1);
+      const mesh = new Mesh(geometry, new MeshBasicMaterial({ map, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+      mesh.renderOrder = 2;
+      mesh.visible = false;
+      this.label.mesh.add(mesh);
+      this.digits.push(mesh);
+      this.digitMaps.push(map);
     }
   }
 
-  private textWait = 0;
-  private shownWave = -1;
+  /** The skull and number for `count` digits: the font size and one digit's width (cm), the skull's and the number's left edges (cm from the label's left). */
+  private numberLayout(count: number): { size: number; advance: number; start: number; numberLeft: number } {
+    const H = C.textHeight;
+    const size = H * (count > 2 ? 0.44 : 0.58);
+    const advance = (this.digitAdvance * size) / DIGIT_FONT;
+    const headWidth = H * 0.32;
+    const gap = H * 0.05;
+    const start = Math.max(0, C.textWidth / 2 - (headWidth + gap + advance * count) / 2);
+    return { size, advance, start, numberLeft: start + headWidth + gap };
+  }
+
+  /** The goblins left (null: none, between waves): the digit planes moved and their cells picked, nothing drawn. */
+  private showNumber(left: number | null): void {
+    if (left === this.shownLeft) return;
+    this.shownLeft = left;
+    const text = left === null ? '' : String(Math.min(Math.max(0, left), 999));
+    const { size, advance, numberLeft } = this.numberLayout(text.length);
+    const scale = size / DIGIT_FONT;
+    // The old number's middle was 0.43 of the way down the label.
+    const y = C.textHeight / 2 - C.textHeight * 0.43;
+    for (let i = 0; i < MAX_DIGITS; i++) {
+      const mesh = this.digits[i];
+      mesh.visible = i < text.length;
+      if (!mesh.visible) continue;
+      this.digitMaps[i].offset.x = Number(text[i]) / 10;
+      mesh.scale.setScalar(scale);
+      mesh.position.set(-C.textWidth / 2 + numberLeft + advance * (i + 0.5), y, 0.01);
+    }
+  }
 
   /** Places wedge `i`: its tail at the lip, its tip toward the middle, standing `height` cm up, `scale` times as long and wide. */
   private placeWedge(i: number, height: number, scale: number): void {
@@ -328,32 +402,21 @@ export class Compass {
    * dots, one per wave: gold for won, white for the one being fought, hollow to come.
    */
   private text(wave: number, total: number, left: number | null): void {
-    const text = `${wave}|${total}|${left ?? '-'}`;
+    // Only the digit count matters here (it moves the skull); the number itself is the digit planes (showNumber).
+    const count = left === null ? 0 : String(Math.min(Math.max(0, left), 999)).length;
+    const text = `${wave}|${total}|${left === null ? '-' : count}`;
     if (text === this.shownText) return;
     this.shownText = text;
     const fighting = left !== null;
     const won = fighting ? wave - 1 : wave;
+    const start = this.numberLayout(count).start;
     this.label.draw((c, w, h) => {
       c.textAlign = 'center';
       c.textBaseline = 'middle';
       if (fighting) {
         // A skull (Kenney Board Game Icons) in front of the number, so it reads as "goblins left", not a random number.
-        const digits = String(left);
-        const size = h * (digits.length > 2 ? 0.44 : 0.58);
-        c.font = `bold ${Math.round(size)}px ${UI_FONT}`;
-        const numberWidth = c.measureText(digits).width;
         const headWidth = h * 0.32;
-        const gap = h * 0.05;
-        const start = Math.max(0, w / 2 - (headWidth + gap + numberWidth) / 2);
-        drawIcon(c, 'skull', start, h * 0.43 - headWidth / 2, headWidth, C.iconColor);
-        c.textAlign = 'left';
-        c.fillStyle = C.numberColor;
-        c.lineJoin = 'round';
-        c.lineWidth = h * 0.05;
-        c.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-        c.strokeText(digits, start + headWidth + gap, h * 0.43);
-        c.fillText(digits, start + headWidth + gap, h * 0.43);
-        c.textAlign = 'center';
+        drawIcon(c, 'skull', start * (w / C.textWidth), h * 0.43 - headWidth / 2, headWidth, C.iconColor);
       } else if (wave > 0) {
         // Between waves and at the end: a gold tick.
         c.strokeStyle = C.tickColor;

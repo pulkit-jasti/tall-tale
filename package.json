@@ -2,6 +2,11 @@
   "name": "tall-tale",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pulkit-jasti/tall-tale.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "iwsdk dev restart --no-open --foreground",

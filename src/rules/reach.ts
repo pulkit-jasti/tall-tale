@@ -102,10 +102,10 @@ export function reachSpots(): { name: string; radius: number; y: number; rare?: 
   const pauseDown = -(P.height / 2 - P.buttonRadius * POKE.rimScale - P.buttonMargin);
   // A balloon rider's middle: it stands on the basket's floor (src/units/balloons.ts), a grunt 3.9 cm tall.
   const riderMiddle = BALLOONS.height - (BALLOONS.radius * 1.15 + 4.2 + BALLOONS.basketHeight / 2 - 0.2) + 3.9 * 0.5;
-  // The settings page: its lowest sound row, Back (top left) and the tabs (bottom row).
+  // The settings page: its lowest row (2026-11-18: the Access tab's Reset tool lessons, its sixth row), Back (top left) and the tabs (bottom row).
   const S = PAUSE.settings;
   const settingsCenter = uiCenterY(S.height, P.tiltDeg);
-  const lowestRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.firstRowY - 4 * S.rowGap, S.sliderX + S.sliderLength / 2);
+  const lowestRow = onPanel(P.radius, settingsCenter, P.tiltDeg, S.firstRowY - 5 * S.accessRowGap, S.sliderX - S.sliderLength / 2);
   const [sbx, sby] = headerBackAt(S.height);
   const backButton = onPanel(P.radius, settingsCenter, P.tiltDeg, sby, sbx);
   const [stx, sty] = tabsAt(S.width, S.height);

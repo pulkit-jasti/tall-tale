@@ -22,7 +22,7 @@
 // toward its own side while looking at it is hard; a small twist of the body
 // and the other hand is easy). The slingshot (right) is held in the left hand,
 // so the pebble, the load and the pull are the right hand's.
-import { DRUM, SWATTER } from '../config/game.js';
+import { DRUM, GLASS, MAGNET, SWATTER } from '../config/game.js';
 
 export type GhostPose = 'open' | 'pinch' | 'fist';
 
@@ -38,7 +38,15 @@ export type GhostAnchor =
   | 'swatterHandle'
   | 'pepperHandle'
   | 'hornHandle'
-  | 'drumHandle';
+  | 'drumHandle'
+  | 'magnetHandle'
+  | 'glassHandle'
+  /** The top of the sugar cube pile in its bowl. */
+  | 'sugarBowl'
+  /** The first goblin brought for the current lesson (on the wall or the road). */
+  | 'baitGoblin'
+  /** The ground just outside the wall in front, where the pepper ring lies. */
+  | 'frontGround';
 
 export type Dir = [number, number, number];
 
@@ -101,6 +109,21 @@ const DRUM_GRIP = {
   rod: [-Math.sin(drumLean), Math.cos(drumLean), 0] as Dir,
   palm: [-Math.cos(drumLean), -Math.sin(drumLean), 0] as Dir,
 };
+/** Right hand around the magnet's or the glass's handle on a left platform, which leans back like the drum stick (by restLeanDeg). */
+const leanGrip = (deg: number): Grip => {
+  const a = (deg * Math.PI) / 180;
+  return { rod: [-Math.sin(a), Math.cos(a), 0], palm: [-Math.cos(a), -Math.sin(a), 0] };
+};
+const MAGNET_GRIP = leanGrip(MAGNET.restLeanDeg);
+const GLASS_GRIP = leanGrip(GLASS.restLeanDeg);
+/**
+ * Right fist pointing the magnet at the ground ahead, like a flashlight (its tips point the way the
+ * knuckles face, HOLD.poses.magnet): palm facing in (left), the thumb tipped forward, so the knuckles
+ * face forward and down.
+ */
+const MAGNET_POINT = { rod: [0, 0.8, 0.6] as Dir, palm: [-1, 0, 0] as Dir };
+/** Right fist holding the glass up in front of the eyes: thumb up (the lens above the fist), palm facing in (left), never toward the headset. */
+const GLASS_UP = { rod: [0, 1, 0] as Dir, palm: [-1, 0, 0] as Dir };
 /** Pinch from above: fingers down and forward, palm down and toward the player. */
 const PINCH_DOWN = { fingers: [0, -0.8, 0.6] as Dir, palm: [0, -0.6, -0.8] as Dir };
 /** Throwing a pinched goblin: fingers forward and a little up, palm down and a little forward (never toward the headset). */
@@ -281,6 +304,117 @@ export const GHOST_DEMOS = {
       key(2.8, 'drumHandle', [0, 8, -5], 'fist', DRUM_GRIP),
     ],
   },
+  /**
+   * 2026-11-18, first-use lessons (check each in the headset). Shake the pepper: grab it (the right hand,
+   * it stands on the left), carry it up over the goblins on the wall (well above them, never through the
+   * wall), and shake it up and down quickly there.
+   */
+  pepperShake: {
+    hand: 'right',
+    keys: [
+      key(0, 'pepperHandle', [5, 1, -6], 'open', HANDLE_GRIP),
+      key(0.6, 'pepperHandle', [0, 0, 0], 'open', HANDLE_GRIP),
+      key(0.9, 'pepperHandle', [0, 0, 0], 'fist', HANDLE_GRIP),
+      key(1.4, 'pepperHandle', [0, 8, -4], 'fist', HANDLE_GRIP),
+      key(2.2, 'baitGoblin', [0, 14, -4], 'fist', HANDLE_GRIP),
+      key(2.4, 'baitGoblin', [0, 10, -4], 'fist', HANDLE_GRIP),
+      key(2.6, 'baitGoblin', [0, 14, -4], 'fist', HANDLE_GRIP),
+      key(2.8, 'baitGoblin', [0, 10, -4], 'fist', HANDLE_GRIP),
+      key(3.0, 'baitGoblin', [0, 14, -4], 'fist', HANDLE_GRIP),
+    ],
+  },
+  /**
+   * The pepper ring: grab the pepper, carry it out over the ground just outside the wall in front (high
+   * enough to clear the wall), and shake it there a few times: a strip of pepper fills on the ground.
+   */
+  pepperGround: {
+    hand: 'right',
+    keys: [
+      key(0, 'pepperHandle', [5, 1, -6], 'open', HANDLE_GRIP),
+      key(0.6, 'pepperHandle', [0, 0, 0], 'open', HANDLE_GRIP),
+      key(0.9, 'pepperHandle', [0, 0, 0], 'fist', HANDLE_GRIP),
+      key(1.4, 'pepperHandle', [0, 8, -4], 'fist', HANDLE_GRIP),
+      key(2.2, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+      key(2.4, 'frontGround', [0, 12, -2], 'fist', HANDLE_GRIP),
+      key(2.6, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+      key(2.8, 'frontGround', [0, 12, -2], 'fist', HANDLE_GRIP),
+      key(3.0, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+      key(3.2, 'frontGround', [0, 12, -2], 'fist', HANDLE_GRIP),
+      key(3.4, 'frontGround', [0, 16, -2], 'fist', HANDLE_GRIP),
+    ],
+  },
+  /** The magnet stands on the left: the right hand from its side and behind, closes the fist, lifts it. */
+  magnetGrab: {
+    hand: 'right',
+    keys: [
+      key(0, 'magnetHandle', [5, 1, -6], 'open', MAGNET_GRIP),
+      key(0.8, 'magnetHandle', [0, 0, 0], 'open', MAGNET_GRIP),
+      key(1.1, 'magnetHandle', [0, 0, 0], 'fist', MAGNET_GRIP),
+      key(2.0, 'magnetHandle', [0, 6, -4], 'fist', MAGNET_GRIP),
+    ],
+  },
+  /**
+   * Grab the magnet, bring it out in front of the chest and point it down at the ground ahead like a
+   * flashlight (the ring lands where it points), then hold it still there: the gear comes off after a hold.
+   */
+  magnetPoint: {
+    hand: 'right',
+    keys: [
+      key(0, 'magnetHandle', [5, 1, -6], 'open', MAGNET_GRIP),
+      key(0.6, 'magnetHandle', [0, 0, 0], 'open', MAGNET_GRIP),
+      key(0.9, 'magnetHandle', [0, 0, 0], 'fist', MAGNET_GRIP),
+      key(1.4, 'magnetHandle', [0, 7, -4], 'fist', MAGNET_GRIP),
+      key(2.3, 'mouth', [8, -24, 16], 'fist', MAGNET_POINT),
+      key(3.8, 'mouth', [8, -24, 16], 'fist', MAGNET_POINT),
+    ],
+  },
+  /** The glass stands on the left: the right hand from its side and behind, closes the fist around the handle, lifts it. */
+  glassGrab: {
+    hand: 'right',
+    keys: [
+      key(0, 'glassHandle', [5, 1, -6], 'open', GLASS_GRIP),
+      key(0.8, 'glassHandle', [0, 0, 0], 'open', GLASS_GRIP),
+      key(1.1, 'glassHandle', [0, 0, 0], 'fist', GLASS_GRIP),
+      key(2.0, 'glassHandle', [0, 6, -4], 'fist', GLASS_GRIP),
+    ],
+  },
+  /**
+   * Grab the glass and raise it in front of the eyes, the lens about 25 cm out and just below eye level
+   * (GLASS.eyeNear to eyeFar, inside coneDeg of the look), and hold it there: the head aims the beam.
+   */
+  glassRaise: {
+    hand: 'right',
+    keys: [
+      key(0, 'glassHandle', [5, 1, -6], 'open', GLASS_GRIP),
+      key(0.6, 'glassHandle', [0, 0, 0], 'open', GLASS_GRIP),
+      key(0.9, 'glassHandle', [0, 0, 0], 'fist', GLASS_GRIP),
+      key(1.4, 'glassHandle', [0, 7, -4], 'fist', GLASS_GRIP),
+      key(2.4, 'mouth', [3, -3, 8], 'fist', GLASS_UP),
+      key(3.9, 'mouth', [3, -3, 8], 'fist', GLASS_UP),
+    ],
+  },
+  /** The sugar bowl stands on the left: the right hand comes down onto the pile from above and pinches a cube off its top. */
+  sugarPinch: {
+    hand: 'right',
+    keys: [
+      key(0, 'sugarBowl', [0, 9, -2], 'open', PINCH_DOWN),
+      key(0.8, 'sugarBowl', [0, 0, 0], 'open', PINCH_DOWN),
+      key(1.1, 'sugarBowl', [0, 0, 0], 'pinch', PINCH_DOWN),
+      key(1.9, 'sugarBowl', [0, 9, -2], 'pinch', PINCH_DOWN),
+    ],
+  },
+  /** A cube from the pile to the wall: lift it, carry it over beside the goblins (above them), open the pinch, lift off. */
+  sugarDrop: {
+    hand: 'right',
+    keys: [
+      key(0, 'sugarBowl', [0, 0, 0], 'pinch', PINCH_DOWN),
+      key(0.5, 'sugarBowl', [0, 9, -2], 'pinch', PINCH_DOWN),
+      key(1.5, 'baitGoblin', [4, 7, -2], 'pinch', PINCH_DOWN),
+      key(1.9, 'baitGoblin', [4, 4, -2], 'pinch', PINCH_DOWN),
+      key(2.2, 'baitGoblin', [4, 4, -2], 'open', PINCH_DOWN),
+      key(2.6, 'baitGoblin', [4, 10, -4], 'open', PINCH_DOWN),
+    ],
+  },
   /** The right hand (the left holds the slingshot) comes down into the bowl and pinches a pebble off the top of the pile. */
   pebble: {
     hand: 'right',
@@ -334,6 +468,28 @@ export const GHOST_DEMOS = {
 } satisfies Record<string, GhostDemo>;
 
 export type GhostDemoName = keyof typeof GHOST_DEMOS;
+
+const flip = (d: Dir | undefined): Dir | undefined => (d ? [-d[0], d[1], d[2]] : undefined);
+
+/**
+ * A demo done with the other hand (2026-11-18): a loadout tool can stand on
+ * either side, and the opposite hand grabs it. Mirroring the whole move
+ * across the anchor's up-forward plane turns a right hand into a left one.
+ */
+export function mirrorDemo(demo: GhostDemo): GhostDemo {
+  return {
+    hand: demo.hand === 'left' ? 'right' : 'left',
+    frame: demo.frame,
+    keys: demo.keys.map((k) => ({
+      ...k,
+      offset: flip(k.offset)!,
+      rod: flip(k.rod),
+      fingers: flip(k.fingers),
+      palm: flip(k.palm)!,
+      arcDeg: k.arcDeg === undefined ? undefined : -k.arcDeg,
+    })),
+  };
+}
 
 /** Where a demo ends: the ghost steps aside while the player's own hand is there. */
 export function endAnchor(name: GhostDemoName): GhostAnchor {

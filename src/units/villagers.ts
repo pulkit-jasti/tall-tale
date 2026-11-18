@@ -13,11 +13,13 @@ import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.
 import type { Spot } from '../world/settlements.js';
 import { angleTo } from '../ui/kit/layout.js';
 import { rigTemplate } from './gear.js';
+import { poolGroup } from '../world/skipHidden.js';
 
 type Doing = 'walk' | 'work' | 'look';
 
 class Villager {
-  readonly root = new Group();
+  /** Skips its matrix updates while hidden (src/world/skipHidden.ts). */
+  readonly root = poolGroup();
   readonly mixer: AnimationMixer;
   private actions = new Map<string, AnimationAction>();
   private current: AnimationAction | null = null;

@@ -56,6 +56,7 @@ import { legsToPoint, legsToWall, reverseLegs, type Leg, type RoadPoint } from '
 import { cloneSkinned, loadTemplate, type ModelTemplate } from '../world/models.js';
 import type { Road, RoadNetwork } from '../world/roads.js';
 import { knightBanner } from '../world/shapes.js';
+import { poolGroup, updateMatricesNow } from '../world/skipHidden.js';
 import type { GearDebris } from '../fx/gearDebris.js';
 import { strikeEvery, troopHitsToDown } from '../rules/gear.js';
 import { findGearBones, rigTemplate, setGear } from './gear.js';
@@ -125,7 +126,8 @@ export interface Squad {
 export type HornPlan = { kind: 'new' } | { kind: 'boost'; squad: Squad } | { kind: 'move'; squad: Squad };
 
 export class Troop {
-  readonly root = new Group();
+  /** Skips its matrix updates while hidden (a pooled soldier, src/world/skipHidden.ts). */
+  readonly root = poolGroup();
   readonly mixer: AnimationMixer;
   private actions = new Map<string, AnimationAction>();
   private current: AnimationAction | null = null;
@@ -623,6 +625,10 @@ export class Troops {
    */
   /** Set by the game: the horn holds a charge, so a new squad can be called. */
   canCall: () => boolean = () => true;
+  /** The horn's move lesson (2026-11-18): no new squad, so a road aimed at moves the one squad out (free). */
+  lessonMoveOnly = false;
+  /** Squads moved by the horn so far (the move lesson waits for one). */
+  moves = 0;
   /** Set by the game while a blow is carried out: the kind the aim showed wins (the charge is already spent then). */
   callOverride: boolean | null = null;
 
@@ -646,7 +652,7 @@ export class Troops {
     // A new squad only when the horn can pay for one (or none is out yet, so "resting" shows); while it
     // rests, aiming at a road moves the nearest squad there for free (2026-11-17: before, a move only
     // happened at the squad cap, so after one call the knights could not be moved at all).
-    const canCall = this.callOverride ?? (this.canCall() || active.length === 0);
+    const canCall = !this.lessonMoveOnly && (this.callOverride ?? (this.canCall() || active.length === 0));
     // Endless War Chief: one more squad (TROOPS.max has room for it).
     if (canCall && active.length < KNIGHTS.maxSquads + BOOST.squads && this.fieldCount + KNIGHTS.squadMin <= KNIGHTS.maxField + BOOST.squads * KNIGHTS.squadMax) {
       return legsToWall(graph, this.lengths, target) ? { kind: 'new' } : null;
@@ -682,6 +688,7 @@ export class Troops {
     }
     if (plan.kind === 'move') {
       this.moveSquad(plan.squad, target);
+      this.moves++;
       this.lastCalled = plan.squad;
       this.moveLock = KNIGHTS.moveLockout;
       return 'move';
@@ -1286,7 +1293,7 @@ export class Troops {
     }
     t.banner.visible = true;
     // Fresh matrices (it just moved to the gate), so the first frame is already in the hand.
-    t.root.updateMatrixWorld(true);
+    updateMatricesNow(t.root);
     this.holdBanner(t);
   }
 
